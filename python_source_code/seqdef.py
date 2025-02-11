@@ -1,6 +1,6 @@
 """
 @Author  : 梁彧祺
-@File    : xinyi_original_seqdef.py
+@File    : seqdef.py
 @Time    : 05/02/2025 12:47
 @Desc    : Optimized SequenceData class with integrated color scheme & legend handling.
 """
