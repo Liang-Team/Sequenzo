@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sequenzo"
+version = "0.1"
+description = "A package for sequence visualization and analysis."
+authors = [{name = "Yuqi Liang 梁彧祺, Xinyi Li 李欣怡, Jan Meyerhoff-Liang 马杨杨"}]
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "seaborn"
+]
+
+[tool.setuptools]
+packages = ["sequenzo"]
