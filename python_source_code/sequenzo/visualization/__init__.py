@@ -6,3 +6,4 @@
 """
 # sequenzo/visualization/__init__.py
 from .plot_most_frequent_sequences import plot_most_frequent_sequences
+from .plot_relative_frequency import plot_relative_frequency

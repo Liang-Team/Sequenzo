@@ -16,7 +16,7 @@ import seaborn as sns
 from sequenzo.seqdef import SequenceData
 
 
-def plot_seqrf(seqdata: SequenceData,
+def plot_relative_frequency(seqdata: SequenceData,
                distance_matrix: np.ndarray,
                num_groups: int = 12,
                save_as=None,
