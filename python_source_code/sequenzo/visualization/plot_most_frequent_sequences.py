@@ -45,9 +45,9 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
 
     # Use provided time labels if available, otherwise use generic "C1, C2, ..."
     if seqdata.var:
-        x_labels = seqdata.var
+        x_labels = seqdata.cleaned_var
     else:
-        x_labels = [f"C{i + 1}" for i in range(sequence_length)]
+        x_labels = [f"{i + 1}" for i in range(sequence_length)]
 
     # **Ensure colors match seqdef**
     state_colors = seqdata.color_map  # Directly get the color mapping from seqdef
@@ -104,7 +104,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(False)  # Do not keep the left border
-    ax.spines["bottom"].set_visible(False)  # Keep the bottom border
+    ax.spines["bottom"].set_visible(False)  # Do not keep the bottom border
 
     # **Save or show**
     if save_as:

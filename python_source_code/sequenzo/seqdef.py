@@ -56,6 +56,8 @@ class SequenceData:
         """
         self.data = data.copy()
         self.var = var
+        # Clean the labels of time steps instead of keeping "C1", ..."C10"
+        self.cleaned_var = [str(i + 1) for i in range(len(var))]
         self.states = states
         self.alphabet = alphabet or sorted(set(data[var].stack().dropna().unique()))
         self.labels = labels
