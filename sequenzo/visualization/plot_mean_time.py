@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Optional
-from sequenzo.seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 
 def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:

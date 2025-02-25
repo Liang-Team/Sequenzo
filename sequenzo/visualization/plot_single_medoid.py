@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import List, Optional
 
-from sequenzo.seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 
 def plot_single_medoid(seqdata: SequenceData,
@@ -49,7 +49,7 @@ def plot_single_medoid(seqdata: SequenceData,
 
     # Configure X-axis
     ax.set_xticks(np.arange(n_timepoints) + 0.5)
-    ax.set_xticklabels(seqdata.cleaned_var, fontsize=10, ha='center')
+    ax.set_xticklabels(seqdata.cleaned_time, fontsize=10, ha='center')
     ax.tick_params(axis='x', which='major', pad=0, length=0, width=0)
 
     # Configure Y-axis

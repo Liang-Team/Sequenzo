@@ -1,6 +1,6 @@
 """
-@Author  : 梁彧祺
-@File    : sequence_index_plots.py
+@Author  : Yuqi Liang 梁彧祺
+@File    : plot_index.py
 @Time    : 29/12/2024 09:08
 @Desc    : 
     Generate sequence index plots.
@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 from PIL import Image
-from seqdef import SequenceData
+from sequenzo import SequenceData
 
 
 ### Data Handling & Preprocessing ###
@@ -524,7 +524,7 @@ if __name__ == '__main__':
     import pandas as pd
     import pickle
     from seqdef import SequenceData
-    from sequence_index_plots import sequence_index_plot
+    from plot_index import sequence_index_plot
 
     df = pd.read_csv(
         '/test_data/real_data_my_paper/detailed_sequence_10_work_years_df.csv')

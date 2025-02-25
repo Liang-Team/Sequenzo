@@ -1,6 +1,6 @@
 """
 @Author  : 梁彧祺
-@File    : seqdef.py
+@File    : define_sequence_data.py
 @Time    : 05/02/2025 12:47
 @Desc    : Optimized SequenceData class with integrated color scheme & legend handling.
 """
@@ -26,7 +26,7 @@ class SequenceData:
     def __init__(
         self,
         data: pd.DataFrame,
-        var: list,
+        time: list,
         states: list,
         alphabet: list = None,
         labels: list = None,
@@ -42,8 +42,8 @@ class SequenceData:
         Initialize the SequenceData object.
 
         :param data: DataFrame containing sequence data.
-        :param var: List of columns containing sequences.
-        :param states: List of unique states (categories).
+        :param time_list: List of columns containing time labels.
+        :param states_list: List of unique states (categories).
         :param alphabet: Optional predefined state space.
         :param labels: Labels for states (optional, for visualization).
         :param id_col: Column name for row identifiers.
@@ -55,11 +55,11 @@ class SequenceData:
         :param cpal: Custom color palette for visualization.
         """
         self.data = data.copy()
-        self.var = var
+        self.time = time
         # Clean the labels of time steps instead of keeping "C1", ..."C10"
-        self.cleaned_var = [str(i + 1) for i in range(len(var))]
+        self.cleaned_time = [str(i + 1) for i in range(len(time))]
         self.states = states
-        self.alphabet = alphabet or sorted(set(data[var].stack().dropna().unique()))
+        self.alphabet = alphabet or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels
         self.id_col = id_col
         self.weights = weights
@@ -103,7 +103,7 @@ class SequenceData:
 
     def _extract_sequences(self) -> pd.DataFrame:
         """Extracts only relevant sequence columns."""
-        return self.data[self.var].copy()
+        return self.data[self.time].copy()
 
     def _process_missing_values(self):
         """Handles missing values based on the specified rules."""
@@ -181,19 +181,4 @@ class SequenceData:
             plt.show()
 
 
-# Example Usage
-if __name__ == "__main__":
-    df = pd.read_csv('/test_data/data_2.7w.csv')
 
-    sequence_data = SequenceData(
-        data=df,
-        var=['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10'],  # Specify sequence columns
-        states=['data', 'math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    )
-
-    sequence_data.describe()
-    processed_sequence = sequence_data.to_dataframe()
-    print(processed_sequence)
-
-    # Display legend
-    sequence_data.plot_legend()

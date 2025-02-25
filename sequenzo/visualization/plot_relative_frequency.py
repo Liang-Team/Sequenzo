@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import seaborn as sns
 
-from sequenzo.seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 
 def plot_relative_frequency(seqdata: SequenceData,

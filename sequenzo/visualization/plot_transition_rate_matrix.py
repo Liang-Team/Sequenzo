@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import List, Optional
-from sequenzo.seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 
 def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False) -> np.ndarray:

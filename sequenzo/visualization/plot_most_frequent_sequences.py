@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
-from sequenzo.seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 
 def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as=None, dpi=200):
@@ -45,7 +45,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
 
     # Use provided time labels if available, otherwise use generic "C1, C2, ..."
     if seqdata.var:
-        x_labels = seqdata.cleaned_var
+        x_labels = seqdata.cleaned_time
     else:
         x_labels = [f"{i + 1}" for i in range(sequence_length)]
 

@@ -17,3 +17,5 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["sequenzo"]
+[tool.setuptools.package-data]
+"sequenzo.datasets" = ["*.csv"]
