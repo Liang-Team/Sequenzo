@@ -438,7 +438,9 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
         cropped_image.show()  # This opens the image using the default viewer
 
 
-def _sequence_index_plot_single(data, categories, age_labels=None,
+# TODO: compare this very original file and the one in sequenzo
+# TODO: I suppose this might look better and I have to understand it better
+def sequence_index_plot_single(data, categories, age_labels=None,
                                num_colors=8, reverse_colors=True, figsize=(10, 6),
                                title=None, xlabel="Time", ylabel="Sequence ID"):
     """
