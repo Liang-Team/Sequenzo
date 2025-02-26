@@ -11,7 +11,8 @@ from .define_sequence_data import *
 from .visualization import plot_sequence_index, plot_most_frequent_sequences, plot_single_medoid
 
 # from .clara.seqclararange import seqclararange
-# from .dissimilarities.seqdist import seqdist
+from .dissimilarity_measures.get_distance_matrix import get_distance_matrix
+from .dissimilarity_measures.get_substitution_cost_matrix import get_substitution_cost_matrix
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
@@ -21,6 +22,8 @@ __all__ = [
     "plot_sequence_index",
     "plot_most_frequent_sequences",
     "plot_single_medoid",
+    "get_distance_matrix",
+    "get_substitution_cost_matrix"
     # "state_distribution_plot",
     # "seqclararange",
     #
