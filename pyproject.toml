@@ -1,21 +1,30 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sequenzo"
-version = "0.1"
-description = "A package for sequence visualization and analysis."
-authors = [{name = "Yuqi Liang 梁彧祺, Xinyi Li 李欣怡, Jan Meyerhoff-Liang 马杨杨"}]
+version = "0.1.0"
+description = "A fast, scalable and intuitive Python package for social sequence analysis."
+readme = "README.md"
+authors = [{ name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
+           { name = "Xinyi Li", email = "1836724126@qq.com"},
+           { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}]
+license = { file = "LICENSE" }
+# TODO: How do I know all the dependencies I need?
 dependencies = [
     "numpy",
     "pandas",
     "matplotlib",
+    "scikit-learn",
     "seaborn",
     "Pillow"
 ]
 
-[tool.setuptools]
-packages = ["sequenzo"]
+[project.urls]
+Homepage = "https://github.com/Liang-Team/Sequenzo"
+# TODO: change
+Documentation = "https://your-docs-link.com"
+
 [tool.setuptools.package-data]
-"sequenzo.datasets" = ["*.csv"]
+"sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv", "country_life_expentancy.csv"]
