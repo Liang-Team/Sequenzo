@@ -8,7 +8,8 @@ from .datasets import load_dataset, list_datasets
 
 # Import the core functions that should be directly available from the sequenzo package
 from .define_sequence_data import *
-from .visualization import *
+from .visualization import plot_sequence_index, plot_most_frequent_sequences, plot_single_medoid
+
 # from .clara.seqclararange import seqclararange
 # from .dissimilarities.seqdist import seqdist
 
@@ -17,8 +18,11 @@ __all__ = [
     "load_dataset",
     "list_datasets",
     "SequenceData",
-    "visualization",
+    "plot_sequence_index",
+    "plot_most_frequent_sequences",
+    "plot_single_medoid",
     # "state_distribution_plot",
     # "seqclararange",
     #
 ]
+

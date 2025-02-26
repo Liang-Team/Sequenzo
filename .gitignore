@@ -1,6 +1,12 @@
 .idea
 .vscode
 .DS_Store
+
 # MacOS built-in
 *.egg-info/
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
 

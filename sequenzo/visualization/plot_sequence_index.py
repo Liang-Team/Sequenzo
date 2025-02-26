@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : plot_index.py
+@File    : plot_sequence_index.py
 @Time    : 29/12/2024 09:08
 @Desc    : 
     Generate sequence index plots.
@@ -63,14 +63,14 @@ def preprocess_data(data):
 ### Plotting ###
 
 # Main User-Facing Function
-def sequence_index_plot(seqdata: SequenceData,
+def plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
                         custom_order=None,
                         sortv=None,
                         age_labels=None,
                         title=None,
                         facet_ncol=2,
-                        xlabel="Age",
+                        xlabel="Time",
                         ylabel="Sequence ID",
                         save_as=None,
                         dpi=200):
@@ -250,8 +250,8 @@ def _sequence_index_plot_grouping_ncol_1(data, categories, id_group_df, age_labe
         ax.tick_params(axis='both', length=4, width=1, colors='black', labelsize=8)
 
         # Set consistent x and y axis labels
-        ax.set_xlabel('Age', fontsize=10, labelpad=10)
-        ax.set_ylabel('Sequence ID', fontsize=10, labelpad=10)
+        ax.set_xlabel(xlabel, fontsize=10, labelpad=10)
+        ax.set_ylabel(ylabel, fontsize=10, labelpad=10)
 
     if title is not None:
         # Center title above subplots only
@@ -305,6 +305,7 @@ def sort_group_labels(group_labels, custom_order=None):
 def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
                                              custom_order=None, age_labels=None,
                                              palette=None, reverse_colors=True, title=None,
+                                             xlabel="Time", ylabel="Sequence ID",
                                              facet_ncol=2, save_as=None, dpi=200):
     """
     Plot sequence index plots with dynamic layout adjustments for better aesthetics.
@@ -414,8 +415,8 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
         ax.tick_params(axis='both', length=4, width=1, colors='black', labelsize=8)
 
         # Set consistent x and y axis labels with increased padding
-        ax.set_xlabel('Age', fontsize=10, labelpad=15)
-        ax.set_ylabel('Sequence ID', fontsize=10, labelpad=15)
+        ax.set_xlabel(xlabel, fontsize=10, labelpad=15)
+        ax.set_ylabel(ylabel, fontsize=10, labelpad=15)
 
     if title is not None:
         # Center title above subplots only
@@ -435,6 +436,94 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
         # Show the cropped figure
         cropped_image = _crop_bottom_whitespace(fig)
         cropped_image.show()  # This opens the image using the default viewer
+
+
+def _sequence_index_plot_single(data, categories, age_labels=None,
+                               num_colors=8, reverse_colors=True, figsize=(10, 6),
+                               title=None, xlabel="Time", ylabel="Sequence ID"):
+    """
+    Efficiently creates a sequence index plot using `imshow` for faster rendering.
+
+    :param data: (np.array or pd.DataFrame) 2D array where rows are sequences and columns are time points.
+    :param categories: (list): List of category labels corresponding to the data values.
+    :param age_labels: (list): List of labels for the x-axis (e.g., ages or time points).
+    :param num_colors: (int): Number of colors in the Spectral palette.
+    :param reverse_colors: (bool): Whether to reverse the color scheme.
+    :param figsize: (tuple): Size of the figure.
+    :param xlabel: (str): Label for the x-axis.
+    :param ylabel: (str): Label for the y-axis.
+    :param title: (str): Title for the plot.
+
+    :return None.
+    """
+    if isinstance(data, pd.DataFrame):
+        data = data.values
+
+    # Sort sequences lexicographically for better visualization
+    sorted_indices = np.lexsort(data.T[::-1])
+    sorted_data = data[sorted_indices]
+
+    # Adjust the palette based on the number of states
+    if num_colors <= 20:
+        spectral_colors = sns.color_palette("Spectral", num_colors)
+    else:
+        spectral_colors = sns.color_palette("cubehelix", num_colors)
+
+    if reverse_colors:
+        spectral_colors = list(reversed(spectral_colors))
+    cmap = ListedColormap(spectral_colors)
+
+    # Create the plot using imshow
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
+
+    # Enhance x-axis aesthetics
+    if age_labels:
+        ax.set_xticks(range(len(age_labels)))
+        ax.set_xticklabels(age_labels, fontsize=10, ha='right', color='black')
+    else:
+        ax.set_xticks(range(sorted_data.shape[1]))
+        ax.set_xticklabels(range(1, sorted_data.shape[1] + 1), fontsize=10, rotation=45, ha='right', color='black')
+
+    # Enhance y-axis aesthetics
+    ax.set_yticks(range(0, len(sorted_data), max(1, len(sorted_data) // 10)))
+    ax.set_yticklabels(
+        range(1, len(sorted_data) + 1, max(1, len(sorted_data) // 10)),
+        fontsize=10,
+        color='black'
+    )
+
+    # Customize axis line styles and ticks
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('gray')
+    ax.spines['bottom'].set_color('gray')
+    ax.spines['left'].set_linewidth(0.7)
+    ax.spines['bottom'].set_linewidth(0.7)
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
+    ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+
+    # Add labels and title
+    ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+    ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+    if title:
+        ax.set_title(title, fontsize=14, color='black')
+
+    # Add a legend
+    legend_handles = [
+        plt.Rectangle((0, 0), 1, 1, color=spectral_colors[i], label=categories[i])
+        for i in range(len(categories))
+    ]
+    ax.legend(
+        handles=legend_handles,
+        bbox_to_anchor=(1.05, 1),
+        loc='upper left',
+        title="States",
+        fontsize=10
+    )
+
+    plt.tight_layout()
+    plt.show()
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
@@ -524,7 +613,7 @@ if __name__ == '__main__':
     import pandas as pd
     import pickle
     from seqdef import SequenceData
-    from plot_index import sequence_index_plot
+    from plot_sequence_index import sequence_index_plot
 
     df = pd.read_csv(
         '/test_data/real_data_my_paper/detailed_sequence_10_work_years_df.csv')
@@ -544,7 +633,7 @@ if __name__ == '__main__':
                                  states=unique_states_list
                                  )
 
-    sequence_index_plot(sequence_data,
+    plot_sequence_index(sequence_data,
                         sortv='lexical',
                         xlabel='Work year')
 
