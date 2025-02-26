@@ -43,7 +43,14 @@ pip install sequenzo
 
 💬 **Have a question or found a bug?**
 
-Submit an issue on [GitHub Issues](), and we’ll address it as soon as possible.
+Please submit an issue on [GitHub Issues](https://github.com/Liang-Team/Sequenzo/issues). 
+
+For an effective bug report, please include the following:
+* A reproducible code example that clearly demonstrates the issue.
+* The output you’re seeing, such as an error message or an image of the plot.
+* A brief explanation of why you believe this is a bug.
+
+Providing these details will help us diagnose and resolve the issue more efficiently. We are always happy to help and will address it as soon as possible.
 
 🌟 **Enjoying Sequenzo?**
 
@@ -51,7 +58,10 @@ Support the project by starring ⭐ the GitHub repo and spreading the word!
 
 🛠 **Interested in contributing?**
 
-Check out our contribution guide (Insert link) and submit a pull request. We would love your help!
+Check out our [contribution guide]() for more details. 
+
+* Write code? Submit a pull request to enhance Sequenzo.
+* Testing? Try Sequenzo and share your feedback. Every suggestion counts!
 
 ## Team
 
