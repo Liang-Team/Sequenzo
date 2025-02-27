@@ -11,9 +11,9 @@ authors = [{ name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
            { name = "Xinyi Li", email = "1836724126@qq.com"},
            { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}]
 license = { file = "LICENSE" }
-# TODO: How do I know all the dependencies I need?
+
 dependencies = [
-    "numpy",
+    "numpy<2.0",
     "pandas",
     "matplotlib",
     "seaborn",

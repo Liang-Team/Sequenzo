@@ -27,13 +27,26 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+      # 为 Windows 配置 Visual Studio 编译环境
+    - name: Add msbuild to PATH
+      if: matrix.os == 'windows-latest'
+      uses: microsoft/setup-msbuild@v1.1
+
+    # 安装 Windows 特定的编译工具
+    - name: Install Windows build tools
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install visualstudio2022buildtools
+        choco install visualstudio2022-workload-nativedesktop
+
     - name: Install system dependencies
       run: |
         python -m pip install --upgrade pip
         pip install wheel setuptools
-        pip install numpy pandas scipy matplotlib seaborn pillow scikit-learn fastcluster joblib
+        pip install "numpy<2.0"
+        pip install pandas scipy matplotlib seaborn pillow scikit-learn fastcluster joblib
         pip install flake8 pytest pytest-cov
-        pip install pybind11
+        pip install "pybind11>=2.6.0"
 
     # 添加详细的安装输出
     - name: Install local package
