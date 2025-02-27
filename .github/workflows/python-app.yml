@@ -43,7 +43,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install wheel setuptools
-        pip install -r requirements-${{ matrix.python-version }}.txt
+        pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
 
     # 添加详细的安装输出
     - name: Install local package

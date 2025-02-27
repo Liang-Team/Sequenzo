@@ -21,6 +21,8 @@ authors = [
 license = { file = "LICENSE" }
 requires-python = ">=3.8,<3.11"
 
+# 最小版本要求，这种配置提供了灵活性，
+# 让 requirements-*.txt 可以精确指定不同 Python 版本的最佳依赖版本。
 dependencies = [
     "numpy>=1.19.5,<2.0",
     "pandas>=1.2.5",
@@ -30,7 +32,7 @@ dependencies = [
     "pybind11>=2.6.0",
     "scipy>=1.6.3",
     "scikit-learn>=0.24.2",
-    "fastcluster>=1.1.26",
+    "fastcluster>=1.1.25",
     "joblib>=1.0.1",
 ]
 
