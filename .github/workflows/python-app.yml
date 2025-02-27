@@ -23,28 +23,43 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4  # Upgrade to the lasted version
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
+    # Installing platform-specific dependencies
     - name: Install Linux dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev
+        sudo apt-get install -y build-essential python3-dev cmake
 
-    - name: Install dependencies
+    - name: Install macOS dependencies
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install cmake
+
+    - name: Install Windows dependencies
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install cmake
+
+    - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install wheel setuptools
+        pip install pybind11 numpy 
         pip install flake8 pytest pytest-cov
-        pip install pybind11 numpy pandas matplotlib seaborn pillow
-        pip install -e .
+        pip install pandas matplotlib seaborn pillow
+
+    # Document the compiling process in details
+    - name: Build package
+      run: |
+        python -m pip install -v -e .  
 
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test imports
@@ -53,20 +68,21 @@ jobs:
         python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
         python -c "import sequenzo.clustering; print('Clustering module imported successfully')"
 
-    # Optional: Build wheel
     - name: Build wheel
       run: |
-        python -m pip install wheel
         python setup.py bdist_wheel
 
-    # Optional: Upload build artifacts
     - name: Upload wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: wheels
+        name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist/*.whl
 
-    # Uncomment when you have tests ready
-    # - name: Run tests
-    #   run: |
-    #     pytest --cov=sequenzo
+    # For potential debugging purposes
+    - name: Display system and build information
+      run: |
+        python --version
+        pip --version
+        cmake --version
+        python -c "import sys; print(f'Platform: {sys.platform}')"
+        python -c "import pybind11; print(f'pybind11 version: {pybind11.__version__}')"
