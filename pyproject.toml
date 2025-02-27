@@ -3,7 +3,7 @@ requires = [
     "setuptools>=64",
     "wheel>=0.40.0",
     "pybind11>=2.10.0",
-    "numpy>=1.19.5",
+    "numpy>=1.19.5,<2.0",  # 限制 numpy 版本，确保兼容 scipy
     "setuptools-scm[toml]>=7.0.0"
 ]
 build-backend = "setuptools.build_meta"
@@ -15,16 +15,15 @@ description = "A fast, scalable and intuitive Python package for social sequence
 readme = "README.md"
 authors = [
     { name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
-    { name = "Xinyi Li", email = "1836724126@qq.com"},
-    { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}
+    { name = "Xinyi Li", email = "1836724126@qq.com" },
+    { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com" }
 ]
 license = { file = "LICENSE" }
 requires-python = ">=3.8,<3.11"
 
-# 最小版本要求，这种配置提供了灵活性，
-# 让 requirements-*.txt 可以精确指定不同 Python 版本的最佳依赖版本。
+# 确保不同 Python 版本都能正确解析 `dependencies`
 dependencies = [
-    "numpy>=1.19.5,<2.0",
+    "numpy>=1.19.5,<2.0",  # 避免 numpy 2.x 破坏 scipy 兼容性
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
@@ -32,7 +31,7 @@ dependencies = [
     "pybind11>=2.6.0",
     "scipy>=1.6.3",
     "scikit-learn>=0.24.2",
-    "fastcluster>=1.1.25",
+    "fastcluster>=1.2.6",  # 适配 scipy >=1.6.3
     "joblib>=1.0.1",
 ]
 
@@ -54,5 +53,6 @@ package-dir = {"" = "."}
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
 
+# 修复 `setuptools.dynamic` 解析失败的情况
 [tool.setuptools.dynamic]
 version = {attr = "sequenzo.__version__"}

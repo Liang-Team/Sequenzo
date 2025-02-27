@@ -12,9 +12,13 @@ import sys
 
 def read_requirements(filename):
     """
-    读取依赖文件
+    读取依赖文件，确保使用 UTF-8 编码，并处理文件缺失情况
     """
-    with open(filename, 'r') as f:
+    if not os.path.exists(filename):
+        print(f"Warning: {filename} not found. Skipping dependency installation.")
+        return []
+
+    with open(filename, 'r', encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith('#')]
 
 def get_extra_compile_args():
@@ -45,34 +49,34 @@ def configure_cpp_extension():
             extra_compile_args=get_extra_compile_args(),
             language='c++',
         )
-        print("C++ extension configured successfully")
+        print("✅ C++ extension configured successfully")
         return [ext_module]
     except Exception as e:
-        print(f"Warning: Unable to configure C++ extension: {e}")
-        print("The package will be installed with a Python fallback implementation")
+        print(f"⚠️ Warning: Unable to configure C++ extension: {e}")
+        print("The package will be installed with a Python fallback implementation.")
         return []
 
-# 动态选择对应 Python 版本的依赖文件
 def get_requirements_file():
     """
     根据当前 Python 版本选择合适的依赖文件
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    if python_version.startswith('3.8'):
-        return 'requirements-3.8.txt'
-    elif python_version.startswith('3.9'):
-        return 'requirements-3.9.txt'
-    elif python_version.startswith('3.10'):
-        return 'requirements-3.10.txt'
-    else:
-        return 'requirements-3.8.txt'  # 默认使用 3.8 的依赖
+    requirements_file = f"requirements-{python_version}.txt"
+
+    if not os.path.exists(requirements_file):
+        print(f"⚠️ Warning: {requirements_file} not found. Using default requirements-3.8.txt.")
+        return "requirements-3.8.txt"
+
+    return requirements_file
 
 # 主 setup 配置
 setup(
     name="sequenzo",
     version="0.1.0",
     description="A fast, scalable and intuitive Python package for social sequence analysis",
-    long_description=open('README.md').read() if os.path.exists('README.md') else '',
+
+    # 确保 README.md 用 UTF-8 读取，避免 Windows 乱码
+    long_description=open('README.md', 'r', encoding="utf-8").read() if os.path.exists('README.md') else '',
     long_description_content_type='text/markdown',
 
     # 包信息
@@ -86,7 +90,7 @@ setup(
     cmdclass={"build_ext": build_ext},
 
     # 依赖管理
-    python_requires='>=3.8,<3.11',
+    python_requires='>=3.8',
     install_requires=read_requirements(get_requirements_file()),
     extras_require={
         'dev': read_requirements('requirements-dev.txt')
@@ -103,6 +107,6 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
 )
-
