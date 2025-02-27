@@ -2,6 +2,9 @@
 .vscode
 .DS_Store
 
+# Python build artifacts
+build/
+dist/
 # MacOS built-in
 *.egg-info/
 
