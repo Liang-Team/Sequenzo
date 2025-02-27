@@ -10,9 +10,14 @@ from .datasets import load_dataset, list_datasets
 from .define_sequence_data import *
 from .visualization import plot_sequence_index, plot_most_frequent_sequences, plot_single_medoid
 
-# from .clara.seqclararange import seqclararange
 from .dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from .dissimilarity_measures.get_substitution_cost_matrix import get_substitution_cost_matrix
+
+from .clustering import Cluster, ClusterResults, ClusterQuality
+from .clustering import k_medoids
+
+# from .clara.seqclararange import seqclararange
+
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
@@ -23,9 +28,12 @@ __all__ = [
     "plot_most_frequent_sequences",
     "plot_single_medoid",
     "get_distance_matrix",
-    "get_substitution_cost_matrix"
+    "get_substitution_cost_matrix",
+    "Cluster",
+    "ClusterResults",
+    "ClusterQuality"
     # "state_distribution_plot",
-    # "seqclararange",
+    # "clara",
     #
 ]
 

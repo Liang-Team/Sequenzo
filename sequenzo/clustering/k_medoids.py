@@ -11,7 +11,7 @@ from scipy.cluster.hierarchy import fcluster
 
 from disscenter import disscentertrim
 
-import example
+import c_code
 
 
 def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
@@ -63,7 +63,7 @@ def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce
     if k < 2 or k > nelements:
         raise ValueError(f" [!] 'k' should be in [2, {nelements}]")
 
-    memb = example.PAMonce(nelements,
+    memb = c_code.PAMonce(nelements,
                            diss.astype(np.float64),
                            initialclust.astype(np.int32),
                            npass,
