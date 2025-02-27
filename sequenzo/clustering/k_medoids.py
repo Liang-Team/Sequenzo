@@ -1,0 +1,75 @@
+"""
+@Author  : 李欣怡
+@File    : k_medoids.py
+@Time    : 2025/2/8 11:53
+@Desc    : 
+"""
+
+import numpy as np
+import pandas as pd
+from scipy.cluster.hierarchy import fcluster
+
+from disscenter import disscentertrim
+
+import example
+
+
+def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
+    if isinstance(method, str):
+        method = method.lower()
+        method_map = ["kmedoids", "pam", "pamonce"]
+        if method in method_map:
+            method = method_map.index(method) + 1  # 转换为 1-based 索引
+
+    if not (isinstance(method, int) and method in {1, 2, 3}):
+        raise ValueError(f"[!] Unknown clustering method {method}.")
+
+    nelements = diss.shape[0]
+    if nelements != diss.shape[1]:
+        raise ValueError(f"[!] Dissipation matrix has {nelements} elements.")
+
+    def internal_random_sample(nelements, k):
+        return np.random.choice(nelements, k, replace=False)  # 0-based 直接适用
+
+    if weights is None:
+        weights = np.ones(diss.shape[1], dtype=float)
+
+    if len(weights) != nelements:
+        raise ValueError(f"[!] [!] weights should be a vector of length {nelements}.")
+
+    if initialclust is None:
+        initialclust = internal_random_sample(nelements, k)
+    else:
+        # initialclust <- cutree(initialclust, k)
+        initialclust = fcluster(initialclust, k, criterion='maxclust')  # 1-based 索引
+
+        if len(initialclust) == nelements:
+            initialclust = disscentertrim(diss=diss, group=initialclust, medoids_index="first", weights=weights)
+
+            if len(initialclust) != k:
+                raise ValueError(f"[!] 'initialclust' should be a vector of cluster membership with k={k}.")
+
+        npass = 0
+
+    if len(initialclust) != k:
+        raise ValueError(f"[!] 'initialclust' should be a vector of medoids index of length :{k}.")
+
+    if np.any((initialclust >= nelements) | (initialclust < 0)):
+        raise ValueError(f" [!] Starting medoids should be in 1:{nelements}")
+
+    if npass < 0:
+        raise ValueError(" [!] 'npass' should be greater than 0")
+
+    if k < 2 or k > nelements:
+        raise ValueError(f" [!] 'k' should be in [2, {nelements}]")
+
+    memb = example.PAMonce(nelements,
+                           diss.astype(np.float64),
+                           initialclust.astype(np.int32),
+                           npass,
+                           weights.astype(np.float64))
+    memb_matrix = memb.runclusterloop()
+
+    return memb_matrix
+
+
