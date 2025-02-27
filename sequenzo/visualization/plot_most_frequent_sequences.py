@@ -44,7 +44,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     x_ticks = np.arange(sequence_length) + 0.5  # Align X-axis ticks to the center of bars
 
     # Use provided time labels if available, otherwise use generic "C1, C2, ..."
-    if seqdata.var:
+    if seqdata.time:
         x_labels = seqdata.cleaned_time
     else:
         x_labels = [f"{i + 1}" for i in range(sequence_length)]
