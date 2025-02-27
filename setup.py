@@ -10,6 +10,13 @@ import pybind11
 import os
 import sys
 
+def read_requirements(filename):
+    """
+    读取依赖文件
+    """
+    with open(filename, 'r') as f:
+        return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+
 def get_extra_compile_args():
     """
     获取平台特定的编译参数
@@ -64,23 +71,10 @@ setup(
     cmdclass={"build_ext": build_ext},
 
     # 依赖管理
-    python_requires='>=3.8,<3.11',  # 调整 Python 版本限制
-    install_requires=[
-        "numpy<2.0",
-        "pandas",
-        "scipy",
-        "matplotlib",
-        "seaborn",
-        "Pillow",
-        "pybind11>=2.6.0",
-        "scikit-learn",
-        "joblib",
-        "fastcluster"
-    ],
-
-    # 额外的开发依赖
+    python_requires='>=3.8,<3.11',
+    install_requires=read_requirements('requirements.txt'),
     extras_require={
-        'dev': ['pytest', 'flake8'],
+        'dev': read_requirements('requirements-dev.txt')
     },
 
     # 额外的元数据
@@ -90,7 +84,7 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",  # 修正许可证
+        "License :: OSI Approved :: BSD License",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",

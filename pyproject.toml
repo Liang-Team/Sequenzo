@@ -14,9 +14,6 @@ authors = [
 ]
 license = { file = "LICENSE" }
 
-# 新增：明确指定 Python 版本要求
-python_requires = ">=3.8,<3.11"
-
 dependencies = [
     "numpy<2.0",
     "pandas",
@@ -30,7 +27,6 @@ dependencies = [
     "joblib",
 ]
 
-# 新增：可选依赖
 [project.optional-dependencies]
 dev = ["pytest", "flake8"]
 
@@ -39,12 +35,13 @@ Homepage = "https://github.com/Liang-Team/Sequenzo"
 Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
+python-requires = ">=3.8,<3.11"
 packages = ["sequenzo"]
 package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
 
-# 修改：使用新的扩展模块语法
+# 对于动态配置，如果需要，可以这样添加
 [tool.setuptools.dynamic]
-# 如果需要动态配置
+version = {attr = "sequenzo.__version__"}

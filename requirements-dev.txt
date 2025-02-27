@@ -1,0 +1,7 @@
+pytest
+flake8
+jupyter
+memory-profiler
+stargazer
+ipykernel
+nbconvert
