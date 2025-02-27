@@ -59,18 +59,17 @@ import gc
 import time
 
 import sys
-from .utils.seqconc import seqconc
-from .utils.seqdss import seqdss
-from .utils.seqdur import seqdur
-from .utils.seqlength import seqlength
-from . import get_substitution_cost_matrix
-
-from . import example
 
 
 def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
+    from .utils.seqconc import seqconc
+    from .utils.seqdss import seqdss
+    from .utils.seqdur import seqdur
+    from .utils.seqlength import seqlength
+    from . import get_substitution_cost_matrix
 
+    from . import example
     gc.collect()                           # garbage collection
     ptime_begin = time.process_time()      # Record the current time (start time)
     tol = sys.float_info.epsilon ** 0.5    # Sets the tolerance for floating-point operations
