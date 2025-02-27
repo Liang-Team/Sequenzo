@@ -52,6 +52,8 @@ setup(
         "pybind11>=2.6.0",
         "scipy",
         "scikit-learn",
+        "fastcluster",
+        "joblib",
     ],
 )
 
