@@ -60,6 +60,8 @@ import time
 import sys
 import numpy as np
 import pandas as pd
+from sequenzo.define_sequence_data import SequenceData
+
 
 def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
@@ -70,7 +72,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     from . import get_substitution_cost_matrix
 
     from . import c_code
-    
+
     gc.collect()                           # garbage collection
     ptime_begin = time.process_time()      # Record the current time (start time)
     tol = sys.float_info.epsilon ** 0.5    # Sets the tolerance for floating-point operations

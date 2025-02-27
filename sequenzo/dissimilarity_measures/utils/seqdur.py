@@ -6,8 +6,8 @@
 """
 import pandas as pd
 import numpy as np
-from ..seqdef import SequenceData
-from . import seqlength
+from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
+from sequenzo.define_sequence_data import SequenceData
 
 # example:
 #     input:

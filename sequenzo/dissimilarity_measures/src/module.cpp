@@ -8,7 +8,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(example, m) {
+PYBIND11_MODULE(c_code, m) {
     py::class_<PAMonce>(m, "PAMonce")
             .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
             .def("runclusterloop", &PAMonce::runclusterloop);

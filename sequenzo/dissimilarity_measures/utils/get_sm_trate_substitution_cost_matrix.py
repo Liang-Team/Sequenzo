@@ -6,7 +6,7 @@
 """
 
 import numpy as np
-from ..seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
 
 def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=True,
                              lag=1, with_missing=False, count=False, statl=None):

@@ -9,7 +9,8 @@
 """
 import pandas as pd
 import numpy as np
-from ..seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
+
 
 def seqlength(seqdata):
     if isinstance(seqdata, SequenceData):

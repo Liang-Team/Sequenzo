@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=42", "wheel", "pybind11>=2.6.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -17,7 +17,8 @@ dependencies = [
     "pandas",
     "matplotlib",
     "seaborn",
-    "Pillow"
+    "Pillow",
+    "pybind11>=2.6.0"
 ]
 
 [project.urls]
@@ -31,3 +32,11 @@ package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
+
+[[tool.setuptools.ext-modules]]
+name = "sequenzo.dissimilarity_measures.c_code"
+sources = [
+    "sequenzo/dissimilarity_measures/src/module.cpp"
+]
+include-dirs = ["${PYBIND11_INCLUDE_DIR}", "${PYTHON_INCLUDE_DIR}"]
+extra-compile-args = ["-std=c++11"]
