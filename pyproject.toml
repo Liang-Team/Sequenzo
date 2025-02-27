@@ -1,5 +1,11 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "pybind11>=2.6.0"]
+requires = [
+    "setuptools>=64",
+    "wheel>=0.40.0",
+    "pybind11>=2.10.0",
+    "numpy>=1.19.5",
+    "setuptools-scm[toml]>=7.0.0"
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,35 +19,38 @@ authors = [
     { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}
 ]
 license = { file = "LICENSE" }
+requires-python = ">=3.8,<3.11"
 
 dependencies = [
-    "numpy<2.0",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "Pillow",
+    "numpy>=1.19.5,<2.0",
+    "pandas>=1.2.5",
+    "matplotlib>=3.4.3",
+    "seaborn>=0.11.2",
+    "Pillow>=8.3.2",
     "pybind11>=2.6.0",
-    "scipy",
-    "scikit-learn",
-    "fastcluster",
-    "joblib",
+    "scipy>=1.6.3",
+    "scikit-learn>=0.24.2",
+    "fastcluster>=1.1.26",
+    "joblib>=1.0.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "flake8"]
+dev = [
+    "pytest>=6.2.5",
+    "flake8>=3.9.2",
+    "memory-profiler>=0.58.0"
+]
 
 [project.urls]
 Homepage = "https://github.com/Liang-Team/Sequenzo"
 Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
-python-requires = ">=3.8,<3.11"
 packages = ["sequenzo"]
 package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
 
-# 对于动态配置，如果需要，可以这样添加
 [tool.setuptools.dynamic]
 version = {attr = "sequenzo.__version__"}

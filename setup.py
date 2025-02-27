@@ -52,6 +52,21 @@ def configure_cpp_extension():
         print("The package will be installed with a Python fallback implementation")
         return []
 
+# 动态选择对应 Python 版本的依赖文件
+def get_requirements_file():
+    """
+    根据当前 Python 版本选择合适的依赖文件
+    """
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if python_version.startswith('3.8'):
+        return 'requirements-3.8.txt'
+    elif python_version.startswith('3.9'):
+        return 'requirements-3.9.txt'
+    elif python_version.startswith('3.10'):
+        return 'requirements-3.10.txt'
+    else:
+        return 'requirements-3.8.txt'  # 默认使用 3.8 的依赖
+
 # 主 setup 配置
 setup(
     name="sequenzo",
@@ -72,7 +87,7 @@ setup(
 
     # 依赖管理
     python_requires='>=3.8,<3.11',
-    install_requires=read_requirements('requirements.txt'),
+    install_requires=read_requirements(get_requirements_file()),
     extras_require={
         'dev': read_requirements('requirements-dev.txt')
     },
@@ -90,3 +105,4 @@ setup(
         "Programming Language :: Python :: 3.10",
     ],
 )
+
