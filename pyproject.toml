@@ -16,7 +16,6 @@ dependencies = [
     "numpy",
     "pandas",
     "matplotlib",
-    "scikit-learn",
     "seaborn",
     "Pillow"
 ]
@@ -24,7 +23,11 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Liang-Team/Sequenzo"
 # TODO: change
-Documentation = "https://your-docs-link.com"
+Documentation = "https://sequenzo.yuqi-liang.tech"
+
+[tool.setuptools]
+packages = ["sequenzo"]
+package-dir = {"" = "."}
 
 [tool.setuptools.package-data]
-"sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv", "country_life_expentancy.csv"]
+"sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
