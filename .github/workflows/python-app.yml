@@ -27,7 +27,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-      # 为 Windows 配置 Visual Studio 编译环境
+    # 为 Windows 配置 Visual Studio 编译环境
     - name: Add msbuild to PATH
       if: matrix.os == 'windows-latest'
       uses: microsoft/setup-msbuild@v1.1

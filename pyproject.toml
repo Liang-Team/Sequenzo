@@ -7,10 +7,15 @@ name = "sequenzo"
 version = "0.1.0"
 description = "A fast, scalable and intuitive Python package for social sequence analysis."
 readme = "README.md"
-authors = [{ name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
-           { name = "Xinyi Li", email = "1836724126@qq.com"},
-           { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}]
+authors = [
+    { name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
+    { name = "Xinyi Li", email = "1836724126@qq.com"},
+    { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com"}
+]
 license = { file = "LICENSE" }
+
+# 新增：明确指定 Python 版本要求
+python_requires = ">=3.8,<3.11"
 
 dependencies = [
     "numpy<2.0",
@@ -25,9 +30,12 @@ dependencies = [
     "joblib",
 ]
 
+# 新增：可选依赖
+[project.optional-dependencies]
+dev = ["pytest", "flake8"]
+
 [project.urls]
 Homepage = "https://github.com/Liang-Team/Sequenzo"
-# TODO: change
 Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
@@ -37,10 +45,6 @@ package-dir = {"" = "."}
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
 
-[[tool.setuptools.ext-modules]]
-name = "sequenzo.dissimilarity_measures.c_code"
-sources = [
-    "sequenzo/dissimilarity_measures/src/module.cpp"
-]
-include-dirs = ["${PYBIND11_INCLUDE_DIR}", "${PYTHON_INCLUDE_DIR}"]
-extra-compile-args = ["-std=c++11"]
+# 修改：使用新的扩展模块语法
+[tool.setuptools.dynamic]
+# 如果需要动态配置

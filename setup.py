@@ -10,7 +10,6 @@ import pybind11
 import os
 import sys
 
-
 def get_extra_compile_args():
     """
     获取平台特定的编译参数
@@ -22,7 +21,6 @@ def get_extra_compile_args():
         return ['-std=c++11', '-Wall', '-Wextra']  # 添加更多警告
     else:
         return ['-std=c++11', '-Wall', '-Wextra']
-
 
 def configure_cpp_extension():
     """
@@ -39,8 +37,6 @@ def configure_cpp_extension():
             ],
             extra_compile_args=get_extra_compile_args(),
             language='c++',
-            # 可选：添加库依赖
-            # libraries=['somelib'] if sys.platform != 'win32' else [],
         )
         print("C++ extension configured successfully")
         return [ext_module]
@@ -68,7 +64,7 @@ setup(
     cmdclass={"build_ext": build_ext},
 
     # 依赖管理
-    python_requires='>=3.8',
+    python_requires='>=3.8,<3.11',  # 调整 Python 版本限制
     install_requires=[
         "numpy<2.0",
         "pandas",
@@ -82,6 +78,11 @@ setup(
         "fastcluster"
     ],
 
+    # 额外的开发依赖
+    extras_require={
+        'dev': ['pytest', 'flake8'],
+    },
+
     # 额外的元数据
     author="Yuqi Liang",
     author_email="yuqi.liang.1900@gmail.com",
@@ -89,14 +90,9 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD-3-Clause License",
+        "License :: OSI Approved :: BSD License",  # 修正许可证
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
     ],
-
-    # 可选的额外组
-    extras_require={
-        'dev': ['pytest', 'flake8'],
-    },
 )
