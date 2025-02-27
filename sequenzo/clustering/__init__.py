@@ -8,6 +8,3 @@ from .hierarchical_clustering import Cluster, ClusterResults, ClusterQuality
 from .k_medoids import k_medoids
 
 
-# Function or method where c_code is needed
-def local_import_c_code():
-    from sequenzo.dissimilarity_measures import c_code

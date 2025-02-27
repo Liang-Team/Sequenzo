@@ -10,15 +10,7 @@ import numpy as np
 import pandas as pd
 import sys
 
-
-# from sequenzo.dissimilarity_measures import c_code
-def local_import_c_code():
-    from sequenzo.dissimilarity_measures import c_code
-    return c_code
-
-
-# Use the local_import_c_code function to import c_code
-c_code = local_import_c_code()
+from sequenzo.dissimilarity_measures import c_code
 
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):

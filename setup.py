@@ -49,7 +49,8 @@ setup(
         "matplotlib",
         "seaborn",
         "Pillow",
-        "pybind11>=2.6.0"
+        "pybind11>=2.6.0",
+        "scipy"
     ],
 )
 
