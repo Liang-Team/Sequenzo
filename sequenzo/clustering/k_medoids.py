@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import fcluster
 
-from disscenter import disscentertrim
+from .utils.disscenter import disscentertrim
 
-import c_code
+import sequenzo.dissimilarity_measures.c_code
 
 
 def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):

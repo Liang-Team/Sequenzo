@@ -30,6 +30,7 @@ class SequenceData:
         states: list,
         alphabet: list = None,
         labels: list = None,
+        ids: list = None,
         id_col: str = None,
         weights: np.ndarray = None,
         start: int = 1,
@@ -42,8 +43,8 @@ class SequenceData:
         Initialize the SequenceData object.
 
         :param data: DataFrame containing sequence data.
-        :param time_list: List of columns containing time labels.
-        :param states_list: List of unique states (categories).
+        :param time: List of columns containing time labels.
+        :param states: List of unique states (categories).
         :param alphabet: Optional predefined state space.
         :param labels: Labels for states (optional, for visualization).
         :param id_col: Column name for row identifiers.
@@ -61,6 +62,7 @@ class SequenceData:
         self.states = states
         self.alphabet = alphabet or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels
+        self.ids = ids
         self.id_col = id_col
         self.weights = weights
         self.start = start
@@ -94,12 +96,28 @@ class SequenceData:
 
     def _validate_parameters(self):
         """Ensures correct input parameters."""
+        # check states, alphabet, labels
         if not self.states:
             raise ValueError("❌ 'states' must be provided.")
         if self.alphabet and set(self.alphabet) != set(self.states):
             raise ValueError("❌ 'alphabet' must match 'states'.")
         if self.labels and len(self.labels) != len(self.states):
             raise ValueError("❌ 'labels' must match the length of 'states'.")
+        
+        # check ids
+        if self.ids is not None:
+            if len(self.ids) != len(self.data):
+                raise ValueError("❌ 'ids' must match the length of 'data'.")
+
+            if len(np.unique(self.ids)) != len(self.ids):
+                raise ValueError("❌ 'ids' must be unique.")
+
+        # check weights
+        if self.weights is not None:
+            if len(self.weights) != len(self.data):
+                raise ValueError("❌ 'weights' must match the length of 'data'.")
+        else:
+            self.weights = np.ones(self.data.shape[0])
 
     def _extract_sequences(self) -> pd.DataFrame:
         """Extracts only relevant sequence columns."""
@@ -107,29 +125,38 @@ class SequenceData:
 
     def _process_missing_values(self):
         """Handles missing values based on the specified rules."""
-        left, right, gaps = self.missing_handling.values()
+        # left, right, gaps = self.missing_handling.values()
+        #
+        # # Fill left-side missing values
+        # if not pd.isna(left) and left != "DEL":
+        #     self.seqdata.fillna(left, inplace=True)
+        #
+        # # Process right-side missing values
+        # if right == "DEL":
+        #     self.seqdata = self.seqdata.apply(lambda row: row.dropna().reset_index(drop=True), axis=1)
+        #
+        # # Process gaps (internal missing values)
+        # if not pd.isna(gaps) and gaps != "DEL":
+        #     self.seqdata.replace(self.nr, gaps, inplace=True)
 
-        # Fill left-side missing values
-        if not pd.isna(left) and left != "DEL":
-            self.seqdata.fillna(left, inplace=True)
-
-        # Process right-side missing values
-        if right == "DEL":
-            self.seqdata = self.seqdata.apply(lambda row: row.dropna().reset_index(drop=True), axis=1)
-
-        # Process gaps (internal missing values)
-        if not pd.isna(gaps) and gaps != "DEL":
-            self.seqdata.replace(self.nr, gaps, inplace=True)
+        self.ismissing = self.seqdata.isna().any().any()
 
     def _convert_states(self):
         """Converts categorical states into numerical values for processing."""
         unique_states = sorted(set(self.seqdata.stack().dropna().unique()))
 
-        # Create mapping
-        self.state_mapping = {state: idx for idx, state in enumerate(unique_states)}
+        # with missing data
+        if self.seqdata.isna().any().any():
+            self.state_mapping = {state: idx + 1 for idx, state in enumerate(unique_states)}    # Create mapping
+            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, 0))    # Convert sequences to numeric values
 
-        # Convert sequences to numeric values
-        self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, np.nan))
+        # without missing data
+        else:
+            self.state_mapping = {state: idx for idx, state in enumerate(unique_states)}
+            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
+
+        if self.ids is not None:
+            self.seqdata.index = self.ids
 
     def _assign_colors(self, reverse_colors=True):
         """Assigns a color palette using the Spectral scheme by default."""
@@ -152,7 +179,12 @@ class SequenceData:
     def describe(self):
         """Prints an overview of the sequence dataset."""
         print(f"🔍 Number of sequences: {len(self.seqdata)}")
-        print(f"📏 Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
+        
+        if self.seqdata.isna().any().any():
+            lengths = self.seqdata.apply(lambda row: (row != 0).sum(), axis=1)
+            print(f"📏 Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+        else:
+        	print(f"📏 Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
         print(f"🔤 Alphabet: {self.alphabet}")
 
     def get_color_map(self):

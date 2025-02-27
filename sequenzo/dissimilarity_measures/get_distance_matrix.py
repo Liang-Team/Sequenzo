@@ -57,9 +57,9 @@
 """
 import gc
 import time
-
 import sys
-
+import numpy as np
+import pandas as pd
 
 def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
@@ -69,7 +69,8 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     from .utils.seqlength import seqlength
     from . import get_substitution_cost_matrix
 
-    from . import example
+    from . import c_code
+    
     gc.collect()                           # garbage collection
     ptime_begin = time.process_time()      # Record the current time (start time)
     tol = sys.float_info.epsilon ** 0.5    # Sets the tolerance for floating-point operations
@@ -476,7 +477,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         refseq_id = np.array(refseq_id, dtype=int)
 
         if method == "OM":
-            om = example.OMdistance(dseqs_num.astype(np.int32),
+            om = c_code.OMdistance(dseqs_num.astype(np.int32),
                                     sm.astype(np.float64),
                                     indel,
                                     norm_num,
@@ -485,7 +486,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMspell":
-            om = example.OMspellDistance(dseqs_num.astype(np.int32),
+            om = c_code.OMspellDistance(dseqs_num.astype(np.int32),
                                          sm.astype(np.float64),
                                          indel,
                                          norm_num,
@@ -497,7 +498,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "HAM" or method == "DHD":
-            DHD = example.DHDdistance(dseqs_num.astype(np.int32),
+            DHD = c_code.DHDdistance(dseqs_num.astype(np.int32),
                                       sm.astype(np.float64),
                                       norm_num,
                                       max_cost,
@@ -523,7 +524,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         refseq_id = np.array([-1, -1])
 
         if method == "OM":
-            om = example.OMdistance(seqdata_num.astype(np.int32),
+            om = c_code.OMdistance(seqdata_num.astype(np.int32),
                                     sm.astype(np.float64),
                                     indel,
                                     norm_num,
@@ -536,7 +537,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             return dist_matrix
 
         elif method == "OMspell":
-            om = example.OMspellDistance(dseqs_num.astype(np.int32),
+            om = c_code.OMspellDistance(dseqs_num.astype(np.int32),
                                          sm.astype(np.float64),
                                          indel,
                                          norm_num,
@@ -547,7 +548,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                                          _seqlength.astype(np.int32))
             dist_matrix = om.compute_all_distances()
 
-            _matrix = example.dist2matrix(nseqs, seqdata_didxs.astype(np.int32), dist_matrix.astype(np.float64))
+            _matrix = c_code.dist2matrix(nseqs, seqdata_didxs.astype(np.int32), dist_matrix.astype(np.float64))
 
             _dist2matrix = _matrix.padding_matrix()
 
@@ -556,7 +557,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             return dist_matrix
 
         elif method == "HAM" or method == "DHD":
-            DHD = example.DHDdistance(seqdata_num.astype(np.int32),
+            DHD = c_code.DHDdistance(seqdata_num.astype(np.int32),
                                       sm.astype(np.float64),
                                       norm_num,
                                       max_cost,

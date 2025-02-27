@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import sys
 
-import c_code
+import sequenzo.dissimilarity_measures.c_code
 
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):

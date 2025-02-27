@@ -7,8 +7,8 @@
 
 import pandas as pd
 import numpy as np
-from . import SequenceData
 from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_cost_matrix
+from sequenzo.define_sequence_data import SequenceData
 
 def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False, miss_cost=None,
                                  time_varying=False, weighted=True, transition="both", lag=1,

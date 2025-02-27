@@ -5,9 +5,9 @@
 @Desc    : 
 """
 from .utils import get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength
-from .seqdef import SequenceData
 from .get_distance_matrix import get_distance_matrix
 from .get_substitution_cost_matrix import get_substitution_cost_matrix
+from sequenzo.define_sequence_data import SequenceData
 
 __all__ = [
     "SequenceData",
