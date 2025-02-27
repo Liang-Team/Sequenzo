@@ -6,7 +6,7 @@
 """
 import numpy as np
 import pandas as pd
-from dissimilarity_measures.seqdef import SequenceData
+from ..seqdef import SequenceData
 
 def sconc_pd(seqdata, sep):
     vi = seqdata.notna()  # Choose values that are not NA
@@ -17,6 +17,12 @@ def seqconc(data, sep="-", vname=['Sequence']):
     if isinstance(data, SequenceData):
         cseq = data.seqdata.apply(lambda row: sconc_pd(row, sep), axis=1)
         cseq.index = data.seqdata.index
+
+        return cseq
+
+    elif isinstance(data, pd.DataFrame):
+        cseq = data.apply(lambda row: sconc_pd(row, sep), axis=1)
+        cseq.index = data.index
 
         return cseq
 

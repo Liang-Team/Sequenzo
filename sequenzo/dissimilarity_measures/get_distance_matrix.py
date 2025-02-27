@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : Xinyi Li 李欣怡
 @File    : get_distance_matrix.py
 @Time    : 2024/11/10 19:55
 @Desc    : Computes pairwise dissimilarities between sequences or dissimilarity from a reference sequence.
@@ -47,89 +47,29 @@
                             if FALSE, an object of class dist is returned,
                             that is, a vector containing only values from the lower triangle of the distance matrix.
                             Objects of class dist are smaller and can be passed directly as arguments to most clustering functions.
-            kweights       : Double or vector of doubles. Default: vector of 1s.
-                            The weights applied to subsequences when method is one of "NMS", "NMSMST", or "SVRspell".
-                            It contains at position k the weight applied to the subsequences of length k.
-                            It must be positive. Its length should be equal to the number of columns of seqdata.
-                            If shorter, longer subsequences are ignored.
-                            If a scalar, it is transformed into rep(kweights,ncol(sedata)).
             tpow           : Default: 1.0.
                             The exponential weight of spell length when method is one of "OMspell", "NMSMST", or "SVRspell".
             expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc" or method = "OMspell".
                             It must be positive. The exact interpretation is distance-dependent.
-            context        : Default: 1-2*expcost. The cost of local insertion when method = "OMloc". It must be positive.
-            link           : String. Default: "mean". The function used to compute substitution costs when method = "OMslen".
-                            One of "mean" or "gmean".
-            h              : Default: 0.5. It must be greater than or equal to 0.
-                            The exponential weight of spell length when method = "OMslen".
-            nu             : Double. Stiffness when method = "TWED".
-                            It must be strictly greater than 0 and is usually less than 1
-            transindel     : String. Default: "constant".
-                            Method for computing transition indel costs when method = "OMstran".
-                            (1)One of "constant" (single indel of 1.0),
-                            (2)"subcost" (based on substitution costs),
-                            (3)or "prob" (based on transition probabilities).
-            otto           : Double. The origin-transition trade-off weight when method = "OMstran".
-                             It must be in [0, 1]
-            previous       : Default: FALSE. When method = "OMstran",
-                            should we also account for the transition from the previous state?
-            add.column     : Default: TRUE. When method = "OMstran",
-                            should the last column (and also the first column when previous = TRUE) be duplicated?
-                            When sequences have different lengths, should the last (first) valid state be duplicated.
-            breaks         : List of ordered pairs of integers. Default: NULL.
-                            The list of the possibly overlapping intervals when method = "CHI2" or method = "EUCLID".
-                            Each interval is defined by the pair c(t1,t2) of the start t1 and end t2 positions of the interval
-            step           : Integer. Default: 1.
-                            The length of the intervals when method = "CHI2" or method = "EUCLID" and breaks = NULL.
-                            It must be positive. It must also be even when overlap = TRUE.
-            overlap        : Default: FALSE. When method = "CHI2" or method = "EUCLID" and breaks = NULL,
-                            should the intervals overlap?
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
-            global.pdotj   : Numerical vector, "obs", or NULL. Default: NULL. Only for method = "CHI2".
-                            The vector of state proportions to be used as marginal distribution.
-                            (1)When NULL, the state distribution on the corresponding interval is used.
-                            (2)When "obs", the overall state distribution in seqdata is used for all intervals.
-                            (3)When a vector of proportions, it is used as marginal distribution for all intervals.
-            prox           : NULL or Matrix. Default: NULL.
-                            The matrix of state proximities when method = "NMS" or method = "SVRspell".
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
-            opt.args       : List. List of additional non-documented arguments for development usage.
-
-   method     |   parameters
---------------|---------------
-    OM        |  sm, indel, norm
-   OMloc      |  sm,expcost,context,norm
-  OMslen      |  sm, indel, link,h, norm
-  OMspell     |  sm, indel, norm, tpow, expcost
-  OMstran     |  sm, indel, transindel, otto, previous, add.column, noorm
-  HAM, DHD    |  sm, norm
-    CHI2      |  breaks, step, overlap, norm, weighted, global.pdotj
-   EUCLID     |  breaks, step, overlap, norm
-LCS,LCP, RLCP |  norm
-    NMS       |  prox, kweights
-   NMSMST     |  kweights, tpow
-  SVRspell    |  prox, kweights, tpow
-    TWED      |  sm,(indel),h,nu,nu, norm
 """
 import gc
 import time
+
 import sys
+from .utils.seqconc import seqconc
+from .utils.seqdss import seqdss
+from .utils.seqdur import seqdur
+from .utils.seqlength import seqlength
+from . import get_substitution_cost_matrix
 
-from seqdef import SequenceData
-from dissimilarity_measures.utils.seqdur import seqdur
-from dissimilarity_measures.utils.seqnum import seqnum
-from dissimilarity_measures.utils.seqasnum import seqasnum
-from get_substitution_cost_matrix import *
-from dissimilarity_measures.utils.seqdss import seqdss
-from dissimilarity_measures.utils.seqconc import seqconc
-from dissimilarity_measures.utils.seqlength import seqlength
-
-import example
+from . import example
 
 
 def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
-            tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
+                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
 
     gc.collect()                           # garbage collection
     ptime_begin = time.process_time()      # Record the current time (start time)
@@ -172,7 +112,9 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     nseqs = seqdata.seqdata.shape[0]
     alphabet = seqdata.alphabet
     nstates = len(alphabet)
-    seqs_dlens = pd.unique(seqlength(seqdata).iloc[:, 0])
+    if seqdata.ismissing:
+        nstates += 1
+    seqs_dlens = pd.unique(seqlength(seqdata))
     seqdata_nr = seqdata.nr
 
     # check method
@@ -205,7 +147,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         refseq_type = "none"
 
     # check for empty sequences
-    sdur = seqdur(seqdata, with_missing=with_missing)
+    sdur = seqdur(seqdata)
     emptyseq = np.where(np.isnan(sdur.iloc[:, 0]))[0]
 
     if len(emptyseq) > 0:
@@ -339,13 +281,13 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                     cost = 2
 
             print(f"Computing sm with seqcost using {sm}")
-            sm = seqcost(seqdata,
-                         method=sm,
-                         with_missing=with_missing,
-                         cval=cost,
-                         miss_cost=cost,
-                         time_varying=tv,
-                         weighted=weighted)
+            sm = get_substitution_cost_matrix(seqdata,
+                                              method=sm,
+                                              with_missing=with_missing,
+                                              cval=cost,
+                                              miss_cost=cost,
+                                              time_varying=tv,
+                                              weighted=weighted)
 
             if indel_type == "auto":
                 indel = sm['indel']
@@ -407,7 +349,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         # 找到 conc1 中的各个元素在 conc2 中的位置
         seqdata_didxs1 = []
         for element in conc1:
-            idx = np.where(np.all(conc2 == element, axis=1))[0][0]
+            idx = np.where(conc2 == element)[0][0]
             seqdata_didxs1.append(idx)
         seqdata_didxs1 = np.array(seqdata_didxs1)
 
@@ -417,7 +359,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         # 找到 conc3 中的各个元素在 conc4 中的位置
         seqdata_didxs2 = []
         for element in conc3:
-            idx = np.where(np.all(conc4 == element, axis=1))[0][0]
+            idx = np.where(conc4 == element)[0][0]
             seqdata_didxs2.append(idx)
         seqdata_didxs2 = np.array(seqdata_didxs2)
 
@@ -427,13 +369,13 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         # 创建一个字典，将 dseqs_series 的每个元素映射到其索引
         dseqs_index_map = {}
-        for idx, row in dseqs_series.iterrows():
-            dseqs_index_map[row['Sequence']] = dseqs_series.index.get_loc(idx)
+        for idx, seq in dseqs_series.items():
+            dseqs_index_map[seq] = dseqs_series.index.get_loc(idx)
 
         # 去重前数据 在 去重后数据 里出现的位置
         seqdata_didxs = []
-        for idx, row in seqdata_series.iterrows():
-            seqdata_didxs.append(dseqs_index_map[row['Sequence']])
+        for idx, seq in seqdata_series.items():
+            seqdata_didxs.append(dseqs_index_map[seq])
 
         seqdata_didxs = np.array(seqdata_didxs)
 
@@ -462,7 +404,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
     # OMspell
     # Redefined dseqs.num
-    elif method in ["OMspell"]:
+    if method in ["OMspell", "NMSMST", "SVRspell"]:
         dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
 
         # dseqs.oidxs <- match(seqconc(dseqs.num), seqconc(seqdata.num))
@@ -471,7 +413,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         conc2 = np.array(seqconc(seqdata_num))
         dseqs_oidxs = []
         for element in conc1:
-            idx = np.where(np.all(conc2 == element, axis=1))[0][0]
+            idx = np.where(conc2 == element)[0][0]
             dseqs_oidxs.append(idx)
 
         # 不能排序！否则会导致实际比较的序列不是期望中的样子
@@ -480,7 +422,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         dseqs_dur = dseqs_dur.iloc[dseqs_oidxs, :] - c
 
         seqdata_dss = seqdss(seqdata, with_missing)
-        dseqs_num = seqdata_dss.seqdata.iloc[dseqs_oidxs, :]
+        dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
         if method == "OMspell":
             _seqlength = seqlength(dseqs_num)
@@ -526,6 +468,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     norm_num = norms[1:].index(norm)
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
+    lengths = seqlength(seqdata.seqdata)
 
     if refseq_type != "none":
         if len(refseq_id) == 1:
@@ -538,6 +481,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                                     sm.astype(np.float64),
                                     indel,
                                     norm_num,
+                                    lengths,
                                     refseq_id.astype(np.int32))
             dist_matrix = om.compute_refseq_distances()
 
@@ -570,8 +514,8 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             for j in range(len2):
                 result[i, j] = distances_matrix[seqdata_didxs1[i], seqdata_didxs2[j]]
 
-        rownames = seqdata.index[refseq[0]]
-        colnames = seqdata.index[refseq[1]]
+        rownames = seqdata.seqdata.index[refseq[0]]
+        colnames = seqdata.seqdata.index[refseq[1]]
         result_df = pd.DataFrame(result, index=rownames, columns=colnames)
 
         return result_df
@@ -579,15 +523,16 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     else:
         refseq_id = np.array([-1, -1])
 
-        if method == "OM" :
+        if method == "OM":
             om = example.OMdistance(seqdata_num.astype(np.int32),
                                     sm.astype(np.float64),
                                     indel,
                                     norm_num,
+                                    lengths,
                                     refseq_id)
             dist_matrix = om.compute_all_distances()
 
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.id, columns=seqdata.id)
+            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
 
             return dist_matrix
 
@@ -607,7 +552,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
             _dist2matrix = _matrix.padding_matrix()
 
-            dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.index, columns=seqdata.index)
+            dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
             return dist_matrix
 
@@ -619,7 +564,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                                       refseq_id)
             dist_matrix = DHD.compute_all_distances()
 
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.index, columns=seqdata.index)
+            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
 
             return dist_matrix
 
@@ -632,3 +577,18 @@ def adaptSmForHAM(sm, nstates, ncols):
         costs[i, :, :] = sm
 
     return costs
+
+if __name__ == '__main__':
+    country_df = pd.read_csv('sampled_data_1000.csv')
+
+    sequence = SequenceData(country_df,
+                            time=['C1', 'C2', 'C3', 'C4', 'C5'],
+                            states=["Non-computing", "Non-technical computing", "Technical computing"])
+
+    distance = get_distance_matrix(sequence,
+                                   method="OMspell",
+                                   # refseq=[[0, 1, 2], [99, 100]],
+                                   sm="TRATE",
+                                   indel="auto")
+
+    distance.to_csv('output/fulldata/python_OMspell_1000.csv')

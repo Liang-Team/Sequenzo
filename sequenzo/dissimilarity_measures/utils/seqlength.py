@@ -8,17 +8,20 @@
             Here, we compute the lengths of all the sequences and return a data frame
 """
 import pandas as pd
-from dissimilarity_measures.seqdef import SequenceData
+import numpy as np
+from ..seqdef import SequenceData
 
 def seqlength(seqdata):
     if isinstance(seqdata, SequenceData):
-        seqdata = seqdata.seqdata
+        seqdata = seqdata.seqdata.replace(-99, np.nan)
 
     # Get effective length after removing void elements
-    non_nan_counts = seqdata.notna().sum(axis=1)
+    if isinstance(seqdata, pd.DataFrame):
+        lengths = seqdata.apply(lambda row: row.dropna().shape[0], axis=1)
+        lengths.name = 'Length'
 
-    seq_length = non_nan_counts.groupby(seqdata.index).sum()
+    else:
+        lengths = np.sum(~np.isnan(seqdata), axis=1)
+        lengths = pd.Series(lengths, name="Length")
 
-    seq_length = pd.Series(seq_length, name="Length", index=seqdata.index)
-
-    return seq_length
+    return lengths

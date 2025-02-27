@@ -6,8 +6,8 @@
 """
 import pandas as pd
 import numpy as np
-from dissimilarity_measures.seqdef import SequenceData
-from seqlength import seqlength
+from ..seqdef import SequenceData
+from . import seqlength
 
 # example:
 #     input:
@@ -22,16 +22,15 @@ def seqdur(seqdata):
     if not isinstance(seqdata, SequenceData):
         raise ValueError("data is not a sequence object, see seqdef function to create one")
 
-    seq_length = seqlength(seqdata).iloc[:, 0]
+    seq_length = seqlength(seqdata)
     maxsl = max(seq_length)
 
-    seqdata = seqdata.seqdata
-    nbseq = seqdata.shape[0]
+    nbseq = seqdata.seqdata.shape[0]
 
     trans = np.full((nbseq, maxsl), np.nan)
-    trans_df = pd.DataFrame(trans, index=seqdata.index, columns=[f"DUR{i + 1}" for i in range(maxsl)])
+    trans_df = pd.DataFrame(trans, index=seqdata.ids, columns=[f"DUR{i + 1}" for i in range(maxsl)])
 
-    seqdatanum = seqdata.to_numpy()
+    seqdatanum = seqdata.values
     seqdatanum[np.isnan(seqdatanum)] = -99
 
     maxcol = 0

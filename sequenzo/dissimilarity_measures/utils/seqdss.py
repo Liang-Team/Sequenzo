@@ -5,13 +5,9 @@
 @Desc    : Extracts distinct states from sequences
 """
 
-import os
-from contextlib import redirect_stdout
-
 import numpy as np
-
-from dissimilarity_measures.seqdef import SequenceData
-from seqlength import seqlength
+from ..seqdef import SequenceData
+from . import seqlength
 
 
 def seqdss(seqdata, with_missing=False):
@@ -20,12 +16,12 @@ def seqdss(seqdata, with_missing=False):
 
     nbseq = len(seqdata.seqdata)
     sl = seqlength(seqdata)
-    maxsl = sl.max().max()
+    maxsl = sl.max()
 
     statl = np.arange(len(seqdata.alphabet))
     nr = seqdata.nr
 
-    trans = np.full((nbseq, maxsl), np.nan, dtype='U25')
+    trans = np.full((nbseq, maxsl), np.nan)
 
     if with_missing:
         statl.append(nr)
@@ -43,10 +39,10 @@ def seqdss(seqdata, with_missing=False):
 
         tmpseq = seqdatanum[i, :]
 
-        while idx < sl.iloc[i, 0]:
-            iseq = tmpseq[idx]
+        while idx < sl[i]:
+            iseq = int(tmpseq[idx])
 
-            while idx < sl.iloc[i, 0] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
+            while idx < sl[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
                 idx += 1
 
             if iseq != -99:
@@ -60,22 +56,4 @@ def seqdss(seqdata, with_missing=False):
 
     trans = trans[:, :maxcol]
 
-    with open(os.devnull, 'w') as fnull:
-        with redirect_stdout(fnull):
-            result = SequenceData(
-                trans,
-                var=seqdata.var,
-                alphabet=seqdata.alphabet,
-                states=seqdata.states,
-                labels=seqdata.labels,
-                id=seqdata.id,
-                id_col=seqdata.id_col,
-                weights=seqdata.weights,
-                start=seqdata.start,
-                missing_handling=seqdata.missing_handling,
-                void=seqdata.void,
-                nr=seqdata.nr,
-                cpal=seqdata.cpal
-            )
-
-    return result
+    return trans

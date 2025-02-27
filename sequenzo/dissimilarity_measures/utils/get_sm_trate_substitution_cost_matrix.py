@@ -6,29 +6,28 @@
 """
 
 import numpy as np
-import pandas as pd
-from dissimilarity_measures.seqdef import SequenceData
+from ..seqdef import SequenceData
 
-def seqtrate(seqdata, states=None, time_varying=False, weighted=True,
-             lag=1, with_missing=False, count=False, statl=None):
+def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=True,
+                             lag=1, with_missing=False, count=False, statl=None):
     # ================
     # Check Parameters
     # ================
     if statl is not None:
-        arr = np.asarray(statl)
-        if np.all(np.issubdtype(arr.dtype, np.integer) & (arr > 0)):
-            states = statl
-        else:
-            raise ValueError("[!] 'statl' must be integer.")
+        states = statl
 
     if not isinstance(seqdata, SequenceData):
-        raise ValueError("[!] 'seqdata' must be sequences data, using seqdef to create one.")
+        raise ValueError("[x] Seqdata must be a pandas DataFrame representing sequences.")
 
     outcome = "counts" if count else "probabilities"
 
     # State list if not specified
     if states is None:
         states = seqdata.alphabet
+        if seqdata.ismissing:
+            statesCode = np.arange(len(states) + 1)
+        else:
+            statesCode = np.arange(len(states))
 
     if with_missing:
         states.append(seqdata.nr)
@@ -37,16 +36,17 @@ def seqtrate(seqdata, states=None, time_varying=False, weighted=True,
     if weighted:
         weights = seqdata.weights
     else:
-        weights = np.ones((seqdata.seqdata.shape[0], 1))
+        weights = np.ones(seqdata.seqdata.shape[0])
 
     nbetat = len(states)
-    statesCode = np.arange(nbetat)
+    if seqdata.ismissing:
+        nbetat += 1
     sdur = seqdata.seqdata.shape[1]
 
     if lag < 0:
-        all_transition = range(abs(lag), sdur)
+        all_transition = np.arange(abs(lag), sdur)
     else:
-        all_transition = range(sdur - lag)
+        all_transition = np.arange(sdur - lag)
 
     num_transition = len(all_transition)
 
@@ -58,7 +58,7 @@ def seqtrate(seqdata, states=None, time_varying=False, weighted=True,
         print(f" [>] Computing time varying transition {outcome} for states {states} ...")
 
         """
-        >>> for example: (output)
+        >>> for example:
                 , , C1
                                              [-> Non computing] [-> Non technical computing] [-> Technical computing]
                 [Non computing ->]                   0.81126761                  0.014084507                0.1746479
@@ -87,17 +87,17 @@ def seqtrate(seqdata, states=None, time_varying=False, weighted=True,
         tmat = np.zeros((num_transition, nbetat, nbetat))
 
         for sl in all_transition:
-            missing_cond = seqdata.iloc[:, sl + lag] != np.nan
+            missing_cond = np.not_equal(seqdata.iloc[:, sl + lag], np.nan)
 
             for x in range(nbetat):
-                colx_cond = seqdata.iloc[:, sl] == statesCode[x]
+                colx_cond = np.equal(seqdata.iloc[:, sl], statesCode[x])
                 PA = np.sum(weights[colx_cond & missing_cond])
 
                 if PA == 0:
                     tmat[sl, x, :] = 0
                 else:
                     for y in range(nbetat):
-                        PAB = np.sum(weights[colx_cond & (seqdata.iloc[:, sl + lag] == statesCode[y])])
+                        PAB = np.sum(weights[colx_cond & (np.equal(seqdata.iloc[:, sl + lag], statesCode[y]))])
                         tmat[sl, x, y] = PAB if count else PAB / PA
 
     # =========================================
@@ -105,34 +105,33 @@ def seqtrate(seqdata, states=None, time_varying=False, weighted=True,
     # =========================================
     else:
         print(f" [>] Computing transition {outcome} for states {states} ...")
+        seqdata = seqdata.to_numpy()
 
-        tmat = pd.DataFrame(0, index=[f"[{s} ->]" for s in states], columns=[f"[-> {s}]" for s in states])
+        tmat = np.zeros((nbetat, nbetat))
 
-        missing_cond = seqdata.iloc[:, [i + lag for i in all_transition]] != np.nan
+        missing_cond = np.not_equal(seqdata[:, all_transition + lag], np.nan)
 
         for x in range(nbetat):
-            colx_cond = seqdata.iloc[:, all_transition] == statesCode[x]
+            PA = 0
+            colx_cond = np.equal(seqdata[:, all_transition], statesCode[x])
 
-            # Count : PA
             if num_transition > 1:
-                logical_and = colx_cond.values & missing_cond.values
-
-                PA = np.sum(weights.T @ (np.sum(logical_and, axis=1).reshape(-1, 1)))
+                PA = np.sum(weights * np.sum(colx_cond & missing_cond, axis=1))
             else:
-                PA = np.sum(weights * (colx_cond & missing_cond).values).sum()
+                PA = np.sum(weights * (colx_cond & missing_cond))
 
             if PA == 0:
-                tmat.iloc[x, :] = 0
-
+                tmat[x, :] = 0
             else:
                 for y in range(nbetat):
-                    y_cond = (seqdata.iloc[:, [i + lag for i in all_transition]] == statesCode[y]).values
-
                     if num_transition > 1:
-                        PAB = np.sum(weights.T @ np.sum(colx_cond.values & y_cond, axis=1).reshape(-1, 1)).sum()
+                        PAB = np.sum(weights *
+                                     np.sum(colx_cond & (np.equal(seqdata[:, all_transition + lag], statesCode[y])),
+                                            axis=1))
                     else:
-                        PAB = np.sum(weights * (colx_cond & (seqdata.iloc[:, [i + lag for i in all_transition]] == statesCode[y])).values).sum()
+                        PAB = np.sum(
+                            weights * (colx_cond & (np.equal(seqdata[:, all_transition + lag], statesCode[y]))))
 
-                    tmat.iloc[x, y] = PAB if count else PAB / PA
+                    tmat[x, y] = PAB if count else PAB / PA
 
     return tmat

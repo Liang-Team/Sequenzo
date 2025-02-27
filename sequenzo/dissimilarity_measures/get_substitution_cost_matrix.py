@@ -7,12 +7,12 @@
 
 import pandas as pd
 import numpy as np
-from dissimilarity_measures.seqdef import SequenceData
-from dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix import seqtrate
+from . import SequenceData
+from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_cost_matrix
 
 def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False, miss_cost=None,
-            time_varying=False, weighted=True, transition="both", lag=1,
-            miss_cost_fixed=None):
+                                 time_varying=False, weighted=True, transition="both", lag=1,
+                                 miss_cost_fixed=None):
     # ================
     # Check Parameters
     # ================
@@ -47,6 +47,8 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
         alphabet.append(seqdata.nr)
 
     alphsize = len(alphabet)
+    if seqdata.ismissing:
+        alphsize += 1
 
     # ==================
     # Process "CONSTANT"
@@ -73,10 +75,10 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # Process "TRATE"
     # ===============
     if method == "TRATE":
-        tr = seqtrate(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)
-
         if time_varying:
             print(" [>] creating time varying substitution-cost matrix using transition rates ...")
+
+            tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)
 
             tmat = tr.shape[1]               # 状态数(因为 tr 是三维，所以第一维是时间维度，不是状态数)
             time = seqdata.seqdata.shape[1]  # 时间点数
@@ -124,12 +126,14 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
         else:
             print(" [>] creating substitution-cost matrix using transition rates ...")
 
+            tr = get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag, with_missing=with_missing)
+
             tmat = tr.shape[0]
             costs = np.zeros((alphsize, alphsize))
 
             for i in range(tmat - 1):
                 for j in range(i + 1, tmat):
-                    cost = cval - tr.iloc[i, j] - tr.iloc[j, i]
+                    cost = cval - tr[i, j] - tr[j, i]
                     costs[i, j] = cost
                     costs[j, i] = cost
 
@@ -142,8 +146,8 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # =================================
     if with_missing and miss_cost_fixed:
         if time_varying:
-            costs[alphsize - 1, :alphsize - 1, :] = miss_cost
-            costs[:alphsize - 1, alphsize - 1, :] = miss_cost
+            costs[:, alphsize - 1, :alphsize - 1] = miss_cost
+            costs[:, :alphsize - 1, alphsize - 1] = miss_cost
         else:
             costs[alphsize - 1, :alphsize - 1] = miss_cost
             costs[:alphsize - 1, alphsize - 1] = miss_cost
@@ -152,6 +156,9 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # Setting Rows and Columns Labels
     # ===============================
     rclab = alphabet
+    if seqdata.ismissing:
+        rclab += " "
+
     if time_varying:    # 3D
         costs = costs
     else:   # 2D
@@ -167,4 +174,4 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
 
 # Define seqsubm as an alias for backward compatibility
 def seqsubm(*args, **kwargs):
-    return seqcost(*args, **kwargs)['sm']
+    return get_substitution_cost_matrix(*args, **kwargs)['sm']
