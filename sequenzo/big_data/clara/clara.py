@@ -18,7 +18,8 @@ from itertools import product
 from .utils.aggregatecases import *
 from .utils.davies_bouldin import *
 from sequenzo.clustering.k_medoids import *
-from sequenzo.dissimilarity_measures import get_distance_matrix, SequenceData
+from sequenzo.dissimilarity_measures import get_distance_matrix
+from sequenzo.define_sequence_data import SequenceData
 
 def adjustedRandIndex(x, y=None):
     if isinstance(x, np.ndarray):

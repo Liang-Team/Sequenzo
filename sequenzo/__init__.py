@@ -15,6 +15,7 @@ from .dissimilarity_measures.get_substitution_cost_matrix import get_substitutio
 
 from .clustering import Cluster, ClusterResults, ClusterQuality
 from .clustering import k_medoids
+from .big_data.clara.clara import clara
 
 # from .clara.seqclararange import seqclararange
 
@@ -31,9 +32,9 @@ __all__ = [
     "get_substitution_cost_matrix",
     "Cluster",
     "ClusterResults",
-    "ClusterQuality"
+    "ClusterQuality",
     # "state_distribution_plot",
-    # "clara",
+    "clara"
     #
 ]
 

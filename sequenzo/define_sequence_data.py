@@ -88,7 +88,7 @@ class SequenceData:
         self._assign_colors()
 
         # Automatically print dataset overview
-        print("\n✅ SequenceData initialized successfully! Here's a summary:")
+        print("\n[>] SequenceData initialized successfully! Here's a summary:")
         self.describe()
 
     @property
@@ -183,14 +183,14 @@ class SequenceData:
 
     def describe(self):
         """Prints an overview of the sequence dataset."""
-        print(f"🔍 Number of sequences: {len(self.seqdata)}")
+        print(f"[>] Number of sequences: {len(self.seqdata)}")
         
         if self.seqdata.isna().any().any():
             lengths = self.seqdata.apply(lambda row: (row != 0).sum(), axis=1)
-            print(f"📏 Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+            print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
         else:
-        	print(f"📏 Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
-        print(f"🔤 Alphabet: {self.alphabet}")
+        	print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
+        print(f"[>] Alphabet: {self.alphabet}")
 
     def get_color_map(self):
         """Returns the color map for visualization."""
