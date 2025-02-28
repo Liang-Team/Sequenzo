@@ -583,16 +583,15 @@ def adaptSmForHAM(sm, nstates, ncols):
     return costs
 
 if __name__ == '__main__':
-    country_df = pd.read_csv('sampled_data_1000.csv')
+    from sequenzo import *
 
-    sequence = SequenceData(country_df,
-                            time=['C1', 'C2', 'C3', 'C4', 'C5'],
-                            states=["Non-computing", "Non-technical computing", "Technical computing"])
+    df = load_dataset('country_co2_emissions')
 
-    distance = get_distance_matrix(sequence,
-                                   method="OMspell",
-                                   # refseq=[[0, 1, 2], [99, 100]],
-                                   sm="TRATE",
-                                   indel="auto")
+    time = list(df.columns)[1:]
 
-    distance.to_csv('output/fulldata/python_OMspell_1000.csv')
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, states=states)
+
+    HAM = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+

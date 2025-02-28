@@ -10,12 +10,12 @@ import numpy as np
 import pandas as pd
 import sys
 
-
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):
 
     # 使用延迟导入获取 c_code 模块
     from .__init__ import _import_c_code
     c_code = _import_c_code()
+
 
     if isinstance(medoids_index, bool):
         if medoids_index:
@@ -94,3 +94,25 @@ def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weight
         return medoids
 
     return ret
+
+if __name__ == '__main__':
+    # Load the data that we would like to explore in this tutorial
+    # `df` is the short for `dataframe`, which is a common variable name for a dataset
+    from sequenzo import *
+    df = load_dataset('country_co2_emissions')
+
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, states=states)
+
+    result = clara(seqdata=sequence_data,
+                   R=2,
+                   kvals=range(2, 21),
+                   sample_size=3000,
+                   criteria=['distance', 'pbm'],
+                   parallel=True,
+                   stability=True)
+    result = result['allstat']
+
