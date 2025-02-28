@@ -1,10 +1,10 @@
-numpy>=1.19.5,<1.23  # 兼容 3.9 和 3.10
+numpy==1.22.4
 pandas==1.3.5
 scipy==1.7.3
 matplotlib==3.5.1
 seaborn==0.11.2
 scikit-learn==0.24.2
 joblib==1.0.1
-fastcluster==1.1.25
+fastcluster==1.2.6
 pillow==8.3.2
 pybind11>=2.6.0

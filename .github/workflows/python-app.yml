@@ -32,45 +32,58 @@ jobs:
     - name: Clear pip cache
       run: python -m pip cache purge
 
-    # Windows: 处理 numpy 版本冲突
-    - name: Install dependencies (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        python -m pip install --upgrade pip
-        pip install numpy==1.22.4 --only-binary numpy  # 限制 numpy 版本，防止 numpy 2.x
-        pip install wheel setuptools cmake
-        pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
-
-    # macOS: 处理 numpy 编译错误 (`faltivec` 相关问题)
+    # macOS: 处理 numpy & fastcluster 版本冲突，提前安装 Cython
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
         python -m pip install --upgrade pip
-        pip install numpy==1.22.4 --only-binary numpy  # ✅ 强制 numpy 1.22.4
-        pip install wheel setuptools
+        if [[ "${{ matrix.python-version }}" == "3.11" ]]; then
+          pip install "numpy>=1.23.2,<2.0"  
+        else
+          pip install numpy==1.22.4 --only-binary numpy
+        fi
+        pip install wheel setuptools Cython  
+        pip install fastcluster==1.2.6  
         pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
 
+    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
+    # pip install wheel setuptools Cython  # ✅ 先安装 Cython 避免 pandas 构建失败
+    # pip install fastcluster==1.2.6  # ✅ 解决 fastcluster 版本问题
+
+    # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install visualstudio2022buildtools --version=17.0.0 -y
+        choco install visualstudio2022-workload-vctools -y
+        python -m pip install --upgrade pip
+        if [[ "${{ matrix.python-version }}" == "3.11" ]]; then
+          pip install "numpy>=1.23.2,<2.0"  
+        else
+          pip install numpy==1.22.4 --only-binary numpy
+        fi
+        pip install wheel setuptools cmake Cython  
+        pip install --force-reinstall fastcluster==1.2.6  
+        pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
+
+    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
+    # pip install wheel setuptools cmake Cython  # ✅ 先安装 Cython 解决 pandas 问题
+    # pip install --force-reinstall fastcluster==1.2.6  # ✅ 强制安装 fastcluster 1.2.6，避免版本冲突
+
+    # Linux: 处理 fastcluster 版本问题，确保 numpy 先安装
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
         python -m pip install --upgrade pip
         pip install wheel setuptools
-        pip install numpy --only-binary numpy  # ✅ 先安装 numpy
+        pip install numpy --only-binary numpy  
+        pip install fastcluster==1.2.6  
         pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
-      # --no-build-isolation 让 fastcluster 直接使用已安装的 numpy。
+    # pip install numpy --only-binary numpy  # ✅ 先安装 numpy
+    # pip install fastcluster==1.2.6  # ✅ 避免 fastcluster 版本问题
 
-
-      # 确保 `PYTHONPATH` 正确
+    # 确保 `PYTHONPATH` 正确
     - name: Verify package path
-      shell: bash
-      run: |
-        echo "📂 Current directory:"
-        ls -lah
-        echo "📂 Sequenzo package directory:"
-        ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
-
-    # 列出文件，检查当前目录
-    - name: List files
       shell: bash
       run: |
         echo "📂 Current directory:"
@@ -103,10 +116,6 @@ jobs:
       run: pip list
 
     # 测试模块是否正确安装
-#    - name: Verify package version
-#      run: |
-#        python -c "import sequenzo; print(f'Sequenzo version: {sequenzo.__version__}')"
-
     - name: Test imports
       run: |
         python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
