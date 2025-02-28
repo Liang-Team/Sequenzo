@@ -24,6 +24,8 @@ def load_dataset(name):
     # 仅在函数被调用时导入pandas，而不是模块加载时
     import pandas as pd
     import os
+    # 这里也需要导入 pkg_resources
+    import importlib.resources as pkg_resources
 
     available_datasets = list_datasets()  # 获取动态数据集列表
 
@@ -34,7 +36,9 @@ def load_dataset(name):
     with pkg_resources.open_text("sequenzo.datasets", f"{name}.csv") as f:
         return pd.read_csv(f)
 
-# 🚀 **关键：添加这一行，确保 load_dataset 可以被外部访问**
+# **关键：添加这一行，确保 load_dataset 可以被外部访问**
 __all__ = ["load_dataset", "list_datasets"]
+
+
 
 

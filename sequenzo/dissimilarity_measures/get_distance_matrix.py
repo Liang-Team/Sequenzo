@@ -72,6 +72,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     from . import get_substitution_cost_matrix
 
     # 使用延迟导入获取 c_code 模块
+    from .__init__ import _import_c_code
     c_code = _import_c_code()
 
     gc.collect()                           # garbage collection

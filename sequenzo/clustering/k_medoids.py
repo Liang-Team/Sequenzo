@@ -15,6 +15,7 @@ from .utils.disscenter import disscentertrim
 def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
 
     # 使用延迟导入获取 c_code 模块
+    from .__init__ import _import_c_code
     c_code = _import_c_code()
 
     if isinstance(method, str):
