@@ -3,14 +3,13 @@ requires = [
     "setuptools>=64",
     "wheel>=0.40.0",
     "pybind11>=2.10.0",
-    "numpy>=1.19.5,<2.0",  # 限制 numpy 版本，确保兼容 scipy
+    "numpy>=1.19.5,<2.0",
     "setuptools-scm[toml]>=7.0.0"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sequenzo"
-version = "0.1.0"
 description = "A fast, scalable and intuitive Python package for social sequence analysis."
 readme = "README.md"
 authors = [
@@ -20,9 +19,17 @@ authors = [
 ]
 license = { file = "LICENSE" }
 requires-python = ">=3.9,<3.12"
-
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dynamic = ["version"]
 dependencies = [
-    "numpy>=1.19.5,<2.0",  # 避免 numpy 2.x 破坏 scipy 兼容性
+    "numpy>=1.19.5,<2.0",
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
@@ -30,7 +37,7 @@ dependencies = [
     "pybind11>=2.6.0",
     "scipy>=1.6.3",
     "scikit-learn>=0.24.2",
-    "fastcluster>=1.2.6",  # 适配 scipy >=1.6.3
+    "fastcluster>=1.2.6",
     "joblib>=1.0.1",
 ]
 
@@ -47,31 +54,14 @@ Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
 packages = ["sequenzo"]
-package-dir = {"" = "."}
+package-data = {"sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]}
 
-[tool.setuptools.package-data]
-"sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
-
-# 确保 setuptools 能正确解析 `__version__`
 [tool.setuptools.dynamic]
 version = {attr = "sequenzo.__version__"}
 
-# 配置 C++ 扩展
-[tool.setuptools.cmake]
-define = [
-    "CMAKE_CXX_STANDARD=11",
-    "CMAKE_CXX_FLAGS=-Wall -Wextra"
-]
+[tool.setuptools.package-dir]
+"" = "."
 
-[tool.setuptools.external]
-pybind11 = { include = ["pybind11"] }
+[tool.pybind11]
+include = ["pybind11"]
 
-[tool.setuptools.external.sequenzo.dissimilarity_measures.c_code]
-sources = ["sequenzo/dissimilarity_measures/src/module.cpp"]
-include_dirs = ["sequenzo/dissimilarity_measures/src/"]
-extra_compile_args = {
-    "win32": ["/std:c++11", "/EHsc", "/W3"],
-    "darwin": ["-std=c++11", "-Wall", "-Wextra"],
-    "linux": ["-std=c++11", "-Wall", "-Wextra"]
-}
-language = "c++"
