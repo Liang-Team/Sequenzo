@@ -21,7 +21,7 @@ def seqdss(seqdata, with_missing=False):
     statl = np.arange(len(seqdata.alphabet))
     nr = seqdata.nr
 
-    trans = np.full((nbseq, maxsl), 0)
+    trans = np.full((nbseq, maxsl), np.nan)
 
     if with_missing:
         statl.append(nr)

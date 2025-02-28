@@ -474,6 +474,8 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         sm = sm.values
     lengths = seqlength(seqdata.seqdata)
 
+    dseqs_num = np.nan_to_num(dseqs_num, nan=0.0, posinf=1e10, neginf=-1e10)
+
     if refseq_type != "none":
         if len(refseq_id) == 1:
             refseq_id = [refseq_id, refseq_id]

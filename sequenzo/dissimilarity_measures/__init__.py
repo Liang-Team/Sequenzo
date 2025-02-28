@@ -8,19 +8,6 @@ from .utils import get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdu
 from .get_distance_matrix import get_distance_matrix
 from .get_substitution_cost_matrix import get_substitution_cost_matrix
 
-# 在模块顶部（非函数内部）进行一次性导入尝试
-# try:
-#     from sequenzo.dissimilarity_measures import c_code
-#     C_CODE_AVAILABLE = c_code is not None
-#
-#     print("=========")
-#     print("这是 try")
-# except ImportError:
-#     c_code = None
-#     C_CODE_AVAILABLE = False
-#     print("=========")
-#     print("这是 except")
-
 
 def _import_c_code():
     """延迟导入 c_code 模块，避免在安装时的循环依赖"""

@@ -9,8 +9,7 @@ import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import fcluster
 
-from .utils.disscenter import disscentertrim
-
+from sequenzo.clustering.utils.disscenter import disscentertrim
 
 def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
 
