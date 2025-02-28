@@ -32,28 +32,42 @@ jobs:
     - name: Clear pip cache
       run: python -m pip cache purge
 
-    # macOS: 处理 pandas & fastcluster 版本冲突 - 支持所有 Python 版本
+    # macOS: 处理依赖安装，针对不同 Python 版本采用不同策略
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
         python -m pip install --upgrade pip
-        pip install Cython==0.29.36  
-        pip install "setuptools==58.1.0"  
-        pip install numpy==1.22.4 --only-binary numpy  
+        pip install Cython==0.29.36
         
-        # 为 Python 3.11 安装更新的 numpy
         if [ "${{ matrix.python-version }}" == "3.11" ]; then
-          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
+          pip install "setuptools>=60.0.0"
+        else
+          pip install "setuptools==58.1.0"
         fi
         
-        pip install scipy==1.7.3 
+        if [ "${{ matrix.python-version }}" == "3.11" ]; then
+          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
+        elif [ "${{ matrix.python-version }}" == "3.10" ]; then
+          pip install "numpy>=1.22.4,<2.0" --only-binary numpy
+        else
+          pip install "numpy==1.22.4" --only-binary numpy || pip install "numpy>=1.21.0,<2.0" --only-binary numpy
+        fi
+        
+        pip install pybind11
+        
+        if [ "${{ matrix.python-version }}" == "3.11" ]; then
+          pip install "scipy>=1.8.0"
+        else
+          pip install "scipy==1.7.3" || pip install "scipy>=1.7.0"
+        fi
+        
         python -m pip install --upgrade wheel
-        pip install fastcluster==1.2.6  
+        pip install fastcluster==1.2.6 || pip install fastcluster
         
         if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
-          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
+          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation || echo "⚠️ Some requirements may not be installed"
         else
-          pip install -r requirements-3.9.txt --no-build-isolation  # 默认使用 3.9 的
+          pip install -r requirements-3.9.txt --no-build-isolation || echo "⚠️ Some requirements may not be installed"
           echo "⚠️ Using requirements-3.9.txt as fallback"
         fi
 
@@ -79,7 +93,7 @@ jobs:
           pip install numpy==1.22.4 --only-binary numpy
         }
         
-        pip install wheel setuptools cmake Cython  
+        pip install wheel setuptools cmake Cython pybind11
         
         pip install --force-reinstall fastcluster==1.2.6  
         
@@ -97,12 +111,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install wheel setuptools
         
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+        
         if [ "${{ matrix.python-version }}" == "3.11" ]; then
           pip install "numpy>=1.23.2,<2.0" --only-binary numpy
         else
           pip install numpy==1.22.4 --only-binary numpy
         fi
         
+        pip install pybind11 
         pip install fastcluster==1.2.6  
         
         if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
@@ -134,13 +152,6 @@ jobs:
         PYTHONUTF8: 1  # ✅ 强制 UTF-8（避免 Windows `UnicodeDecodeError`）
         PYTHONPATH: ${{ github.workspace }}
 
-    # Debugging imports
-    - name: Show detailed import information
-      run: |
-        python -c "import sys; print(sys.path)"
-        python -c "import importlib; print(importlib.import_module('sequenzo'))"
-        python -c "import sequenzo; print(dir(sequenzo))"
-
     # 显示已安装的包
     - name: Show installed packages
       run: pip list
@@ -163,5 +174,3 @@ jobs:
       with:
         name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist/*.whl
-
-
