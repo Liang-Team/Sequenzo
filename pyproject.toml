@@ -19,7 +19,7 @@ authors = [
     { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com" }
 ]
 license = { file = "LICENSE" }
-requires-python = ">=3.8,<3.11"
+requires-python = ">=3.9,<3.12"
 
 # 确保不同 Python 版本都能正确解析 `dependencies`
 dependencies = [
@@ -53,6 +53,6 @@ package-dir = {"" = "."}
 [tool.setuptools.package-data]
 "sequenzo.datasets" = ["country_CO2_emissions.csv", "country_income.csv"]
 
-# 修复 `setuptools.dynamic` 解析失败的情况
+# 确保 setuptools 能正确解析 `__version__`
 [tool.setuptools.dynamic]
 version = {attr = "sequenzo.__version__"}

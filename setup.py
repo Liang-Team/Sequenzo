@@ -15,7 +15,7 @@ def read_requirements(filename):
     读取依赖文件，确保使用 UTF-8 编码，并处理文件缺失情况
     """
     if not os.path.exists(filename):
-        print(f"Warning: {filename} not found. Skipping dependency installation.")
+        print(f"⚠️ Warning: {filename} not found. Skipping dependency installation.")
         return []
 
     with open(filename, 'r', encoding="utf-8") as f:
@@ -26,12 +26,12 @@ def get_extra_compile_args():
     获取平台特定的编译参数
     """
     if sys.platform == 'win32':
-        return ['/std:c++11', '/EHsc', '/W3']  # 添加警告级别
+        return ['/std:c++11', '/EHsc', '/W3']  # Windows 特定编译参数
     elif sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
-        return ['-std=c++11', '-Wall', '-Wextra']  # 添加更多警告
+        return ['-std=c++11', '-Wall', '-Wextra']  # macOS
     else:
-        return ['-std=c++11', '-Wall', '-Wextra']
+        return ['-std=c++11', '-Wall', '-Wextra']  # Linux
 
 def configure_cpp_extension():
     """
@@ -63,16 +63,30 @@ def get_requirements_file():
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     requirements_file = f"requirements-{python_version}.txt"
 
-    if not os.path.exists(requirements_file):
-        print(f"⚠️ Warning: {requirements_file} not found. Using default requirements-3.8.txt.")
-        return "requirements-3.8.txt"
+    if os.path.exists(requirements_file):
+        return requirements_file
+    else:
+        print(f"⚠️ Warning: {requirements_file} not found. Using default requirements-3.9.txt.")
+        return "requirements-3.9.txt" if os.path.exists("requirements-3.9.txt") else []
 
-    return requirements_file
+def get_version():
+    """
+    从 `sequenzo/__init__.py` 读取 `__version__`
+    避免 `AttributeError: module 'sequenzo' has no attribute '__version__'`
+    """
+    version_file = os.path.join("sequenzo", "__init__.py")
+    if os.path.exists(version_file):
+        with open(version_file, 'r', encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("__version__"):
+                    return line.split("=")[-1].strip().strip('"').strip("'")
+    print("⚠️ Warning: __version__ not found in sequenzo/__init__.py. Using default '0.1.0'.")
+    return "0.1.0"
 
 # 主 setup 配置
 setup(
     name="sequenzo",
-    version="0.1.0",
+    version=get_version(),
     description="A fast, scalable and intuitive Python package for social sequence analysis",
 
     # 确保 README.md 用 UTF-8 读取，避免 Windows 乱码
@@ -90,7 +104,7 @@ setup(
     cmdclass={"build_ext": build_ext},
 
     # 依赖管理
-    python_requires='>=3.8',
+    python_requires='>=3.9,<3.12',
     install_requires=read_requirements(get_requirements_file()),
     extras_require={
         'dev': read_requirements('requirements-dev.txt')
@@ -104,7 +118,6 @@ setup(
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",

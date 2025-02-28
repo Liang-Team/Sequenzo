@@ -1,0 +1,10 @@
+numpy==1.26.4  # 3.11 需要 numpy >= 1.23
+pandas==1.5.3  # 兼容 Python 3.11
+scipy==1.10.1  # 兼容 fastcluster 1.2.x
+matplotlib==3.6.3  # 3.11 兼容版本
+seaborn==0.12.2  # 适配 matplotlib >= 3.6
+scikit-learn==1.2.2  # 适配 Python 3.11
+joblib==1.2.0  # 3.11 兼容版本
+fastcluster==1.2.6  # 适配 scipy >= 1.6.3
+pillow==9.4.0  # 3.11 兼容
+pybind11>=2.10.0  # 3.11 需要 >= 2.10.0
