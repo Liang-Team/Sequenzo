@@ -1,14 +1,15 @@
 # This file makes 'datasets' a Python package
 
-import os
-import importlib.resources as pkg_resources
-import pandas as pd
 
 def list_datasets():
     """List all available datasets in the `datasets` package."""
+    # 延迟导入以避免安装时的循环依赖问题
+    import importlib.resources as pkg_resources
+
     with pkg_resources.path("sequenzo.datasets", "__init__.py") as datasets_path:
         datasets_dir = datasets_path.parent  # 获取 datasets 目录路径
         return [file.stem for file in datasets_dir.iterdir() if file.suffix == ".csv"]
+
 
 def load_dataset(name):
     """
@@ -20,6 +21,10 @@ def load_dataset(name):
     Returns:
         pd.DataFrame: Loaded dataset as a pandas DataFrame.
     """
+    # 仅在函数被调用时导入pandas，而不是模块加载时
+    import pandas as pd
+    import os
+
     available_datasets = list_datasets()  # 获取动态数据集列表
 
     if name not in available_datasets:
