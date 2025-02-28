@@ -175,12 +175,18 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # 先尝试editable模式安装
-        pip install --no-cache-dir -e . --no-build-isolation || (
+        $editable_install = $false
+        try {
+          # 先尝试editable模式安装
+          pip install --no-cache-dir -e . --no-build-isolation
+          $editable_install = $true
+        } catch {}
+
+        if (-not $editable_install) {
           Write-Host "Editable install failed, trying regular install..."
-          # 如果失败，尝试非editable模式安装
+          # 尝试非editable模式安装
           pip install --no-cache-dir . --no-build-isolation
-        )
+        }
       env:
         PYTHONUTF8: 1
         PYTHONPATH: ${{ github.workspace }}
