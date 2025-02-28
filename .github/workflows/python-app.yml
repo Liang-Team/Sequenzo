@@ -93,7 +93,10 @@ jobs:
           pip install numpy==1.22.4 --only-binary numpy
         }
         
-        pip install wheel setuptools cmake Cython pybind11
+        pip install wheel setuptools cmake Cython
+        
+        pip uninstall -y pybind11  
+        pip install pybind11==2.10.4  
         
         pip install --force-reinstall fastcluster==1.2.6  
         
@@ -144,13 +147,45 @@ jobs:
       if: runner.os == 'Windows'
       run: chcp 65001
 
-    # 安装本地包
+    - name: Setup Windows C++ compilation
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        # 设置编译器环境变量
+        $Env:CL = "/EHsc /bigobj"
+        $Env:DISTUTILS_USE_SDK = "1"
+        $Env:MSSdk = "1"
+
+        # 打印环境信息以便调试
+        Write-Host "Using Python: $(python --version)"
+        Write-Host "Using pybind11: $(pip show pybind11 | grep Version)"
+        Write-Host "C++ compiler flags: $Env:CL"
+
+    # 整合后的安装步骤
     - name: Install local package
+      if: runner.os != 'Windows'
       run: |
         pip install --no-cache-dir -e . --no-build-isolation
       env:
-        PYTHONUTF8: 1  # ✅ 强制 UTF-8（避免 Windows `UnicodeDecodeError`）
+        PYTHONUTF8: 1
         PYTHONPATH: ${{ github.workspace }}
+
+    # Windows 特定安装本地包步骤
+    - name: Install local package (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        # 先尝试editable模式安装
+        pip install --no-cache-dir -e . --no-build-isolation || (
+          Write-Host "Editable install failed, trying regular install..."
+          # 如果失败，尝试非editable模式安装
+          pip install --no-cache-dir . --no-build-isolation
+        )
+      env:
+        PYTHONUTF8: 1
+        PYTHONPATH: ${{ github.workspace }}
+        DISTUTILS_USE_SDK: 1
+        MSSdk: 1
 
     # 显示已安装的包
     - name: Show installed packages

@@ -20,7 +20,8 @@ def get_extra_compile_args():
     Get platform-specific compilation arguments
     """
     if sys.platform == 'win32':
-        return ['/std:c++11', '/EHsc', '/W3']  # Windows
+        # 更新Windows编译参数
+        return ['/std:c++14', '/EHsc', '/bigobj', '/O2', '/Gy']  # Windows
     elif sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
         return ['-std=c++11', '-Wall', '-Wextra']  # macOS
