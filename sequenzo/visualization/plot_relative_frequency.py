@@ -8,7 +8,7 @@
 """
 import numpy as np
 from scipy.stats import f_oneway
-from sklearn.preprocessing import StandardScaler
+# from sklearn.preprocessing import StandardScaler
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -187,7 +187,11 @@ def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups:
     mds_coords_1d = mds_coords[:, 0]  # Take only 1D result
 
     # **Step 2: Standardize MDS coordinates and sort**
-    scaler = StandardScaler()
+    # 获取 StandardScaler
+    scaler = _get_standard_scaler()
+    if scaler is None:
+        # 提供替代实现或报错
+        raise ImportError("需要 scikit-learn 来执行此功能。请安装: pip install scikit-learn")
     mds_coords_1d = scaler.fit_transform(mds_coords_1d.reshape(-1, 1)).flatten()
 
     # Eigenvector direction in np.linalg.eigh() may differ from R, causing cmdscale() to output reversed coordinates.

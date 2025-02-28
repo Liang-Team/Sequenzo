@@ -13,6 +13,17 @@ from .plot_transition_rate_matrix import compute_transition_matrix, print_transi
 from .plot_mean_time import plot_mean_time
 from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
 
+
+# 改为延迟导入
+def _get_standard_scaler():
+    try:
+        from sklearn.preprocessing import StandardScaler
+        return StandardScaler
+    except ImportError:
+        print("警告: 无法导入 StandardScaler。请确保已正确安装 scikit-learn。")
+        return None
+
+
 __all__ = [
     "plot_sequence_index",
     "plot_most_frequent_sequences",

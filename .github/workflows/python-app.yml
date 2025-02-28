@@ -80,7 +80,7 @@ jobs:
     # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
-      shell: pwsh  # ✅ 确保使用 PowerShell，而不是默认 cmd.exe
+      shell: pwsh  # 确保使用 PowerShell，而不是默认 cmd.exe
       run: |
         choco install visualstudio2022buildtools --version=17.0.0 -y
         choco install visualstudio2022-workload-vctools -y
