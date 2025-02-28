@@ -151,15 +151,14 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # 设置编译器环境变量
-        $Env:CL = "/EHsc /bigobj"
+        choco install visualstudio2019buildtools -y
+        choco install visualstudio2019-workload-vctools -y
+
+        & "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+        $Env:CL = "/EHsc /MD /bigobj /Ox"
         $Env:DISTUTILS_USE_SDK = "1"
         $Env:MSSdk = "1"
-
-        # 打印环境信息以便调试
-        Write-Host "Using Python: $(python --version)"
-        Write-Host "Using pybind11: $(pip show pybind11 | grep Version)"
-        Write-Host "C++ compiler flags: $Env:CL"
 
     # 整合后的安装步骤
     - name: Install local package
@@ -170,22 +169,18 @@ jobs:
         PYTHONUTF8: 1
         PYTHONPATH: ${{ github.workspace }}
 
-    # Windows 特定安装本地包步骤
     - name: Install local package (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $editable_install = $false
         try {
-          # 先尝试editable模式安装
-          pip install --no-cache-dir -e . --no-build-isolation
+          pip install --no-cache-dir -e . --no-build-isolation --verbose
           $editable_install = $true
-        } catch {}
-
-        if (-not $editable_install) {
+        } catch {
+          Write-Host "ERROR DETAILS: $_"
           Write-Host "Editable install failed, trying regular install..."
-          # 尝试非editable模式安装
-          pip install --no-cache-dir . --no-build-isolation
+          pip install --no-cache-dir . --no-build-isolation --verbose
         }
       env:
         PYTHONUTF8: 1
