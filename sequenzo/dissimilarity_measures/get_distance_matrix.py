@@ -71,7 +71,8 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     from .utils.seqlength import seqlength
     from . import get_substitution_cost_matrix
 
-    from . import c_code
+    # 使用延迟导入获取 c_code 模块
+    c_code = _import_c_code()
 
     gc.collect()                           # garbage collection
     ptime_begin = time.process_time()      # Record the current time (start time)

@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 import sys
 
-from sequenzo.dissimilarity_measures import c_code
-
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):
+
+    # 使用延迟导入获取 c_code 模块
+    c_code = _import_c_code()
+
     if isinstance(medoids_index, bool):
         if medoids_index:
             medoids_index = "First"

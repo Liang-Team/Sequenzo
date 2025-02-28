@@ -4,8 +4,10 @@
 @Time    : 05/02/2025 12:47
 @Desc    : Optimized SequenceData class with integrated color scheme & legend handling.
 """
+from __future__ import annotations # 仅适用于 Python 3.7+, 添加此行来推迟类型注解的解析
+__all__ = ['SequenceData']  # 在顶部定义公共 API
 
-import pandas as pd
+# 全局变量和其他不依赖 pandas 的导入可以放在这里
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -55,6 +57,9 @@ class SequenceData:
         :param nr: Symbol for missing values (default: "*").
         :param cpal: Custom color palette for visualization.
         """
+        # 在这里导入 pandas，而不是在模块顶部
+        import pandas as pd
+
         self.data = data.copy()
         self.time = time
         # Clean the labels of time steps instead of keeping "C1", ..."C10"

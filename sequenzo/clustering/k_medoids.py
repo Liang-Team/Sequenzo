@@ -11,10 +11,12 @@ from scipy.cluster.hierarchy import fcluster
 
 from .utils.disscenter import disscentertrim
 
-import sequenzo.dissimilarity_measures.c_code
-
 
 def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
+
+    # 使用延迟导入获取 c_code 模块
+    c_code = _import_c_code()
+
     if isinstance(method, str):
         method = method.lower()
         method_map = ["kmedoids", "pam", "pamonce"]
