@@ -8,39 +8,40 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[project]
-name = "sequenzo"
-version = "0.1.0"
-description = "A fast, scalable and intuitive Python package for social sequence analysis."
-readme = "README.md"
-authors = [
-    { name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
-    { name = "Xinyi Li", email = "1836724126@qq.com" },
-    { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com" }
-]
-license = { file = "LICENSE" }
-requires-python = ">=3.9,<3.12"
+#[project]
+#name = "sequenzo"
+#version = "0.1.0"
+#description = "A fast, scalable and intuitive Python package for social sequence analysis."
+#readme = "README.md"
+#authors = [
+#    { name = "Yuqi Liang", email = "yuqi.liang.1900@gmail.com" },
+#    { name = "Xinyi Li", email = "1836724126@qq.com" },
+#    { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com" }
+#]
+#license = { file = "LICENSE" }
+#requires-python = ">=3.9,<3.12"
 
 # 确保不同 Python 版本都能正确解析 `dependencies`
-dependencies = [
-    "numpy>=1.19.5,<2.0",  # 避免 numpy 2.x 破坏 scipy 兼容性
-    "pandas>=1.2.5",
-    "matplotlib>=3.4.3",
-    "seaborn>=0.11.2",
-    "Pillow>=8.3.2",
-    "pybind11>=2.6.0",
-    "scipy>=1.6.3",
-    "scikit-learn>=0.24.2",
-    "fastcluster>=1.2.6",  # 适配 scipy >=1.6.3
-    "joblib>=1.0.1",
-]
+# 已经都在 setup 里面了
+#dependencies = [
+#    "numpy>=1.19.5,<2.0",  # 避免 numpy 2.x 破坏 scipy 兼容性
+#    "pandas>=1.2.5",
+#    "matplotlib>=3.4.3",
+#    "seaborn>=0.11.2",
+#    "Pillow>=8.3.2",
+#    "pybind11>=2.6.0",
+#    "scipy>=1.6.3",
+#    "scikit-learn>=0.24.2",
+#    "fastcluster>=1.2.6",  # 适配 scipy >=1.6.3
+#    "joblib>=1.0.1",
+#]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=6.2.5",
-    "flake8>=3.9.2",
-    "memory-profiler>=0.58.0"
-]
+#[project.optional-dependencies]
+#dev = [
+#    "pytest>=6.2.5",
+#    "flake8>=3.9.2",
+#    "memory-profiler>=0.58.0"
+#]
 
 [project.urls]
 Homepage = "https://github.com/Liang-Team/Sequenzo"

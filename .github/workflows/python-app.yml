@@ -40,13 +40,17 @@ jobs:
         pip install Cython==0.29.36  
         pip install "setuptools==58.1.0"  
         pip install numpy==1.22.4 --only-binary numpy  
-        pip install wheel
+        pip install scipy==1.7.3 
+        python -m pip install --upgrade wheel
         pip install fastcluster==1.2.6  
         pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
     # pip install Cython==0.29.36  # ✅ 指定 Cython 版本，避免 pandas 编译失败
     # pip install "setuptools==58.1.0"  # ✅ 降级 setuptools，确保 pandas 1.3.5 兼容
-    # pip install numpy==1.22.4 --only-binary numpy  # ✅ 统一 numpy 版本
+    # pip install scipy==1.7.3  pip install numpy==1.22.4 --only-binary numpy  # ✅ 统一 numpy 版本
+    # ✅ 先安装 scipy，避免 scikit-learn 出错
     # pip install fastcluster==1.2.6  # ✅ 解决 fastcluster 版本问题
+    # 顺序很重要：setuptools 先装，然后 wheel 升级，避免 bdist_wheel 失效。
+    # pip install --upgrade wheel 强制确保 wheel 可用，而不仅仅是 pip install wheel。
 
       # macOS: 确保 Xcode CLI 工具已安装
     - name: Install Xcode Command Line Tools
@@ -82,7 +86,6 @@ jobs:
     # ✅ 安装关键依赖项
     # ✅ 解决 fastcluster 版本冲突
     # ✅ 安装 Python 版本对应的 requirements
-
 
     # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
     # pip install wheel setuptools cmake Cython  # ✅ 先安装 Cython 解决 pandas 问题
