@@ -41,15 +41,15 @@ def seqdur(seqdata):
         tmpseq = seqdatanum[i, :]
 
         # Skipping initial -99 values
-        while idx < seq_length[i] and tmpseq[idx] == -99:
+        while idx < seq_length.iloc[i] and tmpseq[idx] == -99:
             idx += 1
 
-        while idx < seq_length[i]:
+        while idx < seq_length.iloc[i]:
             iseq = tmpseq[idx]
             dur = 1
 
             # calculate duration
-            while idx < seq_length[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
+            while idx < seq_length.iloc[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
                 if tmpseq[idx + 1] != -99:
                     dur += 1
                 idx += 1

@@ -39,10 +39,10 @@ def seqdss(seqdata, with_missing=False):
 
         tmpseq = seqdatanum[i, :]
 
-        while idx < sl[i]:
+        while idx < sl.iloc[i]:
             iseq = int(tmpseq[idx])
 
-            while idx < sl[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
+            while idx < sl.iloc[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
                 idx += 1
 
             if iseq != -99:
