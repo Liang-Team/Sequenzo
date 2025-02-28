@@ -14,6 +14,7 @@ import pybind11
 import os
 import sys
 
+
 def get_extra_compile_args():
     """
     Get platform-specific compilation arguments
@@ -25,6 +26,7 @@ def get_extra_compile_args():
         return ['-std=c++11', '-Wall', '-Wextra']  # macOS
     else:
         return ['-std=c++11', '-Wall', '-Wextra']  # Linux
+
 
 def configure_cpp_extension():
     """
@@ -42,10 +44,10 @@ def configure_cpp_extension():
             extra_compile_args=get_extra_compile_args(),
             language='c++',
         )
-        print("✅ C++ extension configured successfully")
+        print("C++ extension configured successfully")
         return [ext_module]
     except Exception as e:
-        print(f"⚠️ Warning: Unable to configure C++ extension: {e}")
+        print(f"Warning: Unable to configure C++ extension: {e}")
         print("The package will be installed with a Python fallback implementation.")
         return []
 

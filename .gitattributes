@@ -1,0 +1,69 @@
+# 设置默认行为，所有文件都采用LF行结束符和UTF-8编码
+* text=auto eol=lf encoding=utf-8
+
+# 源代码文件
+*.py text diff=python encoding=utf-8
+*.c text diff=c encoding=utf-8
+*.cpp text diff=cpp encoding=utf-8
+*.h text diff=c encoding=utf-8
+*.hpp text diff=cpp encoding=utf-8
+*.pyx text diff=python encoding=utf-8
+*.pxd text diff=python encoding=utf-8
+
+# 配置文件
+*.toml text encoding=utf-8
+*.ini text encoding=utf-8
+*.yaml text encoding=utf-8
+*.yml text encoding=utf-8
+*.json text encoding=utf-8
+*.cfg text encoding=utf-8
+*.conf text encoding=utf-8
+requirements*.txt text encoding=utf-8
+pyproject.toml text encoding=utf-8
+setup.py text encoding=utf-8
+setup.cfg text encoding=utf-8
+
+# 文档文件
+*.txt text encoding=utf-8
+*.md text encoding=utf-8
+*.rst text encoding=utf-8
+LICENSE text encoding=utf-8
+README* text encoding=utf-8
+CHANGELOG* text encoding=utf-8
+
+# 在Windows系统上保留CRLF行尾
+*.bat text eol=crlf encoding=utf-8
+*.cmd text eol=crlf encoding=utf-8
+*.ps1 text eol=crlf encoding=utf-8
+
+# 特殊文件处理
+Makefile text eol=lf encoding=utf-8
+makefile text eol=lf encoding=utf-8
+
+# 数据文件（作为二进制处理，不进行任何转换）
+*.db binary
+*.p binary
+*.pkl binary
+*.pickle binary
+*.pyc binary
+*.pyd binary
+*.pyo binary
+
+# 图像文件（二进制）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text encoding=utf-8
+
+# Excel和CSV文件（作为文本文件处理，但特别注意编码）
+*.csv text encoding=utf-8
+*.tsv text encoding=utf-8
+*.xls binary
+*.xlsx binary
+
+# 压缩文件（二进制）
+*.gz binary
+*.zip binary
+*.7z binary
