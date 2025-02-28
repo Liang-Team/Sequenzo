@@ -9,7 +9,10 @@ dist/
 *.egg-info/
 
 # Ignore compiled Python files
-__pycache__/
-*.pyc
-*.pyo
+**/__pycache__/
+# Ignore the topic branch's .pyc files *.pyc
+**/*.pyo
+# Ignore all
+**/*.pyc
+
 
