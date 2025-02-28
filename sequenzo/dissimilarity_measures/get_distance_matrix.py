@@ -111,7 +111,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # Check Argument Types
     # ====================
     if not isinstance(seqdata, SequenceData):
-        raise ValueError("[!] 'seqdata' must be a state sequence object created with seqdef()")
+        raise ValueError("[!] 'seqdata' must be a state sequence object created with SequenceData")
 
     nseqs = seqdata.seqdata.shape[0]
     alphabet = seqdata.alphabet

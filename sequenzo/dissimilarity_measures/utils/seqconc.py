@@ -6,7 +6,8 @@
 """
 import numpy as np
 import pandas as pd
-from ..seqdef import SequenceData
+from sequenzo.define_sequence_data import SequenceData
+
 
 def sconc_pd(seqdata, sep):
     vi = seqdata.notna()  # Choose values that are not NA
@@ -38,3 +39,4 @@ def seqconc(data, sep="-", vname=['Sequence']):
         cseq = pd.DataFrame(cseq, columns=vname)
 
         return cseq
+

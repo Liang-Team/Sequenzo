@@ -18,7 +18,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # Check Parameters
     # ================
     if not isinstance(seqdata, SequenceData):
-        raise ValueError(" [!] data is NOT a sequence object, see seqdef function to create one.")
+        raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
 
     metlist = ["CONSTANT", "TRATE"]
     if method not in metlist:

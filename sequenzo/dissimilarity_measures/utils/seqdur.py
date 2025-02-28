@@ -20,7 +20,7 @@ from sequenzo.define_sequence_data import SequenceData
 #         4-3
 def seqdur(seqdata):
     if not isinstance(seqdata, SequenceData):
-        raise ValueError("data is not a sequence object, see seqdef function to create one")
+        raise ValueError("data is not a sequence object, see SequenceData to create one")
 
     seq_length = seqlength(seqdata)
     maxsl = max(seq_length)

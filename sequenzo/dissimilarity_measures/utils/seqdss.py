@@ -12,7 +12,7 @@ from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
 
 def seqdss(seqdata, with_missing=False):
     if not isinstance(seqdata, SequenceData):
-        raise ValueError("[!] data is NOT a sequence object, see seqdef function to create one.")
+        raise ValueError("[!] data is NOT a sequence object, see SequenceData to create one.")
 
     nbseq = len(seqdata.seqdata)
     sl = seqlength(seqdata)
