@@ -32,41 +32,59 @@ jobs:
     - name: Clear pip cache
       run: python -m pip cache purge
 
-    # macOS: 处理 numpy & fastcluster 版本冲突，提前安装 Cython
+      # macOS: 处理 pandas & fastcluster 版本冲突
     - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
+      if: runner.os == 'macOS' && matrix.python-version == '3.9'
       run: |
         python -m pip install --upgrade pip
-        if [[ "${{ matrix.python-version }}" == "3.11" ]]; then
-          pip install "numpy>=1.23.2,<2.0"  
-        else
-          pip install numpy==1.22.4 --only-binary numpy
-        fi
-        pip install wheel setuptools Cython  
+        pip install Cython==0.29.36  
+        pip install "setuptools==58.1.0"  
+        pip install numpy==1.22.4 --only-binary numpy  
+        pip install wheel
         pip install fastcluster==1.2.6  
         pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
-
-    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
-    # pip install wheel setuptools Cython  # ✅ 先安装 Cython 避免 pandas 构建失败
+    # pip install Cython==0.29.36  # ✅ 指定 Cython 版本，避免 pandas 编译失败
+    # pip install "setuptools==58.1.0"  # ✅ 降级 setuptools，确保 pandas 1.3.5 兼容
+    # pip install numpy==1.22.4 --only-binary numpy  # ✅ 统一 numpy 版本
     # pip install fastcluster==1.2.6  # ✅ 解决 fastcluster 版本问题
 
-    # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
+      # macOS: 确保 Xcode CLI 工具已安装
+    - name: Install Xcode Command Line Tools
+      if: runner.os == 'macOS' && matrix.python-version == '3.9'
+      run: |
+        xcode-select --install || echo "Xcode CLI already installed"
+
+      # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
+      shell: pwsh  # ✅ 确保使用 PowerShell，而不是默认 cmd.exe
       run: |
         choco install visualstudio2022buildtools --version=17.0.0 -y
         choco install visualstudio2022-workload-vctools -y
+
         python -m pip install --upgrade pip
-        if [[ "${{ matrix.python-version }}" == "3.11" ]]; then
-          pip install "numpy>=1.23.2,<2.0"  
-        else
+
+        if ("${{ matrix.python-version }}" -eq "3.11") {
+          pip install "numpy>=1.23.2,<2.0"
+        } else {
           pip install numpy==1.22.4 --only-binary numpy
-        fi
+        }
+        
         pip install wheel setuptools cmake Cython  
+        
         pip install --force-reinstall fastcluster==1.2.6  
+        
         pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
 
-    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
+    # ✅ 安装 Visual Studio C++ 编译工具
+    # ✅ 升级 pip
+    # ✅ PowerShell 语法修正
+    # ✅ 安装关键依赖项
+    # ✅ 解决 fastcluster 版本冲突
+    # ✅ 安装 Python 版本对应的 requirements
+
+
+      # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
     # pip install wheel setuptools cmake Cython  # ✅ 先安装 Cython 解决 pandas 问题
     # pip install --force-reinstall fastcluster==1.2.6  # ✅ 强制安装 fastcluster 1.2.6，避免版本冲突
 
