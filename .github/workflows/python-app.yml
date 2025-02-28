@@ -84,7 +84,7 @@ jobs:
     # ✅ 安装 Python 版本对应的 requirements
 
 
-      # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
+    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
     # pip install wheel setuptools cmake Cython  # ✅ 先安装 Cython 解决 pandas 问题
     # pip install --force-reinstall fastcluster==1.2.6  # ✅ 强制安装 fastcluster 1.2.6，避免版本冲突
 
