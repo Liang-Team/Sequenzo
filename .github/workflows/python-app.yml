@@ -32,33 +32,38 @@ jobs:
     - name: Clear pip cache
       run: python -m pip cache purge
 
-      # macOS: 处理 pandas & fastcluster 版本冲突
+    # macOS: 处理 pandas & fastcluster 版本冲突 - 支持所有 Python 版本
     - name: Install dependencies (macOS)
-      if: runner.os == 'macOS' && matrix.python-version == '3.9'
+      if: runner.os == 'macOS'
       run: |
         python -m pip install --upgrade pip
         pip install Cython==0.29.36  
         pip install "setuptools==58.1.0"  
         pip install numpy==1.22.4 --only-binary numpy  
+        
+        # 为 Python 3.11 安装更新的 numpy
+        if [ "${{ matrix.python-version }}" == "3.11" ]; then
+          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
+        fi
+        
         pip install scipy==1.7.3 
         python -m pip install --upgrade wheel
         pip install fastcluster==1.2.6  
-        pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
-    # pip install Cython==0.29.36  # ✅ 指定 Cython 版本，避免 pandas 编译失败
-    # pip install "setuptools==58.1.0"  # ✅ 降级 setuptools，确保 pandas 1.3.5 兼容
-    # pip install scipy==1.7.3  pip install numpy==1.22.4 --only-binary numpy  # ✅ 统一 numpy 版本
-    # ✅ 先安装 scipy，避免 scikit-learn 出错
-    # pip install fastcluster==1.2.6  # ✅ 解决 fastcluster 版本问题
-    # 顺序很重要：setuptools 先装，然后 wheel 升级，避免 bdist_wheel 失效。
-    # pip install --upgrade wheel 强制确保 wheel 可用，而不仅仅是 pip install wheel。
+        
+        if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
+          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
+        else
+          pip install -r requirements-3.9.txt --no-build-isolation  # 默认使用 3.9 的
+          echo "⚠️ Using requirements-3.9.txt as fallback"
+        fi
 
-      # macOS: 确保 Xcode CLI 工具已安装
+    # macOS: 确保 Xcode CLI 工具已安装 - 所有 Python 版本都需要
     - name: Install Xcode Command Line Tools
-      if: runner.os == 'macOS' && matrix.python-version == '3.9'
+      if: runner.os == 'macOS'
       run: |
         xcode-select --install || echo "Xcode CLI already installed"
 
-      # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
+    # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
       shell: pwsh  # ✅ 确保使用 PowerShell，而不是默认 cmd.exe
@@ -78,18 +83,12 @@ jobs:
         
         pip install --force-reinstall fastcluster==1.2.6  
         
-        pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
-
-    # ✅ 安装 Visual Studio C++ 编译工具
-    # ✅ 升级 pip
-    # ✅ PowerShell 语法修正
-    # ✅ 安装关键依赖项
-    # ✅ 解决 fastcluster 版本冲突
-    # ✅ 安装 Python 版本对应的 requirements
-
-    # pip install "numpy>=1.23.2,<2.0"  # ✅ 3.11 允许更高的 numpy 版本
-    # pip install wheel setuptools cmake Cython  # ✅ 先安装 Cython 解决 pandas 问题
-    # pip install --force-reinstall fastcluster==1.2.6  # ✅ 强制安装 fastcluster 1.2.6，避免版本冲突
+        if (Test-Path "requirements-${{ matrix.python-version }}.txt") {
+          pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
+        } else {
+          pip install -r requirements-3.9.txt --use-deprecated=legacy-resolver
+          Write-Host "⚠️ Using requirements-3.9.txt as fallback"
+        }
 
     # Linux: 处理 fastcluster 版本问题，确保 numpy 先安装
     - name: Install dependencies (Linux)
@@ -97,11 +96,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install wheel setuptools
-        pip install numpy --only-binary numpy  
+        
+        if [ "${{ matrix.python-version }}" == "3.11" ]; then
+          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
+        else
+          pip install numpy==1.22.4 --only-binary numpy
+        fi
+        
         pip install fastcluster==1.2.6  
-        pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
-    # pip install numpy --only-binary numpy  # ✅ 先安装 numpy
-    # pip install fastcluster==1.2.6  # ✅ 避免 fastcluster 版本问题
+        
+        if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
+          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
+        else
+          pip install -r requirements-3.9.txt --no-build-isolation
+          echo "⚠️ Using requirements-3.9.txt as fallback"
+        fi
 
     # 确保 `PYTHONPATH` 正确
     - name: Verify package path
@@ -120,7 +129,7 @@ jobs:
     # 安装本地包
     - name: Install local package
       run: |
-        pip install --no-cache-dir -e .
+        pip install --no-cache-dir -e . --no-build-isolation
       env:
         PYTHONUTF8: 1  # ✅ 强制 UTF-8（避免 Windows `UnicodeDecodeError`）
         PYTHONPATH: ${{ github.workspace }}
@@ -154,3 +163,5 @@ jobs:
       with:
         name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist/*.whl
+
+
