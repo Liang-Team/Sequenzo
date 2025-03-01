@@ -9,7 +9,7 @@
 from .plot_sequence_index import plot_sequence_index
 from .plot_most_frequent_sequences import plot_most_frequent_sequences
 from .plot_relative_frequency import plot_relative_frequency
-from .plot_transition_rate_matrix import compute_transition_matrix, print_transition_matrix, plot_transition_matrix
+from .plot_transition_matrix import compute_transition_matrix, print_transition_matrix, plot_transition_matrix
 from .plot_mean_time import plot_mean_time
 from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
 
@@ -25,8 +25,12 @@ def _get_standard_scaler():
 
 
 __all__ = [
-    "plot_sequence_index",
+    "plot_mean_time",
     "plot_most_frequent_sequences",
+    "plot_relative_frequency",
+    "plot_sequence_index",
     "plot_single_medoid",
+    "plot_state_distribution",
+    "plot_transition_matrix",
     # Add other functions as needed
 ]

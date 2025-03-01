@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : plot_transition_rate_matrix.py
+@File    : plot_transition_matrix.py
 @Time    : 13/02/2025 12:39
 @Desc    :
     This implementation closely follows ggseqplot's `ggseqtrplot` function.

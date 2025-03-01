@@ -14,6 +14,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+import re
 
 
 class SequenceData:
@@ -30,6 +31,7 @@ class SequenceData:
     def __init__(
         self,
         data: pd.DataFrame,
+        time_type: str,
         time: list,
         states: list,
         alphabet: list = None,
@@ -48,6 +50,7 @@ class SequenceData:
 
         :param data: DataFrame containing sequence data.
         :param time: List of columns containing time labels.
+        :param time_type: Type of time labels (e.g., "year", "age").
         :param states: List of unique states (categories).
         :param alphabet: Optional predefined state space.
         :param labels: Labels for states (optional, for visualization).
@@ -59,13 +62,24 @@ class SequenceData:
         :param nr: Symbol for missing values (default: "*").
         :param cpal: Custom color palette for visualization.
         """
+        # Ensure time_type is either "year" or "age"
+        if time_type not in ["year", "age"]:
+            raise ValueError("time_type must be either 'year' or 'age'")
+
         # Import pandas here instead of the top of the file
         import pandas as pd
 
         self.data = data.copy()
         self.time = time
-        # Clean the labels of time steps instead of keeping "C1", ..."C10"
-        self.cleaned_time = [str(i + 1) for i in range(len(time))]
+
+        if time_type == "year":
+            self.time_type = "year"
+        elif time_type == "age":
+            self.time_type = "age"
+
+        # Remove all non-numeric characters from the year labels, e.g., "Year2020" -> "2020", or "C1" -> "1"
+        self.cleaned_time = [re.sub(r'\D', '', str(year)) for year in time]
+
         self.states = states
         self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels
@@ -103,7 +117,7 @@ class SequenceData:
 
     def _validate_parameters(self):
         """Ensures correct input parameters."""
-        # check states, alphabet, labels
+        # Check states, alphabet, labels
         if not self.states:
             raise ValueError("'states' must be provided.")
         if self.alphabet and set(self.alphabet) != set(self.states):
@@ -111,7 +125,7 @@ class SequenceData:
         if self.labels and len(self.labels) != len(self.states):
             raise ValueError("'labels' must match the length of 'states'.")
         
-        # check ids
+        # Check ids
         if self.ids is not None:
             if len(self.ids) != len(self.data):
                 raise ValueError("'ids' must match the length of 'data'.")
@@ -121,7 +135,7 @@ class SequenceData:
         else:
             self.ids = np.arange(len(self.data))
 
-        # check weights
+        # Check weights
         if self.weights is not None:
             if len(self.weights) != len(self.data):
                 raise ValueError("'weights' must match the length of 'data'.")
@@ -158,30 +172,16 @@ class SequenceData:
         Otherwise, the colors will be assigned incorrectly.
 
         For instance, self.states = ['Very Low', 'Low', 'Middle', 'High', 'Very High'], as the user defines when defining the class
-        # but the older version here is {'High': 1, 'Low': 2, 'Middle': 3, 'Very High': 4, 'Very Low': 5}
+        but the older version here is {'High': 1, 'Low': 2, 'Middle': 3, 'Very High': 4, 'Very Low': 5}
         """
-        # unique_states = sorted(set(self.seqdata.stack().dropna().unique()))
-        #
-        # # with missing data
-        # if self.seqdata.isna().any().any():
-        #     self.state_mapping = {state: idx + 1 for idx, state in enumerate(unique_states)}    # Create mapping
-        #     self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, 0))    # Convert sequences to numeric values
-        #
-        # # without missing data
-        # else:
-        #     self.state_mapping = {state: idx for idx, state in enumerate(unique_states)}
-        #     self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
-        #
-        # if self.ids is not None:
-        #     self.seqdata.index = self.ids
-
         correct_order = self.states
 
         # Create the state mapping with correct order
-        self.state_mapping = {state: idx for idx, state in enumerate(correct_order)}
+        self.state_mapping = {state: idx + 1 for idx, state in enumerate(correct_order)}
 
         # Apply the mapping
-        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states)))
+        # If there are missing values, replace them with the last index + 1
+        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states) + 1))
 
         if self.ids is not None:
             self.seqdata.index = self.ids

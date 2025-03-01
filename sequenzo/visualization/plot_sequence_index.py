@@ -13,6 +13,7 @@ from matplotlib.colors import ListedColormap
 import seaborn as sns
 from PIL import Image
 from sequenzo import SequenceData
+from sequenzo.visualization.utils import set_up_time_labels_for_x_axis
 
 
 ### Data Handling & Preprocessing ###
@@ -72,7 +73,7 @@ def plot_sequence_index(seqdata: SequenceData,
                         title=None,
                         facet_ncol=2,
                         xlabel="Time",
-                        ylabel="Sequence ID",
+                        ylabel="Sequences",
                         save_as=None,
                         dpi=200):
     """
@@ -95,9 +96,9 @@ def plot_sequence_index(seqdata: SequenceData,
 
     if id_group_df is None:
         # Call the single plot function if no grouping is provided
-        sequence_index_plot_single(seqdata, age_labels=age_labels,
-                                    figsize=(10, 6), title=title,
-                                    xlabel=xlabel, ylabel=ylabel, save_as=save_as, dpi=dpi)
+        _sequence_index_plot_single(seqdata, figsize=(10, 6), title=title,
+                                    xlabel=xlabel, ylabel=ylabel, save_as=save_as,
+                                    dpi=dpi)
     else:
 
         if facet_ncol == 1:
@@ -307,7 +308,7 @@ def sort_group_labels(group_labels, custom_order=None):
 def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
                                              custom_order=None, age_labels=None,
                                              palette=None, reverse_colors=True, title=None,
-                                             xlabel="Time", ylabel="Sequence ID",
+                                             xlabel="Time", ylabel="Sequences",
                                              facet_ncol=2, save_as=None, dpi=200):
     """
     Plot sequence index plots with dynamic layout adjustments for better aesthetics.
@@ -440,17 +441,13 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
         cropped_image.show()  # This opens the image using the default viewer
 
 
-# TODO: compare this very original file and the one in sequenzo
-# TODO: I suppose this might look better and I have to understand it better
-def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
-                               num_colors=8, reverse_colors=True, figsize=(10, 6),
-                               title=None, xlabel="Time", ylabel="Sequence ID",
-                               save_as=None, dpi=200):
+def _sequence_index_plot_single(seqdata, figsize=(10, 6),
+                                title=None, xlabel="Time", ylabel="Sequences",
+                                save_as=None, dpi=200):
     """
     Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param data: (np.array or pd.DataFrame) 2D array where rows are sequences and columns are time points.
-    :param age_labels: (list): List of labels for the x-axis (e.g., ages or time points).
     :param num_colors: (int): Number of colors in the Spectral palette.
     :param reverse_colors: (bool): Whether to reverse the color scheme.
     :param figsize: (tuple): Size of the figure.
@@ -471,33 +468,21 @@ def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
     sorted_indices = np.lexsort(sequence_values.T[::-1])
     sorted_data = sequence_values[sorted_indices]
 
-    # Adjust the palette based on the number of states
-    if num_colors <= 20:
-        spectral_colors = sns.color_palette("Spectral", num_colors)
-    else:
-        spectral_colors = sns.color_palette("cubehelix", num_colors)
-
-    if reverse_colors:
-        spectral_colors = list(reversed(spectral_colors))
-    cmap = ListedColormap(spectral_colors)
-
-    print("Sorted indices:")
-    print(sorted_indices)
-
-    print("Sequence values after sorting:")
-    print(sorted_data)
-
     # Create the plot using imshow
     fig, ax = plt.subplots(figsize=figsize)
-    ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
+    # ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(), interpolation='nearest')
+    ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(), interpolation='nearest', vmin=1,
+              vmax=len(seqdata.states))
 
-    # Enhance x-axis aesthetics
-    if age_labels:
-        ax.set_xticks(range(len(age_labels)))
-        ax.set_xticklabels(age_labels, fontsize=10, ha='right', color='black')
-    else:
-        ax.set_xticks(range(sorted_data.shape[1]))
-        ax.set_xticklabels(range(1, sorted_data.shape[1] + 1), fontsize=10, rotation=45, ha='right', color='black')
+    # x label
+    set_up_time_labels_for_x_axis(seqdata, ax)
+
+    # Enhance y-axis aesthetics
+    num_sequences = sorted_data.shape[0]
+    ytick_spacing = max(1, num_sequences // 10)
+
+    ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
+    ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=10, color='black')
 
     # Enhance y-axis aesthetics
     ax.set_yticks(range(0, len(sorted_data), max(1, len(sorted_data) // 10)))
@@ -519,114 +504,14 @@ def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+
     ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
     if title:
         ax.set_title(title, fontsize=14, color='black')
 
-    # Add a legend
-    # Use legend from SequenceData
-    ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
-    # legend_handles = [
-    #     plt.Rectangle((0, 0), 1, 1, color=spectral_colors[i], label=categories[i])
-    #     for i in range(len(categories))
-    # ]
-
-    # ax.legend(
-    #     handles=legend_handles,
-    #     bbox_to_anchor=(1.05, 1),
-    #     loc='upper left',
-    #     title="States",
-    #     fontsize=10
-    # )
-
-    if save_as:
-        plt.savefig(save_as, dpi=dpi)
-    else:
-        plt.tight_layout()
-        plt.show()
-
-
-def _sequence_index_plot_single(seqdata: SequenceData,
-                                sortv="from.start",
-                                age_labels=None,
-                                figsize=(10, 6),
-                                title=None,
-                                xlabel="Time",
-                                ylabel="Sequence Index",
-                                save_as=None,
-                                dpi=200):
-    """
-    Generate a single sequence index plot.
-
-    :param seqdata: (SequenceData) A SequenceData object.
-    """
-    # Get sequence values as NumPy array
-    sequence_values = seqdata.values.copy()
-
-    # Ensure no NaN values interfere with sorting
-    if np.isnan(sequence_values).any():
-        sequence_values = np.where(np.isnan(sequence_values), -1, sequence_values)
-
-    print("Sequence values before sorting:")
-    print(sequence_values)
-
-    # Sorting logic
-    if sortv == "from.start":
-        first_state = np.argmax(sequence_values != -1, axis=1)  # Find first valid state
-        sorted_indices = np.argsort(first_state)  # Sort by first occurrence
-    elif sortv == "lexical":
-        sorted_indices = np.lexsort(sequence_values.T[::-1])  # Lexicographic sorting
-    elif sortv == "from.end":
-        last_state = np.argmax(sequence_values[:, ::-1] != -1, axis=1)
-        sorted_indices = np.argsort(last_state)
-    else:
-        sorted_indices = np.arange(sequence_values.shape[0])  # No sorting
-
-    print("Sorted indices:")
-    print(sorted_indices)
-
-    sorted_data = sequence_values[sorted_indices]
-    print("Sequence values after sorting:")
-    print(sorted_data)
-
-    # Use colormap from SequenceData
-    cmap = seqdata.get_colormap()
-
-    fig, ax = plt.subplots(figsize=figsize)
-    ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
-
-    # X-axis labels
-    if age_labels:
-        ax.set_xticks(range(len(age_labels)))
-        ax.set_xticklabels(age_labels, fontsize=10, ha='right', color='black')
-    else:
-        ax.set_xticks(range(sorted_data.shape[1]))
-        ax.set_xticklabels(range(1, sorted_data.shape[1] + 1), fontsize=10, ha='right', color='black')
-
-    # Y-axis labels
-    ax.set_yticks(range(0, len(sorted_data), max(1, len(sorted_data) // 10)))
-    ax.set_yticklabels(range(1, len(sorted_data) + 1, max(1, len(sorted_data) // 10)), fontsize=10, color='black')
-
-    # Remove unnecessary frame borders
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-
-    ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
-    ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
-
-    if title is not None:
-        ax.set_title(title, fontsize=14, color='black')
-
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     if save_as:
-        plt.savefig(save_as, dpi=dpi)
-    else:
-        plt.tight_layout()
-        plt.show()
-
-
-
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')  # Save first
+    plt.show()  # Show after saving

@@ -9,14 +9,12 @@
     similar to `seqfplot` in R's TraMineR package.
 """
 from collections import Counter
-from io import BytesIO  # Import BytesIO for in-memory operations
 
 import pandas as pd
-import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
 
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.visualization.utils import set_up_time_labels_for_x_axis
 
 
 def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as=None, dpi=200):
@@ -39,16 +37,6 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     total_sequences = len(sequences)  # Total number of sequences in the dataset
     df['freq'] = df['count'] / total_sequences * 100  # Convert to percentage based on the entire dataset
 
-    # Infer x-axis labels dynamically based on sequence length
-    sequence_length = len(df['sequence'].iloc[0])  # Get sequence length dynamically
-    x_ticks = np.arange(sequence_length) + 0.5  # Align X-axis ticks to the center of bars
-
-    # Use provided time labels if available, otherwise use generic "C1, C2, ..."
-    if seqdata.time:
-        x_labels = seqdata.cleaned_time
-    else:
-        x_labels = [f"{i + 1}" for i in range(sequence_length)]
-
     # **Ensure colors match seqdef**
     state_colors = seqdata.color_map  # Directly get the color mapping from seqdef
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}  # Reverse mapping from numeric values to state names
@@ -66,7 +54,9 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
             color = state_colors.get(state_label, "gray")  # Get the corresponding color
 
             width = 1  # Width of each time slice
-            ax.barh(y=y_positions[i], width=width, left=left, height=freq, color=color, edgecolor="none")
+            ax.barh(y=y_positions[i], width=width * 1.01, left=left - 0.005,
+                    height=freq, color=color, linewidth=0,
+                    antialiased=False)
             left += width  # Move to the next time slice
 
     # **Formatting**
@@ -75,8 +65,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     ax.set_title(f"Top {top_n} Most Frequent Sequences", fontsize=14, pad=20)  # Add some padding between title and plot
 
     # **Optimize X-axis ticks: align to the center of each bar**
-    ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_labels, fontsize=10)
+    set_up_time_labels_for_x_axis(seqdata, ax)
 
     # **Set Y-axis ticks and labels**
     sum_freq_top_10 = df['freq'].sum()  # Cumulative frequency of top 10 sequences
@@ -98,85 +87,17 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     # **Annotate 0% at the bottom of the Y-axis**
     ax.annotate("0%", xy=(-0.5, 0), xycoords="data", fontsize=12, color="black", ha="left", va="center")
 
-    ax.grid(axis='x', linestyle='--', alpha=0.5)
-
     # **Remove top, right, and left borders, keep only the x-axis and y-axis**
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(False)  # Do not keep the left border
     ax.spines["bottom"].set_visible(False)  # Do not keep the bottom border
 
-    # **Save or show**
+    # Use legend from SequenceData
+    ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
+
     if save_as:
-        # Ensure the file format is correct
-        if not save_as.lower().endswith(('.png', '.jpeg', '.jpg', '.pdf')):
-            save_as += '.png'  # Default to saving as PNG format
-
-        # Save the main plot to memory
-        main_buffer = BytesIO()
-        plt.savefig(main_buffer, format='png', dpi=dpi, bbox_inches='tight')
-        plt.close(fig)  # Close the plot to free memory
-        main_buffer.seek(0)  # Reset the pointer to the beginning of the file
-
-        # Generate the legend and save it to memory
-        legend_buffer = _plot_legend(seqdata, dpi=dpi)
-
-        # Combine the main plot and legend
-        _combine_images(main_buffer, legend_buffer, save_as, dpi=dpi)
-    else:
-        plt.show()
-
-
-def _plot_legend(seqdata: SequenceData, dpi=200):
-    """
-    Generates a slim vertical legend for sequence state colors
-    and returns it as an in-memory image.
-
-    :param seqdata: (SequenceData) A SequenceData object containing sequences.
-    :param dpi: (int) Resolution of the legend.
-    :return: (BytesIO) In-memory image of the legend.
-    """
-    # Create the figure which is slim (narrow width) and vertical (tall height)
-    fig, ax = plt.subplots(figsize=(2, 6))
-    ax.legend(handles=seqdata.legend_handles, loc='center', title="States", fontsize=10, ncol=1)
-    ax.axis('off')
-
-    # Save the legend to memory
-    buffer = BytesIO()
-    plt.savefig(buffer, format='png', dpi=dpi, bbox_inches='tight')
-    # Close the plot to free memory
-    plt.close(fig)
-    # Reset the pointer to the beginning of the file
-    buffer.seek(0)
-    return buffer
-
-
-def _combine_images(main_buffer, legend_buffer, output_path, dpi=200):
-    """
-    Combines the main plot and legend into a single image.
-
-    :param main_buffer: (BytesIO) In-memory image of the main plot.
-    :param legend_buffer: (BytesIO) In-memory image of the legend.
-    :param output_path: (str) Path to save the combined image.
-    :param dpi: (int) Resolution of the output image.
-    """
-    main_image = Image.open(main_buffer)
-    legend_image = Image.open(legend_buffer)
-
-    # Calculate the combined width and height
-    combined_width = main_image.width + legend_image.width
-    combined_height = max(main_image.height, legend_image.height)
-
-    # Create a new blank image
-    combined_image = Image.new('RGB', (combined_width, combined_height), (255, 255, 255))
-
-    # Paste the main plot and legend
-    combined_image.paste(main_image, (0, 0))
-    combined_image.paste(legend_image, (main_image.width, 0))
-
-    # Save the combined image
-    if not output_path.lower().endswith(('.png', '.jpeg', '.jpg', '.pdf')):
-        output_path += '.png'  # Default to saving as PNG format
-    combined_image.save(output_path, dpi=(dpi, dpi))
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')  # Save first
+    plt.show()  # Show after saving
 
 

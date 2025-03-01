@@ -58,88 +58,101 @@ def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
 def plot_mean_time(seqdata: SequenceData,
                    show_error_bar: bool = True,
                    title=None,
+                   x_label="Mean Time (Years)",
+                   y_label="State",
                    save_as: Optional[str] = None,
                    dpi: int = 200) -> None:
     """
-    Plot Mean Time Plot for sequence data, optimized version.
+    Plot Mean Time Plot for sequence data.
 
     :param seqdata: SequenceData object containing sequence information
     :param show_error_bar: Boolean flag to show or hide error bars
     :param title: Optional title for the plot
+    :param x_label: Label for the x-axis
+    :param y_label: Label for the y-axis
     :param save_as: Optional file path to save the plot
     :param dpi: Resolution of the saved plot
     """
-    # Set style to reduce rendering time
-    plt.style.use('seaborn-v0_8-whitegrid')
+    # Still use seaborn's whitegrid style but with reduced transparency
+    # otherwise, seaborn tends to make the colors too light
+    with plt.style.context('seaborn-v0_8-whitegrid'):
+        # Adjust seaborn parameter settings to increase color saturation
+        sns.set_style("whitegrid", {'grid.alpha': 0.3})
+        # Increase color saturation
+        sns.set_palette("deep")
 
-    # Compute all required data at once
-    mean_time_df = _compute_mean_time(seqdata)
+        # Compute all required data at once
+        mean_time_df = _compute_mean_time(seqdata)
 
-    # Create figure and preallocate memory
-    fig = plt.figure(figsize=(12, 7))
-    gs = plt.GridSpec(2, 1, height_ratios=[6, 1], hspace=0.2)
+        # Create figure and preallocate memory
+        fig = plt.figure(figsize=(12, 7))
+        gs = plt.GridSpec(2, 1, height_ratios=[6, 1], hspace=0.2)
 
-    # Get color mapping
-    cmap = seqdata.get_colormap()
-    colors = [cmap.colors[i] for i in range(len(seqdata.states))]
-    mean_time_df['Color'] = pd.Categorical(mean_time_df['State']).codes
-    mean_time_df['Color'] = mean_time_df['Color'].map(lambda x: colors[x])
+        # Get color mapping - enhance saturation
+        cmap = seqdata.get_colormap()
+        colors = [cmap.colors[i] for i in range(len(seqdata.states))]
 
-    # Create main plot
-    ax = fig.add_subplot(gs[0])
+        # Enhance color saturation (optional)
+        import matplotlib.colors as mcolors
+        vibrant_colors = []
+        for color in colors:
+            # Convert to HSV, increase saturation, then convert back to RGB
+            hsv = mcolors.rgb_to_hsv(mcolors.to_rgb(color))
+            hsv[1] = min(hsv[1] * 1.3, 1.0)  # Increase saturation by 30%, but don't exceed max value
+            vibrant_colors.append(mcolors.hsv_to_rgb(hsv))
 
-    # Optimized bar plot drawing
-    bars = sns.barplot(
-        x="MeanTime",
-        y="State",
-        hue="State",
-        data=mean_time_df,
-        palette=mean_time_df["Color"].tolist(),
-        legend=False,
-        errorbar=None,
-        ax=ax
-    )
+        mean_time_df['Color'] = pd.Categorical(mean_time_df['State']).codes
+        mean_time_df['Color'] = mean_time_df['Color'].map(lambda x: vibrant_colors[x])
 
-    # Add error bars if needed
-    if show_error_bar:
-        ax.errorbar(
-            x=mean_time_df["MeanTime"],
-            y=range(len(mean_time_df)),
-            xerr=mean_time_df["StandardError"],
-            fmt='none',
-            ecolor='black',
-            capsize=3,
-            capthick=1,
-            elinewidth=1.5
+        # Create main plot
+        ax = fig.add_subplot(gs[0])
+
+        # Use seaborn for plotting, but set color saturation
+        bars = sns.barplot(
+            x="MeanTime",
+            y="State",
+            hue="State",
+            data=mean_time_df,
+            palette=mean_time_df["Color"].tolist(),
+            legend=False,
+            errorbar=None,
+            ax=ax
         )
 
-    # Set plot properties
-    if title:
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
-    ax.set_xlabel("Mean Time", fontsize=12)
-    ax.set_ylabel("State", fontsize=12)
+        # Adjust the color of the bar chart
+        for i, patch in enumerate(ax.patches):
+            patch.set_facecolor(vibrant_colors[i % len(vibrant_colors)])
+            patch.set_edgecolor('none')  # Remove border to maintain vibrant appearance
 
-    # Create legend
-    legend_ax = fig.add_subplot(gs[1])
-    legend_ax.axis('off')
+        # Add error bars if needed
+        if show_error_bar:
+            ax.errorbar(
+                x=mean_time_df["MeanTime"],
+                y=range(len(mean_time_df)),
+                xerr=mean_time_df["StandardError"],
+                fmt='none',
+                ecolor='black',
+                capsize=3,
+                capthick=1,
+                elinewidth=1.5
+            )
 
-    # Optimize legend creation using list comprehension
-    legend_elements = [plt.Rectangle((0, 0), 1, 1, facecolor=color, label=state)
-                       for state, color in zip(seqdata.states, colors)]
+        # Set plot properties
+        if title:
+            ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
 
-    legend_ax.legend(handles=legend_elements,
-                     loc='center',
-                     ncol=4,
-                     frameon=False,
-                     bbox_to_anchor=(0.5, 0.5))
+        # Adjust grid lines
+        ax.grid(axis='x', alpha=0.2, linestyle='-')
+        ax.set_axisbelow(True)  # Place grid lines behind the bars
 
-    # Adjust layout
-    plt.subplots_adjust(left=0.3)
+        # Adjust layout
+        plt.subplots_adjust(left=0.3)
 
-    if save_as:
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-    else:
-        plt.show()
+        if save_as:
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')  # Save first
+        plt.show()  # Show after saving
 
-    # Clean up memory
-    plt.close(fig)
+        # Clean up memory
+        plt.close(fig)
