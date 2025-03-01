@@ -350,7 +350,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     if refseq_type == "sets":
         conc1 = seqconc(seqdata_num.iloc[refseq[0], :]).to_numpy()
         conc2 = seqconc(dseqs_num1).to_numpy()
-        # 找到 conc1 中的各个元素在 conc2 中的位置
+        # Find the position of each element in conc1 within conc2
         seqdata_didxs1 = []
         for element in conc1:
             idx = np.where(conc2 == element)[0][0]
@@ -360,7 +360,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         conc3 = seqconc(seqdata_num.iloc[refseq[1], :]).to_numpy()
         conc4 = seqconc(dseqs_num2).to_numpy()
-        # 找到 conc3 中的各个元素在 conc4 中的位置
+        # Find the position of each element in conc3 within conc4
         seqdata_didxs2 = []
         for element in conc3:
             idx = np.where(conc4 == element)[0][0]
@@ -371,12 +371,12 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         seqdata_series = seqconc(seqdata_num)
         dseqs_series = seqconc(dseqs_num)
 
-        # 创建一个字典，将 dseqs_series 的每个元素映射到其索引
+        # Create a dictionary that maps each element of dseqs_series to its index
         dseqs_index_map = {}
         for idx, seq in dseqs_series.items():
             dseqs_index_map[seq] = dseqs_series.index.get_loc(idx)
 
-        # 去重前数据 在 去重后数据 里出现的位置
+        # Where the data before deduplication appears in the data after deduplication
         seqdata_didxs = []
         for idx, seq in seqdata_series.items():
             seqdata_didxs.append(dseqs_index_map[seq])
@@ -411,8 +411,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     if method in ["OMspell", "NMSMST", "SVRspell"]:
         dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
 
-        # dseqs.oidxs <- match(seqconc(dseqs.num), seqconc(seqdata.num))
-        # 去重后数据(conc1) 在 去重前数据(conc2) 里第一次出现的位置
+        # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
         conc1 = np.array(seqconc(dseqs_num))
         conc2 = np.array(seqconc(seqdata_num))
         dseqs_oidxs = []
@@ -420,7 +419,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             idx = np.where(conc2 == element)[0][0]
             dseqs_oidxs.append(idx)
 
-        # 不能排序！否则会导致实际比较的序列不是期望中的样子
+        # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
         c = 1 if method == "OMspell" else 0
         dseqs_dur = dseqs_dur.iloc[dseqs_oidxs, :] - c
@@ -574,16 +573,16 @@ def adaptSmForHAM(sm, nstates, ncols):
 
     return costs
 
-if __name__ == '__main__':
-    from sequenzo import *
-
-    df = load_dataset('country_co2_emissions')
-
-    time = list(df.columns)[1:]
-
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-
-    sequence_data = SequenceData(df, time=time, states=states)
-
-    HAM = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+# if __name__ == '__main__':
+#     from sequenzo import *
+#
+#     df = load_dataset('country_co2_emissions')
+#
+#     time = list(df.columns)[1:]
+#
+#     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+#
+#     sequence_data = SequenceData(df, time=time, states=states)
+#
+#     HAM = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 

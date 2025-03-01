@@ -81,8 +81,8 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
 
             tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)
 
-            tmat = tr.shape[1]               # 状态数(因为 tr 是三维，所以第一维是时间维度，不是状态数)
-            time = seqdata.seqdata.shape[1]  # 时间点数
+            tmat = tr.shape[1]               # Number of states (since tr is three dimensions np.ndarray, the first dimension is time)
+            time = seqdata.seqdata.shape[1]  # Total number of time points
             costs = np.zeros((time, alphsize, alphsize))
 
             # Function to compute the cost according to transition rates
