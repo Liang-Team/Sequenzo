@@ -106,14 +106,14 @@ def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray)
 
 
 def plot_transition_matrix(seqdata: SequenceData,
-                           state_labels: List[str],
+                           title: Optional[str] = None,
                            save_as: Optional[str] = None,
                            dpi: int = 200) -> None:
     """
     Plot state transition rate matrix as a heatmap.
 
     :param seqdata: SequenceData object containing sequence information
-    :param state_labels: list of state names for matrix labels
+    :param title: optional title for the plot
     :param save_as: optional file path to save the plot
     :param dpi: resolution of the saved plot
     """
@@ -137,8 +137,8 @@ def plot_transition_matrix(seqdata: SequenceData,
         annot=True,
         fmt=".2f",
         cmap=cmap,
-        xticklabels=state_labels,
-        yticklabels=state_labels,
+        xticklabels=seqdata.states,
+        yticklabels=seqdata.states,
         linewidths=0.5,
         linecolor="gray",
         cbar_kws={"shrink": 0.8},
@@ -150,7 +150,9 @@ def plot_transition_matrix(seqdata: SequenceData,
         spine.set_visible(True)
 
     # Adjust format
-    plt.title("State Transition Rate Matrix", fontsize=14, fontweight='bold', pad=20)
+    if title:
+        plt.title(title, fontsize=14, fontweight='bold', pad=20)
+    # plt.title("State Transition Rate Matrix", fontsize=14, fontweight='bold', pad=20)
     plt.xlabel("State at t + 1", fontsize=12, labelpad=10)
     plt.ylabel("State at t", fontsize=12, labelpad=10)
 
@@ -161,9 +163,7 @@ def plot_transition_matrix(seqdata: SequenceData,
     # Adjust layout
     plt.tight_layout()
 
-    # Save or display plot
     if save_as:
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-    else:
-        plt.show()
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')  # Save first
+    plt.show()  # Show after saving
 

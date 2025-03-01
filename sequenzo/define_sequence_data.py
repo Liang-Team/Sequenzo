@@ -181,7 +181,7 @@ class SequenceData:
 
         # Apply the mapping
         # If there are missing values, replace them with the last index + 1
-        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states) + 1))
+        self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, len(self.states) + 1))
 
         if self.ids is not None:
             self.seqdata.index = self.ids

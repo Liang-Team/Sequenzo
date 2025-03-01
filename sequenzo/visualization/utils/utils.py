@@ -5,12 +5,19 @@
 @Desc    : 
 """
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from sequenzo import SequenceData
 
 
-def set_up_time_labels_for_x_axis(seqdata, ax):
-    # Extract time labels (years)
+def set_up_time_labels_for_x_axis(seqdata: SequenceData,
+                                  ax: Axes) -> None:
+    """
+    Helper function to set up time labels for the x-axis.
 
+    :param seqdata: (SequenceData) A SequenceData object containing time information
+    :param ax: (matplotlib.axes.Axes) The axes to set labels on
+    """
+    # Extract time labels (year or age)
     time_labels = np.array(seqdata.cleaned_time)
 
     # Determine the number of time steps
@@ -30,6 +37,9 @@ def set_up_time_labels_for_x_axis(seqdata, ax):
     # Set x-ticks and labels dynamically
     ax.set_xticks(xtick_positions)
     ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color="black")
+    # Note that here is black, but in the index plot the x label is gray
+    # as I set it in the index plot function: ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
+    # TODO: think about the uniform color setting for the x label in the whole project
 
 
 
