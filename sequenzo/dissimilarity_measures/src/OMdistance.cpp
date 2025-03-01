@@ -33,8 +33,6 @@ public:
             fmat.resize(fmatsize);
             for (int i = 0; i < fmatsize; ++i)
                 fmat[i].resize(fmatsize, 0);
-            for(int i = 0; i < fmatsize; i ++)
-                fmat[i][0] = fmat[0][i] = i * indel;
 
             // ==================
             // initialize maxcost
@@ -96,40 +94,47 @@ public:
             int m = ptr_len(is);
             int n = ptr_len(js);
             int mSuf = m+1, nSuf = n+1;
-//            int prefix = 0;
+            int prefix = 0;
 
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_sm = sm.unchecked<2>();
 
 //            Skipping common prefix
-//            int i = 1;
-//            int j = 1;
-//            while (i < mSuf && j < nSuf &&
-//                   ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-//                i++;
-//                j++;
-//                prefix++;
-//            }
+            int i = 1;
+            int j = 1;
+            while (i < mSuf && j < nSuf &&
+                   ptr_seq(is, i-1) == ptr_seq(js, j-1)){
+                i++;
+                j++;
+                prefix++;
+            }
 //            Skipping common suffix
-//            while (mSuf > i && nSuf > j
-//                   && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
-//                mSuf--;
-//                nSuf--;
-//            }
+            while (mSuf > i && nSuf > j
+                   && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
+                mSuf--;
+                nSuf--;
+            }
 
-            for(int i = 1; i < mSuf; i ++){
-                for(int j = 1; j < nSuf; j ++){
-                    double minimum = fmat[i-1][j] + indel;
-                    double j_indel = fmat[i][j-1] + indel;
+            m = mSuf - prefix;
+            n = nSuf - prefix;
+            for(int i = 0; i < m; i ++)
+                fmat[i][0]  = i * indel;
+            for(int i = 0; i < n; i ++)
+                fmat[0][i] = i * indel;
+
+            for(int i = prefix+1; i < mSuf; i ++){
+                for(int j = prefix+1; j < nSuf; j ++){
+                    double minimum = fmat[i-1-prefix][j-prefix] + indel;
+                    double j_indel = fmat[i-prefix][j-1-prefix] + indel;
 
                     double sub = 0;
                     if(ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-                        sub = fmat[i-1][j-1];
+                        sub = fmat[i-1-prefix][j-1-prefix];
                     }else{
-                        sub = fmat[i-1][j-1] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1));
+                        sub = fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1));
                     }
 
-                    fmat[i][j] = std::min({minimum, j_indel, sub});
+                    fmat[i-prefix][j-prefix] = std::min({minimum, j_indel, sub});
                 }
             }
 
@@ -138,7 +143,7 @@ public:
             double ml = double(m) * indel;
             double nl = double(n) * indel;
 
-            return normalize_distance(fmat[mSuf-1][nSuf-1],maxpossiblecost, ml, nl);
+            return normalize_distance(fmat[mSuf-1-prefix][nSuf-1-prefix],maxpossiblecost, ml, nl);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
