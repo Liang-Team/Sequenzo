@@ -520,9 +520,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             for j in range(len2):
                 result[i, j] = distances_matrix[seqdata_didxs1[i], seqdata_didxs2[j]]
 
-        rownames = seqdata.seqdata.index[refseq[0]]
-        colnames = seqdata.seqdata.index[refseq[1]]
-        result_df = pd.DataFrame(result, index=rownames, columns=colnames)
+        result_df = pd.DataFrame(result, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
         return result_df
 
@@ -530,17 +528,13 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         refseq_id = np.array([-1, -1])
 
         if method == "OM":
-            om = c_code.OMdistance(seqdata_num.astype(np.int32),
+            om = c_code.OMdistance(dseqs_num.astype(np.int32),
                                     sm.astype(np.float64),
                                     indel,
                                     norm_num,
                                     lengths,
                                     refseq_id)
             dist_matrix = om.compute_all_distances()
-
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
-
-            return dist_matrix
 
         elif method == "OMspell":
             om = c_code.OMspellDistance(dseqs_num.astype(np.int32),
@@ -554,25 +548,21 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                                          _seqlength.astype(np.int32))
             dist_matrix = om.compute_all_distances()
 
-            _matrix = c_code.dist2matrix(nseqs, seqdata_didxs.astype(np.int32), dist_matrix.astype(np.float64))
-
-            _dist2matrix = _matrix.padding_matrix()
-
-            dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
-
-            return dist_matrix
-
         elif method == "HAM" or method == "DHD":
-            DHD = c_code.DHDdistance(seqdata_num.astype(np.int32),
+            DHD = c_code.DHDdistance(dseqs_num.astype(np.int32),
                                       sm.astype(np.float64),
                                       norm_num,
                                       max_cost,
                                       refseq_id)
             dist_matrix = DHD.compute_all_distances()
 
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
+        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs.astype(np.int32), dist_matrix.astype(np.float64))
 
-            return dist_matrix
+        _dist2matrix = _matrix.padding_matrix()
+
+        dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+
+        return dist_matrix
 
 
 

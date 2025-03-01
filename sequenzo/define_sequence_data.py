@@ -116,6 +116,8 @@ class SequenceData:
 
             if len(np.unique(self.ids)) != len(self.ids):
                 raise ValueError("❌ 'ids' must be unique.")
+        else:
+            self.ids = np.arange(len(self.data))
 
         # check weights
         if self.weights is not None:
@@ -177,7 +179,7 @@ class SequenceData:
         self.state_mapping = {state: idx for idx, state in enumerate(correct_order)}
 
         # Apply the mapping
-        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
+        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states)))
 
         if self.ids is not None:
             self.seqdata.index = self.ids
