@@ -230,6 +230,7 @@ class SequenceData:
         ax.axis('off')
 
         if save_as:
+            plt.show()
             plt.savefig(save_as, dpi=dpi)
         else:
             plt.tight_layout()
