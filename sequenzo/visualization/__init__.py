@@ -13,6 +13,7 @@ from .plot_transition_matrix import compute_transition_matrix, print_transition_
 from .plot_mean_time import plot_mean_time
 from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
 from .plot_state_distribution import plot_state_distribution
+from .plot_modal_state import plot_modal_state
 
 
 # Delay imports to avoid circular dependency issues during installation
@@ -33,5 +34,6 @@ __all__ = [
     "plot_single_medoid",
     "plot_state_distribution",
     "plot_transition_matrix",
+    "plot_modal_state",
     # Add other functions as needed
 ]

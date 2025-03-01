@@ -5,7 +5,13 @@
 @Desc    : 
 """
 import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+
+from io import BytesIO
+from PIL import Image
+from typing import Tuple, Optional, List, Dict, Any
+
 from sequenzo import SequenceData
 
 
@@ -42,4 +48,119 @@ def set_up_time_labels_for_x_axis(seqdata: SequenceData,
     # TODO: think about the uniform color setting for the x label in the whole project
 
 
+def create_standalone_legend(
+        colors: Dict[str, str],
+        labels: List[str],
+        ncol: int = 5,
+        figsize: Tuple[int, int] = (8, 1),
+        fontsize: int = 10,
+        dpi: int = 200
+) -> BytesIO:
+    """
+    Creates a standalone legend image without borders.
 
+    Parameters:
+        colors: Dictionary mapping labels to color values
+        labels: List of state labels to include in the legend
+        ncol: Number of columns in the legend
+        figsize: Size of the figure (width, height)
+        fontsize: Font size for legend text
+        dpi: Resolution of the output image
+
+    Returns:
+        BytesIO: In-memory buffer containing the legend image
+    """
+    # Create a new figure for the legend
+    legend_fig = plt.figure(figsize=figsize)
+    ax = legend_fig.add_subplot(111)
+    ax.axis('off')  # Hide the axes
+
+    # Create handles for the legend
+    handles = [plt.Rectangle((0, 0), 1, 1, color=colors.get(s, "gray")) for s in labels]
+
+    # Create the legend without a frame
+    legend = ax.legend(
+        handles,
+        labels,
+        loc='center',
+        ncol=min(ncol, len(labels)),
+        frameon=False,  # No border around legend
+        fontsize=fontsize
+    )
+
+    # Save to memory buffer
+    buffer = BytesIO()
+    legend_fig.savefig(
+        buffer,
+        format='png',
+        dpi=dpi,
+        bbox_inches='tight',
+        pad_inches=0  # Remove padding
+    )
+    plt.close(legend_fig)
+    buffer.seek(0)
+
+    return buffer
+
+
+def combine_plot_with_legend(
+        main_image_buffer: BytesIO,
+        legend_buffer: BytesIO,
+        output_path: Optional[str] = None,
+        dpi: int = 200,
+        padding: int = 10
+) -> Image.Image:
+    """
+    Combines a main plot image with a legend image, placing the legend below the main plot.
+
+    Parameters:
+        main_image_buffer: Buffer containing the main plot image
+        legend_buffer: Buffer containing the legend image
+        output_path: Optional path to save the combined image
+        dpi: Resolution for the saved image
+        padding: Padding between main image and legend in pixels
+
+    Returns:
+        PIL.Image: The combined image
+    """
+    # Open images from buffers
+    main_img = Image.open(main_image_buffer)
+    legend_img = Image.open(legend_buffer)
+
+    # Calculate dimensions for combined image
+    combined_width = max(main_img.width, legend_img.width)
+    combined_height = main_img.height + padding + legend_img.height
+
+    # Create new blank image
+    combined_img = Image.new('RGB', (combined_width, combined_height), (255, 255, 255))
+
+    # Paste main image at top
+    combined_img.paste(main_img, (0, 0))
+
+    # Center and paste legend below main image with padding
+    legend_x = (combined_width - legend_img.width) // 2
+    combined_img.paste(legend_img, (legend_x, main_img.height + padding))
+
+    # Save if output path is provided
+    if output_path:
+        combined_img.save(output_path, dpi=(dpi, dpi))
+
+    return combined_img
+
+
+def save_figure_to_buffer(fig, dpi: int = 200) -> BytesIO:
+    """
+    Saves a matplotlib figure to a BytesIO buffer.
+
+    Parameters:
+        fig: Matplotlib figure to save
+        dpi: Resolution of the output image
+
+    Returns:
+        BytesIO: Buffer containing the figure image
+    """
+    buffer = BytesIO()
+    fig.savefig(buffer, format='png', dpi=dpi, bbox_inches='tight')
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer

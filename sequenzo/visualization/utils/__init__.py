@@ -4,6 +4,12 @@
 @Time    : 01/03/2025 10:16
 @Desc    : 
 """
-from .utils import set_up_time_labels_for_x_axis
+from .utils import (set_up_time_labels_for_x_axis,
+                    create_standalone_legend,
+                    save_figure_to_buffer,
+                    combine_plot_with_legend)
 
-__all__ = ['set_up_time_labels_for_x_axis']
+__all__ = ['set_up_time_labels_for_x_axis',
+           'create_standalone_legend',
+           'save_figure_to_buffer',
+           'combine_plot_with_legend']
