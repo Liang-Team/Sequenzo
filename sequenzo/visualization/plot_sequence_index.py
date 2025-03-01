@@ -68,6 +68,7 @@ def plot_sequence_index(seqdata: SequenceData,
                         custom_order=None,
                         sortv=None,
                         age_labels=None,
+                        categories=None,
                         title=None,
                         facet_ncol=2,
                         xlabel="Time",
@@ -81,6 +82,7 @@ def plot_sequence_index(seqdata: SequenceData,
     :param id_group_df: (pd.DataFrame, optional) DataFrame containing IDs and grouping information for sequences.
     :param custom_order: (dict, optional) Custom sorting order for group labels.
     :param age_labels: (list, optional) Labels for the x-axis (e.g., ages or time points).
+    :param categories: (list, optional) List of categories for splitting the index plot into different groups
     :param title: (str, optional) Title for the plot.
     :param facet_ncol: (int, default=2) Number of columns for grouped plots.
     :param save_as: (str, optional) File path to save the plot.
@@ -89,11 +91,11 @@ def plot_sequence_index(seqdata: SequenceData,
     :return None.
     """
     if not isinstance(seqdata, SequenceData):
-        raise TypeError("❌ Input data must be a SequenceData object.")
+        raise TypeError("Input data must be a SequenceData object.")
 
     if id_group_df is None:
         # Call the single plot function if no grouping is provided
-        _sequence_index_plot_single(seqdata, age_labels=age_labels,
+        sequence_index_plot_single(seqdata, age_labels=age_labels,
                                     figsize=(10, 6), title=title,
                                     xlabel=xlabel, ylabel=ylabel, save_as=save_as, dpi=dpi)
     else:
@@ -102,12 +104,12 @@ def plot_sequence_index(seqdata: SequenceData,
             # Call the grouped plot function if grouping is provided
             _sequence_index_plot_grouping_ncol_1(seqdata, id_group_df=id_group_df,
                                                  age_labels=age_labels, title=title,
-                                                 xlabel=xlabel, ylabel=ylabel,
+                                                 xlabel=xlabel, ylabel=ylabel, categories=categories,
                                                  facet_ncol=facet_ncol, save_as=save_as, dpi=dpi)
         else:
             _sequence_index_plot_grouping_ncol_not_1(seqdata, id_group_df=id_group_df,
                                                      age_labels=age_labels, title=title,
-                                                     xlabel=xlabel, ylabel=ylabel,
+                                                     xlabel=xlabel, ylabel=ylabel, categories=categories,
                                                      facet_ncol=facet_ncol, save_as=save_as, dpi=dpi)
 
 
@@ -440,14 +442,14 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
 
 # TODO: compare this very original file and the one in sequenzo
 # TODO: I suppose this might look better and I have to understand it better
-def sequence_index_plot_single(data, categories, age_labels=None,
+def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
                                num_colors=8, reverse_colors=True, figsize=(10, 6),
-                               title=None, xlabel="Time", ylabel="Sequence ID"):
+                               title=None, xlabel="Time", ylabel="Sequence ID",
+                               save_as=None, dpi=200):
     """
     Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param data: (np.array or pd.DataFrame) 2D array where rows are sequences and columns are time points.
-    :param categories: (list): List of category labels corresponding to the data values.
     :param age_labels: (list): List of labels for the x-axis (e.g., ages or time points).
     :param num_colors: (int): Number of colors in the Spectral palette.
     :param reverse_colors: (bool): Whether to reverse the color scheme.
@@ -458,13 +460,19 @@ def sequence_index_plot_single(data, categories, age_labels=None,
 
     :return None.
     """
-    if isinstance(data, pd.DataFrame):
-        data = data.values
+    # Get sequence values as NumPy array
+    sequence_values = seqdata.values.copy()
+
+    # Ensure no NaN values interfere with sorting
+    if np.isnan(sequence_values).any():
+        sequence_values = np.where(np.isnan(sequence_values), -1, sequence_values)
 
     # Sort sequences lexicographically for better visualization
-    sorted_indices = np.lexsort(data.T[::-1])
-    sorted_data = data[sorted_indices]
+    sorted_indices = np.lexsort(sequence_values.T[::-1])
+    sorted_data = sequence_values[sorted_indices]
 
+    # TODO: why if not using this, then the visualization is not that good?
+    # TODO: must be something wrong with the defining data section
     # Adjust the palette based on the number of states
     if num_colors <= 20:
         spectral_colors = sns.color_palette("Spectral", num_colors)
@@ -475,6 +483,8 @@ def sequence_index_plot_single(data, categories, age_labels=None,
         spectral_colors = list(reversed(spectral_colors))
     cmap = ListedColormap(spectral_colors)
 
+    # Use colormap from SequenceData
+    cmap = seqdata.get_colormap()
     # Create the plot using imshow
     fig, ax = plt.subplots(figsize=figsize)
     ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
@@ -512,20 +522,26 @@ def sequence_index_plot_single(data, categories, age_labels=None,
         ax.set_title(title, fontsize=14, color='black')
 
     # Add a legend
-    legend_handles = [
-        plt.Rectangle((0, 0), 1, 1, color=spectral_colors[i], label=categories[i])
-        for i in range(len(categories))
-    ]
-    ax.legend(
-        handles=legend_handles,
-        bbox_to_anchor=(1.05, 1),
-        loc='upper left',
-        title="States",
-        fontsize=10
-    )
+    # Use legend from SequenceData
+    ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
+    # legend_handles = [
+    #     plt.Rectangle((0, 0), 1, 1, color=spectral_colors[i], label=categories[i])
+    #     for i in range(len(categories))
+    # ]
 
-    plt.tight_layout()
-    plt.show()
+    # ax.legend(
+    #     handles=legend_handles,
+    #     bbox_to_anchor=(1.05, 1),
+    #     loc='upper left',
+    #     title="States",
+    #     fontsize=10
+    # )
+
+    if save_as:
+        plt.savefig(save_as, dpi=dpi)
+    else:
+        plt.tight_layout()
+        plt.show()
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
