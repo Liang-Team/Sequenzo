@@ -97,7 +97,13 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     if save_as:
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')  # Save first
-    plt.show()  # Show after saving
+        # Ensure the filename has an extension
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as = f"{save_as}.png"  # Add default .png extension
+
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+
+    plt.show()
+    plt.close()  # Release resources
 
 

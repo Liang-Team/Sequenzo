@@ -128,14 +128,14 @@ def plot_state_distribution(seqdata: SequenceData,
     # Adjust layout to make room for the legend
     plt.tight_layout()
 
-    # Save if requested
     if save_as:
+        # Ensure the filename has an extension
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as = f"{save_as}.png"  # Add default .png extension
+
         plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
 
-    # Display the plot
     plt.show()
-
-    # Clean up
-    plt.close(fig)
+    plt.close()  # Release resources
 
 

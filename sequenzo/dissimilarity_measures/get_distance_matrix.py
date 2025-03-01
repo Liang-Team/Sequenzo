@@ -86,7 +86,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # check method
     deprecated_methods = ["OMopt", "LCSopt"]
     if method in deprecated_methods:
-        print(f"[!] Warning: {method} is deprecated")
+        print(f"[!] Warning: {method} is deprecated.\n")
 
         if method == "OMopt":
             method = "OM"
@@ -98,7 +98,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # check norm
     if isinstance(norm, bool):
         norm = "auto" if norm else "none"
-        print("[!] Warning: 'norm' has a deprecated value, TRUE changed into 'auto', FALSE into 'none'")
+        print("[!] Warning: 'norm' has a deprecated value, TRUE changed into 'auto', FALSE into 'none'.\n")
 
     # ===========================================
     # Check For Arguments That Need To Be Defined
@@ -133,7 +133,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         # if list of two sets of indexes, we will compute pairwise distances between the two sets
         if isinstance(refseq, list) and len(refseq) > 1:
             if len(refseq) > 2:
-                print("[!] Warning: Only first two elements of the 'refseq' list are used!")
+                print("[!] Warning: Only first two elements of the 'refseq' list are used.\n")
 
             for i in range(2):
                 if not all(isinstance(x, int) and x >= 0 for x in refseq[i]):
@@ -158,23 +158,23 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         if method == "OMloc":
             raise ValueError(f"[x] Error: empty sequences in method 'OMloc': {emptyseq}.")
         else:
-            print(f"[!] Warning: empty sequences {emptyseq}.")
+            print(f"[!] Warning: empty sequences {emptyseq}.\n")
 
     # check with.missing
     has_seqdata_missing = seqdata.seqdata.isna().any().any()
     has_refseq_missing = True if refseq_type == "sequence" and refseq.seqdata.isna().any().any() else False
     if with_missing and not has_seqdata_missing and not has_refseq_missing:
         with_missing = False
-        print("[!] seqdist: 'with.missing' set as FALSE as 'seqdata' has no non-void missing values.")
+        print("[!] seqdist: 'with.missing' set as FALSE as 'seqdata' has no non-void missing values.\n")
 
     if not with_missing and (has_seqdata_missing or has_refseq_missing):
         raise ValueError("[x] 'with.missing' must be TRUE when 'seqdata' or 'refseq' contain missing values.")
 
     if with_missing:
         nstates += 1
-        print("[>] Including missing values as an additional state.")
+        print("[>] Including missing values as an additional state.\n")
 
-    print(f"[>] {nseqs} sequences with {nstates} distinct states.")
+    print(f"[>] {nseqs} sequences with {nstates} distinct states.\n")
 
     # check norm
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
@@ -284,7 +284,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                 else:
                     cost = 2
 
-            print(f"Computing sm with seqcost using {sm}")
+            print(f"Computing sm with seqcost using {sm}\n")
             sm = get_substitution_cost_matrix(seqdata,
                                               method=sm,
                                               with_missing=with_missing,
@@ -297,7 +297,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                 indel = sm['indel']
                 indel_type = "vector" if indel > 1 else "number"
 
-                print(f"[>] Generated an indel of type {indel_type}.")
+                print(f"[>] Generated an indel of type {indel_type}.\n")
 
             sm = sm['sm']
 
@@ -305,10 +305,10 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         else:
             if method == "HAM":
-                print("[>] Creating a 'sm' with a single substitution cost of 1.")
+                print("[>] Creating a 'sm' with a single substitution cost of 1.\n")
                 sm = seqsubm(seqdata, "CONSTANT", with_missing=with_missing, cval=1, miss_cost=1)
             elif method == "DHD":
-                print("[>] Creating a 'sm' with the costs derived from the transition rates.")
+                print("[>] Creating a 'sm' with the costs derived from the transition rates.\n")
                 sm = seqsubm(seqdata, "TRATE", with_missing=with_missing, cval=4, miss_cost=4, time_varying=True,
                              weighted=weighted)
             else:
@@ -395,7 +395,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             raise ValueError(f"[!] Unknown refseq type: {refseq_type}.")
 
         if refseq_type == "sets":
-            print(f"pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}")
+            print(f"Pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}\n")
 
     # ==============================
     # Compute Method-Specific Values
@@ -452,7 +452,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     ndn = dseqs_num.shape[0]
     incl_refseq = "(including refseq)" if refseq_type == "sequence" else ""
     seq_or_spell = "spell sequences" if method in ["OMspell"] else "sequences"
-    print(f"[>] {ndn} distinct {seq_or_spell} {incl_refseq}.")
+    print(f"[>] {ndn} distinct {seq_or_spell} {incl_refseq}.\n")
     del ndn
     del seq_or_spell
 
@@ -461,7 +461,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     dseqs_lens = seqlength(dseqs_num)
     ds = "spell " if method in ["OMspell"] else ""
     dl = dseqs_lens[:-1] if refseq_type == "sequence" and len(dseqs_lens) > 1 else dseqs_lens
-    print(f"[>] min/max {ds}sequence lengths: {min(dl)} / {max(dl)}.")
+    print(f"[>] min/max {ds}sequence lengths: {min(dl)} / {max(dl)}.\n")
     del ds
     del dl
 

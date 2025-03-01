@@ -157,9 +157,14 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # **Save or Show Plot**
     if save_as:
+        # Ensure the filename has an extension
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as = f"{save_as}.png"  # Add default .png extension
+
         plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-    else:
-        plt.show()
+
+    plt.show()
+    plt.close()  # Release resources
 
 
 def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups: int = 10,

@@ -11,7 +11,7 @@ public:
     OMdistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> seqlength,py::array_t<int> refseqS)
             : indel(indel), norm(norm) {
 
-        py::print("OM starts ......");
+        py::print("Starting optimal matching...\n");
         std::cout << std::flush;
 
         try {
@@ -151,7 +151,7 @@ public:
     }
 
     py::array_t<double> compute_all_distances() {
-        py::print("[>] start f:compute_all_distances() ...");
+        py::print("[>] Starting compute_all_distances()...\n");
 
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
@@ -164,7 +164,7 @@ public:
                 }
             }
 
-            py::print("[>] successfully computed!");
+            py::print("[>] Successfully computed!");
 
             return dist_matrix;
         } catch (const std::exception& e) {
@@ -174,7 +174,7 @@ public:
     }
 
     py::array_t<double> compute_refseq_distances() {
-        py::print("[>] start f:compute_refseq_distances() ...");
+        py::print("[>] Starting compute_refseq_distances()...\n");
 
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
@@ -192,7 +192,7 @@ public:
                 }
             }
 
-            py::print("[>] successfully computed!");
+            py::print("[>] Successfully computed!");
 
             return refdist_matrix;
         } catch (const std::exception& e) {

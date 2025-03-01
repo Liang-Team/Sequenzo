@@ -227,31 +227,3 @@ def plot_modal_state(seqdata: SequenceData,
         plt.axis('off')
         plt.show()
         plt.close()
-
-
-if __name__ == '__main__':
-    # Import necessary libraries
-    from sequenzo import *  # Social sequence analysis
-    import pandas as pd  # Data manipulation
-
-    # List all the available datasets in Sequenzo
-    print('Available datasets in Sequenzo: ', list_datasets())
-
-    # Load the data that we would like to explore in this tutorial
-    # `df` is the short for `dataframe`, which is a common variable name for a dataset
-    df = load_dataset('chinese_colonial_territories')
-
-    # Create a SequenceData object from the dataset
-
-    # Define the time-span variable
-    time = list(df.columns)[3:]
-
-    states = ['UK', 'Portugal', 'Germany', 'Japan', 'France', 'Tsarist Russia', 'China']
-
-    sequence_data = SequenceData(df, time=time, time_type="year", states=states)
-
-    # Simple modal plot without grouping
-    plot_modal_state(sequence_data, save_as='chinese_colonial_territories')
-
-    # Group by a column in the data
-    plot_modal_state(sequence_data, group_by="Type", save_as='modal_plot_grouped.png')

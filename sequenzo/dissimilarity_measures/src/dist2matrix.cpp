@@ -10,8 +10,8 @@ public:
     dist2matrix(int nseq, py::array_t<int> seqdata_didxs, py::array_t<double> dist_dseqs_num)
             : nseq(nseq) {
 
-        py::print("Completion matrix starts ......");
-        std::cout << std::flush;  // 刷新 C++ 输出
+        py::print("Starting to work on the matrix...");
+        std::cout << std::flush;  // Refresh C++ output
 
         try {
             this->seqdata_didxs = seqdata_didxs;
@@ -25,7 +25,7 @@ public:
     }
 
     py::array_t<double> padding_matrix() {
-        py::print("[>] start f:padding_matrix() ...");
+        py::print("[>] Starting padding_matrix()...");
 
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
@@ -40,11 +40,11 @@ public:
                 }
             }
 
-            py::print("[>] successfully complete!");
+            py::print("[>] Successfully completed!");
 
             return dist_matrix;
         } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
+            py::print("Error in compute_all_distances(): ", e.what());
             throw;
         }
     }

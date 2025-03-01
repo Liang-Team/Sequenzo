@@ -29,87 +29,70 @@ from joblib import Parallel, delayed
 
 
 class Cluster:
-    def __init__(self, matrix, entity_ids, clustering_method="ward", n_jobs=-1, num_splits=5):
+    def __init__(self, matrix, entity_ids, clustering_method="ward", n_jobs=-1):
         """
-        A class to handle clustering operations with a divide-and-conquer strategy using fastcluster.
+        A class to handle hierarchical clustering operations using fastcluster for improved performance.
 
-        :param matrix: Precomputed distance matrix (full square form or condensed form).
+        :param matrix: Precomputed distance matrix (full square form).
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
         :param clustering_method: Clustering algorithm to use (default: "ward").
         :param n_jobs: Number of parallel jobs to use (-1 for all available cores).
-        :param num_splits: Number of splits for the divide-and-conquer strategy.
         """
-        if not isinstance(entity_ids, (list, np.ndarray)):
-            raise ValueError("entity_ids must be a list or numpy array of IDs.")
-        if len(entity_ids) != len(matrix):
+        # Ensure entity_ids is a numpy array for consistent processing
+        self.entity_ids = np.array(entity_ids)
+
+        # Check if entity_ids is valid
+        if len(self.entity_ids) != len(matrix):
             raise ValueError("Length of entity_ids must match the size of the matrix.")
 
-        # Convert matrix to condensed form if needed
-        if len(matrix.shape) == 2 and matrix.shape[0] == matrix.shape[1]:
-            print("Detected full distance matrix. Converting to condensed form...")
-            self.full_matrix = matrix
+        # Optional: Check uniqueness of entity_ids
+        if len(np.unique(self.entity_ids)) != len(self.entity_ids):
+            raise ValueError("entity_ids must contain unique values.")
+
+        # Convert matrix to numpy array if it's a DataFrame
+        if isinstance(matrix, pd.DataFrame):
+            print("Converting DataFrame to NumPy array...")
+            self.full_matrix = matrix.values
         else:
+            self.full_matrix = matrix
+
+        # Verify matrix is in square form
+        if len(self.full_matrix.shape) != 2 or self.full_matrix.shape[0] != self.full_matrix.shape[1]:
             raise ValueError("Input must be a full square-form distance matrix.")
 
-        self.entity_ids = entity_ids
         self.clustering_method = clustering_method.lower()
-        self.n_jobs = n_jobs
-        self.num_splits = num_splits
 
         # Supported clustering methods
         supported_methods = ["ward", "single", "complete", "average", "centroid", "median"]
         if self.clustering_method not in supported_methods:
-            raise ValueError(f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
+            raise ValueError(
+                f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
 
-        # Compute linkage matrix using divide-and-conquer strategy
-        self.linkage_matrix = self._compute_linkage_divide_and_conquer()
+        # Compute linkage matrix using fastcluster
+        print(f"Computing linkage matrix using fastcluster with {self.clustering_method} method...")
+        self.linkage_matrix = self._compute_linkage()
 
-    def _compute_linkage_divide_and_conquer(self):
+    def _compute_linkage(self):
         """
-        Compute the linkage matrix using a divide-and-conquer strategy.
+        Compute the linkage matrix using fastcluster for improved performance.
         """
-        print(f"Using divide-and-conquer strategy with {self.num_splits} splits...")
+        # Convert the distance matrix to condensed form for linkage
+        condensed_matrix = squareform(self.full_matrix)
 
-        # Step 1: Split the data into subsets
-        indices = np.arange(len(self.entity_ids))
-        subsets = np.array_split(indices, self.num_splits)
+        # Use fastcluster's linkage function
+        return linkage(condensed_matrix, method=self.clustering_method)
 
-        # Step 2: Perform clustering on each subset
-        def process_subset(subset):
-            subset_matrix = self.full_matrix[np.ix_(subset, subset)]
-            subset_condensed = squareform(subset_matrix)
-            subset_linkage = linkage(subset_condensed, method=self.clustering_method)  # Using fastcluster
-            return subset_linkage, subset
-
-        results = Parallel(n_jobs=self.n_jobs)(
-            delayed(process_subset)(subset) for subset in subsets
-        )
-
-        # Step 3: Merge subset results into a global clustering
-        cluster_centers = []
-        for linkage_matrix, subset in results:
-            # Approximate each cluster by its centroid (mean of the cluster points)
-            labels = fcluster(linkage_matrix, t=2, criterion="maxclust")
-            for cluster_id in np.unique(labels):
-                cluster_indices = subset[labels == cluster_id - 1]
-                cluster_center = self.full_matrix[np.ix_(cluster_indices, cluster_indices)].mean(axis=0)
-                cluster_centers.append(cluster_center)
-
-        # Compute the final clustering on the cluster centers
-        global_matrix = squareform(pdist(np.array(cluster_centers)))
-        final_linkage = linkage(global_matrix, method=self.clustering_method)
-        return final_linkage
-
-    def plot_dendrogram(self, save_as=None, style="whitegrid", title="Dendrogram", xlabel="Entities", ylabel="Distance",
-                        grid=False, dpi=300, figsize=(12, 8)):
+    def plot_dendrogram(self, save_as=None, style="whitegrid", title="Dendrogram",
+                        xlabel="Entities", ylabel="Distance", grid=False, dpi=200,
+                        figsize=(12, 8)):
         """
         Plot a dendrogram of the hierarchical clustering with optional high-resolution output.
 
         :param save_as: File path to save the plot. If None, the plot will be shown.
         :param style: Seaborn style for the plot.
         :param title: Title of the plot.
-        :param ylabel:
-        :param xlabel:
+        :param xlabel: X-axis label.
+        :param ylabel: Y-axis label.
         :param grid: Whether to display grid lines.
         :param dpi: Dots per inch for the saved image (default: 300 for high resolution).
         :param figsize: Tuple specifying the figure size in inches (default: (12, 8)).
@@ -128,9 +111,26 @@ class Cluster:
             plt.grid(False)
 
         if save_as:
-            plt.savefig(save_as, dpi=dpi)
-        else:
-            plt.show()
+            # Ensure the filename has an extension
+            if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+                save_as = f"{save_as}.png"  # Add default .png extension
+
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+
+        plt.show()
+        plt.close()  # Release resources
+
+    def get_cluster_labels(self, num_clusters):
+        """
+        Get cluster labels for a specified number of clusters.
+
+        :param num_clusters: The number of clusters to create.
+        :return: Array of cluster labels corresponding to entity_ids.
+        """
+        if self.linkage_matrix is None:
+            raise ValueError("Linkage matrix is not computed.")
+
+        return fcluster(self.linkage_matrix, t=num_clusters, criterion='maxclust')
 
 
 class ClusterQuality:
@@ -350,7 +350,7 @@ class ClusterQuality:
                                 ylabel="Normalized Score",
                                 grid=True,
                                 save_as=None,
-                                dpi=300,
+                                dpi=200,
                                 figsize=(12, 8)
                             ):
         """
@@ -405,10 +405,8 @@ class ClusterQuality:
             plt.grid(False)
 
         if save_as:
-            plt.show()
-            plt.savefig(save_as, dpi=dpi)  # Save the plot with specified DPI and size
-        else:
-            plt.show()
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+        plt.show()
 
 
 class ClusterResults:
@@ -438,3 +436,36 @@ class ClusterResults:
         # Generate cluster labels
         cluster_labels = fcluster(self.linkage_matrix, k=num_clusters, criterion="maxclust")
         return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster ID": cluster_labels})
+
+
+
+if __name__ == '__main__':
+    # Import necessary libraries
+    from sequenzo import *  # Social sequence analysis
+    import pandas as pd  # Data manipulation
+
+    # List all the available datasets in Sequenzo
+    print('Available datasets in Sequenzo: ', list_datasets())
+
+    # Load the data that we would like to explore in this tutorial
+    # `df` is the short for `dataframe`, which is a common variable name for a dataset
+    df = load_dataset('country_co2_emissions')
+
+    # Create a SequenceData object from the dataset
+
+    # Define the time-span variable
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+
+    om = get_distance_matrix(seqdata=sequence_data,
+                             method='OM',
+                             sm="TRATE",
+                             indel="auto")
+
+    from sequenzo.clustering import Cluster
+
+    Cluster(om, sequence_data.ids, clustering_method='ward').plot_dendrogram(xlabel="Countries", ylabel="Distance", save_as='dendrogram')
+

@@ -34,9 +34,7 @@ class SequenceData:
         time_type: str,
         time: list,
         states: list,
-        alphabet: list = None,
         labels: list = None,
-        ids: list = None,
         id_col: str = None,
         weights: np.ndarray = None,
         start: int = 1,
@@ -83,8 +81,8 @@ class SequenceData:
         self.states = states
         self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels
-        self.ids = ids
         self.id_col = id_col
+        self.ids = np.array(data[id_col].values)
         self.weights = weights
         self.start = start
         self.missing_handling = missing_handling or {"left": np.nan, "right": "DEL", "gaps": np.nan}
