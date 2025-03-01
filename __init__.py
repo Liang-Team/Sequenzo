@@ -5,15 +5,14 @@
 @Desc    : Sequenzo Package Initialization
 """
 
-# 定义版本号 - 这必须在所有导入之前
+# Define the version number - this must be done before all imports
 __version__ = "0.1.0"
 
 
-# 使用惰性导入来避免安装时的循环依赖问题
 def __getattr__(name):
     """
-    延迟导入主要组件，以解决安装过程中的循环依赖问题。
-    这允许 setuptools 获取 __version__ 而不需要先安装所有依赖项。
+    # Delay imports to avoid circular dependency issues during installation
+    # This allows setuptools to retrieve `__version__` without requiring all dependencies to be installed first.
     """
     if name == "datasets":
         from . import datasets
@@ -37,7 +36,7 @@ def __getattr__(name):
     raise AttributeError(f"module 'sequenzo' has no attribute '{name}'")
 
 
-# 这些是包的公共 API，但使用 __getattr__ 延迟导入
+# These are the public APIs of the package, but use __getattr__ for lazy imports
 __all__ = [
     'datasets',
     'visualization',

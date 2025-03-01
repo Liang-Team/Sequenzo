@@ -4,10 +4,12 @@
 @Time    : 05/02/2025 12:47
 @Desc    : Optimized SequenceData class with integrated color scheme & legend handling.
 """
-from __future__ import annotations # 仅适用于 Python 3.7+, 添加此行来推迟类型注解的解析
-__all__ = ['SequenceData']  # 在顶部定义公共 API
+# Only applicable to Python 3.7+, add this line to defer type annotation evaluation
+from __future__ import annotations
+# Define the public API at the top of the file
+__all__ = ['SequenceData']
 
-# 全局变量和其他不依赖 pandas 的导入可以放在这里
+# Global variables and other imports that do not depend on pandas are placed here
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -57,7 +59,7 @@ class SequenceData:
         :param nr: Symbol for missing values (default: "*").
         :param cpal: Custom color palette for visualization.
         """
-        # 在这里导入 pandas，而不是在模块顶部
+        # Import pandas here instead of the top of the file
         import pandas as pd
 
         self.data = data.copy()
@@ -103,26 +105,26 @@ class SequenceData:
         """Ensures correct input parameters."""
         # check states, alphabet, labels
         if not self.states:
-            raise ValueError("❌ 'states' must be provided.")
+            raise ValueError("'states' must be provided.")
         if self.alphabet and set(self.alphabet) != set(self.states):
-            raise ValueError("❌ 'alphabet' must match 'states'.")
+            raise ValueError("'alphabet' must match 'states'.")
         if self.labels and len(self.labels) != len(self.states):
-            raise ValueError("❌ 'labels' must match the length of 'states'.")
+            raise ValueError("'labels' must match the length of 'states'.")
         
         # check ids
         if self.ids is not None:
             if len(self.ids) != len(self.data):
-                raise ValueError("❌ 'ids' must match the length of 'data'.")
+                raise ValueError("'ids' must match the length of 'data'.")
 
             if len(np.unique(self.ids)) != len(self.ids):
-                raise ValueError("❌ 'ids' must be unique.")
+                raise ValueError("'ids' must be unique.")
         else:
             self.ids = np.arange(len(self.data))
 
         # check weights
         if self.weights is not None:
             if len(self.weights) != len(self.data):
-                raise ValueError("❌ 'weights' must match the length of 'data'.")
+                raise ValueError("'weights' must match the length of 'data'.")
         else:
             self.weights = np.ones(self.data.shape[0])
 
@@ -209,8 +211,10 @@ class SequenceData:
         if self.seqdata.isna().any().any():
             lengths = self.seqdata.apply(lambda row: (row != 0).sum(), axis=1)
             print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+
         else:
-        	print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
+            print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
+
         print(f"[>] Alphabet: {self.alphabet}")
 
     def get_legend(self):

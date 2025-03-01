@@ -3,7 +3,7 @@
 
 def list_datasets():
     """List all available datasets in the `datasets` package."""
-    # 延迟导入以避免安装时的循环依赖问题
+    # Delay imports to avoid circular dependency issues during installation
     import importlib.resources as pkg_resources
 
     with pkg_resources.path("sequenzo.datasets", "__init__.py") as datasets_path:

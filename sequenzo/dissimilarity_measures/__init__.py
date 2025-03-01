@@ -10,13 +10,14 @@ from .get_substitution_cost_matrix import get_substitution_cost_matrix
 
 
 def _import_c_code():
-    """延迟导入 c_code 模块，避免在安装时的循环依赖"""
+    """Lazily import the c_code module to avoid circular dependencies during installation"""
     try:
-        from . import c_code
+        from sequenzo.dissimilarity_measures import c_code
         return c_code
     except ImportError:
-        # 如果 C 扩展无法导入，返回 None
-        print("警告: C++ 扩展 (c_code) 无法导入。请确保正确编译了扩展模块。")
+        # If the C extension cannot be imported, return None
+        print(
+            "Warning: The C++ extension (c_code) could not be imported. Please ensure the extension module is compiled correctly.")
         return None
 
 

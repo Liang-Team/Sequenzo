@@ -14,13 +14,13 @@ from .plot_mean_time import plot_mean_time
 from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
 
 
-# 改为延迟导入
+# Delay imports to avoid circular dependency issues during installation
 def _get_standard_scaler():
     try:
         from sklearn.preprocessing import StandardScaler
         return StandardScaler
     except ImportError:
-        print("警告: 无法导入 StandardScaler。请确保已正确安装 scikit-learn。")
+        print("Warning: Not able to install StandardScaler。Please ensure that you have installed scikit-learn successfully.")
         return None
 
 

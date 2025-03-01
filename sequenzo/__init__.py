@@ -17,8 +17,6 @@ from .clustering import Cluster, ClusterResults, ClusterQuality
 from .clustering import k_medoids
 from .big_data.clara.clara import clara
 
-# from .clara.seqclararange import seqclararange
-
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
@@ -35,6 +33,5 @@ __all__ = [
     "ClusterQuality",
     # "state_distribution_plot",
     "clara"
-    #
 ]
 

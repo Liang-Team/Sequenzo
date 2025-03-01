@@ -15,15 +15,23 @@ dist/
 # Ignore all
 **/*.pyc
 
-# 编译过程中生成的中间产物或者系统特定的二进制文件
-# 共享对象，shared object，是一种在Linux/macOS下的Python扩展模块
+# Intermediate files or system-specific binary files generated during compilation
+
+# Shared object (.so) files are Python extension modules on Linux/macOS
 **/*.so
-# Python dynamic - windows 下的Python扩展模块，相当于windows的dll文件，但专门用于Python
+
+# Python dynamic library (.pyd) files are Python extension modules on Windows,
+# similar to Windows DLL files but specifically for Python
 **/*.pyd
-# Windows 动态链接库
+
+# Windows dynamic link library (.dll)
 **/*.dll
-# 中间的目标文件，之后再链接生成最终的.so共享库。
-# 这个文件通常是编译过程的中间产物，最终不会被python直接使用
+
+# Intermediate object files, which are later linked to generate the final .so shared library.
+# These files are usually intermediate products of the compilation process and are not directly used by Python.
 **/*.o
-# Linuc/macOS上的静态库文件，用于静态链接C/C++代码
+
+# Static library files on Linux/macOS, used for statically linking C/C++ code
 **/*.a
+
+raw_requirements.txt

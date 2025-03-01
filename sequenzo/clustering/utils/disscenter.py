@@ -12,7 +12,7 @@ import sys
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):
 
-    # 使用延迟导入获取 c_code 模块
+    # Lazily import the c_code module to avoid circular dependencies during installation
     from .__init__ import _import_c_code
     c_code = _import_c_code()
 

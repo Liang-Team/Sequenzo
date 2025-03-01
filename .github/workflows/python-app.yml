@@ -28,11 +28,11 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    # 清理 `pip` 缓存，防止冲突
+    # Clear the `pip` cache to prevent conflicts
     - name: Clear pip cache
       run: python -m pip cache purge
 
-    # macOS: 处理依赖安装，针对不同 Python 版本采用不同策略
+    # macOS: Handle dependency installation, using different strategies for different Python versions
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
@@ -71,13 +71,13 @@ jobs:
           echo "⚠️ Using requirements-3.9.txt as fallback"
         fi
 
-    # macOS: 确保 Xcode CLI 工具已安装 - 所有 Python 版本都需要
+    # macOS: Ensure that Xcode CLI tools are installed – required for all Python versions
     - name: Install Xcode Command Line Tools
       if: runner.os == 'macOS'
       run: |
         xcode-select --install || echo "Xcode CLI already installed"
 
-    # Windows: 处理 numpy & fastcluster 版本问题，安装完整的 MSVC 工具链
+    # Windows: Handle numpy & fastcluster version issues, install the complete MSVC toolchain
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
       shell: pwsh  # 确保使用 PowerShell，而不是默认 cmd.exe
@@ -107,7 +107,7 @@ jobs:
           Write-Host "⚠️ Using requirements-3.9.txt as fallback"
         }
 
-    # Linux: 处理 fastcluster 版本问题，确保 numpy 先安装
+    # Linux: Handle fastcluster version issues, ensure numpy is installed first
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -133,7 +133,7 @@ jobs:
           echo "⚠️ Using requirements-3.9.txt as fallback"
         fi
 
-    # 确保 `PYTHONPATH` 正确
+    # Ensure `PYTHONPATH` is set correctly
     - name: Verify package path
       shell: bash
       run: |
@@ -142,7 +142,7 @@ jobs:
         echo "📂 Sequenzo package directory:"
         ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
 
-    # Windows: 解决 Unicode 编码问题
+    # Windows: Fix Unicode encoding issues
     - name: Set Windows Encoding
       if: runner.os == 'Windows'
       run: chcp 65001
@@ -160,7 +160,7 @@ jobs:
         $Env:DISTUTILS_USE_SDK = "1"
         $Env:MSSdk = "1"
 
-    # 整合后的安装步骤
+    # Consolidated installation steps for all platforms
     - name: Install local package
       if: runner.os != 'Windows'
       run: |
@@ -188,11 +188,11 @@ jobs:
         DISTUTILS_USE_SDK: 1
         MSSdk: 1
 
-    # 显示已安装的包
+    # Display installed packages
     - name: Show installed packages
       run: pip list
 
-    # 测试模块是否正确安装
+    # Test whether the module is installed correctly
     - name: Test imports
       run: |
         python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
@@ -200,11 +200,11 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}
 
-    # 构建 wheel
+    # Build the wheel
     - name: Build wheel
       run: python setup.py bdist_wheel
 
-    # 上传构建产物
+    # Upload build artifacts
     - name: Upload wheel
       uses: actions/upload-artifact@v4
       with:
