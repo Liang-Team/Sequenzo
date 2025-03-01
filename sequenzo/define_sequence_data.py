@@ -65,7 +65,7 @@ class SequenceData:
         # Clean the labels of time steps instead of keeping "C1", ..."C10"
         self.cleaned_time = [str(i + 1) for i in range(len(time))]
         self.states = states
-        self.alphabet = alphabet or sorted(set(data[time].stack().dropna().unique()))
+        self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels
         self.ids = ids
         self.id_col = id_col
@@ -147,18 +147,37 @@ class SequenceData:
         self.ismissing = self.seqdata.isna().any().any()
 
     def _convert_states(self):
-        """Converts categorical states into numerical values for processing."""
-        unique_states = sorted(set(self.seqdata.stack().dropna().unique()))
+        """
+        Converts categorical states into numerical values for processing.
+        Note that the order has to be the same as when the user defines the states of the class,
+        as it is very important for visualization.
+        Otherwise, the colors will be assigned incorrectly.
 
-        # with missing data
-        if self.seqdata.isna().any().any():
-            self.state_mapping = {state: idx + 1 for idx, state in enumerate(unique_states)}    # Create mapping
-            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, 0))    # Convert sequences to numeric values
+        For instance, self.states = ['Very Low', 'Low', 'Middle', 'High', 'Very High'], as the user defines when defining the class
+        # but the older version here is {'High': 1, 'Low': 2, 'Middle': 3, 'Very High': 4, 'Very Low': 5}
+        """
+        # unique_states = sorted(set(self.seqdata.stack().dropna().unique()))
+        #
+        # # with missing data
+        # if self.seqdata.isna().any().any():
+        #     self.state_mapping = {state: idx + 1 for idx, state in enumerate(unique_states)}    # Create mapping
+        #     self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, 0))    # Convert sequences to numeric values
+        #
+        # # without missing data
+        # else:
+        #     self.state_mapping = {state: idx for idx, state in enumerate(unique_states)}
+        #     self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
+        #
+        # if self.ids is not None:
+        #     self.seqdata.index = self.ids
 
-        # without missing data
-        else:
-            self.state_mapping = {state: idx for idx, state in enumerate(unique_states)}
-            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
+        correct_order = self.states
+
+        # Create the state mapping with correct order
+        self.state_mapping = {state: idx for idx, state in enumerate(correct_order)}
+
+        # Apply the mapping
+        self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, np.nan))
 
         if self.ids is not None:
             self.seqdata.index = self.ids
@@ -166,16 +185,16 @@ class SequenceData:
     def _assign_colors(self, reverse_colors=True):
         """Assigns a color palette using the Spectral scheme by default."""
         num_states = len(self.states)
-        spectral_colors = sns.color_palette("Spectral", num_states)
+
+        if num_states <= 20:
+            spectral_colors = sns.color_palette("Spectral", num_states)
+        else:
+            spectral_colors = sns.color_palette("cubehelix", num_states)
 
         if reverse_colors:
             spectral_colors = list(reversed(spectral_colors))
 
         self.color_map = {state: spectral_colors[i] for i, state in enumerate(self.states)}
-
-        # Save legend
-        self.legend_handles = [plt.Rectangle((0, 0), 1, 1, color=self.color_map[state], label=state) for state in
-                               self.states]
 
     def get_colormap(self):
         """Returns a ListedColormap for visualization."""
@@ -192,26 +211,25 @@ class SequenceData:
         	print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
         print(f"[>] Alphabet: {self.alphabet}")
 
-    def get_color_map(self):
-        """Returns the color map for visualization."""
-        return ListedColormap([self.color_map[state] for state in self.alphabet])
-
     def get_legend(self):
         """Returns the legend handles and labels for visualization."""
+        self.legend_handles = [plt.Rectangle((0, 0), 1, 1,
+                                             color=self.color_map[state],
+                                             label=state) for state in
+                               self.states]
         return [handle for handle in self.legend_handles], self.states
 
     def to_dataframe(self) -> pd.DataFrame:
         """Returns the processed sequence dataset as a DataFrame."""
         return self.seqdata
 
-    def plot_legend(self, save_as='legend', dpi=200):
+    def plot_legend(self, save_as=None, dpi=200):
         """Displays the saved legend for sequence state colors."""
         fig, ax = plt.subplots(figsize=(2, 2))
         ax.legend(handles=self.legend_handles, loc='center', title="States", fontsize=10)
         ax.axis('off')
 
         if save_as:
-            plt.show()
             plt.savefig(save_as, dpi=dpi)
         else:
             plt.tight_layout()

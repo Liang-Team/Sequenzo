@@ -471,8 +471,6 @@ def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
     sorted_indices = np.lexsort(sequence_values.T[::-1])
     sorted_data = sequence_values[sorted_indices]
 
-    # TODO: why if not using this, then the visualization is not that good?
-    # TODO: must be something wrong with the defining data section
     # Adjust the palette based on the number of states
     if num_colors <= 20:
         spectral_colors = sns.color_palette("Spectral", num_colors)
@@ -483,8 +481,12 @@ def sequence_index_plot_single(seqdata, age_labels=None, xtick=None,
         spectral_colors = list(reversed(spectral_colors))
     cmap = ListedColormap(spectral_colors)
 
-    # Use colormap from SequenceData
-    cmap = seqdata.get_colormap()
+    print("Sorted indices:")
+    print(sorted_indices)
+
+    print("Sequence values after sorting:")
+    print(sorted_data)
+
     # Create the plot using imshow
     fig, ax = plt.subplots(figsize=figsize)
     ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
