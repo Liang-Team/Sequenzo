@@ -17,7 +17,7 @@ from itertools import product
 
 from .utils.aggregatecases import *
 from .utils.davies_bouldin import *
-from sequenzo.clustering.k_medoids import *
+from sequenzo.big_data.clara.utils.k_medoids_once import *
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
 
@@ -123,14 +123,17 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
                 if seqdata.ismissing:
-                    states = np.arange(len(seqdata.states) + 1).tolist()
+                    states = np.arange(1, len(seqdata.states)+2).tolist()
                 else:
-                    states = np.arange(len(seqdata.states)).tolist()
+                    states = np.arange(1, len(seqdata.states)+1).tolist()
                 data_subset = SequenceData(data_subset,
+                                           time_type=seqdata.time_type,
                                            time=seqdata.time,
                                            states=states)
                 diss = get_distance_matrix(data_subset, method="OMspell", sm="TRATE", indel="auto")
 
+        diss = diss.apply(lambda x: x.fillna(x.mean()), axis=0)
+        diss.replace([np.inf, -np.inf], 1, inplace=True)
         diss = diss.values
         hc = fastcluster.linkage(diss, method='ward')
 
@@ -139,7 +142,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
 
         for k in kvals:
             # Weighted PAM clustering on subsample
-            clustering = k_medoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
+            clustering = k_medoids_once(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
             medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
             medoids = medoids.to_numpy().flatten()
 
@@ -153,10 +156,11 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
             with open(os.devnull, 'w') as fnull:
                 with redirect_stdout(fnull):
                     if seqdata.ismissing:
-                        states = np.arange(len(seqdata.states) + 1).tolist()
+                        states = np.arange(1, len(seqdata.states) + 2).tolist()
                     else:
-                        states = np.arange(len(seqdata.states)).tolist()
+                        states = np.arange(1, len(seqdata.states) + 1).tolist()
                     agseqdata = SequenceData(agseqdata,
+                                             time_type=seqdata.time_type,
                                              time=seqdata.time,
                                              states=states)
                     diss2 = get_distance_matrix(seqdata=agseqdata, method="OMspell", refseq=refseq, sm="TRATE", indel="auto")
@@ -382,3 +386,26 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
         ret = claraObj(kretlines=range(len(kvalscriteria)), method=method, kvals=kvals, kret=kret, seqdata=seqdata)
 
     return ret
+
+if __name__ == '__main__':
+    from sequenzo import *  # Social sequence analysis
+    import pandas as pd  # Import necesarry packages
+
+    df = load_dataset('country_co2_emissions')
+
+    # Ctrate SeqdataData
+    # Define the time-span variable
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+
+    result = clara(sequence_data,
+                   R=10,
+                   sample_size=3000,
+                   kvals=range(2, 21),
+                   criteria=['distance', 'pbm'],
+                   parallel=True,
+                   stability=True)
+    result

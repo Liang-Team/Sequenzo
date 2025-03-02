@@ -77,7 +77,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # ===============
     if method == "TRATE":
         print("[>] Transition-based substitution-cost matrix (TRATE) initiated...")
-        print(f"  - Computing transition probabilities for: [{', '.join(seqdata.states)}]")
+        print(f"  - Computing transition probabilities for: [{', '.join(map(str, seqdata.states))}]")
 
         if time_varying:
             tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)

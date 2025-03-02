@@ -7,7 +7,11 @@
 from .aggregatecases import *
 from .davies_bouldin import *
 from .wfcmdd import *
+from .k_medoids_once import k_medoids_once
+
+
+import sequenzo.dissimilarity_measures.c_code
 
 __all__ = [
-
+    'k_medoids_once'
 ]

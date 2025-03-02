@@ -1,18 +1,17 @@
 """
 @Author  : 李欣怡
-@File    : k_medoids.py
+@File    : k_medoids_once.py
 @Time    : 2025/2/8 11:53
 @Desc    : 
 """
 
 import numpy as np
-import pandas as pd
 from scipy.cluster.hierarchy import fcluster
 
 from sequenzo.clustering.utils.disscenter import disscentertrim
 
 
-def k_medoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
+def k_medoids_once(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
 
     # Lazily import the c_code module to avoid circular dependencies during installation
     from .__init__ import _import_c_code

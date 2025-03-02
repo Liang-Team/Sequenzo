@@ -14,7 +14,6 @@ from .dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from .dissimilarity_measures.get_substitution_cost_matrix import get_substitution_cost_matrix
 
 from .clustering import Cluster, ClusterResults, ClusterQuality
-from .clustering import k_medoids
 from .big_data.clara.clara import clara
 
 

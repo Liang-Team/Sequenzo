@@ -18,13 +18,11 @@ def seqdss(seqdata, with_missing=False):
     sl = seqlength(seqdata)
     maxsl = sl.max()
 
-    statl = np.arange(len(seqdata.alphabet))
-    nr = seqdata.nr
+    statl = np.arange(len(seqdata.alphabet) + 1)
+    if seqdata.ismissing:
+        statl = np.arange(len(seqdata.states) + 2)
 
     trans = np.full((nbseq, maxsl), np.nan)
-
-    if with_missing:
-        statl.append(nr)
 
     # Converts character data to numeric values
     seqdatanum = seqdata.values
