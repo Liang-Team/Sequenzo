@@ -135,16 +135,18 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}
 
-    # Build the wheel
-    - name: Build wheel
-      run: python setup.py bdist_wheel
+    # Build the package (both .whl and .tar.gz)
+    - name: Build package
+      run: |
+        python setup.py sdist bdist_wheel
 
-    # Upload build artifacts
-    - name: Upload wheel
+    # Upload build artifacts (both wheels and source distribution)
+    - name: Upload built artifacts
       uses: actions/upload-artifact@v4
       with:
         name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
-        path: dist/*.whl
+        path: dist/*
+      # Upload both .whl and .tar.gz
 
   publish:
     needs: build
@@ -155,7 +157,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Move wheels to dist
+      - name: Move wheels and source dist to `dist/`
         run: |
           mkdir -p dist/
           find artifacts/ -name "*.whl" -exec mv {} dist/ \;
@@ -168,5 +170,6 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           pip install twine
-          twine upload dist/*.whl dist/*.tar.gz --skip-existing
+          twine upload dist/* --skip-existing
+
   
