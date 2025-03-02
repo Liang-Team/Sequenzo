@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         python-version: ['3.9', '3.10', '3.11']
 
     steps:
@@ -80,36 +80,6 @@ jobs:
       run: |
         xcode-select --install || echo "Xcode CLI already installed"
 
-    # Windows: Handle numpy & fastcluster version issues, install the complete MSVC toolchain
-    - name: Install dependencies (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh  # 确保使用 PowerShell，而不是默认 cmd.exe
-      run: |
-        choco install visualstudio2022buildtools --version=17.0.0 -y
-        choco install visualstudio2022-workload-vctools -y
-
-        python -m pip install --upgrade pip
-
-        if ("${{ matrix.python-version }}" -eq "3.11") {
-          pip install "numpy>=1.23.2,<2.0"
-        } else {
-          pip install numpy==1.22.4 --only-binary numpy
-        }
-        
-        pip install wheel setuptools cmake Cython
-        
-        pip uninstall -y pybind11  
-        pip install pybind11==2.10.4  
-        
-        pip install --force-reinstall fastcluster==1.2.6  
-        
-        if (Test-Path "requirements-${{ matrix.python-version }}.txt") {
-          pip install -r requirements-${{ matrix.python-version }}.txt --use-deprecated=legacy-resolver
-        } else {
-          pip install -r requirements-3.9.txt --use-deprecated=legacy-resolver
-          Write-Host "⚠️ Using requirements-3.9.txt as fallback"
-        }
-
     # Linux: Handle fastcluster version issues, ensure numpy is installed first
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
@@ -145,51 +115,13 @@ jobs:
         echo "📂 Sequenzo package directory:"
         ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
 
-    # Windows: Fix Unicode encoding issues
-    - name: Set Windows Encoding
-      if: runner.os == 'Windows'
-      run: chcp 65001
-
-    - name: Setup Windows C++ compilation
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        choco install visualstudio2019buildtools -y
-        choco install visualstudio2019-workload-vctools -y
-
-        & "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-
-        $Env:CL = "/EHsc /MD /bigobj /Ox"
-        $Env:DISTUTILS_USE_SDK = "1"
-        $Env:MSSdk = "1"
-
     # Consolidated installation steps for all platforms
     - name: Install local package
-      if: runner.os != 'Windows'
       run: |
         pip install --no-cache-dir -e . --no-build-isolation
       env:
         PYTHONUTF8: 1
         PYTHONPATH: ${{ github.workspace }}
-
-    - name: Install local package (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $editable_install = $false
-        try {
-          pip install --no-cache-dir -e . --no-build-isolation --verbose
-          $editable_install = $true
-        } catch {
-          Write-Host "ERROR DETAILS: $_"
-          Write-Host "Editable install failed, trying regular install..."
-          pip install --no-cache-dir . --no-build-isolation --verbose
-        }
-      env:
-        PYTHONUTF8: 1
-        PYTHONPATH: ${{ github.workspace }}
-        DISTUTILS_USE_SDK: 1
-        MSSdk: 1
 
     # Display installed packages
     - name: Show installed packages
