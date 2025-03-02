@@ -138,9 +138,15 @@ jobs:
     # Build the package (both .whl and .tar.gz)
     - name: Build package
       run: |
-        python setup.py sdist bdist_wheel
+        pip install build
+        python -m build
         echo "Files in dist/ after build:"
         ls -lah dist/
+
+    - name: Verify package
+      run: |
+        pip install twine
+        twine check dist/*
 
     # Upload build artifacts (both wheels and source distribution)
     - name: Upload built artifacts
