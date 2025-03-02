@@ -107,49 +107,49 @@ jobs:
         fi
 
 # Ensure `PYTHONPATH` is set correctly
-  - name: Verify package path
-    shell: bash
-    run: |
-      echo "📂 Current directory:"
-      ls -lah
-      echo "📂 Sequenzo package directory:"
-      ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
+    - name: Verify package path
+      shell: bash
+      run: |
+        echo "📂 Current directory:"
+        ls -lah
+        echo "📂 Sequenzo package directory:"
+        ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
 
-  # Consolidated installation steps for all platforms
-  - name: Install local package
-    run: |
-      pip install --no-cache-dir -e . --no-build-isolation
-    env:
-      PYTHONUTF8: 1
-      PYTHONPATH: ${{ github.workspace }}
+    # Consolidated installation steps for all platforms
+    - name: Install local package
+      run: |
+        pip install --no-cache-dir -e . --no-build-isolation
+      env:
+        PYTHONUTF8: 1
+        PYTHONPATH: ${{ github.workspace }}
 
-  # Display installed packages
-  - name: Show installed packages
-    run: pip list
+    # Display installed packages
+    - name: Show installed packages
+      run: pip list
 
-  # Test whether the module is installed correctly
-  - name: Test imports
-    run: |
-      python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
-      python -c "import sequenzo.clustering; print('Clustering module imported successfully')"
-    env:
-      PYTHONPATH: ${{ github.workspace }}
+    # Test whether the module is installed correctly
+    - name: Test imports
+      run: |
+        python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
+        python -c "import sequenzo.clustering; print('Clustering module imported successfully')"
+      env:
+        PYTHONPATH: ${{ github.workspace }}
 
-  # Build the package (both .whl and .tar.gz)
-  - name: Build package
-    run: |
-      python setup.py sdist bdist_wheel
-      echo "Files in dist/ after build:"
-      ls -lah dist/
+    # Build the package (both .whl and .tar.gz)
+    - name: Build package
+      run: |
+        python setup.py sdist bdist_wheel
+        echo "Files in dist/ after build:"
+        ls -lah dist/
 
-  # Upload build artifacts (both wheels and source distribution)
-  - name: Upload built artifacts
-    uses: actions/upload-artifact@v4
-    with:
-      name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
-      path: |
-        dist/*.whl
-        dist/*.tar.gz
+    # Upload build artifacts (both wheels and source distribution)
+    - name: Upload built artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
+        path: |
+          dist/*.whl
+          dist/*.tar.gz
 
   publish:
     needs: build
