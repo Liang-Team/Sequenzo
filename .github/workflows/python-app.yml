@@ -210,3 +210,23 @@ jobs:
       with:
         name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
         path: dist/*.whl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Show downloaded wheels
+        run: ls -lah dist/
+
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          pip install twine
+          twine upload dist/* --skip-existing
