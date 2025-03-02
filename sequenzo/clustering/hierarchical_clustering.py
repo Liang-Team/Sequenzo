@@ -612,6 +612,8 @@ if __name__ == '__main__':
 
     sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
 
+    # plot_sequence_index(sequence_data, state=['Very Low', 'Low', 'Middle', 'High', 'Very High'])
+
     om = get_distance_matrix(seqdata=sequence_data,
                              method='OM',
                              sm="TRATE",
@@ -637,9 +639,11 @@ if __name__ == '__main__':
     cluster_results.plot_cluster_distribution(num_clusters=6, save_as="distribution.png", title=None)
 
     # index plot for each cluster
+    # TODO: you are almost done!!
     plot_sequence_index(seqdata=sequence_data,
                         id_group_df=membership_table,
                         categories='Cluster ID')
 
+    # TODO: set up this plot for multiple groups
     # plot_state_distribution()
 

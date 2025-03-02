@@ -67,7 +67,7 @@ def preprocess_data(data):
 ### Plotting ###
 
 # Main User-Facing Function
-def plot_sequence_index(seqdata: SequenceData,
+def _plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
                         custom_order=None,
                         sortv=None,
@@ -308,7 +308,8 @@ def sort_group_labels(group_labels, custom_order=None):
     return ordered_labels
 
 
-def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
+def _sequence_index_plot_grouping_ncol_not_1(seqdata: SequenceData,
+                                             categories, id_group_df,
                                              custom_order=None, age_labels=None,
                                              palette=None, reverse_colors=True, title=None,
                                              xlabel="Time", ylabel="Sequences",
@@ -316,7 +317,7 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
     """
     Plot sequence index plots with dynamic layout adjustments for better aesthetics.
 
-    :param data: np.array or pd.DataFrame
+    :param seqdata: np.array or pd.DataFrame
         Sequence data matrix where rows are sequences and columns are time points.
     :param categories: list
         List of category labels corresponding to the data values.
@@ -337,12 +338,13 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
     :param dpi: int, default=200
         Resolution of the saved plot.
     """
-    num_colors = len(categories)
-    spectral_colors = sns.color_palette("Spectral", num_colors)
-    if reverse_colors:
-        spectral_colors = list(reversed(spectral_colors))
-    cmap = ListedColormap(spectral_colors) if palette is None else ListedColormap(
-        [palette.get(cat, '#000000') for cat in categories])
+    data = seqdata.data.to_dataframe()
+    num_colors = len(seqdata.states)
+    # spectral_colors = sns.color_palette("Spectral", num_colors)
+    # if reverse_colors:
+    #     spectral_colors = list(reversed(spectral_colors))
+    # cmap = ListedColormap(spectral_colors) if palette is None else ListedColormap(
+    #     [palette.get(cat, '#000000') for cat in categories])
 
     group_column_name = id_group_df.columns[1]
 
@@ -442,6 +444,128 @@ def _sequence_index_plot_grouping_ncol_not_1(data, categories, id_group_df,
         # Show the cropped figure
         cropped_image = _crop_bottom_whitespace(fig)
         cropped_image.show()  # This opens the image using the default viewer
+
+
+def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10, 6),
+                        title=None, xlabel="Time", ylabel="Sequences",
+                        save_as=None, dpi=200):
+    """
+    Creates sequence index plots, optionally grouped by categories.
+
+    :param seqdata: SequenceData object containing sequence information
+    :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
+    :param categories: Column name in id_group_df that contains grouping information
+    :param figsize: Size of each subplot figure
+    :param title: Title for the plot (if None, default titles will be used)
+    :param xlabel: Label for the x-axis
+    :param ylabel: Label for the y-axis
+    :param save_as: File path to save the plot (if None, plot will be shown)
+    :param dpi: DPI for saved image
+    """
+    # If no grouping information, create a single plot
+    if id_group_df is None or categories is None:
+        return _sequence_index_plot_single(seqdata, figsize, title, xlabel, ylabel, save_as, dpi)
+
+    # Ensure ID columns match (convert if needed)
+    id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
+
+    # Get unique groups and sort them
+    groups = sorted(id_group_df[categories].unique())
+    num_groups = len(groups)
+
+    # Calculate figure size based on number of groups
+    if num_groups <= 3:
+        fig, axes = plt.subplots(num_groups, 1, figsize=(figsize[0], figsize[1] * num_groups))
+        # Convert to array for single group case
+        if num_groups == 1:
+            axes = np.array([axes])
+    else:
+        # For more than 3 groups, use a grid layout
+        ncols = min(2, num_groups)
+        nrows = (num_groups + ncols - 1) // ncols  # Ceiling division
+        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows))
+        axes = axes.flatten()
+
+    # Create a plot for each group
+    for i, group in enumerate(groups):
+        # Get IDs for this group
+        group_ids = id_group_df[id_group_df[categories] == group][id_col_name].values
+
+        # Match IDs with sequence data
+        mask = np.isin(seqdata.ids, group_ids)
+        if not np.any(mask):
+            print(f"Warning: No matching sequences found for group '{group}'")
+            continue
+
+        # Extract sequences for this group
+        group_sequences = seqdata.values[mask]
+
+        # Sort sequences for better visualization
+        if np.isnan(group_sequences).any():
+            group_sequences = np.where(np.isnan(group_sequences), -1, group_sequences)
+
+        sorted_indices = np.lexsort(group_sequences.T[::-1])
+        sorted_data = group_sequences[sorted_indices]
+
+        # Plot on the corresponding axis
+        ax = axes[i]
+        im = ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(),
+                       interpolation='nearest', vmin=1, vmax=len(seqdata.states))
+
+        # Set up time labels
+        set_up_time_labels_for_x_axis(seqdata, ax)
+
+        # Enhance y-axis aesthetics
+        num_sequences = sorted_data.shape[0]
+        ytick_spacing = max(1, num_sequences // 10)
+
+        ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
+        ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=10, color='black')
+
+        # Customize axis style
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('gray')
+        ax.spines['bottom'].set_color('gray')
+        ax.spines['left'].set_linewidth(0.7)
+        ax.spines['bottom'].set_linewidth(0.7)
+        ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
+        ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+
+        # Add group title
+        group_title = f"{categories} {group} (n = {num_sequences})"
+        ax.set_title(group_title, fontsize=12, loc='right')
+
+        # Add axis labels (only for leftmost plots in grid layout)
+        if i % ncols == 0 or num_groups <= 3:
+            ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+
+        # Add x-label only to bottom plots
+        if i >= num_groups - ncols or num_groups <= 3:
+            ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+
+    # Hide unused subplots
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    # Add a common title if provided
+    if title:
+        fig.suptitle(title, fontsize=14, y=1.02)
+
+    # Add a single legend for all subplots
+    handles, labels = seqdata.get_legend()
+    fig.legend(handles, labels,
+               bbox_to_anchor=(1.05, 0.5),
+               loc='center right',
+               fontsize=10)
+
+    # Adjust layout
+    plt.tight_layout()
+    fig.subplots_adjust(right=0.85)  # Make room for the legend
+
+    # Save and show
+    save_and_show_results(save_as, dpi=dpi)
+
 
 
 def _sequence_index_plot_single(seqdata, figsize=(10, 6),

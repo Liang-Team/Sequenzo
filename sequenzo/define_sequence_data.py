@@ -174,11 +174,15 @@ class SequenceData:
         """
         correct_order = self.states
 
+        if self.ismissing:
+            self.states.append("Missing")
+
         # Create the state mapping with correct order
         self.state_mapping = {state: idx + 1 for idx, state in enumerate(correct_order)}
 
         # Apply the mapping
         # If there are missing values, replace them with the last index + 1
+        # And update the additional missing value as a new state in self.state and self.alphabet
         try:
             self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, len(self.states) + 1))
         except AttributeError:
