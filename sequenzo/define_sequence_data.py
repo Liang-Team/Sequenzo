@@ -174,9 +174,6 @@ class SequenceData:
         """
         correct_order = self.states
 
-        if self.ismissing:
-            self.states.append("Missing")
-
         # Create the state mapping with correct order
         self.state_mapping = {state: idx + 1 for idx, state in enumerate(correct_order)}
 

@@ -60,6 +60,7 @@ def jaccardCoef(tab):
 def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
           criteria=["distance"], stability=False, dnoise=None,
           parallel=False, max_dist=None):
+
     # ==================
     # Parameter checking
     # ==================
@@ -132,8 +133,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
                                            states=states)
                 diss = get_distance_matrix(data_subset, method="OMspell", sm="TRATE", indel="auto")
 
-        diss = diss.apply(lambda x: x.fillna(x.mean()), axis=0)
-        diss.replace([np.inf, -np.inf], 1, inplace=True)
+        diss = diss.apply(lambda x: x.fillna(0), axis=0)
+        diss.replace([np.inf, -np.inf], 1e6, inplace=True)
         diss = diss.values
         hc = fastcluster.linkage(diss, method='ward')
 

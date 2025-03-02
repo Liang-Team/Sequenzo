@@ -114,10 +114,8 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         raise ValueError("[!] 'seqdata' must be a state sequence object created with SequenceData")
 
     nseqs = seqdata.seqdata.shape[0]
-    alphabet = seqdata.alphabet
-    nstates = len(alphabet)
-    if seqdata.ismissing:
-        nstates += 1
+    states = seqdata.states
+    nstates = len(states)
     seqs_dlens = pd.unique(seqlength(seqdata))
     seqdata_nr = seqdata.nr
 
@@ -161,18 +159,14 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             print(f"[!] Warning: empty sequences {emptyseq}.\n")
 
     # check with.missing
-    has_seqdata_missing = seqdata.seqdata.isna().any().any()
-    has_refseq_missing = True if refseq_type == "sequence" and refseq.seqdata.isna().any().any() else False
+    has_seqdata_missing = seqdata.ismissing
+    has_refseq_missing = True if refseq_type == "sequence" and refseq.seqdata.ismissing else False
     if with_missing and not has_seqdata_missing and not has_refseq_missing:
         with_missing = False
         print("[!] seqdist: 'with.missing' set as FALSE as 'seqdata' has no non-void missing values.\n")
 
     if not with_missing and (has_seqdata_missing or has_refseq_missing):
         raise ValueError("[x] 'with.missing' must be TRUE when 'seqdata' or 'refseq' contain missing values.")
-
-    if with_missing:
-        nstates += 1
-        print("[>] Including missing values as an additional state.")
 
     print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
 
@@ -572,16 +566,17 @@ def adaptSmForHAM(sm, nstates, ncols):
 
     return costs
 
-# if __name__ == '__main__':
-#     from sequenzo import *
-#
-#     df = load_dataset('country_co2_emissions')
-#
-#     time = list(df.columns)[1:]
-#
-#     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-#
-#     sequence_data = SequenceData(df, time=time, states=states)
-#
-#     HAM = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+if __name__ == '__main__':
+    from sequenzo import *
 
+    df = load_dataset('country_co2_emissions')
+
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time_type="year", time=time, states=states)
+
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+
+    print("================")
