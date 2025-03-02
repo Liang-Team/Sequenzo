@@ -189,19 +189,26 @@ jobs:
           echo "Number of files in dist directory:"
           find dist/ -type f | wc -l
 
-      - name: Upload to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      - name: Verify packages before upload
         run: |
           pip install twine
-          echo "Checking files to upload:"
-          find dist/ -type f
           echo "Validating package distribution files:"
           twine check dist/*
-          echo "Attempting to upload files to PyPI..."
-          twine upload dist/* --skip-existing --verbose 2>&1 | tee upload_log.txt
-          echo "Last part of upload log:"
-          tail -n 50 upload_log.txt
-  
-    
+            
+          echo "Checking LICENSE file presence:"
+          for wheel in dist/*.whl; do
+            echo "Extracting $wheel to check for LICENSE file..."
+            python -m zipfile -l "$wheel" | grep -i license || echo "No LICENSE found in $wheel"
+          done
+          
+          for sdist in dist/*.tar.gz; do
+            echo "Listing $sdist to check for LICENSE file..."
+            tar -tvf "$sdist" | grep -i license || echo "No LICENSE found in $sdist"
+          done
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_PASSWORD }}
+          skip-existing: true
+          verbose: true
