@@ -62,13 +62,13 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
             time = seqdata.seqdata.shape[1]
 
             print(
-                f" [>] creating {alphsize}x{alphsize}x{time} time varying substitution-cost matrix using {cval} as constant value.")
+                f"  - Creating {alphsize}x{alphsize}x{time} time varying substitution-cost matrix using {cval} as constant value.")
             costs = np.full((time, alphsize, alphsize), cval)
 
             for i in range(time):
                 np.fill_diagonal(costs[i, :, :], 0)  # Set diagonal to 0 in each time slice
         else:
-            print(f" [>] creating {alphsize}x{alphsize} substitution-cost matrix using {cval} as constant value")
+            print(f"  - Creating {alphsize}x{alphsize} substitution-cost matrix using {cval} as constant value")
             costs = np.full((alphsize, alphsize), cval)
             np.fill_diagonal(costs, 0)  # Set diagonal to 0
 
@@ -76,9 +76,10 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # Process "TRATE"
     # ===============
     if method == "TRATE":
-        if time_varying:
-            print(" [>] creating time varying substitution-cost matrix using transition rates ...")
+        print("[>] Transition-based substitution-cost matrix (TRATE) initiated...")
+        print(f"  - Computing transition probabilities for: [{', '.join(seqdata.states)}]")
 
+        if time_varying:
             tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)
 
             tmat = tr.shape[1]               # Number of states (since tr is three dimensions np.ndarray, the first dimension is time)
@@ -125,8 +126,6 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
                         costs[t, j, i] = cost
 
         else:
-            print(" [>] creating substitution-cost matrix using transition rates ...")
-
             tr = get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag, with_missing=with_missing)
 
             tmat = tr.shape[0]
@@ -141,6 +140,8 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
             indel = 0.5 * np.max(costs)
 
             return_result['indel'] = indel
+
+    print("[>] Indel cost generated.\n")
 
     # =================================
     # Process the Cost of Missing Value

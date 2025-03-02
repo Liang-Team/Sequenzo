@@ -172,9 +172,9 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
     if with_missing:
         nstates += 1
-        print("[>] Including missing values as an additional state.\n")
+        print("[>] Including missing values as an additional state.")
 
-    print(f"[>] {nseqs} sequences with {nstates} distinct states.\n")
+    print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
 
     # check norm
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
@@ -284,7 +284,6 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
                 else:
                     cost = 2
 
-            print(f"Computing sm with seqcost using {sm}\n")
             sm = get_substitution_cost_matrix(seqdata,
                                               method=sm,
                                               with_missing=with_missing,
@@ -296,8 +295,6 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             if indel_type == "auto":
                 indel = sm['indel']
                 indel_type = "vector" if indel > 1 else "number"
-
-                print(f"[>] Generated an indel of type {indel_type}.\n")
 
             sm = sm['sm']
 
@@ -395,7 +392,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             raise ValueError(f"[!] Unknown refseq type: {refseq_type}.")
 
         if refseq_type == "sets":
-            print(f"Pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}\n")
+            print(f"[>] Pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}")
 
     # ==============================
     # Compute Method-Specific Values
@@ -450,9 +447,9 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # ===========================
     # Modified dseqs.num for OMspell
     ndn = dseqs_num.shape[0]
-    incl_refseq = "(including refseq)" if refseq_type == "sequence" else ""
+    incl_refseq = " (including refseq)" if refseq_type == "sequence" else ""
     seq_or_spell = "spell sequences" if method in ["OMspell"] else "sequences"
-    print(f"[>] {ndn} distinct {seq_or_spell} {incl_refseq}.\n")
+    print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
     del ndn
     del seq_or_spell
 
@@ -461,7 +458,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     dseqs_lens = seqlength(dseqs_num)
     ds = "spell " if method in ["OMspell"] else ""
     dl = dseqs_lens[:-1] if refseq_type == "sequence" and len(dseqs_lens) > 1 else dseqs_lens
-    print(f"[>] min/max {ds}sequence lengths: {min(dl)} / {max(dl)}.\n")
+    print(f"[>] Sequence {ds}length: min/max = {min(dl)} / {max(dl)}.\n")
     del ds
     del dl
 
@@ -521,6 +518,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         result_df = pd.DataFrame(result, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
+        print("[>] Computed Successfully.")
         return result_df
 
     else:
@@ -561,6 +559,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
+        print("[>] Computed Successfully.")
         return dist_matrix
 
 

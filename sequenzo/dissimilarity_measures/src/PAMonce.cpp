@@ -9,7 +9,7 @@ namespace py = pybind11;
 class PAMonce {
 public:
     PAMonce(int nelement, py::array_t<double> diss, py::array_t<int> centroids, int npass, py::array_t<double> weights){
-        py::print("[>] Starting PAMonce...\n");
+        py::print("[>] PAMonce starts ... ");
         std::cout << std::flush;
 
         try {

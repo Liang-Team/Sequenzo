@@ -12,7 +12,7 @@ public:
                     double timecost, py::array_t<double> seqdur, py::array_t<double> indellist, py::array_t<int> seqlength)
             : indel(indel), norm(norm), timecost(timecost) {
 
-        py::print("Starting OMspell...\n");
+        py::print("[>] Starting Optimal Matching with spell(OMspell)...");
         std::cout << std::flush;
 
         try {
@@ -170,14 +170,12 @@ public:
 
             return normalize_distance(fmat[mSuf-1][nSuf-1],maxpossiblecost, ml, nl);
         } catch (const std::exception& e) {
-            py::print("Error in compute_distance(): ", e.what());
+            py::print("Error in compute_distance: ", e.what());
             throw;
         }
     }
 
     py::array_t<double> compute_all_distances() {
-        py::print("[>] Starting compute_all_distances()...\n");
-
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
@@ -189,8 +187,6 @@ public:
                 }
             }
 
-            py::print("[>] Successfully computed!");
-
             return dist_matrix;
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
@@ -199,8 +195,6 @@ public:
     }
 
     py::array_t<double> compute_refseq_distances() {
-        py::print("[>] Starting compute_refseq_distances()...\n");
-
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
@@ -217,11 +211,9 @@ public:
                 }
             }
 
-            py::print("[>] Successfully computed!");
-
             return refdist_matrix;
         } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances(): ", e.what());
+            py::print("Error in compute_all_distances: ", e.what());
             throw;
         }
     }

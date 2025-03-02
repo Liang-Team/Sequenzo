@@ -55,8 +55,6 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
     # =====================================
     seqdata = seqdata.seqdata
     if time_varying:
-        print(f" [>] Computing time varying transition {outcome} for states {states} ...")
-
         """
         >>> for example:
                 , , C1
@@ -104,7 +102,6 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
     # Compute Non Time Varying Transition Rates
     # =========================================
     else:
-        print(f" [>] Computing transition {outcome} for states {states} ...")
         seqdata = seqdata.to_numpy()
 
         tmat = np.zeros((nbetat, nbetat))

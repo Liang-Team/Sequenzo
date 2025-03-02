@@ -10,7 +10,7 @@ class DHDdistance{
 public:
     DHDdistance(py::array_t<int> sequences, py::array_t<double> sm, int norm, double maxdist, py::array_t<int> refseqS)
                 : norm(norm), maxdist(maxdist){
-        py::print("Starting DHD...");
+        py::print("[>] Starting (Dynamic) Hamming Distance(DHD/HAM)...");
         std::cout << std::flush;
 
         try{
@@ -82,8 +82,6 @@ public:
     }
 
     py::array_t<double> compute_all_distances() {
-        py::print("[>] Starting compute_all_distances()...");
-
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
@@ -95,18 +93,14 @@ public:
                 }
             }
 
-            py::print("[>] Successfully computed!");
-
             return dist_matrix;
         } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances(): ", e.what());
+            py::print("Error in compute_all_distances: ", e.what());
             throw;
         }
     }
 
     py::array_t<double> compute_refseq_distances() {
-        py::print("[>] Starting compute_refseq_distances()...");
-
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
@@ -122,8 +116,6 @@ public:
                     buffer(is, rseq-rseq1) = cmpres;
                 }
             }
-
-            py::print("[>] Successfully computed!");
 
             return refdist_matrix;
         } catch (const std::exception& e) {
