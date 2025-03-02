@@ -1,11 +1,14 @@
 # GitHub Actions workflow for Sequenzo package
 name: Sequenzo Package CI
 
+#on:
+#  push:
+#    branches: [ "main" ]
+#  pull_request:
+#    branches: [ "main" ]
+
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:  # Only executes when manually triggered
 
 permissions:
   contents: read
