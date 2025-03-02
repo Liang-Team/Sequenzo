@@ -5,7 +5,7 @@
 @Desc    : Sequenzo Package Initialization
 """
 # Define the version number - this must be done before all imports
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from sequenzo import datasets, visualization, clustering, dissimilarity_measures, SequenceData, big_data
 
