@@ -81,6 +81,17 @@ class Cluster:
         """
         Compute the linkage matrix using fastcluster for improved performance.
         """
+        # 检查原始矩阵中的问题
+        if np.any(np.isnan(self.full_matrix)) or np.any(np.isinf(self.full_matrix)):
+            print("[!] Warning: Distance matrix contains NaN or Inf values. Replacing with maximum finite value...")
+            max_valid = np.nanmax(self.full_matrix[np.isfinite(self.full_matrix)])
+            self.full_matrix[~np.isfinite(self.full_matrix)] = max_valid
+
+        # 确保矩阵是对称的
+        if not np.allclose(self.full_matrix, self.full_matrix.T, rtol=1e-5, atol=1e-8):
+            print("[!] Warning: Distance matrix is not symmetric. Symmetrizing...")
+            self.full_matrix = (self.full_matrix + self.full_matrix.T) / 2
+
         # Convert the distance matrix to condensed form for linkage
         condensed_matrix = squareform(self.full_matrix)
 
@@ -123,10 +134,14 @@ class Cluster:
 
         save_and_show_results(save_as, dpi=200)
 
-
     def get_cluster_labels(self, num_clusters):
         """
         Get cluster labels for a specified number of clusters.
+
+        There is a common point of confusion because
+        k is typically used to represent the number of clusters in clustering algorithms (e.g., k-means).
+
+        However, SciPy's hierarchical clustering API specifically uses t as the parameter name.
 
         :param num_clusters: The number of clusters to create.
         :return: Array of cluster labels corresponding to entity_ids.
@@ -134,18 +149,20 @@ class Cluster:
         if self.linkage_matrix is None:
             raise ValueError("Linkage matrix is not computed.")
 
-        return fcluster(self.linkage_matrix, t=num_clusters, criterion='maxclust')
+        cluster_labels = fcluster(self.linkage_matrix, t=num_clusters, criterion="maxclust")
+
+        return cluster_labels
 
 
 class ClusterQuality:
     def __init__(self, matrix_or_cluster, max_clusters=20, clustering_method=None):
         """
-        Initialize the ClusterQuality class for precomputed distance matrices
-        or a Cluster instance.
+        Initialize the ClusterQuality class for precomputed distance matrices or a Cluster instance.
 
-        allow the ClusterQuality class to directly accept a Cluster instance
+        Allow the ClusterQuality class to directly accept a Cluster instance
         and internally extract the relevant matrix (cluster.full_matrix)
         and clustering method (cluster.clustering_method).
+
         This keeps the user interface clean and simple while handling the logic under the hood.
 
         :param matrix_or_cluster: The precomputed distance matrix (full square form or condensed form)
@@ -184,7 +201,7 @@ class ClusterQuality:
         }
         self.linkage_matrix = None
 
-    def compute_cluster_quality_scores(self) -> None:
+    def compute_cluster_quality_scores(self):
         """
         Compute clustering quality scores for different numbers of clusters.
         """
@@ -328,10 +345,11 @@ class ClusterQuality:
             "Min-Max Norm.": []  # Abbreviated from "Min-Max Normalized Value"
         }
 
+        # Get maximum value and its position from original scores
         for metric, values in original_scores.items():
             values = np.array(values)
-            optimal_k = np.nanargmax(values) + 2  # Adding 2 because k starts at 2
-            max_value = np.nanmax(values)
+            optimal_k = np.nanargmax(values) + 2  # Add 2 because k starts at 2
+            max_value = values[optimal_k - 2]  # Get the original maximum value
 
             # Add data to the summary table
             summary["Metric"].append(metric)
@@ -344,7 +362,7 @@ class ClusterQuality:
 
     def plot_combined_scores(self,
                              metrics_list=None,
-                             norm="none",
+                             norm="zscore",
                              palette="husl",
                              line_width=2,
                              style="whitegrid",
@@ -355,41 +373,62 @@ class ClusterQuality:
                              save_as=None,
                              dpi=200,
                              figsize=(12, 8)
-                             ) -> None:
+                             ):
         """
         Plot combined scores for clustering quality metrics with customizable parameters.
-        :param save_as:
-        :param grid:
-        :param ylabel:
-        :param xlabel:
-        :param title:
-        :param style:
-        :param line_width:
-        :param palette:
-        :param norm:
-        :param metrics_list:
-        :param dpi: Dots per inch for the saved image (default: 300 for high resolution).
-        :param figsize: Tuple specifying the figure size in inches (default: (12, 8)).
+
+        This function displays normalized metric values for easier comparison while preserving
+        the original statistical properties in the legend.
+
+        It first calculates raw means and standard deviations from the original data before applying any normalization,
+        then uses these raw statistics in the legend labels to provide context about the actual scale and
+        distribution of each metric.
+
+        :param metrics_list: List of metrics to plot (default: all available metrics)
+        :param norm: Normalization method for plotting ("zscore", "range", or "none")
+        :param palette: Color palette for the plot
+        :param line_width: Width of plotted lines
+        :param style: Seaborn style for the plot
+        :param title: Plot title
+        :param xlabel: X-axis label
+        :param ylabel: Y-axis label
+        :param grid: Whether to show grid lines
+        :param save_as: File path to save the plot
+        :param dpi: DPI for saved image
+        :param figsize: Figure size in inches
         """
+        # Store original scores before normalization
+        original_scores = self.scores.copy()
+
+        # Calculate statistics from original data
+        original_stats = {}
+        for metric in metrics_list or self.scores.keys():
+            values = np.array(original_scores[metric])
+            original_stats[metric] = {
+                'mean': np.nanmean(values),
+                'std': np.nanstd(values)
+            }
+
+        # Apply normalization if requested
         if norm != "none":
             self._normalize_scores(method=norm)
 
+        # Set up plot
         sns.set(style=style)
         palette_colors = sns.color_palette(palette, len(metrics_list) if metrics_list else len(self.scores))
-        plt.figure(figsize=figsize)  # Set the figure size
+        plt.figure(figsize=figsize)
 
         if metrics_list is None:
             metrics_list = self.scores.keys()
 
-        legend_labels = []  # To store legend labels
-
+        # Plot each metric
         for idx, metric in enumerate(metrics_list):
-
             values = np.array(self.scores[metric])
-            mean_val = np.nanmean(values)
-            std_val = np.nanstd(values)
+
+            # Use original statistics for legend
+            mean_val = original_stats[metric]['mean']
+            std_val = original_stats[metric]['std']
             legend_label = f"{metric} ({mean_val:.2f} / {std_val:.2f})"
-            legend_labels.append(legend_label)
 
             plt.plot(
                 range(2, self.max_clusters + 1),
@@ -399,27 +438,36 @@ class ClusterQuality:
                 linewidth=line_width,
             )
 
+        # Set title and labels
         if title is None:
-            title = f"Cluster Quality Metrics"
+            title = "Cluster Quality Metrics"
 
-        plt.legend(title="Metrics (Mean / Std Dev)", fontsize=10, title_fontsize=12)
+        plt.title(title, fontsize=14, fontweight="bold")
         plt.xlabel(xlabel, fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
+
+        # Configure ticks and legend
         plt.xticks(ticks=range(2, self.max_clusters + 1), fontsize=10)
         plt.yticks(fontsize=10)
         plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        plt.legend(title="Metrics (Raw Mean / Std Dev)", fontsize=10, title_fontsize=12)
 
-        if title is not None:
-            plt.title(title, fontsize=14, fontweight="bold")
+        # Add a note about normalization
+        norm_note = f"Note: Lines show {norm} normalized values; legend shows raw statistics"
+        plt.figtext(0.5, 0.01, norm_note, ha='center', fontsize=10, style='italic')
 
+        # Configure grid
         if grid:
             plt.grid(True, linestyle="--", alpha=0.7)
         else:
             plt.grid(False)
 
-        if save_as:
-            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-        plt.show()
+        # Adjust layout to make room for the note
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.1)
+
+        # Save and show the plot
+        save_and_show_results(save_as, dpi)
 
 
 class ClusterResults:
@@ -440,6 +488,10 @@ class ClusterResults:
         Generate a table mapping entity IDs to their corresponding cluster IDs.
         Based on this table, users later can link this to the original dataframe for further regression models.
 
+        There is a common point of confusion because
+        k is typically used to represent the number of clusters in clustering algorithms (e.g., k-means).
+        However, SciPy's hierarchical clustering API specifically uses t as the parameter name.
+
         :param num_clusters: The number of clusters to create.
         :return: Pandas DataFrame with entity IDs and cluster memberships.
         """
@@ -447,9 +499,96 @@ class ClusterResults:
             raise ValueError("Linkage matrix is not computed.")
 
         # Generate cluster labels
-        cluster_labels = fcluster(self.linkage_matrix, k=num_clusters, criterion="maxclust")
+        cluster_labels = fcluster(self.linkage_matrix, t=num_clusters, criterion="maxclust")
         return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster ID": cluster_labels})
 
+    def get_cluster_distribution(self, num_clusters) -> pd.DataFrame:
+        """
+        Generate a distribution summary of clusters showing counts and percentages.
+
+        This function calculates how many entities belong to each cluster and what
+        percentage of the total they represent.
+
+        :param num_clusters: The number of clusters to create.
+        :return: DataFrame with cluster distribution information.
+        """
+        # Get cluster memberships
+        memberships_df = self.get_cluster_memberships(num_clusters)
+
+        # Count entities in each cluster
+        cluster_counts = memberships_df['Cluster ID'].value_counts().sort_index()
+
+        # Calculate percentages
+        total_entities = len(memberships_df)
+        cluster_percentages = (cluster_counts / total_entities * 100).round(2)
+
+        # Create distribution dataframe
+        distribution = pd.DataFrame({
+            'Cluster': cluster_counts.index,
+            'Count': cluster_counts.values,
+            'Percentage': cluster_percentages.values
+        }).sort_values('Cluster')
+
+        return distribution
+
+    def plot_cluster_distribution(self, num_clusters, save_as=None, title=None,
+                                  style="whitegrid", dpi=200, figsize=(10, 6)):
+        """
+        Plot the distribution of entities across clusters as a bar chart.
+
+        This visualization shows how many entities belong to each cluster, providing
+        insight into the balance and size distribution of the clustering result.
+
+        :param num_clusters: The number of clusters to create.
+        :param save_as: File path to save the plot. If None, the plot will be shown.
+        :param title: Title for the plot. If None, a default title will be used.
+        :param style: Seaborn style for the plot.
+        :param dpi: DPI for saved image.
+        :param figsize: Figure size in inches.
+        """
+        # Get cluster distribution data
+        distribution = self.get_cluster_distribution(num_clusters)
+
+        # Set up plot
+        sns.set(style=style)
+        plt.figure(figsize=figsize)
+
+        # Create bar plot with a more poetic, fresh color palette
+        # 'muted', 'pastel', and 'husl' are good options for fresher colors
+        ax = sns.barplot(x='Cluster', y='Count', hue='Cluster', data=distribution,
+                         palette='pastel', legend=False)
+
+        # Add percentage labels on top of bars
+        for i, p in enumerate(ax.patches):
+            height = p.get_height()
+            percentage = distribution.iloc[i]['Percentage']
+            ax.text(p.get_x() + p.get_width() / 2., height + 0.5,
+                    f'{percentage}%', ha="center", fontsize=9)
+
+        # Set a simple label for entity count at the top
+        if title is None:
+            title = f"N = {len(self.entity_ids)}"
+
+        # Use a lighter, non-bold title style
+        plt.title(title, fontsize=12, fontweight="normal", loc='right')
+
+        plt.xlabel("Cluster ID", fontsize=12)
+        plt.ylabel("Number of Entities", fontsize=12)
+        plt.xticks(fontsize=10)
+        plt.yticks(fontsize=10)
+
+        # Ensure integer ticks for cluster IDs
+        plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        # Add grid for better readability but make it lighter
+        plt.grid(axis='y', linestyle='--', alpha=0.4)
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save and show the plot
+        from sequenzo.visualization.utils import save_and_show_results
+        save_and_show_results(save_as, dpi)
 
 
 if __name__ == '__main__':
@@ -480,5 +619,27 @@ if __name__ == '__main__':
 
     from sequenzo.clustering import Cluster
 
-    Cluster(om, sequence_data.ids, clustering_method='ward').plot_dendrogram(xlabel="Countries", ylabel="Distance", save_as='dendrogram')
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward')
+    cluster.plot_dendrogram(xlabel="Countries", ylabel="Distance", save_as='dendrogram')
+
+    # Create a ClusterQuality object to evaluate clustering quality
+    cluster_quality = ClusterQuality(cluster)
+    cluster_quality.compute_cluster_quality_scores()
+    cluster_quality.plot_combined_scores(norm='zscore', save_as='combined_scores')
+    summary_table = cluster_quality.get_metrics_table()
+    print(summary_table)
+
+    cluster_results = ClusterResults(cluster)
+    membership_table = cluster_results.get_cluster_memberships(num_clusters=5)
+    print(membership_table)
+    distribution = cluster_results.get_cluster_distribution(num_clusters=5)
+    print(distribution)
+    cluster_results.plot_cluster_distribution(num_clusters=6, save_as="distribution.png", title=None)
+
+    # index plot for each cluster
+    plot_sequence_index(seqdata=sequence_data,
+                        id_group_df=membership_table,
+                        categories='Cluster ID')
+
+    # plot_state_distribution()
 
