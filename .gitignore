@@ -33,5 +33,3 @@ dist/
 
 # Static library files on Linux/macOS, used for statically linking C/C++ code
 **/*.a
-
-raw_requirements.txt
