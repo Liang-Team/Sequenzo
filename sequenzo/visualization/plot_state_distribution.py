@@ -4,24 +4,230 @@
 @Time    : 15/02/2025 22:03
 @Desc    : 
 """
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from sequenzo import SequenceData
 from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
+    save_figure_to_buffer,
+    create_standalone_legend,
+    combine_plot_with_legend,
     save_and_show_results
 )
 
 
 def plot_state_distribution(seqdata: SequenceData,
+                            id_group_df=None,
+                            categories=None,
                             figsize=(12, 7),
                             title=None,
                             xlabel="Time",
                             ylabel="State Distribution (%)",
-                            stacked=True,
                             save_as=None,
-                            dpi=200) -> None:
+                            dpi=200,
+                            layout='column',
+                            stacked=True) -> None:
+    """
+    Creates state distribution plots for different groups, showing how state
+    prevalence changes over time within each group.
+
+    :param seqdata: (SequenceData) A SequenceData object containing sequences
+    :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
+    :param categories: Column name in id_group_df that contains grouping information
+    :param figsize: (tuple) Size of the figure
+    :param title: (str) Optional title for the plot
+    :param xlabel: (str) Label for the x-axis
+    :param ylabel: (str) Label for the y-axis
+    :param save_as: (str) Optional file path to save the plot
+    :param dpi: (int) Resolution of the saved plot
+    :param layout: (str) Layout style - 'column' (default, 3xn), 'grid' (nxn)
+    :param stacked: (bool) Whether to create stacked area plots (True) or line plots (False)
+
+    :return: None
+    """
+    # If no grouping information, create a single plot
+    if id_group_df is None or categories is None:
+        return _plot_state_distribution_single(
+            seqdata=seqdata, figsize=figsize, title=title, xlabel=xlabel, ylabel=ylabel, save_as=save_as, dpi=dpi, stacked=stacked
+        )
+
+    # Ensure ID columns match (convert if needed)
+    id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
+
+    # Get unique groups and sort them
+    groups = sorted(id_group_df[categories].unique())
+    num_groups = len(groups)
+
+    # Calculate figure size and layout based on number of groups and specified layout
+    if layout == 'column':
+        # 3xn layout (3 columns)
+        ncols = 3
+        nrows = (num_groups + ncols - 1) // ncols  # Ceiling division
+        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
+                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
+        axes = axes.flatten()
+    else:  # 'grid' layout
+        # nxn layout
+        ncols = int(np.ceil(np.sqrt(num_groups)))
+        nrows = ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
+                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
+        axes = axes.flatten()
+
+    # Create state mapping from numerical values back to state names
+    inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
+
+    # Process each group
+    for i, group in enumerate(groups):
+        # Get IDs for this group
+        group_ids = id_group_df[id_group_df[categories] == group][id_col_name].values
+
+        # Match IDs with sequence data
+        mask = np.isin(seqdata.ids, group_ids)
+        if not np.any(mask):
+            print(f"Warning: No matching sequences found for group '{group}'")
+            continue
+
+        # Get sequences for this group
+        group_seq_df = seqdata.to_dataframe().loc[mask]
+
+        # Calculate state distributions at each time point
+        distributions = []
+        for col in group_seq_df.columns:
+            # Count occurrences of each state at this time point
+            state_counts = group_seq_df[col].value_counts().sort_index()
+
+            # Convert to percentages
+            total = len(group_seq_df)
+            state_percentages = (state_counts / total) * 100
+
+            # Create a dictionary with states as keys and percentages as values
+            dist = {inv_state_mapping.get(i, 'Missing'): state_percentages.get(i, 0)
+                    for i in range(1, len(seqdata.states) + 1)}
+
+            # Add time point and distribution to the list
+            distributions.append(dict(time=col, **dist))
+
+        # Ensure percentages sum to exactly 100% to avoid gaps
+        for j in range(len(distributions)):
+            total_percentage = sum(distributions[j][state] for state in seqdata.states)
+            if total_percentage < 100:
+                top_state = seqdata.states[-1]
+                distributions[j][top_state] += (100 - total_percentage)
+
+        # Convert to DataFrame for plotting
+        dist_df = pd.DataFrame(distributions)
+
+        # Plot on the corresponding axis
+        ax = axes[i]
+
+        # Get colors for each state
+        base_colors = [seqdata.color_map[state] for state in seqdata.states]
+
+        # Plot the data
+        if stacked:
+            # Create a stacked area plot
+            ax.stackplot(range(len(dist_df)),
+                         [dist_df[state] for state in seqdata.states],
+                         labels=seqdata.states,
+                         colors=base_colors,
+                         alpha=1.0)
+
+            # Add grid lines behind the stack plot
+            ax.grid(axis='y', linestyle='-', alpha=0.2)
+            ax.set_axisbelow(True)
+        else:
+            # Create a line plot
+            for k, state in enumerate(seqdata.states):
+                ax.plot(range(len(dist_df)), dist_df[state],
+                        label=state, color=base_colors[k],
+                        linewidth=2.5, marker='o', markersize=5)
+
+            # Add grid lines
+            ax.grid(True, linestyle='-', alpha=0.2)
+
+        # Set group title
+        group_title = f"{categories} {group} (n = {len(group_seq_df)})"
+        ax.set_title(group_title, fontsize=12, loc='right')
+
+        # Set y-axis limits from 0 to 100%
+        ax.set_ylim(0, 100)
+
+        # Clean up axis aesthetics
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('gray')
+        ax.spines['bottom'].set_color('gray')
+        ax.spines['left'].set_linewidth(0.7)
+        ax.spines['bottom'].set_linewidth(0.7)
+        ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
+        ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+
+        # Set x-axis labels
+        set_up_time_labels_for_x_axis(seqdata, ax)
+
+        # Add axis labels
+        if i % ncols == 0:
+            ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+
+        if i >= num_groups - ncols:
+            ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+
+    # Hide unused subplots
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    # Add a common title if provided
+    if title:
+        fig.suptitle(title, fontsize=14, y=1.02)
+
+    # Adjust layout to remove tight_layout warning
+    fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
+
+    # Save main figure to memory
+    main_buffer = save_figure_to_buffer(fig, dpi=dpi)
+
+    # Create standalone legend
+    colors = {state: seqdata.color_map[state] for state in seqdata.states}
+    legend_buffer = create_standalone_legend(
+        colors=colors,
+        labels=seqdata.states,
+        ncol=min(5, len(seqdata.states)),
+        figsize=(figsize[0] * ncols, 1),
+        fontsize=10,
+        dpi=dpi
+    )
+
+    # Combine plot with legend
+    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+        save_as = save_as + '.png'
+
+    combined_img = combine_plot_with_legend(
+        main_buffer,
+        legend_buffer,
+        output_path=save_as,
+        dpi=dpi,
+        padding=20
+    )
+
+    # Display combined image
+    plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
+    plt.imshow(combined_img)
+    plt.axis('off')
+    plt.show()
+    plt.close()
+
+
+def _plot_state_distribution_single(seqdata: SequenceData,
+                                    figsize=(12, 7),
+                                    title=None,
+                                    xlabel="Time",
+                                    ylabel="State Distribution (%)",
+                                    stacked=True,
+                                    save_as=None,
+                                    dpi=200) -> None:
     """
     Creates a state distribution plot showing how the prevalence of states changes over time,
     with enhanced color vibrancy.
@@ -132,5 +338,3 @@ def plot_state_distribution(seqdata: SequenceData,
     plt.tight_layout()
 
     save_and_show_results(save_as, dpi=200)
-
-

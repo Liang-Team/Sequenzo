@@ -1,6 +1,6 @@
 """
-@Author  : 梁彧祺
-@File    : 241220_hierarchical_clustering.py
+@Author  : Yuqi Liang 梁彧祺
+@File    : hierarchical_clustering.py
 @Time    : 18/12/2024 17:59
 @Desc    :
     This module provides a flexible and user-friendly implementation of hierarchical clustering,
@@ -591,59 +591,6 @@ class ClusterResults:
         save_and_show_results(save_as, dpi)
 
 
-if __name__ == '__main__':
-    # Import necessary libraries
-    from sequenzo import *  # Social sequence analysis
-    import pandas as pd  # Data manipulation
 
-    # List all the available datasets in Sequenzo
-    print('Available datasets in Sequenzo: ', list_datasets())
 
-    # Load the data that we would like to explore in this tutorial
-    # `df` is the short for `dataframe`, which is a common variable name for a dataset
-    df = load_dataset('country_co2_emissions')
-
-    # Create a SequenceData object from the dataset
-
-    # Define the time-span variable
-    time = list(df.columns)[1:]
-
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-
-    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
-
-    # plot_sequence_index(sequence_data, state=['Very Low', 'Low', 'Middle', 'High', 'Very High'])
-
-    om = get_distance_matrix(seqdata=sequence_data,
-                             method='OM',
-                             sm="TRATE",
-                             indel="auto")
-
-    from sequenzo.clustering import Cluster
-
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward')
-    cluster.plot_dendrogram(xlabel="Countries", ylabel="Distance", save_as='dendrogram')
-
-    # Create a ClusterQuality object to evaluate clustering quality
-    cluster_quality = ClusterQuality(cluster)
-    cluster_quality.compute_cluster_quality_scores()
-    cluster_quality.plot_combined_scores(norm='zscore', save_as='combined_scores')
-    summary_table = cluster_quality.get_metrics_table()
-    print(summary_table)
-
-    cluster_results = ClusterResults(cluster)
-    membership_table = cluster_results.get_cluster_memberships(num_clusters=5)
-    print(membership_table)
-    distribution = cluster_results.get_cluster_distribution(num_clusters=5)
-    print(distribution)
-    cluster_results.plot_cluster_distribution(num_clusters=6, save_as="distribution.png", title=None)
-
-    # index plot for each cluster
-    # TODO: you are almost done!!
-    plot_sequence_index(seqdata=sequence_data,
-                        id_group_df=membership_table,
-                        categories='Cluster ID')
-
-    # TODO: set up this plot for multiple groups
-    # plot_state_distribution()
 

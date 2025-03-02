@@ -9,446 +9,28 @@
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-import seaborn as sns
 from PIL import Image
+
 from sequenzo import SequenceData
 from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
+    save_figure_to_buffer,
+    create_standalone_legend,
+    combine_plot_with_legend,
     save_and_show_results
 )
 
 
-### Data Handling & Preprocessing ###
-
-def _load_data(file_path):
-    """
-    Load data from a pickle file or DataFrame and return matrix and ID list.
-    """
-    try:
-        with open(file_path, 'rb') as file:
-            data = pickle.load(file)
-            if isinstance(data, pd.DataFrame):
-                id_list = data.index.tolist()
-                matrix = data.values
-            elif isinstance(data, np.ndarray):
-                id_list = None
-                matrix = data
-            else:
-                raise ValueError("Unsupported data type in pickle file.")
-
-    except Exception as e:
-        print(f"Error while loading the file: {e}")
-        print("Attempting to reload with Pandas compatibility options...")
-        data = pd.read_pickle(file_path, compression=None)
-        if isinstance(data, pd.DataFrame):
-            id_list = data.index.tolist()
-            matrix = data.values
-        else:
-            raise ValueError("Pandas failed to load data properly.")
-
-    return matrix, id_list
-
-
-def preprocess_data(data):
-    """
-    Map string-based states in the data matrix to integer indices.
-    TODO: rename this function as its indication is too ambiguous
-
-    preprocess_data 的核心作用是将字符串类型的数据（如 'software'）转换为数值型数据（如 0, 1 等），
-    因为字符串无法直接用于 imshow 函数，而 imshow 是用来处理数值矩阵并将其以颜色形式可视化的。
-    """
-    unique_states = np.unique(data)
-    state_mapping = {state: idx for idx, state in enumerate(unique_states)}
-    mapped_data = np.vectorize(state_mapping.get)(data)
-    return mapped_data, state_mapping
-
-
-### Plotting ###
-
-# Main User-Facing Function
-def _plot_sequence_index(seqdata: SequenceData,
+def plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
-                        custom_order=None,
-                        sortv=None,
-                        age_labels=None,
                         categories=None,
+                        figsize=(10, 6),
                         title=None,
-                        facet_ncol=2,
                         xlabel="Time",
                         ylabel="Sequences",
                         save_as=None,
-                        dpi=200):
-    """
-    Unified function for sequence index plotting.
-
-    :param seqdata: (SequenceData) A SequenceData object containing preprocessed sequence data.
-    :param id_group_df: (pd.DataFrame, optional) DataFrame containing IDs and grouping information for sequences.
-    :param custom_order: (dict, optional) Custom sorting order for group labels.
-    :param age_labels: (list, optional) Labels for the x-axis (e.g., ages or time points).
-    :param categories: (list, optional) List of categories for splitting the index plot into different groups
-    :param title: (str, optional) Title for the plot.
-    :param facet_ncol: (int, default=2) Number of columns for grouped plots.
-    :param save_as: (str, optional) File path to save the plot.
-    :param dpi: (int, default=200) Resolution of the saved plot.
-
-    :return None.
-    """
-    if not isinstance(seqdata, SequenceData):
-        raise TypeError("Input data must be a SequenceData object.")
-
-    if id_group_df is None:
-        # Call the single plot function if no grouping is provided
-        _sequence_index_plot_single(seqdata, figsize=(10, 6), title=title,
-                                    xlabel=xlabel, ylabel=ylabel, save_as=save_as,
-                                    dpi=dpi)
-    else:
-
-        if facet_ncol == 1:
-            # Call the grouped plot function if grouping is provided
-            _sequence_index_plot_grouping_ncol_1(seqdata, id_group_df=id_group_df,
-                                                 age_labels=age_labels, title=title,
-                                                 xlabel=xlabel, ylabel=ylabel, categories=categories,
-                                                 facet_ncol=facet_ncol, save_as=save_as, dpi=dpi)
-        else:
-            _sequence_index_plot_grouping_ncol_not_1(seqdata, id_group_df=id_group_df,
-                                                     age_labels=age_labels, title=title,
-                                                     xlabel=xlabel, ylabel=ylabel, categories=categories,
-                                                     facet_ncol=facet_ncol, save_as=save_as, dpi=dpi)
-
-
-def _crop_bottom_whitespace(fig, threshold=240, margin=5):
-    """
-    Crop the bottom whitespace from a matplotlib figure and save or return the cropped image.
-
-    :param fig: matplotlib.figure.Figure
-        The Matplotlib figure to crop.
-    :param threshold: int, default=240
-        Pixel intensity threshold to detect whitespace.
-    :param margin: int, default=5
-        Additional margin to leave after cropping.
-
-    :return: PIL.Image.Image
-        The cropped image as a PIL Image object.
-    """
-    from io import BytesIO
-
-    # Save the figure to an in-memory buffer
-    buffer = BytesIO()
-    fig.savefig(buffer, format='png', dpi=200, bbox_inches='tight', pad_inches=0)
-    buffer.seek(0)
-
-    # Open the buffer as an image
-    with Image.open(buffer) as img:
-        img_array = np.array(img)
-
-        # Detect non-white rows
-        is_not_white = np.any(img_array < threshold, axis=-1)
-        non_white_rows = np.where(is_not_white.any(axis=1))[0]
-
-        if len(non_white_rows) > 0:
-            first_content_row = non_white_rows[0]
-            last_content_row = non_white_rows[-1]
-            cropped = img.crop((0, first_content_row, img.width, last_content_row + margin))
-        else:
-            # If no content detected, return the original image
-            cropped = img
-
-        return cropped
-
-
-def _sequence_index_plot_grouping_ncol_1(data, categories, id_group_df, age_labels=None,
-                                         palette=None, reverse_colors=True, title=None,
-                                         facet_ncol=2, save_as=None, dpi=200):
-    """
-    Plot sequence index plots with grouping.
-
-    :param data: np.array or pd.DataFrame
-        Sequence data matrix where rows are sequences and columns are time points.
-    :param categories: list
-        List of category labels corresponding to the data values.
-    :param id_group_df: pd.DataFrame
-        DataFrame containing IDs and grouping information for sequences.
-    :param age_labels: list, optional
-        Labels for the x-axis (e.g., ages or time points).
-    :param palette: dict, optional
-        Custom color palette mapping categories to colors.
-    :param reverse_colors: bool, default=True
-        Whether to reverse the color scheme.
-    :param title: str, optional
-        Title for the plot.
-    :param facet_ncol: int, default=2
-        Number of columns for grouped plots.
-    :param save_as: str, optional
-        File path to save the plot.
-    :param dpi: int, default=200 as some personal computers might not have enough resources for more than 200
-        Resolution of the saved plot.
-    """
-    num_colors = len(categories)
-    spectral_colors = sns.color_palette("Spectral", num_colors)
-    if reverse_colors:
-        spectral_colors = list(reversed(spectral_colors))
-    cmap = ListedColormap(spectral_colors) if palette is None else ListedColormap(
-        [palette.get(cat, '#000000') for cat in categories])
-
-    group_column_name = id_group_df.columns[1]
-    group_labels = id_group_df[group_column_name].unique()
-    facet_nrow = int(np.ceil(len(group_labels) / facet_ncol))
-
-    width = 10
-    height_per_subplot = 6
-
-    fig = plt.figure(figsize=(width, height_per_subplot * facet_nrow))
-    gs = plt.GridSpec(facet_nrow, facet_ncol + 1, figure=fig,
-                      width_ratios=[*[1] * facet_ncol, 0.15],
-                      wspace=0.2,
-                      hspace=0.3,
-                      top=0.92,  # 根据实际效果调整这个值
-                      bottom=0.05)
-
-    legend_patches = [plt.Rectangle((0, 0), 1, 1, facecolor=cmap(i / (num_colors - 1)))
-                      for i in range(num_colors)]
-
-    legend_ax = fig.add_subplot(gs[:, -1])
-    legend_ax.legend(legend_patches, categories,
-                     loc='center left',
-                     bbox_to_anchor=(0, 0.7)
-                     )
-    legend_ax.axis('off')
-
-    for idx, group in enumerate(group_labels):
-        ax = fig.add_subplot(gs[idx // facet_ncol, idx % facet_ncol])
-
-        # Check for group existence in id_group_df
-        if group not in id_group_df[group_column_name].values:
-            print(f"Group '{group}' not found in id_group_df.")
-            ax.axis('off')
-            continue
-
-        group_data = data[id_group_df[group_column_name] == group]
-
-        if len(group_data) > 0:
-            sorted_data = group_data[np.lexsort(group_data.T[::-1])]
-            im = ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
-            ax.set_title(f"{group} (N={len(group_data):,})", fontsize=10, pad=5, loc='center')
-
-            if age_labels:
-                ax.set_xticks(range(len(age_labels)))
-                ax.set_xticklabels(age_labels, fontsize=8)
-            else:
-                ax.set_xticks(range(sorted_data.shape[1]))
-                ax.set_xticklabels(range(1, sorted_data.shape[1] + 1), fontsize=8)
-
-            num_yticks = min(10, sorted_data.shape[0])
-            ytick_positions = np.linspace(0, sorted_data.shape[0] - 1, num_yticks, dtype=int)
-            ax.set_yticks(ytick_positions)
-            ax.set_yticklabels([f"{int(x + 1):,}" for x in ytick_positions], fontsize=8)
-        else:
-            ax.axis('off')
-
-        # Remove the spines (frame) and only keep the ticks
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-
-        # Adjust tick appearance
-        ax.tick_params(axis='both', length=4, width=1, colors='black', labelsize=8)
-
-        # Set consistent x and y axis labels
-        ax.set_xlabel(xlabel, fontsize=10, labelpad=10)
-        ax.set_ylabel(ylabel, fontsize=10, labelpad=10)
-
-    if title is not None:
-        # Center title above subplots only
-        subplot_width = facet_ncol / (facet_ncol + 0.15)  # Exclude the legend width
-        fig.suptitle(title, fontsize=15, x=subplot_width / 2, y=0.94)  # Adjusted y for spacing
-
-    _crop_bottom_whitespace(fig)
-
-    if save_as:
-        # Ensure the file extension is valid
-        if not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-            save_as += '.png'  # Default to .png if no valid extension provided
-
-        # Crop the figure and save
-        cropped_image = _crop_bottom_whitespace(fig)
-        cropped_image.save(save_as)  # Save the cropped image
-        plt.close()
-    else:
-        # Show the cropped figure
-        cropped_image = _crop_bottom_whitespace(fig)
-        cropped_image.show()  # This opens the image using the default viewer
-
-
-# Generalized function for sorting group labels
-def sort_group_labels(group_labels, custom_order=None):
-    """
-    Sort group labels either using a custom order or natural sorting.
-
-    :param group_labels: list
-        List of group labels to be sorted.
-    :param custom_order: dict, optional
-        A dictionary mapping labels to their desired order.
-        Example: {1: 'Software focused', 2: 'Hardware focused', ...}.
-
-    :return: list
-        Sorted group labels.
-    """
-    if custom_order:
-        # If a custom order is provided, use it to sort the labels
-        ordered_labels = sorted(group_labels, key=lambda x: list(custom_order.keys()).index(x))
-    else:
-        # Fall back to natural sorting (numerical or alphabetical)
-        try:
-            ordered_labels = sorted(group_labels, key=lambda x: int(x))
-        except ValueError:
-            # If labels are not all numerical, sort them alphabetically
-            ordered_labels = sorted(group_labels, key=str)
-    return ordered_labels
-
-
-def _sequence_index_plot_grouping_ncol_not_1(seqdata: SequenceData,
-                                             categories, id_group_df,
-                                             custom_order=None, age_labels=None,
-                                             palette=None, reverse_colors=True, title=None,
-                                             xlabel="Time", ylabel="Sequences",
-                                             facet_ncol=2, save_as=None, dpi=200):
-    """
-    Plot sequence index plots with dynamic layout adjustments for better aesthetics.
-
-    :param seqdata: np.array or pd.DataFrame
-        Sequence data matrix where rows are sequences and columns are time points.
-    :param categories: list
-        List of category labels corresponding to the data values.
-    :param id_group_df: pd.DataFrame
-        DataFrame containing IDs and grouping information for sequences.
-    :param age_labels: list, optional
-        Labels for the x-axis (e.g., ages or time points).
-    :param palette: dict, optional
-        Custom color palette mapping categories to colors.
-    :param reverse_colors: bool, default=True
-        Whether to reverse the color scheme.
-    :param title: str, optional
-        Title for the plot.
-    :param facet_ncol: int, default=2
-        Number of columns for grouped plots.
-    :param save_as: str, optional
-        File path to save the plot.
-    :param dpi: int, default=200
-        Resolution of the saved plot.
-    """
-    data = seqdata.data.to_dataframe()
-    num_colors = len(seqdata.states)
-    # spectral_colors = sns.color_palette("Spectral", num_colors)
-    # if reverse_colors:
-    #     spectral_colors = list(reversed(spectral_colors))
-    # cmap = ListedColormap(spectral_colors) if palette is None else ListedColormap(
-    #     [palette.get(cat, '#000000') for cat in categories])
-
-    group_column_name = id_group_df.columns[1]
-
-    # Sort group labels using the new function
-    group_labels = sort_group_labels(id_group_df[group_column_name].unique(), custom_order=custom_order)
-
-    facet_nrow = int(np.ceil(len(group_labels) / facet_ncol))
-
-    # Dynamic figure size calculation
-    base_width_per_col = 6  # Base width per column
-    base_height_per_row = 3  # Base height per row
-    width = facet_ncol * base_width_per_col
-    height = facet_nrow * base_height_per_row
-
-    fig = plt.figure(figsize=(width, height))
-    gs = plt.GridSpec(facet_nrow, facet_ncol + 1, figure=fig,
-                      width_ratios=[*[1] * facet_ncol, 0.15],
-                      wspace=0.4 + 0.1 * (facet_ncol - 2),  # Adjusted spacing for more columns
-                      hspace=0.6)  # Consistent vertical spacing
-
-    legend_patches = [plt.Rectangle((0, 0), 1, 1, facecolor=cmap(i / (num_colors - 1)))
-                      for i in range(num_colors)]
-
-    # Adjust legend position for facet_ncol
-    legend_anchor_y = 0.8 if facet_ncol >= 4 else 0.7  # Move legend up for ncol=4
-    legend_ax = fig.add_subplot(gs[:, -1])
-    legend_ax.legend(legend_patches, categories,
-                     loc='center left',
-                     bbox_to_anchor=(0, legend_anchor_y))
-    legend_ax.axis('off')
-
-    for idx, group in enumerate(group_labels):
-
-        ax = fig.add_subplot(gs[idx // facet_ncol, idx % facet_ncol])
-
-        # Check for group existence in id_group_df
-        if group not in id_group_df[group_column_name].values:
-            print(f"Group '{group}' not found in id_group_df.")
-            ax.axis('off')
-            continue
-
-        group_data = data[id_group_df[group_column_name] == group]
-        if len(group_data) > 0:
-            sorted_data = group_data[np.lexsort(group_data.T[::-1])]
-            im = ax.imshow(sorted_data, aspect='auto', cmap=cmap, interpolation='nearest')
-
-            # Use textual label from custom_order if provided
-            if custom_order and group in custom_order:
-                title_label = custom_order[group]
-            else:
-                title_label = group  # Fallback to numeric label if no custom order
-
-            ax.set_title(f"{title_label} (N={len(group_data):,})", fontsize=10, pad=5, loc='center')
-
-            if age_labels:
-                ax.set_xticks(range(len(age_labels)))
-                ax.set_xticklabels(age_labels, fontsize=8)
-            else:
-                ax.set_xticks(range(sorted_data.shape[1]))
-                ax.set_xticklabels(range(1, sorted_data.shape[1] + 1), fontsize=8)
-
-            num_yticks = min(10, sorted_data.shape[0])
-            ytick_positions = np.linspace(0, sorted_data.shape[0] - 1, num_yticks, dtype=int)
-            ax.set_yticks(ytick_positions)
-            ax.set_yticklabels([f"{int(x + 1):,}" for x in ytick_positions], fontsize=8)
-        else:
-            ax.axis('off')
-
-        # Remove the spines (frame) and only keep the ticks
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-
-        # Adjust tick appearance
-        ax.tick_params(axis='both', length=4, width=1, colors='black', labelsize=8)
-
-        # Set consistent x and y axis labels with increased padding
-        ax.set_xlabel(xlabel, fontsize=10, labelpad=15)
-        ax.set_ylabel(ylabel, fontsize=10, labelpad=15)
-
-    if title is not None:
-        # Center title above subplots only
-        subplot_width = facet_ncol / (facet_ncol + 0.15)  # Exclude the legend width
-        fig.suptitle(title, fontsize=15, x=subplot_width / 2, y=0.94)  # Adjusted y for spacing
-
-    if save_as:
-        # Ensure the file extension is valid
-        if not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-            save_as += '.png'  # Default to .png if no valid extension provided
-
-        # Crop the figure and save
-        cropped_image = _crop_bottom_whitespace(fig)
-        cropped_image.save(save_as)  # Save the cropped image
-        plt.close()
-    else:
-        # Show the cropped figure
-        cropped_image = _crop_bottom_whitespace(fig)
-        cropped_image.show()  # This opens the image using the default viewer
-
-
-def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10, 6),
-                        title=None, xlabel="Time", ylabel="Sequences",
-                        save_as=None, dpi=200):
+                        dpi=200,
+                        layout='column'):
     """
     Creates sequence index plots, optionally grouped by categories.
 
@@ -461,6 +43,7 @@ def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10,
     :param ylabel: Label for the y-axis
     :param save_as: File path to save the plot (if None, plot will be shown)
     :param dpi: DPI for saved image
+    :param layout: Layout style - 'column' (default, 3xn), 'grid' (nxn)
     """
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
@@ -473,17 +56,20 @@ def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10,
     groups = sorted(id_group_df[categories].unique())
     num_groups = len(groups)
 
-    # Calculate figure size based on number of groups
-    if num_groups <= 3:
-        fig, axes = plt.subplots(num_groups, 1, figsize=(figsize[0], figsize[1] * num_groups))
-        # Convert to array for single group case
-        if num_groups == 1:
-            axes = np.array([axes])
-    else:
-        # For more than 3 groups, use a grid layout
-        ncols = min(2, num_groups)
+    # Calculate figure size and layout based on number of groups and specified layout
+    if layout == 'column':
+        # 3xn layout (3 columns)
+        ncols = 3
         nrows = (num_groups + ncols - 1) // ncols  # Ceiling division
-        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
+                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
+        axes = axes.flatten()
+    else:  # 'grid' layout
+        # nxn layout
+        ncols = int(np.ceil(np.sqrt(num_groups)))
+        nrows = ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
+                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
         axes = axes.flatten()
 
     # Create a plot for each group
@@ -512,6 +98,9 @@ def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10,
         im = ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(),
                        interpolation='nearest', vmin=1, vmax=len(seqdata.states))
 
+        # Remove grid lines
+        ax.grid(False)
+
         # Set up time labels
         set_up_time_labels_for_x_axis(seqdata, ax)
 
@@ -536,12 +125,11 @@ def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10,
         group_title = f"{categories} {group} (n = {num_sequences})"
         ax.set_title(group_title, fontsize=12, loc='right')
 
-        # Add axis labels (only for leftmost plots in grid layout)
-        if i % ncols == 0 or num_groups <= 3:
+        # Add axis labels
+        if i % ncols == 0:
             ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
 
-        # Add x-label only to bottom plots
-        if i >= num_groups - ncols or num_groups <= 3:
+        if i >= num_groups - ncols:
             ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
 
     # Hide unused subplots
@@ -552,25 +140,50 @@ def plot_sequence_index(seqdata, id_group_df=None, categories=None, figsize=(10,
     if title:
         fig.suptitle(title, fontsize=14, y=1.02)
 
-    # Add a single legend for all subplots
-    handles, labels = seqdata.get_legend()
-    fig.legend(handles, labels,
-               bbox_to_anchor=(1.05, 0.5),
-               loc='center right',
-               fontsize=10)
+    # Adjust layout to remove tight_layout warning
+    fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
 
-    # Adjust layout
-    plt.tight_layout()
-    fig.subplots_adjust(right=0.85)  # Make room for the legend
+    # Save main figure to memory
+    main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
-    # Save and show
-    save_and_show_results(save_as, dpi=dpi)
+    # Create standalone legend
+    colors = {state: seqdata.color_map[state] for state in seqdata.states}
+    legend_buffer = create_standalone_legend(
+        colors=colors,
+        labels=seqdata.states,
+        ncol=min(5, len(seqdata.states)),
+        figsize=(figsize[0] * ncols, 1),
+        fontsize=10,
+        dpi=dpi
+    )
+
+    # Combine plot with legend
+    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+        save_as = save_as + '.png'
+
+    combined_img = combine_plot_with_legend(
+        main_buffer,
+        legend_buffer,
+        output_path=save_as,
+        dpi=dpi,
+        padding=20
+    )
+
+    # Display combined image
+    plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
+    plt.imshow(combined_img)
+    plt.axis('off')
+    plt.show()
+    plt.close()
 
 
-
-def _sequence_index_plot_single(seqdata, figsize=(10, 6),
-                                title=None, xlabel="Time", ylabel="Sequences",
-                                save_as=None, dpi=200):
+def _sequence_index_plot_single(seqdata: SequenceData,
+                                figsize=(10, 6),
+                                title=None,
+                                xlabel="Time",
+                                ylabel="Sequences",
+                                save_as=None,
+                                dpi=200):
     """
     Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
@@ -640,3 +253,4 @@ def _sequence_index_plot_single(seqdata, figsize=(10, 6),
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     save_and_show_results(save_as, dpi=200)
+

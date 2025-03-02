@@ -179,3 +179,4 @@ def save_and_show_results(save_as, dpi=200):
     plt.show()
     # Release resources
     plt.close()
+
