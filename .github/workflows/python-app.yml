@@ -200,9 +200,7 @@ jobs:
           echo "Validating package distribution files:"
           twine check dist/*
           echo "Attempting to upload files to PyPI..."
-          # Redirect stderr to stdout to capture all output
           twine upload dist/* --skip-existing --verbose 2>&1 | tee upload_log.txt
-          # Display the last 50 lines of the log in case of truncation
           echo "Last part of upload log:"
           tail -n 50 upload_log.txt
   
