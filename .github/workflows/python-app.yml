@@ -1,14 +1,11 @@
 # GitHub Actions workflow for Sequenzo package
 name: Sequenzo Package CI
 
-#on:
-#  push:
-#    branches: [ "main" ]
-#  pull_request:
-#    branches: [ "main" ]
-
 on:
-  workflow_dispatch:  # Only executes when manually triggered
+  push:
+    tags:
+      - "v*"  # 触发当 tag 以 'v' 开头，例如 v0.1.1
+  workflow_dispatch:  # 允许手动触发
 
 permissions:
   contents: read
@@ -31,124 +28,21 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    # Clear the `pip` cache to prevent conflicts
-    - name: Clear pip cache
-      run: python -m pip cache purge
-
-    # macOS: Handle dependency installation, using different strategies for different Python versions
-    - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install Cython==0.29.36
-        
-        if [ "${{ matrix.python-version }}" == "3.11" ]; then
-          pip install "setuptools>=60.0.0"
-        else
-          pip install "setuptools==58.1.0"
-        fi
-        
-        if [ "${{ matrix.python-version }}" == "3.11" ]; then
-          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
-        elif [ "${{ matrix.python-version }}" == "3.10" ]; then
-          pip install "numpy>=1.22.4,<2.0" --only-binary numpy
-        else
-          pip install "numpy==1.22.4" --only-binary numpy || pip install "numpy>=1.21.0,<2.0" --only-binary numpy
-        fi
-        
-        pip install pybind11
-        
-        if [ "${{ matrix.python-version }}" == "3.11" ]; then
-          pip install "scipy>=1.8.0"
-        else
-          pip install "scipy==1.7.3" || pip install "scipy>=1.7.0"
-        fi
-        
-        python -m pip install --upgrade wheel
-        pip install fastcluster==1.2.6 || pip install fastcluster
-        
-        if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
-          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation || echo "⚠️ Some requirements may not be installed"
-        else
-          pip install -r requirements-3.9.txt --no-build-isolation || echo "⚠️ Some requirements may not be installed"
-          echo "⚠️ Using requirements-3.9.txt as fallback"
-        fi
+        pip install Cython pybind11
+        pip install build twine
 
-    # macOS: Ensure that Xcode CLI tools are installed – required for all Python versions
-    - name: Install Xcode Command Line Tools
-      if: runner.os == 'macOS'
-      run: |
-        xcode-select --install || echo "Xcode CLI already installed"
-
-    # Linux: Handle fastcluster version issues, ensure numpy is installed first
-    - name: Install dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel setuptools
-        
-        sudo apt-get update
-        sudo apt-get install -y build-essential
-        
-        if [ "${{ matrix.python-version }}" == "3.11" ]; then
-          pip install "numpy>=1.23.2,<2.0" --only-binary numpy
-        else
-          pip install numpy==1.22.4 --only-binary numpy
-        fi
-        
-        pip install pybind11 
-        pip install fastcluster==1.2.6  
-        
-        if [ -f "requirements-${{ matrix.python-version }}.txt" ]; then
-          pip install -r requirements-${{ matrix.python-version }}.txt --no-build-isolation
-        else
-          pip install -r requirements-3.9.txt --no-build-isolation
-          echo "⚠️ Using requirements-3.9.txt as fallback"
-        fi
-
-# Ensure `PYTHONPATH` is set correctly
-    - name: Verify package path
-      shell: bash
-      run: |
-        echo "📂 Current directory:"
-        ls -lah
-        echo "📂 Sequenzo package directory:"
-        ls -lah sequenzo || echo "⚠️ Directory 'sequenzo' not found!"
-
-    # Consolidated installation steps for all platforms
-    - name: Install local package
-      run: |
-        pip install --no-cache-dir -e . --no-build-isolation
-      env:
-        PYTHONUTF8: 1
-        PYTHONPATH: ${{ github.workspace }}
-
-    # Display installed packages
-    - name: Show installed packages
-      run: pip list
-
-    # Test whether the module is installed correctly
-    - name: Test imports
-      run: |
-        python -c "import sequenzo.dissimilarity_measures; print('Dissimilarity measures module imported successfully')"
-        python -c "import sequenzo.clustering; print('Clustering module imported successfully')"
-      env:
-        PYTHONPATH: ${{ github.workspace }}
-
-    # Build the package (both .whl and .tar.gz)
     - name: Build package
       run: |
-        pip install build
         python -m build
         echo "Files in dist/ after build:"
         ls -lah dist/
 
     - name: Verify package
-      run: |
-        pip install twine
-        twine check dist/*
+      run: twine check dist/*
 
-    # Upload build artifacts (both wheels and source distribution)
     - name: Upload built artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -157,8 +51,36 @@ jobs:
           dist/*.whl
           dist/*.tar.gz
 
+  build_linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install cibuildwheel
+      run: python -m pip install cibuildwheel
+
+    - name: Build manylinux wheels
+      run: |
+        python -m cibuildwheel --output-dir dist
+
+    - name: Upload built artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-wheels-${{ matrix.python-version }}
+        path: dist/*
+
   publish:
-    needs: build
+    needs: [build, build_linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all built wheels
