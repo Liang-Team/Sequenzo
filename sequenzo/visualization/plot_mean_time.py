@@ -10,9 +10,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.visualization.utils import (
+    set_up_time_labels_for_x_axis,
+    save_and_show_results
+)
 
 
 def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
@@ -135,13 +138,5 @@ def plot_mean_time(seqdata: SequenceData,
     plt.subplots_adjust(left=0.3)
     plt.tight_layout()
 
-    if save_as:
-        # Ensure the filename has an extension
-        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-    plt.show()
-    plt.close()  # Release resources
+    save_and_show_results(save_as, dpi=200)
 

@@ -12,8 +12,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List, Optional
+from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.visualization.utils import (
+    set_up_time_labels_for_x_axis,
+    save_and_show_results
+)
 
 
 def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False) -> np.ndarray:
@@ -163,13 +167,5 @@ def plot_transition_matrix(seqdata: SequenceData,
     # Adjust layout
     plt.tight_layout()
 
-    if save_as:
-        # Ensure the filename has an extension
-        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-    plt.show()
-    plt.close()  # Release resources
+    save_and_show_results(save_as, dpi=200)
 

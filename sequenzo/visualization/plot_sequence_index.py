@@ -13,7 +13,10 @@ from matplotlib.colors import ListedColormap
 import seaborn as sns
 from PIL import Image
 from sequenzo import SequenceData
-from sequenzo.visualization.utils import set_up_time_labels_for_x_axis
+from sequenzo.visualization.utils import (
+    set_up_time_labels_for_x_axis,
+    save_and_show_results
+)
 
 
 ### Data Handling & Preprocessing ###
@@ -512,12 +515,4 @@ def _sequence_index_plot_single(seqdata, figsize=(10, 6),
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    if save_as:
-        # Ensure the filename has an extension
-        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-    plt.show()
-    plt.close()  # Release resources
+    save_and_show_results(save_as, dpi=200)

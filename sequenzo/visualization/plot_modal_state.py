@@ -13,7 +13,8 @@ from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
     create_standalone_legend,
     save_figure_to_buffer,
-    combine_plot_with_legend
+    combine_plot_with_legend,
+    save_and_show_results
 )
 from PIL import Image
 
@@ -182,48 +183,33 @@ def plot_modal_state(seqdata: SequenceData,
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(main_fig, dpi=dpi)
 
-    # If there are states, create a legend
-    if len(seqdata.states) > 0:
-        # Create standalone legend
-        legend_buffer = create_standalone_legend(
-            colors=colors,
-            labels=seqdata.states,
-            ncol=min(5, len(seqdata.states)),
-            figsize=(fig_width, 1),
-            fontsize=10,
-            dpi=dpi
-        )
+    # Create a legend
+    # Create standalone legend
+    legend_buffer = create_standalone_legend(
+        colors=colors,
+        labels=seqdata.states,
+        ncol=min(5, len(seqdata.states)),
+        figsize=(fig_width, 1),
+        fontsize=10,
+        dpi=dpi
+    )
 
-        if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-            save_as = save_as + '.png'
+    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+        save_as = save_as + '.png'
 
-        # Combine main plot with legend
-        combined_img = combine_plot_with_legend(
-            main_buffer,
-            legend_buffer,
-            output_path=save_as,
-            dpi=dpi,
-            padding=20  # Increased padding between plot and legend
-        )
+    # Combine main plot with legend
+    combined_img = combine_plot_with_legend(
+        main_buffer,
+        legend_buffer,
+        output_path=save_as,
+        dpi=dpi,
+        padding=20  # Increased padding between plot and legend
+    )
 
-        # Display combined image
-        plt.figure(figsize=(fig_width, adjusted_fig_height + 1))
-        plt.imshow(combined_img)
-        plt.axis('off')
-        plt.show()
-        plt.close()
-    else:
-        # If no states, just display the main plot
-        main_img = Image.open(main_buffer)
+    # Display combined image
+    plt.figure(figsize=(fig_width, adjusted_fig_height + 1))
+    plt.imshow(combined_img)
+    plt.axis('off')
+    plt.show()
+    plt.close()
 
-        if save_as:
-            # If there is no extension when the user defines, then add .png
-            if not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-                save_as = save_as + '.png'
-            main_img.save(save_as, dpi=(dpi, dpi))
-
-        plt.figure(figsize=(fig_width, adjusted_fig_height))
-        plt.imshow(main_img)
-        plt.axis('off')
-        plt.show()
-        plt.close()

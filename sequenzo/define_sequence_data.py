@@ -52,7 +52,7 @@ class SequenceData:
         :param states: List of unique states (categories).
         :param alphabet: Optional predefined state space.
         :param labels: Labels for states (optional, for visualization).
-        :param id_col: Column name for row identifiers.
+        :param id_col: Column name for row identifiers, which is very important for hierarchical clustering.
         :param weights: Sequence weights (optional).
         :param start: Starting time index (default: 1).
         :param missing_handling: Dict specifying handling for missing values (left, right, gaps).

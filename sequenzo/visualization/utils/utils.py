@@ -55,7 +55,7 @@ def create_standalone_legend(
         figsize: Tuple[int, int] = (8, 1),
         fontsize: int = 10,
         dpi: int = 200
-) -> BytesIO:
+        ) -> BytesIO:
     """
     Creates a standalone legend image without borders.
 
@@ -112,6 +112,8 @@ def combine_plot_with_legend(
 ) -> Image.Image:
     """
     Combines a main plot image with a legend image, placing the legend below the main plot.
+    This means that it saves the combined image to a file if an output path is provided,
+    which is different from the function `save_and_show_results` as that is responsible for visualizations that do not require cropping.
 
     Parameters:
         main_image_buffer: Buffer containing the main plot image
@@ -164,3 +166,16 @@ def save_figure_to_buffer(fig, dpi: int = 200) -> BytesIO:
     plt.close(fig)
     buffer.seek(0)
     return buffer
+
+
+def save_and_show_results(save_as, dpi=200):
+    if save_as:
+        # Ensure the filename has an extension
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as = f"{save_as}.png"  # Add default .png extension
+
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+
+    plt.show()
+    # Release resources
+    plt.close()

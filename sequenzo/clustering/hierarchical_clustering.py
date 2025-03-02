@@ -3,33 +3,39 @@
 @File    : 241220_hierarchical_clustering.py
 @Time    : 18/12/2024 17:59
 @Desc    :
-
-    fastcluster 是专为提升大规模层次聚类效率设计的工具，可以处理百万级的数据矩阵。fastcluster 的链接矩阵计算效率更高。
-
     This module provides a flexible and user-friendly implementation of hierarchical clustering,
     along with tools to evaluate cluster quality and analyze clustering results.
 
     It supports common hierarchical clustering methods and evaluation metrics,
     designed for social sequence analysis and other research applications.
 
-    The python_source_code has three main components:
+    This module leverages fastcluster, a tool specifically designed to enhance the efficiency of large-scale hierarchical clustering.
+    Unlike native Python tools such as SciPy, fastcluster optimizes linkage matrix computations,
+    enabling it to handle datasets with millions of entries more efficiently.
+
+    It has three main components:
     1. Cluster Class: Performs hierarchical clustering on a precomputed distance matrix.
     2. ClusterQuality Class: Evaluates the quality of clustering for different numbers of clusters using various metrics.
     3. ClusterResults Class: Analyzes and visualizes the clustering results (e.g., membership tables and cluster distributions).
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
+
 import pandas as pd
+import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import squareform
 from sklearn.metrics import silhouette_score
-from fastcluster import linkage  # 使用 fastcluster 替代 scipy.cluster.hierarchy.linkage
-from joblib import Parallel, delayed
+from fastcluster import linkage
+
+from sequenzo.visualization.utils import save_and_show_results
 
 
 class Cluster:
-    def __init__(self, matrix, entity_ids, clustering_method="ward", n_jobs=-1):
+    def __init__(self,
+                 matrix,
+                 entity_ids,
+                 clustering_method="ward"):
         """
         A class to handle hierarchical clustering operations using fastcluster for improved performance.
 
@@ -51,7 +57,7 @@ class Cluster:
 
         # Convert matrix to numpy array if it's a DataFrame
         if isinstance(matrix, pd.DataFrame):
-            print("Converting DataFrame to NumPy array...")
+            print("[>] Converting DataFrame to NumPy array...")
             self.full_matrix = matrix.values
         else:
             self.full_matrix = matrix
@@ -69,7 +75,6 @@ class Cluster:
                 f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
 
         # Compute linkage matrix using fastcluster
-        print(f"Computing linkage matrix using fastcluster with {self.clustering_method} method...")
         self.linkage_matrix = self._compute_linkage()
 
     def _compute_linkage(self):
@@ -82,8 +87,14 @@ class Cluster:
         # Use fastcluster's linkage function
         return linkage(condensed_matrix, method=self.clustering_method)
 
-    def plot_dendrogram(self, save_as=None, style="whitegrid", title="Dendrogram",
-                        xlabel="Entities", ylabel="Distance", grid=False, dpi=200,
+    def plot_dendrogram(self,
+                        save_as=None,
+                        style="whitegrid",
+                        title="Dendrogram",
+                        xlabel="Entities",
+                        ylabel="Distance",
+                        grid=False,
+                        dpi=200,
                         figsize=(12, 8)):
         """
         Plot a dendrogram of the hierarchical clustering with optional high-resolution output.
@@ -110,15 +121,8 @@ class Cluster:
         if not grid:
             plt.grid(False)
 
-        if save_as:
-            # Ensure the filename has an extension
-            if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-                save_as = f"{save_as}.png"  # Add default .png extension
+        save_and_show_results(save_as, dpi=200)
 
-            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-        plt.show()
-        plt.close()  # Release resources
 
     def get_cluster_labels(self, num_clusters):
         """
@@ -156,7 +160,7 @@ class ClusterQuality:
         elif isinstance(matrix_or_cluster, (np.ndarray, pd.DataFrame)):
             # Handle direct matrix input
             if isinstance(matrix_or_cluster, pd.DataFrame):
-                print("Detected Pandas DataFrame. Converting to NumPy array...")
+                print("[>] Detected Pandas DataFrame. Converting to NumPy array...")
                 matrix_or_cluster = matrix_or_cluster.values
             self.matrix = matrix_or_cluster
             self.clustering_method = clustering_method or "ward"
@@ -180,7 +184,7 @@ class ClusterQuality:
         }
         self.linkage_matrix = None
 
-    def compute_cluster_quality_scores(self):
+    def compute_cluster_quality_scores(self) -> None:
         """
         Compute clustering quality scores for different numbers of clusters.
         """
@@ -196,7 +200,7 @@ class ClusterQuality:
             self.scores["R2"].append(self._compute_r2(labels))
             self.scores["HC"].append(self._compute_hierarchical_criterion(labels))
 
-    def _compute_silhouette(self, labels):
+    def _compute_silhouette(self, labels) -> float:
         """
         Compute Silhouette Score (ASW).
         """
@@ -204,7 +208,7 @@ class ClusterQuality:
             return silhouette_score(self.matrix, labels, metric="precomputed")
         return np.nan
 
-    def _compute_weighted_silhouette(self, labels):
+    def _compute_weighted_silhouette(self, labels) -> float:
         """
         Compute Weighted Silhouette Score (ASWw).
         """
@@ -214,7 +218,7 @@ class ClusterQuality:
         silhouette_scores = [silhouette_score(self.matrix, labels, metric="precomputed")]
         return np.sum(weights * silhouette_scores)
 
-    def _compute_homogeneity(self, labels):
+    def _compute_homogeneity(self, labels) -> float:
         """
         Compute Homogeneity (HG).
         """
@@ -222,7 +226,7 @@ class ClusterQuality:
         total_points = len(labels)
         return np.sum((cluster_sizes / total_points) ** 2)
 
-    def _compute_point_biserial(self, labels):
+    def _compute_point_biserial(self, labels) -> float:
         """
         Compute Point-Biserial Correlation (PBC).
         """
@@ -246,7 +250,7 @@ class ClusterQuality:
         # Calculate PBC
         return (between.mean() - within.mean()) / np.std(np.concatenate([within, between]))
 
-    def _compute_calinski_harabasz(self, labels):
+    def _compute_calinski_harabasz(self, labels) -> float:
         """
         Compute Calinski-Harabasz Index (CH).
         """
@@ -256,7 +260,7 @@ class ClusterQuality:
         total_var = np.var(self.matrix)
         return (total_var - within_var) * (n_samples - n_clusters) / (within_var * (n_clusters - 1))
 
-    def _compute_r2(self, labels):
+    def _compute_r2(self, labels) -> float:
         """
         Compute R-squared (R2).
         """
@@ -268,13 +272,13 @@ class ClusterQuality:
         total_sum_of_squares = np.sum((self.matrix - np.mean(self.matrix)) ** 2)
         return 1 - within_cluster_sum_of_squares / total_sum_of_squares
 
-    def _compute_hierarchical_criterion(self, labels):
+    def _compute_hierarchical_criterion(self, labels) -> float:
         """
         Compute Hierarchical Criterion (HC).
         """
         return np.var([np.mean(self.matrix[labels == cluster]) for cluster in np.unique(labels)])
 
-    def _normalize_scores(self, method="zscore"):
+    def _normalize_scores(self, method="zscore") -> None:
         """
         Normalize each metric independently.
 
@@ -338,23 +342,32 @@ class ClusterQuality:
 
         return pd.DataFrame(summary)
 
-    def plot_combined_scores(
-                                self,
-                                metrics_list=None,
-                                norm="none",
-                                palette="husl",
-                                line_width=2,
-                                style="whitegrid",
-                                title=None,
-                                xlabel="Number of Clusters",
-                                ylabel="Normalized Score",
-                                grid=True,
-                                save_as=None,
-                                dpi=200,
-                                figsize=(12, 8)
-                            ):
+    def plot_combined_scores(self,
+                             metrics_list=None,
+                             norm="none",
+                             palette="husl",
+                             line_width=2,
+                             style="whitegrid",
+                             title=None,
+                             xlabel="Number of Clusters",
+                             ylabel="Normalized Score",
+                             grid=True,
+                             save_as=None,
+                             dpi=200,
+                             figsize=(12, 8)
+                             ) -> None:
         """
         Plot combined scores for clustering quality metrics with customizable parameters.
+        :param save_as:
+        :param grid:
+        :param ylabel:
+        :param xlabel:
+        :param title:
+        :param style:
+        :param line_width:
+        :param palette:
+        :param norm:
+        :param metrics_list:
         :param dpi: Dots per inch for the saved image (default: 300 for high resolution).
         :param figsize: Tuple specifying the figure size in inches (default: (12, 8)).
         """
@@ -422,7 +435,7 @@ class ClusterResults:
         self.linkage_matrix = cluster.linkage_matrix
         self.entity_ids = cluster.entity_ids  # Retrieve entity IDs from Cluster class
 
-    def get_cluster_memberships(self, num_clusters):
+    def get_cluster_memberships(self, num_clusters) -> pd.DataFrame:
         """
         Generate a table mapping entity IDs to their corresponding cluster IDs.
         Based on this table, users later can link this to the original dataframe for further regression models.

@@ -15,6 +15,10 @@ from matplotlib.patches import Rectangle
 import seaborn as sns
 
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.visualization.utils import (
+    set_up_time_labels_for_x_axis,
+    save_and_show_results
+)
 
 
 def plot_relative_frequency(seqdata: SequenceData,
@@ -156,15 +160,7 @@ def plot_relative_frequency(seqdata: SequenceData,
     )
 
     # **Save or Show Plot**
-    if save_as:
-        # Ensure the filename has an extension
-        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-    plt.show()
-    plt.close()  # Release resources
+    save_and_show_results(save_as, dpi)
 
 
 def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups: int = 10,

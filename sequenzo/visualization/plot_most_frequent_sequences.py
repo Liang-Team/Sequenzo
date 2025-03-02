@@ -14,7 +14,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sequenzo.define_sequence_data import SequenceData
-from sequenzo.visualization.utils import set_up_time_labels_for_x_axis
+from sequenzo.visualization.utils import (
+    set_up_time_labels_for_x_axis,
+    save_and_show_results
+)
 
 
 def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as=None, dpi=200):
@@ -96,14 +99,6 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    if save_as:
-        # Ensure the filename has an extension
-        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-
-    plt.show()
-    plt.close()  # Release resources
+    save_and_show_results(save_as, dpi=200)
 
 
