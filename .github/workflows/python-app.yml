@@ -162,7 +162,10 @@ jobs:
           mkdir -p dist/
           find artifacts/ -name "*.whl" -exec mv {} dist/ \;
           find artifacts/ -name "*.tar.gz" -exec mv {} dist/ \;
+          echo "Contents of dist directory:"
           ls -lah dist/
+          echo "Number of files in dist directory:"
+          find dist/ -type f | wc -l
 
       - name: Upload to PyPI
         env:
@@ -170,6 +173,9 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           pip install twine
-          twine upload dist/* --skip-existing
+          echo "Checking files to upload:"
+          find dist/ -type f
+          echo "Attempting to upload files to PyPI..."
+          twine upload dist/* --skip-existing --verbose
 
   
