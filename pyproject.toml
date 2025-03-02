@@ -54,9 +54,11 @@ Homepage = "https://github.com/Liang-Team/Sequenzo"
 Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
-packages = ["sequenzo"]
 package-data = {"sequenzo.datasets" = ["country_co2_emissions.csv", "country_income.csv", "chinese_colonial_territories.csv"]}
 license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+include = ["sequenzo*"]
 
 [tool.setuptools.package-dir]
 "" = "."
@@ -64,5 +66,4 @@ license-files = ["LICENSE"]
 [tool.pybind11]
 include = ["pybind11"]
 
-[tool.setuptools.packages.find]
-include = ["sequenzo*"]
+
