@@ -217,11 +217,11 @@ class SequenceData:
         print(f"[>] Number of sequences: {len(self.seqdata)}")
         
         if self.ismissing:
-            lengths = self.seqdata.apply(lambda row: (row != len(self.states)+1).sum(), axis=1)
+            lengths = self.seqdata.apply(lambda row: (row != len(self.states)).sum(), axis=1)
             print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
 
             # print some missing information
-            missing_index = self.seqdata.stack()[self.seqdata.stack() == len(self.states)+1].index.get_level_values(0).tolist()
+            missing_index = self.seqdata.stack()[self.seqdata.stack() == len(self.states)].index.get_level_values(0).tolist()
             missing_count = len(missing_index)
             print(f"[>] There are {missing_count} sequences with missing values, which are {missing_index}")
 
