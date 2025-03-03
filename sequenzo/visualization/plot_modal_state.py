@@ -49,13 +49,17 @@ def plot_modal_state(seqdata: SequenceData,
     # Get sequence data as a DataFrame
     seq_df = seqdata.to_dataframe()
 
+    # Ensure seq_df has the same index as the original data
+    # This is crucial to align the grouping variable with sequence data
+    seq_df.index = seqdata.data.index
+
     # Create state mapping from numerical values back to state names
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
 
     # Process grouping variable
     if group_by is None:
         # If no grouping, create a single group with all sequences
-        groups = pd.Series(["All Sequences"] * len(seq_df))
+        groups = pd.Series(["All Sequences"] * len(seq_df), index=seq_df.index)
         if group_labels is None:
             group_labels = ["All Sequences"]
     elif isinstance(group_by, str):
@@ -119,7 +123,7 @@ def plot_modal_state(seqdata: SequenceData,
             continue
 
         # Subset data for this group
-        group_data = seq_df.loc[group_indices]
+        group_data = seq_df[group_indices]
 
         # Calculate modal states and their frequencies for each time point
         modal_states = []
@@ -212,4 +216,29 @@ def plot_modal_state(seqdata: SequenceData,
     plt.axis('off')
     plt.show()
     plt.close()
+
+
+
+if __name__ == '__main__':
+    # Import necessary libraries
+    from sequenzo import *  # Social sequence analysis
+    import pandas as pd  # Data manipulation
+
+    # List all the available datasets in Sequenzo
+    print('Available datasets in Sequenzo: ', list_datasets())
+
+    # Load the data that we would like to explore in this tutorial
+    # `df` is the short for `dataframe`, which is a common variable name for a dataset
+    df = load_dataset('country_co2_emissions')
+
+    # Create a SequenceData object from the dataset
+
+    # Define the time-span variable
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+
+    plot_modal_state(sequence_data)
 
