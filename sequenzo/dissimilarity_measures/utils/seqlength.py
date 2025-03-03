@@ -14,7 +14,7 @@ from sequenzo.define_sequence_data import SequenceData
 
 def seqlength(seqdata):
     if isinstance(seqdata, SequenceData):
-        seqdata = seqdata.seqdata.replace(-99, np.nan)
+        seqdata = seqdata.seqdata.replace(np.nan, -99)
 
     # Get effective length after removing void elements
     if isinstance(seqdata, pd.DataFrame):

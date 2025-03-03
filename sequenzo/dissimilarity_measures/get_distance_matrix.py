@@ -56,15 +56,14 @@
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
 """
 import gc
-import time
-import sys
+import warnings
 import numpy as np
 import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 
 
-def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
-                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True):
+def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
+                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None):
     from .utils.seqconc import seqconc
     from .utils.seqdss import seqdss
     from .utils.seqdur import seqdur
@@ -76,8 +75,20 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     c_code = _import_c_code()
 
     gc.collect()                           # garbage collection
-    ptime_begin = time.process_time()      # Record the current time (start time)
-    tol = sys.float_info.epsilon ** 0.5    # Sets the tolerance for floating-point operations
+
+    if opts is not None:
+        seqdata = opts.get('seqdata')
+        method = opts.get('method')
+        refseq = opts.get('refseq')
+        norm = opts.get('norm') or "none"
+        indel = opts.get('indel') or "auto"
+        sm = opts.get('sm')
+        with_missing = opts.get('with_missing') or False
+        full_matrix = opts.get('full_matrix') or True
+        tpow = opts.get('tpow') or 1.0
+        expcost = opts.get('expcost') or 0.5
+        weighted = opts.get('weighted') or True
+        check_max_size = opts.get('check_max_size') or True
 
     # ======================================
     # Check Arguments With Deprecated Values
@@ -104,7 +115,9 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # Check For Arguments That Need To Be Defined
     # ===========================================
     # Check if the method parameter is missing
-    if 'method' not in locals():
+    if seqdata is None:
+        raise ValueError("[!] The 'seqdata' parameter is missing.")
+    if method is None:
         raise ValueError("[!] The 'method' parameter is missing.")
 
     # ====================
@@ -117,7 +130,6 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     states = seqdata.states
     nstates = len(states)
     seqs_dlens = pd.unique(seqlength(seqdata))
-    seqdata_nr = seqdata.nr
 
     # check method
     om_methods = ["OM", "OMspell"]
@@ -154,26 +166,16 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
     if len(emptyseq) > 0:
         if method == "OMloc":
-            raise ValueError(f"[x] Error: empty sequences in method 'OMloc': {emptyseq}.")
+            raise ValueError(f"[!] Error: empty sequences in method 'OMloc': {emptyseq}.")
         else:
             print(f"[!] Warning: empty sequences {emptyseq}.\n")
-
-    # check with.missing
-    has_seqdata_missing = seqdata.ismissing
-    has_refseq_missing = True if refseq_type == "sequence" and refseq.seqdata.ismissing else False
-    if with_missing and not has_seqdata_missing and not has_refseq_missing:
-        with_missing = False
-        print("[!] seqdist: 'with.missing' set as FALSE as 'seqdata' has no non-void missing values.\n")
-
-    if not with_missing and (has_seqdata_missing or has_refseq_missing):
-        raise ValueError("[x] 'with.missing' must be TRUE when 'seqdata' or 'refseq' contain missing values.")
 
     print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
 
     # check norm
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
     if norm not in norms:
-        raise ValueError(f"[x] 'norm' should be in {norms}.")
+        raise ValueError(f"[!] 'norm' should be in {norms}.")
 
     # check indel
     # indel_type: "number", "vector", "auto"
@@ -246,7 +248,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         elif method in ["OMspell"]:
             norm = "YujianBo"
         else:
-            raise ValueError(f"[x] No known normalization method to select automatically for {method}.")
+            raise ValueError(f"[!] No known normalization method to select automatically for {method}.")
 
     # ======================
     # Configure sm and indel
@@ -322,7 +324,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
 
     else:
-        dseqs_num = seqdata_num.drop_duplicates()
+        dseqs_num = seqdata_num.drop_duplicates()   # We can't convert to numpy because it would cause problems with OMspell later
 
     # Check that dseqs_num does not exceed the max allowed number
     if check_max_size:
@@ -392,7 +394,7 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
     # Compute Method-Specific Values
     # ==============================
     if method in ["OMspell"] and indel_type == "number":
-        indellist = np.repeat(indel, nstates)
+        indellist = np.repeat(indel, nstates + 1)
         indel = np.max(indellist)
 
         indel_type = "vector"
@@ -412,9 +414,12 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
 
         # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
+        # Get duration
         c = 1 if method == "OMspell" else 0
         dseqs_dur = dseqs_dur.iloc[dseqs_oidxs, :] - c
 
+        # Get DSS
+        # for example: "0-1-1-1-2-2-3-2-2" ---> "0-1-2-3-2"
         seqdata_dss = seqdss(seqdata, with_missing)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
@@ -464,7 +469,12 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         sm = sm.values
     lengths = seqlength(seqdata.seqdata)
 
-    dseqs_num = np.nan_to_num(dseqs_num, nan=0.0, posinf=1e10, neginf=-1e10)
+    # The interface between python and C++ requires no nan values
+    if isinstance(dseqs_num, np.ndarray):
+        dseqs_num = np.nan_to_num(dseqs_num, nan=0)
+    else:
+        warnings.simplefilter('ignore', category=pd.core.common.SettingWithCopyWarning)
+        dseqs_num.fillna(0, inplace=True)
 
     if refseq_type != "none":
         if len(refseq_id) == 1:
@@ -473,54 +483,56 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
         refseq_id = np.array(refseq_id, dtype=int)
 
         if method == "OM":
-            om = c_code.OMdistance(dseqs_num.astype(np.int32),
-                                    sm.astype(np.float64),
+            om = c_code.OMdistance(dseqs_num,
+                                    sm,
                                     indel,
                                     norm_num,
                                     lengths,
-                                    refseq_id.astype(np.int32))
+                                    refseq_id)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMspell":
-            om = c_code.OMspellDistance(dseqs_num.astype(np.int32),
-                                         sm.astype(np.float64),
+            om = c_code.OMspellDistance(dseqs_num,
+                                         sm,
                                          indel,
                                          norm_num,
                                          refseq_id,
                                          expcost,
-                                         dseqs_dur.astype(np.float64),
-                                         indellist.astype(np.float64),
-                                         _seqlength.astype(np.int32))
+                                         dseqs_dur,
+                                         indellist,
+                                         _seqlength)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "HAM" or method == "DHD":
-            DHD = c_code.DHDdistance(dseqs_num.astype(np.int32),
-                                      sm.astype(np.float64),
+            DHD = c_code.DHDdistance(dseqs_num,
+                                      sm,
                                       norm_num,
                                       max_cost,
                                       refseq_id)
             dist_matrix = DHD.compute_refseq_distances()
 
-        distances_matrix = dist_matrix.reshape((nunique1, nunique2))
+        _dist_matrix = dist_matrix.reshape((nunique1, nunique2))
 
-        len1 = len(seqdata_didxs1)
-        len2 = len(seqdata_didxs2)
-        result = np.zeros((len(refseq[0]), len(refseq[1])), dtype=float)
-        for i in range(len1):
-            for j in range(len2):
-                result[i, j] = distances_matrix[seqdata_didxs1[i], seqdata_didxs2[j]]
 
-        result_df = pd.DataFrame(result, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
+        if full_matrix:
+            len1 = len(seqdata_didxs1)
+            len2 = len(seqdata_didxs2)
+            dist_matrix = np.zeros((len(refseq[0]), len(refseq[1])), dtype=float)
+            for i in range(len1):
+                for j in range(len2):
+                    dist_matrix[i, j] = _dist_matrix[seqdata_didxs1[i], seqdata_didxs2[j]]
 
-        print("[>] Computed Successfully.")
-        return result_df
+            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
+
+        else:
+            dist_matrix = pd.DataFrame(_dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
     else:
         refseq_id = np.array([-1, -1])
 
         if method == "OM":
-            om = c_code.OMdistance(dseqs_num.astype(np.int32),
-                                    sm.astype(np.float64),
+            om = c_code.OMdistance(dseqs_num,
+                                    sm,
                                     indel,
                                     norm_num,
                                     lengths,
@@ -528,38 +540,41 @@ def get_distance_matrix(seqdata, method, refseq=None, norm="none", indel="auto",
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMspell":
-            om = c_code.OMspellDistance(dseqs_num.astype(np.int32),
-                                         sm.astype(np.float64),
+            om = c_code.OMspellDistance(dseqs_num,
+                                         sm,
                                          indel,
                                          norm_num,
                                          refseq_id,
                                          expcost,
-                                         dseqs_dur.astype(np.float64),
-                                         indellist.astype(np.float64),
-                                         _seqlength.astype(np.int32))
+                                         dseqs_dur,
+                                         indellist,
+                                         _seqlength)
             dist_matrix = om.compute_all_distances()
 
         elif method == "HAM" or method == "DHD":
-            DHD = c_code.DHDdistance(dseqs_num.astype(np.int32),
-                                      sm.astype(np.float64),
+            DHD = c_code.DHDdistance(dseqs_num,
+                                      sm,
                                       norm_num,
                                       max_cost,
                                       refseq_id)
             dist_matrix = DHD.compute_all_distances()
 
-        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs.astype(np.int32), dist_matrix.astype(np.float64))
+        if full_matrix:
+            _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+            _dist2matrix = _matrix.padding_matrix()
 
-        _dist2matrix = _matrix.padding_matrix()
+            dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
-        dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+        else:
+            _matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
 
-        print("[>] Computed Successfully.")
-        return dist_matrix
+    print("[>] Computed Successfully.")
+    return dist_matrix
 
 
 
 def adaptSmForHAM(sm, nstates, ncols):
-    costs = np.zeros((ncols, nstates, nstates))
+    costs = np.zeros((ncols, nstates + 1, nstates + 1))
 
     for i in range(ncols):
         costs[i, :, :] = sm
@@ -569,7 +584,7 @@ def adaptSmForHAM(sm, nstates, ncols):
 if __name__ == '__main__':
     from sequenzo import *
 
-    df = load_dataset('country_co2_emissions')
+    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
 
     time = list(df.columns)[1:]
 
@@ -577,6 +592,6 @@ if __name__ == '__main__':
 
     sequence_data = SequenceData(df, time_type="year", time=time, states=states)
 
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     print("================")

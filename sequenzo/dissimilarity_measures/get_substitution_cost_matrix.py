@@ -28,12 +28,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     if transition not in transitionlist:
         raise ValueError(f" [!] transition must be one of: {', '.join(transitionlist)}.")
 
-    if with_missing and not seqdata.seqdata.isna().any().any():
-        with_missing = False
-        print("[!] seqcost: 'with.missing' set as False as 'seqdata' has no non-void missing values.")
-
     return_result = {"indel": 1}
-    alphabet = seqdata.alphabet
 
     cval4cond = time_varying and method == "TRATE" and transition == "both"
     if cval is None:
@@ -43,13 +38,8 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     if miss_cost_fixed is None:
         miss_cost_fixed = False if method in ["INDELS", "INDELSLOG"] else True
 
-    # Adding an entry for missing state
-    if with_missing:
-        alphabet.append(seqdata.nr)
-
-    alphsize = len(alphabet)
-    if seqdata.ismissing:
-        alphsize += 1
+    states = seqdata.states
+    alphsize = len(states) + 1
 
     # ==================
     # Process "CONSTANT"
@@ -77,10 +67,10 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # ===============
     if method == "TRATE":
         print("[>] Transition-based substitution-cost matrix (TRATE) initiated...")
-        print(f"  - Computing transition probabilities for: [{', '.join(map(str, seqdata.states))}]")
+        print(f"  - Computing transition probabilities for: [{', '.join(map(str, seqdata.states))}]")   # Because the matrix CLARA is passing in is a number
 
         if time_varying:
-            tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag, with_missing=with_missing)
+            tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag)
 
             tmat = tr.shape[1]               # Number of states (since tr is three dimensions np.ndarray, the first dimension is time)
             time = seqdata.seqdata.shape[1]  # Total number of time points
@@ -126,12 +116,12 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
                         costs[t, j, i] = cost
 
         else:
-            tr = get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag, with_missing=with_missing)
+            tr = get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag)
 
             tmat = tr.shape[0]
             costs = np.zeros((alphsize, alphsize))
 
-            for i in range(tmat - 1):
+            for i in range(1, tmat - 1):
                 for j in range(i + 1, tmat):
                     cost = cval - tr[i, j] - tr[j, i]
                     costs[i, j] = cost
@@ -157,14 +147,11 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # ===============================
     # Setting Rows and Columns Labels
     # ===============================
-    rclab = alphabet
-    if seqdata.ismissing:
-        rclab += " "
-
     if time_varying:    # 3D
         costs = costs
     else:   # 2D
-        costs = pd.DataFrame(costs, index=rclab, columns=rclab, dtype=float)
+        states.insert(0, "null")
+        costs = pd.DataFrame(costs, index=states, columns=states, dtype=float)
 
     # ===============================
     # Calculate the Similarity Matrix
@@ -177,3 +164,19 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
 # Define seqsubm as an alias for backward compatibility
 def seqsubm(*args, **kwargs):
     return get_substitution_cost_matrix(*args, **kwargs)['sm']
+
+if __name__ == "__main__":
+    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
+
+    time = list(df.columns)[1:]
+
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+
+    sm = get_substitution_cost_matrix(sequence_data,
+                                      method="CONSTANT",
+                                      cval=2,
+                                      time_varying=False)
+
+    print("===============")

@@ -63,8 +63,7 @@ def seqdur(seqdata):
         if j > maxcol:
             maxcol = j
 
-    # Remove redundant columns to ensure that
-    # the matrix returned is of the appropriate dimension
+    # Remove redundant columns to ensure that the matrix returned is of the appropriate dimension
     trans_df = trans_df.iloc[:, :maxcol]
 
     return trans_df

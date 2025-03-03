@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : Xinyi Li 李欣怡
 @File    : seqdss.py
 @Time    : 2024/11/19 10:11
 @Desc    : Extracts distinct states from sequences
@@ -14,15 +14,13 @@ def seqdss(seqdata, with_missing=False):
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[!] data is NOT a sequence object, see SequenceData to create one.")
 
-    nbseq = len(seqdata.seqdata)
-    sl = seqlength(seqdata)
-    maxsl = sl.max()
+    number_seq = len(seqdata.seqdata)
+    slen = seqlength(seqdata)
+    maxsl = slen.max()
 
-    statl = np.arange(len(seqdata.alphabet) + 1)
-    if seqdata.ismissing:
-        statl = np.arange(len(seqdata.states) + 2)
+    statesMapping = seqdata.state_mapping
 
-    trans = np.full((nbseq, maxsl), np.nan)
+    trans = np.full((number_seq, maxsl), np.nan)
 
     # Converts character data to numeric values
     seqdatanum = seqdata.values
@@ -31,20 +29,20 @@ def seqdss(seqdata, with_missing=False):
         seqdatanum[np.isnan(seqdatanum)] = -99
 
     maxcol = 0
-    for i in range(nbseq):
+    for i in range(number_seq):
         idx = 0
         j = 0
 
         tmpseq = seqdatanum[i, :]
 
-        while idx < sl.iloc[i]:
-            iseq = int(tmpseq[idx])
+        while idx < slen.iloc[i]:
+            current_code = tmpseq[idx]
 
-            while idx < sl.iloc[i] - 1 and (tmpseq[idx + 1] == iseq or tmpseq[idx + 1] == -99):
+            while idx < slen.iloc[i] - 1 and (tmpseq[idx + 1] == current_code or tmpseq[idx + 1] == -99):
                 idx += 1
 
-            if iseq != -99:
-                trans[i, j] = statl[iseq]
+            if current_code != -99:
+                trans[i, j] = current_code
                 j += 1
 
             idx += 1

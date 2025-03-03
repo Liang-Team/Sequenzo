@@ -8,29 +8,12 @@
 import numpy as np
 from sequenzo.define_sequence_data import SequenceData
 
-def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=True,
-                             lag=1, with_missing=False, count=False, statl=None):
+def get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=True, lag=1, count=False):
     # ================
     # Check Parameters
     # ================
-    if statl is not None:
-        states = statl
-
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[x] Seqdata must be a pandas DataFrame representing sequences.")
-
-    outcome = "counts" if count else "probabilities"
-
-    # State list if not specified
-    if states is None:
-        states = seqdata.alphabet
-        if seqdata.ismissing:
-            statesCode = np.arange(len(states) + 1)
-        else:
-            statesCode = np.arange(len(states))
-
-    if with_missing:
-        states.append(seqdata.nr)
 
     # Weights
     if weighted:
@@ -38,9 +21,10 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
     else:
         weights = np.ones(seqdata.seqdata.shape[0])
 
-    nbetat = len(states)
-    if seqdata.ismissing:
-        nbetat += 1
+    states = seqdata.states
+    statesMapping = seqdata.state_mapping
+
+    _size = len(states) + 1
     sdur = seqdata.seqdata.shape[1]
 
     if lag < 0:
@@ -82,21 +66,21 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
                 [Technical computing ->]             0.05760000                  0.012800000               0.92960000
         """
 
-        tmat = np.zeros((num_transition, nbetat, nbetat))
+        tmat = np.zeros((num_transition, _size, _size))
 
         for sl in all_transition:
             missing_cond = np.not_equal(seqdata.iloc[:, sl + lag], np.nan)
 
-            for x in range(nbetat):
-                colx_cond = np.equal(seqdata.iloc[:, sl], statesCode[x])
+            for state_x in statesMapping.values():
+                colx_cond = np.equal(seqdata.iloc[:, sl], state_x)
                 PA = np.sum(weights[colx_cond & missing_cond])
 
                 if PA == 0:
-                    tmat[sl, x, :] = 0
+                    tmat[sl, state_x, :] = 0
                 else:
-                    for y in range(nbetat):
-                        PAB = np.sum(weights[colx_cond & (np.equal(seqdata.iloc[:, sl + lag], statesCode[y]))])
-                        tmat[sl, x, y] = PAB if count else PAB / PA
+                    for state_y in statesMapping.values():
+                        PAB = np.sum(weights[colx_cond & (np.equal(seqdata.iloc[:, sl + lag], state_y))])
+                        tmat[sl, state_x, state_y] = PAB if count else PAB / PA
 
     # =========================================
     # Compute Non Time Varying Transition Rates
@@ -104,13 +88,13 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
     else:
         seqdata = seqdata.to_numpy()
 
-        tmat = np.zeros((nbetat, nbetat))
+        tmat = np.zeros((_size, _size))
 
         missing_cond = np.not_equal(seqdata[:, all_transition + lag], np.nan)
 
-        for x in range(nbetat):
+        for state_x in statesMapping.values():
             PA = 0
-            colx_cond = np.equal(seqdata[:, all_transition], statesCode[x])
+            colx_cond = np.equal(seqdata[:, all_transition], state_x)
 
             if num_transition > 1:
                 PA = np.sum(weights * np.sum(colx_cond & missing_cond, axis=1))
@@ -118,17 +102,17 @@ def get_sm_trate_cost_matrix(seqdata, states=None, time_varying=False, weighted=
                 PA = np.sum(weights * (colx_cond & missing_cond))
 
             if PA == 0:
-                tmat[x, :] = 0
+                tmat[state_x, :] = 0
             else:
-                for y in range(nbetat):
+                for state_y in statesMapping.values():
                     if num_transition > 1:
                         PAB = np.sum(weights *
-                                     np.sum(colx_cond & (np.equal(seqdata[:, all_transition + lag], statesCode[y])),
+                                     np.sum(colx_cond & (np.equal(seqdata[:, all_transition + lag], state_y)),
                                             axis=1))
                     else:
                         PAB = np.sum(
-                            weights * (colx_cond & (np.equal(seqdata[:, all_transition + lag], statesCode[y]))))
+                            weights * (colx_cond & (np.equal(seqdata[:, all_transition + lag], state_y))))
 
-                    tmat[x, y] = PAB if count else PAB / PA
+                    tmat[state_x, state_y] = PAB if count else PAB / PA
 
     return tmat

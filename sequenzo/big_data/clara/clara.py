@@ -15,8 +15,8 @@ import fastcluster
 from scipy.special import comb
 from itertools import product
 
-from .utils.aggregatecases import *
-from .utils.davies_bouldin import *
+from sequenzo.big_data.clara.utils.aggregatecases import *
+from sequenzo.big_data.clara.utils.davies_bouldin import *
 from sequenzo.big_data.clara.utils.k_medoids_once import *
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
@@ -57,9 +57,8 @@ def jaccardCoef(tab):
     return n11 / (n01 + n10 - n11)
 
 
-def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
-          criteria=["distance"], stability=False, dnoise=None,
-          parallel=False, max_dist=None):
+def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_args=None,
+          criteria=["distance"], stability=False, parallel=False, max_dist=None):
 
     # ==================
     # Parameter checking
@@ -70,50 +69,51 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
     if sample_size is None:
         sample_size = 40 + 2 * max(kvals)
 
-    dlambda = None  # To keep internal code
-
-    print(" [>] Starting generalized CLARA for sequence analysis.")
+    print("[>] Starting generalized CLARA for sequence analysis.")
 
     # Check for input data type (should be a sequence object)
     if not isinstance(seqdata, SequenceData):
-        raise ValueError(" [!] 'seqdata' should be SequenceData, check the input format.")
+        raise ValueError("[!] 'seqdata' should be SequenceData, check the input format.")
 
     if max(kvals) > sample_size:
-        raise ValueError(" [!] More clusters than the size of the sample requested.")
+        raise ValueError("[!] More clusters than the size of the sample requested.")
 
-    allmethods = ["crisp", "fuzzy", "representativeness", "noise"]
+    allmethods = ["crisp"]
     if method not in allmethods:
-        raise ValueError(f" [!] Unknown method {method}. Please specify one of the following: {', '.join(allmethods)}")
+        raise ValueError(f"[!] Unknown method {method}. Please specify one of the following: {', '.join(allmethods)}")
 
     if method == "representativeness" and max_dist is None:
-        raise ValueError(" [!] You need to set max.dist when using representativeness method.")
+        raise ValueError("[!] You need to set max.dist when using representativeness method.")
 
     allcriteria = ["distance", "db", "xb", "pbm", "ams"]
     if not all(c in allcriteria for c in criteria):
         raise ValueError(
-            f" [!] Unknown criteria among {', '.join(criteria)}. Please specify at least one among {', '.join(allcriteria)}.")
+            f"[!] Unknown criteria among {', '.join(criteria)}. Please specify at least one among {', '.join(allcriteria)}.")
 
-    print(f" [>] Using {method} clustering optimizing the following criterion: {', '.join(criteria)}.")
+    if dist_args is None:
+        raise ValueError("[!] You need to set the 'dist_args' for get_distance_matrix function.")
+
+    print(f"[>] Using {method} clustering optimizing the following criterion: {', '.join(criteria)}.")
 
     # FIXME : Add coherance check between method and criteria
 
-    # ====================
+    # ===========
     # Aggregation
-    # ====================
-    n = len(seqdata.seqdata)
-    print(f" [>] Aggregating {n} sequences...", end="")
+    # ===========
+    number_seq = len(seqdata.seqdata)
+    print(f"  - Aggregating {number_seq} sequences...")
 
     ac = DataFrameAggregator().aggregate(seqdata.seqdata)
     agseqdata = seqdata.seqdata.iloc[ac['aggIndex'], :]
     agseqdata.attrs['weights'] = None
-    ac['probs'] = ac['aggWeights'] / n
-    print(f" OK ({len(ac['aggWeights'])} unique cases).")
+    ac['probs'] = ac['aggWeights'] / number_seq
+    print(f"  - OK ({len(ac['aggWeights'])} unique cases).")
 
     # Memory cleanup before parallel computation
     gc.collect()
-    print(" [>] Starting iterations...\n")
+    print("[>] Starting iterations...\n")
 
-    def calc_pam_iter(circle, agseqdata, sample_size, kvals, ac, m, dnoise, dlambda, method):
+    def calc_pam_iter(circle, agseqdata, sample_size, kvals, ac):
         mysample = np.random.choice(len(agseqdata), size=sample_size, p=ac['probs'], replace=True)
         mysample = pd.DataFrame({'id': mysample})
 
@@ -123,18 +123,16 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
 
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
-                if seqdata.ismissing:
-                    states = np.arange(1, len(seqdata.states)+2).tolist()
-                else:
-                    states = np.arange(1, len(seqdata.states)+1).tolist()
+                states = np.arange(1, len(seqdata.states) + 1).tolist()
                 data_subset = SequenceData(data_subset,
                                            time_type=seqdata.time_type,
                                            time=seqdata.time,
                                            states=states)
-                diss = get_distance_matrix(data_subset, method="OMspell", sm="TRATE", indel="auto")
+                dist_args['seqdata'] = data_subset
+                diss = get_distance_matrix(opts=dist_args)
 
-        diss = diss.apply(lambda x: x.fillna(0), axis=0)
-        diss.replace([np.inf, -np.inf], 1e6, inplace=True)
+        # diss = diss.apply(lambda x: x.fillna(0), axis=0)
+        # diss.replace([np.inf, -np.inf], 1e6, inplace=True)
         diss = diss.values
         hc = fastcluster.linkage(diss, method='ward')
 
@@ -156,16 +154,16 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
 
             with open(os.devnull, 'w') as fnull:
                 with redirect_stdout(fnull):
-                    if seqdata.ismissing:
-                        states = np.arange(1, len(seqdata.states) + 2).tolist()
-                    else:
-                        states = np.arange(1, len(seqdata.states) + 1).tolist()
+                    states = np.arange(1, len(seqdata.states) + 1).tolist()
                     agseqdata = SequenceData(agseqdata,
                                              time_type=seqdata.time_type,
                                              time=seqdata.time,
                                              states=states)
-                    diss2 = get_distance_matrix(seqdata=agseqdata, method="OMspell", refseq=refseq, sm="TRATE", indel="auto")
-                    agseqdata = agseqdata.seqdata
+                    dist_args['seqdata'] = agseqdata
+                    dist_args['refseq'] = refseq
+                    diss2 = get_distance_matrix(opts=dist_args)
+
+                    agseqdata = agseqdata.seqdata   # Restore scene
 
             # Compute two minimal distances are used for silhouette width
             # and other criterions
@@ -218,9 +216,9 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", m=1.5,
     #         results[0] = all iter1's = [{k=2's}, {k=3's}, ... , {k=10's}]
     #         results[1] = all iter2's = [{k=2's}, {k=3's}, ... , {k=10's}]
     results = Parallel(n_jobs=-1)(
-        delayed(calc_pam_iter)(i, agseqdata, sample_size, kvals, ac, m, dnoise, dlambda, method) for i in range(R))
+        delayed(calc_pam_iter)(circle=i, agseqdata=agseqdata, sample_size=sample_size, kvals=kvals, ac=ac) for i in range(R))
 
-    print("\n [>] Aggregating iterations for each k values...")
+    print("[>] Aggregating iterations for each k values...")
 
     # output example :
     #         data[0] = all k=2's = [{when iter1, k=2's}, {when iter2, k=2's}, ... , {when iter100, k=2's}]
@@ -392,7 +390,7 @@ if __name__ == '__main__':
     from sequenzo import *  # Social sequence analysis
     import pandas as pd  # Import necesarry packages
 
-    df = load_dataset('country_co2_emissions')
+    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
 
     # Ctrate SeqdataData
     # Define the time-span variable
@@ -407,6 +405,8 @@ if __name__ == '__main__':
                    sample_size=3000,
                    kvals=range(2, 21),
                    criteria=['distance', 'pbm'],
+                   dist_args={"method": "OMspell", "sm": "TRATE", "indel": "auto"},
                    parallel=True,
                    stability=True)
-    result
+
+    print(result)

@@ -13,6 +13,7 @@ __all__ = ['SequenceData']
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from docutils.parsers.rst import states
 from matplotlib.colors import ListedColormap
 import re
 
@@ -80,7 +81,7 @@ class SequenceData:
 
         self.states = states
         self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
-        self.labels = labels
+        self.labels = labels or states
         self.id_col = id_col
         self.ids = np.array(data[id_col].values) if self.id_col else np.arange(len(data))
         self.weights = weights
@@ -162,6 +163,11 @@ class SequenceData:
 
         self.ismissing = self.seqdata.isna().any().any()
 
+        if self.ismissing:
+            self.states.append("Missing")
+            self.alphabet.append("Missing")
+            self.labels.append("Missing")
+
     def _convert_states(self):
         """
         Converts categorical states into numerical values for processing.
@@ -181,9 +187,9 @@ class SequenceData:
         # If there are missing values, replace them with the last index + 1
         # And update the additional missing value as a new state in self.state and self.alphabet
         try:
-            self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, len(self.states) + 1))
+            self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, len(self.states)))
         except AttributeError:
-            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states) + 1))
+            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states)))
 
         if self.ids is not None:
             self.seqdata.index = self.ids
@@ -210,9 +216,14 @@ class SequenceData:
         """Prints an overview of the sequence dataset."""
         print(f"[>] Number of sequences: {len(self.seqdata)}")
         
-        if self.seqdata.isna().any().any():
-            lengths = self.seqdata.apply(lambda row: (row != 0).sum(), axis=1)
+        if self.ismissing:
+            lengths = self.seqdata.apply(lambda row: (row != len(self.states)+1).sum(), axis=1)
             print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+
+            # print some missing information
+            missing_index = self.seqdata.stack()[self.seqdata.stack() == len(self.states)+1].index.get_level_values(0).tolist()
+            missing_count = len(missing_index)
+            print(f"[>] There are {missing_count} sequences with missing values, which are {missing_index}")
 
         else:
             print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
