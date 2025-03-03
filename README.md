@@ -22,7 +22,7 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 ## Documentation
 
-Explore the full Sequenzo documentation [here](sequenzo.yuqi-liang.tech).
+Explore the full Sequenzo documentation [here](sequenzo.yuqi-liang.tech). Even though the documentation website is still under construction, you can already find some useful information there.
 
 **Where to start on the documentation website?**
 * New to Sequenzo or social sequence analysis? Begin with "About Sequenzo" → "Quickstart Guide" for a smooth introduction.
@@ -33,10 +33,16 @@ For Chinese users, additional tutorials are available on [Yuqi's video tutorials
 
 ## Installation
 
-The latest stable release and required dependencies can be installed from PyPI. You can type the following line in your terminal:
+The latest stable release and required dependencies can be installed from [PyPI](https://pypi.org/project/sequenzo/). You can type the following line in your terminal:
 
 ```
 pip install sequenzo
+```
+
+If you have some issues with the installation, it might because you have both Python 2 and Python 3 installed on your computer. In this case, you can try to use `pip3` instead of `pip` to install the package.
+
+```
+pip3 install sequenzo
 ```
 
 ## Join the Community
@@ -58,7 +64,7 @@ Support the project by starring ⭐ the GitHub repo and spreading the word!
 
 🛠 **Interested in contributing?**
 
-Check out our [contribution guide]() for more details. 
+Check out our [contribution guide]() for more details (work in progress). 
 
 * Write code? Submit a pull request to enhance Sequenzo.
 * Testing? Try Sequenzo and share your feedback. Every suggestion counts!
@@ -73,7 +79,7 @@ Check out our [contribution guide]() for more details.
 **Ackowledgements**
 * Technical advisor in sequence analysis: Tim Liao, University of Illinois Urbana-Champaign
 * Website and related technical support: Mactavish
-* Logo and color design: Changyu Yi
+* Logo and theme color design: Changyu Yi
 * Sequence data sources compilation
   * Economics: Jan Meyerhoff-Liang
   * History: Jingrui Chen
