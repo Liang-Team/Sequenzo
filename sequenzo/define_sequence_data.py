@@ -165,8 +165,6 @@ class SequenceData:
 
         if self.ismissing:
             self.states.append("Missing")
-            self.alphabet.append("Missing")
-            self.labels.append("Missing")
 
     def _convert_states(self):
         """

@@ -18,8 +18,6 @@ def seqdss(seqdata, with_missing=False):
     slen = seqlength(seqdata)
     maxsl = slen.max()
 
-    statesMapping = seqdata.state_mapping
-
     trans = np.full((number_seq, maxsl), np.nan)
 
     # Converts character data to numeric values

@@ -38,7 +38,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     if miss_cost_fixed is None:
         miss_cost_fixed = False if method in ["INDELS", "INDELSLOG"] else True
 
-    states = seqdata.states
+    states = seqdata.states.copy()
     alphsize = len(states) + 1
 
     # ==================
