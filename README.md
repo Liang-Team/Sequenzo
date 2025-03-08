@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Liang-Team/Sequenzo/main/assets/logo/FullLogo_NoBuffer.jpg" alt="Sequenzo Logo" width="400">
+</p>
 
 # Sequenzo: Fast, scalable, and intuitive social sequence analysis
 
@@ -79,9 +82,8 @@ Check out our [contribution guide]() for more details (work in progress).
 **Ackowledgements**
 * Technical advisor in sequence analysis: Tim Liao, University of Illinois Urbana-Champaign
 * Website and related technical support: Mactavish
-* Logo and theme color design: Changyu Yi
+* Visual design consultant: Changyu Yi
 * Sequence data sources compilation
   * Economics: Jan Meyerhoff-Liang
   * History: Jingrui Chen
-  * Public health: Yuelu Yin
 * Testing
