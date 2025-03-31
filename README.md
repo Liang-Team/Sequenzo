@@ -61,6 +61,17 @@ Explore the full Sequenzo documentation [here](sequenzo.yuqi-liang.tech). Even t
 
 For Chinese users, additional tutorials are available on [Yuqi's video tutorials on Bilibili](https://space.bilibili.com/263594713/lists/4147974).
 
+## Platform Compatibility
+
+Sequenzo provides pre-built Python wheels for maximum compatibility:
+
+| Platform        | Architecture       | Python Versions | Status     |
+|-----------------|--------------------|------------------|------------|
+| **macOS**       | universal2 (x86_64 + arm64) | 3.9, 3.10, 3.11 | Built-in wheel |
+| **Windows**     | win32, AMD64       | 3.9, 3.10, 3.11 | Built-in wheel |
+| **Linux (glibc)** | i686, x86_64      | 3.9, 3.10, 3.11 | `manylinux2014` |
+| **Linux (musl)** | i686, x86_64      | 3.9, 3.10, 3.11 | `musllinux_1_2` |
+
 ## Installation
 
 The latest stable release and required dependencies can be installed from [PyPI](https://pypi.org/project/sequenzo/). You can type the following line in your terminal:
