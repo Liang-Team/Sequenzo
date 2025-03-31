@@ -12,8 +12,8 @@ def seqlength(seqdata):
 
     if isinstance(seqdata, pd.DataFrame):
         seqarray_long = seqdata.to_numpy(dtype=np.int32)
-        return np.sum(~np.isnan(seqarray_long) & (seqarray_long>0), axis=1)
+        return np.sum(seqarray_long > 0, axis=1)
 
     else:
         seqarray_long = seqdata
-        return np.sum(~np.isnan(seqarray_long) & (seqarray_long>0), axis=1)
+        return np.sum(seqarray_long > 0, axis=1)

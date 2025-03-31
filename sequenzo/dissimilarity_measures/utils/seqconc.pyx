@@ -1,16 +1,21 @@
 import numpy as np
 cimport numpy as cnp
 from libc.stdint cimport int32_t
+from libc.string cimport strcmp
 
 cdef str sconc_np(cnp.ndarray[int32_t, ndim=1] seqdata, str sep):
     cdef int i, size = seqdata.shape[0]
     cdef list valid_values = []
+    cdef bytes result = b""
 
     for i in range(size):
-        if not np.isnan(seqdata[i]) and seqdata[i] >= 0:
+        if seqdata[i] >= 0:
             valid_values.append(str(seqdata[i]))
 
-    return sep.join(valid_values)
+    if valid_values:
+        result = sep.join(valid_values).encode('utf-8')
+
+    return result.decode('utf-8')
 
 def seqconc(cnp.ndarray[int32_t, ndim=2] data, str sep="-"):
     if data.ndim == 1:
