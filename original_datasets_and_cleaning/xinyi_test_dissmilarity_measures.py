@@ -45,7 +45,7 @@ for filename in csv_files:
     start_time = time.time()
     refseq = [[0, 1, 2], [99, 100]]
     diss = get_distance_matrix(seqdata=data, method="OM", sm="TRATE", indel="auto")
-    # print(diss)
+    print(diss)
     end_time = time.time()
 
     runtime = end_time - start_time

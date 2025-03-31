@@ -109,7 +109,7 @@ class SequenceData:
     @property
     def values(self):
         """Returns sequence data as a NumPy array, similar to xinyi_original_seqdef()."""
-        return self.seqdata.to_numpy()
+        return self.seqdata.to_numpy(dtype=np.int32)
 
     def __repr__(self):
         return f"SequenceData({len(self.seqdata)} sequences, Alphabet: {self.alphabet})"

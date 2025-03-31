@@ -16,7 +16,7 @@ from sequenzo.clustering import Cluster
 
 # CSV 文件路径列表
 csv_files = [
-    'sampled_1000_data.csv',
+    'sampled_20000_data.csv',
     # 'df_sampled_1000_detailed_sequences.csv',
     # 'df_sampled_2000_detailed_sequences.csv',
     # 'df_sampled_3000_detailed_sequences.csv',
@@ -57,11 +57,11 @@ for filename in csv_files:
     print(f"File: {filename}, Runtime: {runtime} seconds")
 
 # 绘制折线图
-plt.figure(figsize=(10, 6))
-sns.lineplot(x=filenames, y=runtimes, marker='o')
-plt.xticks(rotation=45, ha='right')  # 旋转 x 轴标签以避免重叠
-plt.xlabel("CSV Filename")
-plt.ylabel("Runtime (seconds)")
-plt.title("Runtime vs CSV Filename")
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(10, 6))
+# sns.lineplot(x=filenames, y=runtimes, marker='o')
+# plt.xticks(rotation=45, ha='right')  # 旋转 x 轴标签以避免重叠
+# plt.xlabel("CSV Filename")
+# plt.ylabel("Runtime (seconds)")
+# plt.title("Runtime vs CSV Filename")
+# plt.tight_layout()
+# plt.show()

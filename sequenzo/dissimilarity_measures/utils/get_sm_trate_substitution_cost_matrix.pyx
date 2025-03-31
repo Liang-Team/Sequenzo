@@ -1,6 +1,7 @@
 import numpy as np
 cimport numpy as cnp
 from sequenzo.define_sequence_data import SequenceData
+from libc.stdint cimport int32_t
 
 def get_sm_trate_cost_matrix(seqdata, bint time_varying=False, bint weighted=True, int lag=1, bint count=False):
     if not isinstance(seqdata, SequenceData):
@@ -18,11 +19,11 @@ def get_sm_trate_cost_matrix(seqdata, bint time_varying=False, bint weighted=Tru
     cdef int _size = len(states) + 1
     cdef int sdur = seqdata.seqdata.shape[1]
 
-    cdef cnp.ndarray[long, ndim=1] all_transition
+    cdef cnp.ndarray[int32_t, ndim=1] all_transition
     if lag < 0:
-        all_transition = np.arange(abs(lag), sdur)
+        all_transition = np.arange(abs(lag), sdur, dtype=np.int32)
     else:
-        all_transition = np.arange(sdur - lag)
+        all_transition = np.arange(sdur - lag, dtype=np.int32)
     cdef int num_transition = len(all_transition)
 
     cdef cnp.ndarray[double, ndim=3] tmat_3d = np.zeros((num_transition, _size, _size))
@@ -31,7 +32,7 @@ def get_sm_trate_cost_matrix(seqdata, bint time_varying=False, bint weighted=Tru
     cdef int sl, state_x, state_y
     cdef cnp.ndarray[char, ndim=2] missing_cond
 
-    seqdata = seqdata.seqdata.to_numpy()
+    seqdata = seqdata.seqdata.to_numpy(dtype=np.int32)
 
     if time_varying:
         for sl in all_transition:
