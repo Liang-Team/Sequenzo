@@ -77,7 +77,10 @@ class SequenceData:
             self.time_type = "age"
 
         # Remove all non-numeric characters from the year labels, e.g., "Year2020" -> "2020", or "C1" -> "1"
-        self.cleaned_time = [re.sub(r'\D', '', str(year)) for year in time]
+        # self.cleaned_time = [re.sub(r'\D', '', str(year)) for year in time]
+        # No longer support this feature as we encourage users to clean the time variables.
+        # TODO: might implement a helper function for users to clean up their time variables.
+        self.cleaned_time = time
 
         self.states = states
         self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
