@@ -113,15 +113,15 @@ Check out our [contribution guide]() for more details (work in progress).
 ## Team
 
 **Authors**
-* Yuqi Liang, University of Oxford
-* Xinyi Li, Heilongjiang University
-* Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford
+* [Yuqi Liang, University of Oxford](https://www.yuqi-liang.tech/)
+* [Xinyi Li, Heilongjiang University](https://github.com/Fantasy201)
+* [Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford](https://www.inet.ox.ac.uk/people/jan-meyerhoff-liang)
 
-**Ackowledgements**
-* Technical advisor in sequence analysis: Professor Tim Liao, University of Illinois Urbana-Champaign
-* Website and related technical support: Mactavish
+**Acknowledgements**
+* Technical advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
+* Website and related technical support: [Mactavish](https://github.com/mactavishz)
 * Visual design consultant: Changyu Yi
 * Sequence data sources compilation
   * Economics: Jan Meyerhoff-Liang
   * History: Jingrui Chen
-* Yuqi's PhD advisor: Professor Ridhi Kashyap, University of Oxford
+* Yuqi's PhD advisor: [Professor Ridhi Kashyap, University of Oxford](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/)
