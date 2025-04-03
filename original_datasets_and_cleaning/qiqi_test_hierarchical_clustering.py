@@ -16,7 +16,7 @@ from sequenzo.clustering import Cluster
 
 # CSV 文件路径列表
 csv_files = [
-    'sampled_20000_data.csv',
+    'sampled_5000_data.csv',
     # 'df_sampled_1000_detailed_sequences.csv',
     # 'df_sampled_2000_detailed_sequences.csv',
     # 'df_sampled_3000_detailed_sequences.csv',

@@ -6,16 +6,20 @@
 """
 
 import numpy as np
-from scipy.cluster.hierarchy import fcluster
+from scipy.cluster.hierarchy import fcluster, cut_tree
+
+import importlib
+import sequenzo.dissimilarity_measures.c_code
+
+c_code = importlib.import_module("sequenzo.dissimilarity_measures.c_code")
 
 from sequenzo.clustering.utils.disscenter import disscentertrim
-
 
 def k_medoids_once(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
 
     # Lazily import the c_code module to avoid circular dependencies during installation
-    from .__init__ import _import_c_code
-    c_code = _import_c_code()
+    # from .__init__ import _import_c_code
+    # c_code = _import_c_code()
 
     if isinstance(method, str):
         method = method.lower()
@@ -42,8 +46,8 @@ def k_medoids_once(diss, k, weights=None, npass=1, initialclust=None, method='PA
     if initialclust is None:
         initialclust = internal_random_sample(nelements, k)
     else:
-        # initialclust <- cutree(initialclust, k)
-        initialclust = fcluster(initialclust, k, criterion='maxclust')  # 1-based 索引
+        # initialclust = fcluster(initialclust, k, criterion='maxclust')  # 1-based 索引
+        initialclust = cut_tree(initialclust, n_clusters=k).flatten() + 1  # 1-based 索引
 
         if len(initialclust) == nelements:
             initialclust = disscentertrim(diss=diss, group=initialclust, medoids_index="first", weights=weights)

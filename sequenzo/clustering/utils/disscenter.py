@@ -8,14 +8,17 @@
 
 import numpy as np
 import pandas as pd
-import sys
+
+import importlib
+import sequenzo.dissimilarity_measures.c_code
+
+c_code = importlib.import_module("sequenzo.dissimilarity_measures.c_code")
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):
 
     # Lazily import the c_code module to avoid circular dependencies during installation
-    from .__init__ import _import_c_code
-    c_code = _import_c_code()
-
+    # from .__init__ import _import_c_code
+    # c_code = _import_c_code()
 
     if isinstance(medoids_index, bool):
         if medoids_index:

@@ -7,6 +7,7 @@
 
 import gc
 import os
+import sys
 from contextlib import redirect_stdout
 import warnings
 
@@ -18,6 +19,7 @@ from itertools import product
 from sequenzo.big_data.clara.utils.aggregatecases import *
 from sequenzo.big_data.clara.utils.davies_bouldin import *
 from sequenzo.big_data.clara.utils.k_medoids_once import *
+from sequenzo.big_data.clara.utils.get_weighted_diss import *
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
 
@@ -131,10 +133,11 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                 dist_args['seqdata'] = data_subset
                 diss = get_distance_matrix(opts=dist_args)
 
-        # diss = diss.apply(lambda x: x.fillna(0), axis=0)
-        # diss.replace([np.inf, -np.inf], 1e6, inplace=True)
         diss = diss.values
-        hc = fastcluster.linkage(diss, method='ward')
+        _diss = diss.copy()
+        _diss = get_weighted_diss(_diss, ac2['aggWeights'])
+        hc = fastcluster.linkage(_diss, method='ward')
+        del _diss
 
         # For each number of clusters
         allclust = []
@@ -390,22 +393,25 @@ if __name__ == '__main__':
     from sequenzo import *  # Social sequence analysis
     import pandas as pd  # Import necesarry packages
 
-    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
+    # df = pd.read_csv('D:/country_co2_emissions_missing.csv')
+    df = pd.read_csv('/home/xinyi/data/detailed_data/sampled_1000_data.csv')
 
-    # Ctrate SeqdataData
-    # Define the time-span variable
-    time = list(df.columns)[1:]
+    # time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    time = list(df.columns)[4:]
+    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
 
-    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+    # sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+    sequence_data = SequenceData(df, time=time, time_type="age", id_col="worker_id", states=states)
 
     result = clara(sequence_data,
                    R=5,
                    sample_size=3000,
                    kvals=range(2, 21),
                    criteria=['distance', 'pbm'],
-                   dist_args={"method": "OMspell", "sm": "TRATE", "indel": "auto"},
+                   dist_args={"method": "OMspell", "sm": "CONSTANT", "indel": 1, "expcost": 1},
                    parallel=True,
                    stability=True)
 

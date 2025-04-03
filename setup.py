@@ -78,6 +78,7 @@ def configure_cython_extensions():
             Path("sequenzo/dissimilarity_measures/utils/seqdss.pyx").as_posix(),
             Path("sequenzo/dissimilarity_measures/utils/seqdur.pyx").as_posix(),
             Path("sequenzo/dissimilarity_measures/utils/seqlength.pyx").as_posix(),
+            Path("sequenzo/big_data/clara/utils/get_weighted_diss.pyx").as_posix(),
         ]
 
         extensions = [

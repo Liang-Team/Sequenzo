@@ -97,6 +97,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     gc.collect()                           # garbage collection
 
+    print("========= get_distance_matrix =======")
+    print(c_code)  # 是否为 None
+    print(dir(c_code))  # 检查它的属性
+
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -587,7 +591,7 @@ if __name__ == '__main__':
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
 
-    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    df = pd.read_csv("Sequenzo/original_datasets_and_cleaning/country_co2_emissions_missing.csv")
 
     # time = list(df.columns)[4:]
     time = list(df.columns)[1:]
