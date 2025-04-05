@@ -23,6 +23,7 @@ from sequenzo.big_data.clara.utils.get_weighted_diss import *
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
 
+
 def adjustedRandIndex(x, y=None):
     if isinstance(x, np.ndarray):
         x = np.array(x)
@@ -353,7 +354,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         ret['stats'] = pd.DataFrame(ret['stats'],
                                     columns=["Avg dist", "PBM", "DB", "XB", "AMS", "ARI>0.8", "JC>0.8", "Best iter"])
-        ret['stats'].index = [f"cluster{val}" for val in kvals]
+        ret['stats'].insert(0, "Number of Clusters", kvals)
 
         return ret
 
@@ -389,6 +390,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
     return ret
 
+
 if __name__ == '__main__':
     from sequenzo import *  # Social sequence analysis
     import pandas as pd  # Import necesarry packages
@@ -416,3 +418,4 @@ if __name__ == '__main__':
                    stability=True)
 
     print(result)
+

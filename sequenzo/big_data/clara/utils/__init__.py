@@ -21,6 +21,7 @@ def _import_c_code():
             "Warning: The C++ extension (c_code) could not be imported. Please ensure the extension module is compiled correctly.")
         return None
 
+
 __all__ = [
     'k_medoids_once'
 ]

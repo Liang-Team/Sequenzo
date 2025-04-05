@@ -29,6 +29,7 @@ from .dissimilarity_measures.get_substitution_cost_matrix import get_substitutio
 
 from .clustering import Cluster, ClusterResults, ClusterQuality
 from .big_data.clara.clara import clara
+from .big_data.clara.visualization import plot_scores_from_dataframe
 
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -49,6 +50,7 @@ __all__ = [
     "plot_relative_frequency",
     "plot_mean_time",
     "plot_transition_matrix",
-    "clara"
+    "clara",
+    "plot_scores_from_dataframe"
 ]
 

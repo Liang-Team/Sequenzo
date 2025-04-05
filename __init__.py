@@ -32,8 +32,8 @@ def __getattr__(name):
             from sequenzo.define_sequence_data import SequenceData
             return SequenceData
         elif name == "big_data":
-            from sequenzo.big_data import clara
-            return clara
+            from sequenzo.big_data import big_data
+            return big_data
     except ImportError as e:
         raise AttributeError(f"Could not import {name}: {e}")
 

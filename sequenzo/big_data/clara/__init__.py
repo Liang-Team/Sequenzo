@@ -5,6 +5,8 @@
 @Desc    : 
 """
 from .clara import clara
+from .visualization import plot_scores_from_dataframe
+
 
 def _import_c_code():
     """Lazily import the c_code module to avoid circular dependencies during installation"""
@@ -17,6 +19,8 @@ def _import_c_code():
             "Warning: The C++ extension (c_code) could not be imported. Please ensure the extension module is compiled correctly.")
         return None
 
+
 __all__ = [
-    'clara'
+    'clara',
+    'plot_scores_from_dataframe'
 ]
