@@ -82,14 +82,14 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         raise ValueError("[!] More clusters than the size of the sample requested.")
 
     allmethods = ["crisp"]
-    if method not in allmethods:
+    if method.lower() not in [m.lower() for m in allmethods]:
         raise ValueError(f"[!] Unknown method {method}. Please specify one of the following: {', '.join(allmethods)}")
 
-    if method == "representativeness" and max_dist is None:
+    if method.lower() == "representativeness" and max_dist is None:
         raise ValueError("[!] You need to set max.dist when using representativeness method.")
 
     allcriteria = ["distance", "db", "xb", "pbm", "ams"]
-    if not all(c in allcriteria for c in criteria):
+    if not all(c.lower() in [crit.lower() for crit in allcriteria] for c in criteria):
         raise ValueError(
             f"[!] Unknown criteria among {', '.join(criteria)}. Please specify at least one among {', '.join(allcriteria)}.")
 
@@ -108,7 +108,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
     ac = DataFrameAggregator().aggregate(seqdata.seqdata)
     agseqdata = seqdata.seqdata.iloc[ac['aggIndex'], :]
-    agseqdata.attrs['weights'] = None
+    # agseqdata.attrs['weights'] = None
     ac['probs'] = ac['aggWeights'] / number_seq
     print(f"  - OK ({len(ac['aggWeights'])} unique cases).")
 
@@ -336,7 +336,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     def claraObj(kretlines, method, kvals, kret, seqdata):
         clustering = np.full((seqdata.seqdata.shape[0], len(kvals)), -1)
         clustering = pd.DataFrame(clustering)
-        clustering.columns = [f"cluster{val}" for val in kvals]
+        clustering.columns = [f"Cluster {val}" for val in kvals]
+        clustering.index = seqdata.ids
 
         ret = {
             "kvals": kvals,
@@ -354,7 +355,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         ret['stats'] = pd.DataFrame(ret['stats'],
                                     columns=["Avg dist", "PBM", "DB", "XB", "AMS", "ARI>0.8", "JC>0.8", "Best iter"])
-        ret['stats'].insert(0, "Number of Clusters", kvals)
+        ret['stats'].insert(0, "Number of Clusters", [f"Cluster {k}" for k in kvals])
+        ret['stats']["k_num"] = kvals
 
         return ret
 
@@ -378,7 +380,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         for meth in criteria:
             stats = pd.DataFrame(ret[meth]['stats'])
-            stats['ngroup'] = kvals
             stats['criteria'] = meth
 
             allstats[meth] = stats
@@ -395,27 +396,27 @@ if __name__ == '__main__':
     from sequenzo import *  # Social sequence analysis
     import pandas as pd  # Import necesarry packages
 
-    # df = pd.read_csv('D:/country_co2_emissions_missing.csv')
-    df = pd.read_csv('/home/xinyi/data/detailed_data/sampled_1000_data.csv')
+    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
+    # df = pd.read_csv('/home/xinyi/data/detailed_data/sampled_1000_data.csv')
 
-    # time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    time = list(df.columns)[1:]
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 
-    time = list(df.columns)[4:]
-    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
+    # time = list(df.columns)[4:]
+    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
 
-    # sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
-    sequence_data = SequenceData(df, time=time, time_type="age", id_col="worker_id", states=states)
+    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+    # sequence_data = SequenceData(df, time=time, time_type="age", id_col="worker_id", states=states)
 
     result = clara(sequence_data,
-                   R=5,
+                   R=2,
                    sample_size=3000,
-                   kvals=range(2, 21),
-                   criteria=['distance', 'pbm'],
+                   kvals=range(2, 6),
+                   criteria=['distance'],
                    dist_args={"method": "OMspell", "sm": "CONSTANT", "indel": 1, "expcost": 1},
                    parallel=True,
                    stability=True)
 
-    print(result)
+    print(result['clustering'])
 

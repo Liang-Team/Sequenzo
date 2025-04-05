@@ -25,7 +25,7 @@ def k_medoids_once(diss, k, weights=None, npass=1, initialclust=None, method='PA
         method = method.lower()
         method_map = ["kmedoids", "pam", "pamonce"]
         if method in method_map:
-            method = method_map.index(method) + 1  # 转换为 1-based 索引
+            method = method_map.index(method) + 1  # 1-based index
 
     if not (isinstance(method, int) and method in {1, 2, 3}):
         raise ValueError(f"[!] Unknown clustering method {method}.")

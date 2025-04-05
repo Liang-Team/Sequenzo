@@ -589,20 +589,20 @@ if __name__ == '__main__':
 
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
 
-    df = pd.read_csv("Sequenzo/original_datasets_and_cleaning/country_co2_emissions_missing.csv")
+    # df = pd.read_csv("Sequenzo/original_datasets_and_cleaning/country_co2_emissions_missing.csv")
 
-    # time = list(df.columns)[4:]
-    time = list(df.columns)[1:]
+    time = list(df.columns)[4:]
+    # time = list(df.columns)[1:]
 
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
 
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-    #                              time_type="age", time=time, id_col="worker_id", states=states)
-    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+                                 time_type="age", time=time, id_col="worker_id", states=states)
+    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
 
     refseq = [[0, 1, 2], [99, 100]]
     om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
