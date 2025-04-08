@@ -19,7 +19,7 @@
   </a>
 </p>
 
-# Sequenzo: Fast, scalable, and intuitive social sequence analysis
+# Sequenzo: Fast, scalable, and intuitive social sequence analysis in Python
 
 Sequenzo is a high-performance Python package designed for social sequence analysis. It is built to analyze **any sequence of categorical events**, from individual career paths and migration patterns to corporate growth and urban development. 
 Whether you are working with **people, places, or policies**, Sequenzo helps uncover meaningful patterns efficiently. 
