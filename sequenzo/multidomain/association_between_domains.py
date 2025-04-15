@@ -59,9 +59,9 @@ def log_likelihood_ratio_test(xtab, struct_zero=True):
     return lrt_stat, df, p_val
 
 
-def seqdomassoc(seqdata_dom, assoc=("LRT", "V"), rep_method="overall",
-                wrange=None, p_value=True, struct_zero=True, cross_table=False,
-                with_missing=False, weighted=True, dnames=None):
+def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method="overall",
+                                    wrange=None, p_value=True, struct_zero=True, cross_table=False,
+                                    with_missing=False, weighted=True, dnames=None):
     """
     Python version of R's seqdomassoc (currently supports rep_method="overall").
     Parameters:
@@ -85,7 +85,7 @@ def seqdomassoc(seqdata_dom, assoc=("LRT", "V"), rep_method="overall",
 
     ndom = len(seqdata_dom)
     if dnames is None:
-        dnames = [f"Dom{i+1}" for i in range(ndom)]
+        dnames = [f"Dom{i + 1}" for i in range(ndom)]
 
     cross_tables = {}
     results = []
@@ -149,9 +149,11 @@ if __name__ == '__main__':
     # 假设已经有三个 SequenceData 对象：
     # seq_child, seq_marr, seq_left
 
+    # TODO: download biofam
+
     seq_child, seq_marr, seq_left = None, None, None
 
-    result = seqdomassoc(
+    result = get_association_between_domains(
         [seq_child, seq_marr, seq_left],
         assoc=["V", "LRT"],
         rep_method="overall",

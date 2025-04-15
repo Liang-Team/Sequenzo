@@ -321,7 +321,7 @@ class SequenceData:
         if weighted:
             w = self.flatten_weights()
             # Safe increment using integer indices
-            # Numpy's index starts from 0
+            # Numpy's index starts from 0, thus it is important to reduce by 1
             np.add.at(table, (v1 - 1, v2 - 1), w)
         else:
             np.add.at(table, (v1 - 1, v2 - 1), 1)
