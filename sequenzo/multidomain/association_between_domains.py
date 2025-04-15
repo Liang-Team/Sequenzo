@@ -150,6 +150,7 @@ if __name__ == '__main__':
     # seq_child, seq_marr, seq_left
 
     # TODO: download biofam
+    # TODO 先搞这个相关性，然后把其他三个衡量方法做好，然后再做可视化
 
     seq_child, seq_marr, seq_left = None, None, None
 

@@ -22,54 +22,88 @@ import pybind11
 import numpy
 import os
 import sys
+import subprocess
 from glob import glob
 
 
-def get_extra_compile_args():
-    if sys.platform == 'win32':
-        return ['/std:c++14', '/EHsc', '/bigobj', '/O2', '/Gy']
-    elif sys.platform == 'darwin':
+def get_mac_arch():
+    """
+    Detects the current macOS architecture.
+    Returns:
+        str: 'x86_64' or 'arm64' depending on the Mac hardware.
+    """
+    try:
+        return subprocess.check_output(['uname', '-m']).decode().strip()
+    except Exception:
+        return None
+
+
+def get_compile_args_for_file(filename):
+    """
+    Returns appropriate compiler flags depending on whether the file is C or C++.
+    """
+    base_cflags = ['-Wall', '-Wextra']
+    base_cppflags = ['-std=c++17'] + base_cflags
+
+    if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
-        return ['-std=c++11', '-Wall', '-Wextra']
+        arch = get_mac_arch()
+        if arch in ('x86_64', 'arm64'):
+            arch_flags = ['-arch', arch]
+        else:
+            arch_flags = []
     else:
-        return ['-std=c++11', '-Wall', '-Wextra']
+        arch_flags = []
+
+    if filename.endswith(".cpp"):
+        return base_cppflags + arch_flags
+    else:
+        return base_cflags + arch_flags
 
 
-def get_cython_compile_args():
-    extra_compile_args = []
-    if sys.platform == "win32":
-        extra_compile_args.append("/O2")
-    return extra_compile_args
+def get_include_dirs():
+    """
+    Collects all required include directories for compiling C++ and Cython code.
+    Returns:
+        list: Paths to include directories.
+    """
+    return [
+        pybind11.get_include(),
+        pybind11.get_include(user=True),
+        numpy.get_include(),
+        'sequenzo/dissimilarity_measures/src/',
+    ]
 
 
 def configure_cpp_extension():
+    """
+    Configures the Pybind11 C++ extension module.
+    Returns:
+        list: A list with one or zero configured Pybind11Extension.
+    """
     try:
         ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
             sources=glob('sequenzo/dissimilarity_measures/src/*.cpp'),
-            include_dirs=[
-                pybind11.get_include(),
-                pybind11.get_include(user=True),
-                'sequenzo/dissimilarity_measures/src/',
-            ],
-            extra_compile_args=get_extra_compile_args(),
+            include_dirs=get_include_dirs(),
+            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             language='c++',
+            define_macros=[('VERSION_INFO', '"0.0.1"')],
         )
         print("C++ extension configured successfully")
         return [ext_module]
     except Exception as e:
-        print(f"Warning: Unable to configure C++ extension: {e}")
-        print("The package will be installed with a Python fallback implementation.")
+        print(f"Failed to configure C++ extension: {e}")
+        print("Fallback: Python-only functionality will be used.")
         return []
 
 
 def configure_cython_extensions():
     """
-    Currently, there are two places that use cython:
-    clustering/utils and dissimilarity_measures/utils.
-    To avoid calling many cython files manually, I set up this function here.
+    Configures and compiles all .pyx files via Cython.
+    Returns:
+        list: Compiled Cython extensions (or empty list if failed).
     """
-    # Search all the pyx files.
     try:
         pyx_paths = [
             Path("sequenzo/clustering/utils/point_biserial.pyx").as_posix(),
@@ -81,28 +115,40 @@ def configure_cython_extensions():
             Path("sequenzo/big_data/clara/utils/get_weighted_diss.pyx").as_posix(),
         ]
 
-        extensions = [
-            Extension(
+        extensions = []
+        for path in pyx_paths:
+            extra_args = get_compile_args_for_file(path)
+            extension = Extension(
                 name=path.replace("/", ".").replace(".pyx", ""),
                 sources=[path],
-                include_dirs=[numpy.get_include()],
-                extra_compile_args=get_cython_compile_args(),
+                include_dirs=get_include_dirs(),
+                extra_compile_args=extra_args,
             )
-            for path in pyx_paths
-        ]
+            extensions.append(extension)
         print(f"Found {len(extensions)} Cython modules.")
         return cythonize(extensions, compiler_directives={"language_level": "3"})
     except Exception as e:
-        print(f"Warning: Unable to configure Cython extensions: {e}")
+        print(f"Failed to configure Cython extensions: {e}")
         return []
 
 
-# 防止路径缺失导致安装报错
+class BuildExt(build_ext):
+    """
+    Custom build_ext class that prints architecture info on macOS.
+    """
+    def build_extensions(self):
+        if sys.platform == 'darwin':
+            arch = get_mac_arch()
+            print(f"Compiling extensions for macOS [{arch}]...")
+        super().build_extensions()
+
+
+# Ensure necessary folders exist to prevent file not found errors
 os.makedirs("sequenzo/dissimilarity_measures/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/utils", exist_ok=True)
 
-# 正式调用
+# Run the actual setup process
 setup(
     ext_modules=configure_cpp_extension() + configure_cython_extensions(),
-    cmdclass={"build_ext": build_ext},
+    cmdclass={"build_ext": BuildExt},
 )
