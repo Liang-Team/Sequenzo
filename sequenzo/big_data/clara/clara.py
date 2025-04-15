@@ -7,7 +7,6 @@
 
 import gc
 import os
-import sys
 from contextlib import redirect_stdout
 import warnings
 
@@ -20,8 +19,6 @@ from sequenzo.big_data.clara.utils.aggregatecases import *
 from sequenzo.big_data.clara.utils.davies_bouldin import *
 from sequenzo.big_data.clara.utils.k_medoids_once import *
 from sequenzo.big_data.clara.utils.get_weighted_diss import *
-from sequenzo.dissimilarity_measures import get_distance_matrix
-from sequenzo.define_sequence_data import SequenceData
 
 
 def adjustedRandIndex(x, y=None):

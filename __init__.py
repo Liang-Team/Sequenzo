@@ -6,12 +6,10 @@
 """
 # sequenzo/__init__.py (Top-level)
 
-import sys
-
 __version__ = "0.1.5"
 
 # Lazy import: public submodules
-from sequenzo import datasets, visualization, clustering, dissimilarity_measures, define_sequence_data, big_data
+from sequenzo import datasets, visualization, clustering, dissimilarity_measures, big_data, define_sequence_data
 
 
 def __getattr__(name):

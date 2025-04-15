@@ -14,7 +14,7 @@
 from .datasets import load_dataset, list_datasets
 
 # Import the core functions that should be directly available from the sequenzo package
-from .define_sequence_data import *
+from sequenzo.define_sequence_data import *
 from .visualization import (plot_sequence_index,
                             plot_most_frequent_sequences,
                             plot_single_medoid,

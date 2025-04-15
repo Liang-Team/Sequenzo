@@ -13,6 +13,7 @@ __all__ = ['SequenceData']
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pandas as pd
 from docutils.parsers.rst import states
 from matplotlib.colors import ListedColormap
 import re
@@ -255,6 +256,79 @@ class SequenceData:
         else:
             plt.tight_layout()
             plt.show()
+
+    # ------------------------------
+    # The following are for multidomain sequence analysis, especially for seqdomassoc()
+
+    @property
+    def n_sequences(self):
+        """Returns number of sequences (rows)."""
+        return self.seqdata.shape[0]
+
+    @property
+    def n_steps(self):
+        """Returns sequence length (columns)."""
+        return self.seqdata.shape[1]
+
+    @property
+    def alphabet(self):
+        """Returns state alphabet."""
+        return self._alphabet
+
+    @alphabet.setter
+    def alphabet(self, val):
+        self._alphabet = val
+
+    @property
+    def weights(self):
+        return self._weights
+
+    @weights.setter
+    def weights(self, val):
+        self._weights = val
+
+    def flatten(self) -> np.ndarray:
+        """Flatten all sequences into a 1D array (row-wise)."""
+        return self.seqdata.values.flatten()
+
+    def flatten_weights(self) -> np.ndarray:
+        """
+        Repeat weights across sequence length for 1D alignment with flatten().
+        E.g., 5 sequences × 10 steps → repeat each weight 10 times.
+        """
+        return np.repeat(self.weights, self.n_steps)
+
+    def to_numeric(self) -> np.ndarray:
+        """Returns integer-coded sequence data as NumPy array."""
+        return self.seqdata.to_numpy(dtype=np.int32)
+
+    def get_xtabs(self, other: SequenceData, weighted=True) -> np.ndarray:
+        """
+        NumPy-only version of get_xtabs.
+        Returns a raw NumPy matrix: shape (len(alphabet1), len(alphabet2))
+        """
+        if self.n_sequences != other.n_sequences or self.n_steps != other.n_steps:
+            raise ValueError("Both SequenceData objects must have same shape.")
+
+        v1 = self.flatten()
+        v2 = other.flatten()
+
+        n1 = len(self.alphabet)
+        n2 = len(other.alphabet)
+
+        table = np.zeros((n1, n2), dtype=np.float64)
+
+        if weighted:
+            w = self.flatten_weights()
+            # Safe increment using integer indices
+            # Numpy's index starts from 0
+            np.add.at(table, (v1 - 1, v2 - 1), w)
+        else:
+            np.add.at(table, (v1 - 1, v2 - 1), 1)
+
+        return table
+
+
 
 
 

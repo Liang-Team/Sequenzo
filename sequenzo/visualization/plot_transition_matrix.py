@@ -15,7 +15,6 @@ import seaborn as sns
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    set_up_time_labels_for_x_axis,
     save_and_show_results
 )
 

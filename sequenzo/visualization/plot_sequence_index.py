@@ -214,6 +214,13 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(), interpolation='nearest', vmin=1,
               vmax=len(seqdata.states))
 
+    # Disable background grid and all axis guide lines
+    ax.grid(False)
+
+    # Optional: remove tick marks and tick labels to avoid visual grid effects
+    # ax.set_xticks([])
+    # ax.set_yticks([])
+
     # x label
     set_up_time_labels_for_x_axis(seqdata, ax)
 

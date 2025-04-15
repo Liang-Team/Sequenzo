@@ -63,8 +63,6 @@ import platform
 import numpy as np
 import pandas as pd
 
-from sequenzo.define_sequence_data import SequenceData
-
 
 # @profile
 # @numba.jit(nopython=True, parallel=True)

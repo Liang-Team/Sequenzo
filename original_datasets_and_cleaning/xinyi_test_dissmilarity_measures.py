@@ -7,12 +7,9 @@
 import pandas as pd
 import time
 import os
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
-from sequenzo.clustering import Cluster
 
 # CSV 文件路径列表
 csv_files = [
