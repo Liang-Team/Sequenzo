@@ -1,6 +1,6 @@
 """
 @Author  : 李欣怡
-@File    : seqMD.py
+@File    : cat.py
 @Time    : 2025/4/8 09:06
 @Desc    : Build multidomain (MD) sequences of combined individual domain states (expanded alphabet),
            derive multidomain indel and substitution costs from domain costs by means of an additive trick (CAT),
@@ -16,19 +16,20 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.utils import seqlength
 from sequenzo.dissimilarity_measures import get_distance_matrix, get_substitution_cost_matrix
 
-def seqMD(channels: List[SequenceData],
-          method: Optional[str] = None,
-          norm: str = "none",
-          indel: Union[float, np.ndarray, List[Union[float, List[float]]]] = "auto",
-          sm: Optional[Union[List[str], List[np.ndarray]]] = None,
-          with_missing: Optional[Union[bool, List[bool]]] = None,
-          full_matrix: bool = True,
-          link: str = "sum",
-          cval: float = 2,
-          miss_cost: float = 2,
-          cweight: Optional[List[float]] = None,
-          what: str = "MDseq",
-          ch_sep: str = "+"):
+
+def compute_cat_distance_matrix(channels: List[SequenceData],
+                                method: Optional[str] = None,
+                                norm: str = "none",
+                                indel: Union[float, np.ndarray, List[Union[float, List[float]]]] = "auto",
+                                sm: Optional[Union[List[str], List[np.ndarray]]] = None,
+                                with_missing: Optional[Union[bool, List[bool]]] = None,
+                                full_matrix: bool = True,
+                                link: str = "sum",
+                                cval: float = 2,
+                                miss_cost: float = 2,
+                                cweight: Optional[List[float]] = None,
+                                what: str = "MDseq",
+                                ch_sep: str = "+"):
     """
             mulitdomain sequences analysis, you can get:
             - multi-domain sequences ('MDseq')
@@ -184,10 +185,10 @@ def seqMD(channels: List[SequenceData],
             break
 
     substmat_list = []  # subsitution matrix
-    indel_list = []     # indels per channel
+    indel_list = []  # indels per channel
     alphabet_list = []  # alphabet for each channel
     alphsize_list = []  # alphabet size per channel
-    maxlength_list = np.zeros(nchannels)    # seqlenth of each channels
+    maxlength_list = np.zeros(nchannels)  # seqlenth of each channels
 
     # Storing number of columns and cnames
     for i in range(nchannels):
@@ -240,7 +241,8 @@ def seqMD(channels: List[SequenceData],
             channel = channels[i]
 
             if not isinstance(channel, SequenceData):
-                raise ValueError("[!] Channel ", i, " is not a state sequence object, use 'seqdef' function to create one.")
+                raise ValueError("[!] Channel ", i,
+                                 " is not a state sequence object, use 'seqdef' function to create one.")
 
             # Since states is prepared for the upcoming MD states
             # And MD uses numeric representations, we use numbers here instead of the original string states.
@@ -251,7 +253,8 @@ def seqMD(channels: List[SequenceData],
                 print("[>] Including missing value as an additional state.")
             else:
                 if channel.ismissing:
-                    raise ValueError("[!] Found missing values in channel ", i, ", set with.missing as TRUE for that channel.")
+                    raise ValueError("[!] Found missing values in channel ", i,
+                                     ", set with.missing as TRUE for that channel.")
 
             # Check states
             alphabet_list.append(states)
@@ -278,11 +281,11 @@ def seqMD(channels: List[SequenceData],
                 else:
                     indel_list.append(indel[i])
 
-            else:   # Provided sm
+            else:  # Provided sm
                 substmat_list.append(sm[i])
 
                 if "auto" == indel:
-                    indel_list.append(np.repeat(np.max(sm[i])/2, alphsize_list[i]))
+                    indel_list.append(np.repeat(np.max(sm[i]) / 2, alphsize_list[i]))
                 else:
                     indel_list.append(indel[i])
 
@@ -452,7 +455,7 @@ if __name__ == '__main__':
 
     sequence_data = [seq_left, seq_child, seq_marr]
 
-    MD = seqMD(sequence_data, method="OM", sm=["TRATE"], indel=[2, 1, 1], what="diss", link="sum")
+    MD = compute_cat_distance_matrix(sequence_data, method="OM", sm=["TRATE"], indel=[2, 1, 1], what="diss", link="sum")
 
     print(MD)
 

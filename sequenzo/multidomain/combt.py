@@ -1,26 +1,23 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : combt_utils.py
+@File    : combt.py
 @Time    : 15/04/2025 21:30
 @Desc    : Modular utility functions for CombT (Combined Typology) strategy.
            Split into reusable components to give users control over distance calculation, clustering, and label merging.
 """
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")  # 设置后端：非交互式（避免 show() 崩溃）
+import matplotlib.pyplot as plt
+
+import seaborn as sns
 from sequenzo.dissimilarity_measures import get_distance_matrix
+from sequenzo.clustering.hierarchical_clustering import Cluster, ClusterQuality
+from sequenzo.visualization.utils.utils import save_and_show_results
 
 
 def compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray]:
-    """
-    Compute dissimilarity matrices for multiple domains.
-
-    Parameters:
-    - sequence_objects: List of SequenceData instances.
-    - method_params: List of dicts, each with parameters for get_distance_matrix().
-
-    Returns:
-    - List of distance matrices (NumPy arrays), one per domain.
-    """
     if method_params is None or len(method_params) != len(sequence_objects):
         raise ValueError("[CombT] Number of method_params must match number of domains.")
 
@@ -32,56 +29,85 @@ def compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray
 
 
 def assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray, sep: str = "+") -> pd.Series:
-    """
-    Assemble a combined typology label from domain-specific cluster labels.
-
-    Parameters:
-    - cluster_labels: List of label arrays, each from a domain (must be same length).
-    - ids: Entity IDs to attach as Series index.
-    - sep: Separator between domain cluster labels.
-
-    Returns:
-    - Pandas Series with combined typology labels.
-    """
     n = len(cluster_labels[0])
     assert all(len(cl) == n for cl in cluster_labels), "[CombT] Cluster label arrays must have the same length."
-
     combined = [sep.join(str(cl[i]) for cl in cluster_labels) for i in range(n)]
     return pd.Series(combined, index=ids, name="CombT")
 
-
 def get_combt_membership_table(ids: np.ndarray,
-                               cluster_labels: list[np.ndarray],
-                               combined_typology: pd.Series,
-                               domain_names: list[str] = None) -> pd.DataFrame:
-    """
-    Build a full membership table with domain-level cluster assignments and final combined typology.
-
-    Parameters:
-    - ids: Entity IDs (used as index).
-    - cluster_labels: List of cluster arrays (1D NumPy arrays).
-    - combined_typology: Series of combined typology labels.
-    - domain_names: Optional list of domain names to label the cluster columns.
-
-    Returns:
-    - Pandas DataFrame with domain clusters + combined typology.
-    """
+                                cluster_labels: list[np.ndarray],
+                                combined_typology: pd.Series,
+                                domain_names: list[str] = None) -> pd.DataFrame:
     df = pd.DataFrame(index=ids)
-
     if domain_names is None:
         domain_names = [f"Domain_{i + 1}" for i in range(len(cluster_labels))]
-
     for name, labels in zip(domain_names, cluster_labels):
         df[f"{name}_Cluster"] = labels
-
     df["CombT"] = combined_typology
     return df
 
 
-# ===== EXAMPLE USAGE =====
+def interactive_combined_typology(domains, method_params, domain_names=None, norm="zscore"):
+    diss_matrices = compute_domain_distances(domains, method_params)
+
+    cluster_labels = []
+    ids = domains[0].ids
+
+    if domain_names is None:
+        domain_names = [f"Domain_{i + 1}" for i in range(len(domains))]
+
+    for i, (diss, seq) in enumerate(zip(diss_matrices, domains)):
+        print(f"\n[>] Processing domain: {domain_names[i]}")
+        clus = Cluster(matrix=diss, entity_ids=seq.ids)
+        quality = ClusterQuality(clus)
+        quality.compute_cluster_quality_scores()
+        quality.plot_combined_scores(norm=norm,
+                                     title=f"Cluster Quality - {domain_names[i]}",
+                                     save_as=f"Cluster Quality - {domain_names[i]}")
+
+        while True:
+            try:
+                print(f"Cluster Quality - {domain_names[i]}.png has been saved. Please check it and then come back.\n")
+                k = int(input(f"[?] Enter number of clusters for domain '{domain_names[i]}': "))
+                labels = clus.get_cluster_labels(num_clusters=k)
+                cluster_labels.append(labels)
+                break
+            except Exception as e:
+                print(f"[!] Invalid input: {e}. Please try again.")
+
+    combt_series = assemble_combined_typology(cluster_labels, ids=ids)
+    membership_df = get_combt_membership_table(ids, cluster_labels, combt_series, domain_names)
+
+    print("\n[>] Combined Typology Membership Table Preview:")
+    print(membership_df.reset_index().rename(columns={"index": "id"}).head())
+
+    membership_df.reset_index().rename(columns={"index": "id"}).to_csv("combt_membership_table.csv", index=False)
+    print("\n[>] combt_membership_table.csv has been saved.")
+
+    # Output frequency and proportion table
+    freq_table = membership_df["CombT"].value_counts().reset_index()
+    freq_table.columns = ["CombT", "Frequency"]
+    freq_table["Proportion (%)"] = (freq_table["Frequency"] / freq_table["Frequency"].sum() * 100).round(2)
+
+    print("\n[>] CombT Frequency Table:")
+    print(freq_table)
+
+    # Optional bar plot
+    plt.figure(figsize=(10, 5))
+    sns.barplot(data=freq_table, x="CombT", y="Proportion (%)", color="skyblue")
+    plt.xticks(rotation=45, ha="right")
+    plt.title("Frequency of Combined Typologies")
+    plt.xlabel("CombT")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    save_and_show_results(save_as="Frequency of Combined Typologies")
+    print("\nFrequency of Combined Typologies.png has been saved.")
+
+    return membership_df
+
+
 if __name__ == '__main__':
     from sequenzo import *
-    from sequenzo.clustering.hierarchical_clustering import Cluster
 
     left_df = load_dataset('biofam_left_domain')
     children_df = load_dataset('biofam_child_domain')
@@ -103,16 +129,4 @@ if __name__ == '__main__':
         {"method": "OM", "sm": "CONSTANT", "indel": 1},
     ]
 
-    diss_matrices = compute_domain_distances(domains, method_params)
-
-    cluster_labels = []
-    for diss, seq in zip(diss_matrices, domains):
-        clus = Cluster(matrix=diss, entity_ids=seq.ids)
-        labels = clus.get_cluster_labels(num_clusters=4)
-        cluster_labels.append(labels)
-
-    combt_series = assemble_combined_typology(cluster_labels, ids=domains[0].ids)
-    membership_df = get_combt_membership_table(domains[0].ids, cluster_labels, combt_series,
-                                               domain_names=["Left", "Child", "Married"])
-
-    print(membership_df.head())
+    membership_df = interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
