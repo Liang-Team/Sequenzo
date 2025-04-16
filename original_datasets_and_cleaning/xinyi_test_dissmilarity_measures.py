@@ -13,12 +13,12 @@ from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_mat
 
 # CSV 文件路径列表
 csv_files = [
-    # 'sampled_1000_data.csv',
-    'country_co2_emissions_missing.csv',
+    # 'country_co2_emissions_missing.csv',
+    'sampled_1000_data.csv'
 ]
 
 # data_dir = '/home/xinyi/data/detailed_data'
-data_dir = ''
+data_dir = 'D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []

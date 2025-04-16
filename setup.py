@@ -26,6 +26,25 @@ import subprocess
 from glob import glob
 import tempfile
 
+def ensure_xsimd_exists():
+    xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
+    include_path = xsimd_dir / "include"
+    if not include_path.exists():
+        print(f"[INFO] xsimd not found at {include_path}, attempting to clone...")
+        try:
+            xsimd_dir.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run([
+                "git", "clone", "--depth", "1",
+                "https://github.com/xtensor-stack/xsimd.git",
+                str(xsimd_dir)
+            ], check=True)
+            print("[INFO] xsimd cloned successfully.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to clone xsimd automatically: {e}")
+
+
+ensure_xsimd_exists()
+
 
 def get_mac_arch():
     """
