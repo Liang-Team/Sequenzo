@@ -607,7 +607,7 @@ if __name__ == '__main__':
     sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
 
     refseq = [[0, 1, 2], [99, 100]]
-    om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
     print(om)
 
     print("================")
