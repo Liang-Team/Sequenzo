@@ -320,7 +320,7 @@ def seqMD(channels: List[SequenceData],
 
                 for chan in range(nchannels):
                     state = statelisti[chan]
-                    ipos = alphabet_list[chan].index(state) + 1
+                    ipos = alphabet_list[chan].index(state)
 
                     newindel[i] += indel[chan][ipos] * cweight[chan]
 
@@ -402,33 +402,58 @@ def seqMD(channels: List[SequenceData],
                                                   with_missing=False,
                                                   full_matrix=full_matrix)
             print("  - OK.")
+
+            diss_matrix = pd.DataFrame(diss_matrix, index=channels[0].ids, columns=channels[0].ids)
             return diss_matrix
 
 
 if __name__ == '__main__':
+    # from sequenzo import *
+    #
+    # # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
+    # # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
+    # # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    #
+    # # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    #
+    # time = list(df.columns)[4:]
+    # # time = list(df.columns)[1:]
+    #
+    # # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    # # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    #
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    # # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    #
+    # sequence_data = [sequence_data, sequence_data]
+    #
+    # MD = seqMD(sequence_data, method="OM", sm=["TRATE"], indel="auto", what="diss", link="mean")
+    # print(MD)
+    #
+    # print("================")
+
     from sequenzo import *
 
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    left_df = load_dataset('biofam_left_domain')
+    children_df = load_dataset('biofam_child_domain')
+    married_df = load_dataset('biofam_married_domain')
 
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    time_cols = [col for col in children_df.columns if col.startswith("age_")]
 
-    time = list(df.columns)[4:]
-    # time = list(df.columns)[1:]
+    seq_left = SequenceData(data=left_df, time_type="age", time=time_cols, states=[0, 1],
+                            labels=["At home", "Left home"])
+    seq_child = SequenceData(data=children_df, time_type="age", time=time_cols, states=[0, 1],
+                             labels=["No child", "Child"])
+    seq_marr = SequenceData(data=married_df, time_type="age", time=time_cols, states=[0, 1],
+                            labels=["Not married", "Married"])
 
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    sequence_data = [seq_left, seq_child, seq_marr]
 
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
-    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    MD = seqMD(sequence_data, method="OM", sm=["TRATE"], indel=[2, 1, 1], what="diss", link="sum")
 
-    sequence_data = [sequence_data, sequence_data]
-
-    MD = seqMD(sequence_data, method="OM", sm=["TRATE"], indel="auto", what="diss", link="mean")
     print(MD)
 
     print("================")
