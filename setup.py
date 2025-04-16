@@ -24,6 +24,7 @@ import os
 import sys
 import subprocess
 from glob import glob
+import tempfile
 
 
 def get_mac_arch():
@@ -38,18 +39,59 @@ def get_mac_arch():
         return None
 
 
+def has_openmp_support():
+    """
+    Check if the current compiler supports OpenMP.
+    Returns:
+        bool
+    """
+    if getattr(has_openmp_support, "_checked", False):
+        return has_openmp_support._result
+
+    try:
+        test_code = '#include <omp.h>\nint main() { return 0; }'
+        temp_dir = tempfile.gettempdir()
+        source_path = os.path.join(temp_dir, 'test_openmp.cpp')
+        binary_path = os.path.join(temp_dir, 'test_openmp')
+
+        with open(source_path, 'w') as f:
+            f.write(test_code)
+
+        result = subprocess.run(
+            ['clang++', '-fopenmp', source_path, '-o', binary_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+        # Clean up
+        os.remove(source_path)
+        if os.path.exists(binary_path):
+            os.remove(binary_path)
+
+        supported = result.returncode == 0
+        if supported:
+            print("OpenMP is supported. Enabling -fopenmp.")
+        else:
+            print("OpenMP is NOT supported by the current compiler. Skipping -fopenmp.")
+
+        has_openmp_support._result = supported
+        has_openmp_support._checked = True
+        return supported
+
+    except Exception:
+        has_openmp_support._result = False
+        has_openmp_support._checked = True
+        return False
+
+
 def get_compile_args_for_file(filename):
-    """
-    Returns appropriate compiler flags depending on whether the file is C or C++.
-    """
     if sys.platform == 'win32':
         base_cflags = ['/W4', '/bigobj']
-        base_cppflags = ['/std=c++17'] + base_cflags
+        base_cppflags = ['/std:c++17'] + base_cflags
         openmp_flag = ['/openmp']
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
-        openmp_flag = ['-fopenmp']
+        openmp_flag = ['-fopenmp'] if has_openmp_support() else []
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
