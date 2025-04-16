@@ -1,8 +1,10 @@
 ﻿#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <xsimd/xsimd.hpp>
 #include <vector>
 #include <cmath>
 #include <iostream>
+#include "utils.h"
 
 namespace py = pybind11;
 
@@ -69,24 +71,6 @@ public:
         }
     }
 
-    double normalize_distance(double rawdist, double maxdist, double l1, double l2) const {
-        if (rawdist == 0.0) return 0.0;
-        switch (norm) {
-            case 0:
-                return rawdist;
-            case 1:
-                return l1 > l2 ? rawdist / l1 : l2 > 0.0 ? rawdist / l2 : 0.0;
-            case 2:
-                return (l1 * l2 == 0.0) ? (l1 != l2 ? 1.0 : 0.0)
-                                        : 1.0 - ((maxdist - rawdist) / (2.0 * std::sqrt(l1) * std::sqrt(l2)));
-            case 3:
-                return maxdist == 0.0 ? 1.0 : rawdist / maxdist;
-            case 4:
-                return maxdist == 0.0 ? 1.0 : (2.0 * rawdist) / (rawdist + maxdist);
-            default: return rawdist;
-        }
-    }
-
     double compute_distance(int is, int js) {
         try {
             auto ptr_len = seqlength.unchecked<1>();
@@ -124,17 +108,20 @@ public:
 
             for(int i = prefix+1; i < mSuf; i ++){
                 for(int j = prefix+1; j < nSuf; j ++){
-                    double minimum = fmat[i-1-prefix][j-prefix] + indel;
-                    double j_indel = fmat[i-prefix][j-1-prefix] + indel;
+                    // Use SIMD batch processing to compute min and other operations
+                    xsimd::batch<double> min_batch, j_indel_batch, sub_batch;
 
-                    double sub = 0;
-                    if(ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-                        sub = fmat[i-1-prefix][j-1-prefix];
-                    }else{
-                        sub = fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1));
-                    }
+                    // Calculate the three values and perform min operation
+                    min_batch = xsimd::batch<double>(fmat[i-1-prefix][j-prefix] + indel);
+                    j_indel_batch = xsimd::batch<double>(fmat[i-prefix][j-1-prefix] + indel);
+                    sub_batch = xsimd::batch<double>((ptr_seq(is, i-1) == ptr_seq(js, j-1)) ?
+                                                     fmat[i-1-prefix][j-1-prefix] :
+                                                     (fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1))));
 
-                    fmat[i-prefix][j-prefix] = std::min({minimum, j_indel, sub});
+                    // Store the result
+                    xsimd::batch<double> result = xsimd::min(min_batch, j_indel_batch);
+                    result = xsimd::min(result, sub_batch);
+                    fmat[i-prefix][j-prefix] = result.get(0);
                 }
             }
 
@@ -143,7 +130,7 @@ public:
             double ml = double(m) * indel;
             double nl = double(n) * indel;
 
-            return normalize_distance(fmat[mSuf-1-prefix][nSuf-1-prefix],maxpossiblecost, ml, nl);
+            return normalize_distance(fmat[mSuf-1-prefix][nSuf-1-prefix],maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
@@ -153,7 +140,7 @@ public:
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
-
+            #pragma omp parallel for collapse(2)
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -171,7 +158,7 @@ public:
     py::array_t<double> compute_refseq_distances() {
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
-
+            #pragma omp parallel for collapse(2)
             double cmpres = 0;
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {

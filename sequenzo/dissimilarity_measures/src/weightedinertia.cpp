@@ -2,6 +2,7 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
+#include <xsimd/xsimd.hpp>
 
 namespace py = pybind11;
 
@@ -31,10 +32,12 @@ public:
 
         auto ptr_result = result.mutable_unchecked<1>();
 
+        // 初始化结果为 0
         for (int i = 0; i < ilen; i++) {
             ptr_result(i) = 0;
         }
 
+        // 计算总权重
         double totweights = 0.0;
         for (int i = 0; i < ilen; i++) {
             totweights += ptr_weights(ptr_indiv(i));
@@ -50,8 +53,11 @@ public:
 
                 double diss = ptr_dist(pos_i, pos_j);
 
-                ptr_result(i) += diss * ptr_weights(pos_j);
-                ptr_result(j) += diss * i_weight;
+                xsimd::batch<double> diss_batch(diss);
+                xsimd::batch<double> i_weight_batch(i_weight);
+
+                ptr_result(i) += diss_batch.get(0) * ptr_weights(pos_j);
+                ptr_result(j) += diss_batch.get(0) * i_weight_batch.get(0);
             }
 
             if (totweights > 0) {

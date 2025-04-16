@@ -1,20 +1,16 @@
 ﻿#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <pybind11/detail/common.h>  // 使用 pybind11 提供的 ssize_t
 #include <vector>
 #include <iostream>
-
+#include <xsimd/xsimd.hpp>  // 添加 xsimd 库头文件
 #define WEIGHTED_CLUST_TOL -1e-10
-
-// 使用 pybind11 的 ssize_t 类型，跨平台更兼容
-using ssize_t = pybind11::ssize_t;
 
 namespace py = pybind11;
 
 class PAMonce {
 public:
     PAMonce(int nelement, py::array_t<double> diss, py::array_t<int> centroids, int npass, py::array_t<double> weights){
-        py::print("[>] PAMonce starts ... ");
+        py::print("[>] Starting Partitioning Around Medoids (PAMonce)");
         std::cout << std::flush;
 
         try {
@@ -40,21 +36,21 @@ public:
     }
 
     double find_max_value(py::array_t<double> diss) {
-        // 获取数组维度
-        py::buffer_info buf_info = diss.request();
-        double *ptr = static_cast<double *>(buf_info.ptr);
+        auto buf_info = diss.shape();
+        auto ptr = diss.unchecked<2>();
 
-        ssize_t rows = buf_info.shape[0];
-        ssize_t cols = buf_info.shape[1];
+        int rows = buf_info[0];
+        int cols = buf_info[1];
 
         double max_val = -std::numeric_limits<double>::infinity(); // 初始化为负无穷
 
-        for (ssize_t i = 0; i < rows; i++) {
-            for (ssize_t j = 0; j < cols; j++) {
-                double val = ptr[i * cols + j];
-                if (val > max_val) {
-                    max_val = val;
-                }
+        constexpr int batch_size = xsimd::batch<double>::size;
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j += batch_size) {
+                xsimd::batch<double> batch_vals = xsimd::load_unaligned(&ptr(i, j));
+                double batch_max = xsimd::reduce_max(batch_vals);
+                max_val = std::max(max_val, batch_max);
             }
         }
 
@@ -76,57 +72,77 @@ public:
         int hbest = -1, nbest = -1;
         double total = -1;
 
+        xsimd::batch<double> max_val(std::numeric_limits<double>::infinity()); // 默认是正无穷
+
         do {
             for(int i=0; i<nelement; i++){
                 for(int k=0; k<nclusters; k++){
                     int i_cluster = ptr_centroids(k);
 
-                    if(dysma[i] > ptr_diss(i, i_cluster)){
+                    // 使用 xsimd 批量处理
+                    xsimd::batch<double> diss_val(ptr_diss(i, i_cluster));
+                    if(dysma[i] > diss_val.get(0)){
                         dysmb[i] = dysma[i];
-                        dysma[i] = ptr_diss(i, i_cluster);
+                        dysma[i] = diss_val.get(0);
                         tclusterid[i] = k;
-                    }else if(dysmb[i] > ptr_diss(i, i_cluster)){
-                        dysmb[i] = ptr_diss(i, i_cluster);
+                    }else if(dysmb[i] > diss_val.get(0)){
+                        dysmb[i] = diss_val.get(0);
                     }
                 }
             }
 
+            // 计算 total
             if(total < 0){
                 total = 0;
-                for(int i=0; i<nelement; i++){
-                    total += ptr_weights(i) * dysma[i];
+                xsimd::batch<double> batch_total(0.0);
+                for(int i = 0; i < nelement; i++){
+                    xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(i));
+                    xsimd::batch<double> diss_val(dysma[i]);
+                    batch_total += weight * diss_val;
                 }
+
+                total = xsimd::reduce_add(batch_total);
             }
 
             dzsky = 1;
 
+            // 计算 removeCost
             for(int k=0; k<nclusters; k++){
                 int i = ptr_centroids(k);
                 double removeCost = 0;
 
-                for(int j=0; j<nelement; j++){
+                xsimd::batch<double> batch_removeCost(0.0);
+                for(int j = 0; j < nelement; j++){
                     if(tclusterid[j] == k){
-                        removeCost += ptr_weights(j) * (dysmb[j] - dysma[j]);
+                        xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(j));
+                        xsimd::batch<double> diff(dysmb[j] - dysma[j]);
+                        batch_removeCost += weight * diff;
                         fvect[j] = dysmb[j];
                     }else{
                         fvect[j] = dysma[j];
                     }
                 }
 
-                //Now check possible new medoids h
-                for(int h=0; h<nelement; h++){
+                removeCost = xsimd::reduce_add(batch_removeCost);
+
+                // 计算 addGain
+                for(int h = 0; h < nelement; h++){
                     if(ptr_diss(h, i) > 0){
                         double addGain = removeCost;
 
-                        //Compute gain of adding h as a medoid
-                        for(int j=0; j<nelement; j++){
+                        xsimd::batch<double> batch_addGain(addGain);
+
+                        for(int j = 0; j < nelement; j++){
                             if(ptr_diss(h, j) < fvect[j]){
-                                addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
+                                xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(j));
+                                xsimd::batch<double> diss_val(ptr_diss(h, j));
+                                xsimd::batch<double> fvect_val(fvect[j]);
+                                batch_addGain += weight * (diss_val - fvect_val);
                             }
                         }
 
-                        if(dzsky > addGain){
-                            dzsky = addGain;
+                        if(dzsky > batch_addGain.get(0)){
+                            dzsky = batch_addGain.get(0);
                             hbest = h;
                             nbest = i;
                         }
@@ -134,6 +150,7 @@ public:
                 }
             }
 
+            // 更新 centroids
             if(dzsky < WEIGHTED_CLUST_TOL){
                 for(int k=0; k<nclusters; k++){
                     if(ptr_centroids(k) == nbest){
@@ -145,7 +162,8 @@ public:
             }
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
-        for(int j=0; j<nelement; j++){
+        // 更新 clusterid
+        for(int j = 0; j < nelement; j++){
             ptr_clusterid(j) = ptr_centroids[tclusterid[j]];
         }
 

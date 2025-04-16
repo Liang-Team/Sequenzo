@@ -74,6 +74,7 @@ def get_include_dirs():
     return [
         pybind11.get_include(),
         pybind11.get_include(user=True),
+        'sequenzo/dissimilarity_measures/src/xsimd/include',
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
     ]

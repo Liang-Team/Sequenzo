@@ -87,7 +87,7 @@ class SequenceData:
         self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
         self.labels = labels or states
         self.id_col = id_col
-        self.ids = np.array(data[id_col].values) if self.id_col else np.arange(len(data))
+        self.ids = np.array(data[id_col].values) if self.id_col else data.index
         self.weights = weights
         self.start = start
         self.missing_handling = missing_handling or {"left": np.nan, "right": "DEL", "gaps": np.nan}

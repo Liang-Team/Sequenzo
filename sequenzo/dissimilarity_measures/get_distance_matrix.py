@@ -193,8 +193,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # all but NMS, NMSMST, SVRspell
     if isinstance(indel, (int, float)):
         indel_type = "number"
-    elif isinstance(indel, np.ndarray) and np.issubdtype(indel.dtype, np.number):
-        if np.size(indel) != nstates:
+    elif isinstance(indel, (np.ndarray, list)) and np.issubdtype(indel.dtype, np.number):
+        if len(indel) != nstates:
             raise ValueError("[!] When a vector, 'indel' must contain a cost for each state.")
         indel_type = "vector"
     elif indel == "auto":
@@ -212,7 +212,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     sm_methods = ["TRATE", "CONSTANT"]
 
     if sm is not None:
-        if isinstance(sm, np.ndarray) and sm.ndim == 2:
+        if isinstance(sm, np.ndarray) and (sm.ndim == 2 or sm.ndim == 3):
             sm_type = "matrix"
         elif isinstance(sm, np.ndarray) and sm.ndim == 1:
             sm_type = "array"
@@ -270,7 +270,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # OM, OMspell, HAM, DHD
     elif method in om_methods + ["HAM", "DHD"]:
-        if sm_type == "method":
+        if sm_type == "matrix":
+            # TODO : checkcost()
+            a = 1
+
+        elif sm_type == "method":
             tv = False
             cost = None
             if sm in ["INDELS", "INDELSLOG"]:
@@ -586,23 +590,23 @@ if __name__ == '__main__':
 
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
 
-    # df = pd.read_csv("Sequenzo/original_datasets_and_cleaning/country_co2_emissions_missing.csv")
+    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
 
-    time = list(df.columns)[4:]
-    # time = list(df.columns)[1:]
+    # time = list(df.columns)[4:]
+    time = list(df.columns)[1:]
 
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
 
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
-    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
 
     refseq = [[0, 1, 2], [99, 100]]
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
     print(om)
 
     print("================")

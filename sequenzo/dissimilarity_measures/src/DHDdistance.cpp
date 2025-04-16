@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
+#include <omp.h>
+#include "utils.h"
 
 namespace py = pybind11;
 
@@ -41,24 +43,6 @@ public:
         }
     }
 
-    double normalize_distance(double rawdist, double maxdist, double l1, double l2) const {
-        if (rawdist == 0.0) return 0.0;
-        switch (norm) {
-            case 0:
-                return rawdist;
-            case 1:
-                return l1 > l2 ? rawdist / l1 : l2 > 0.0 ? rawdist / l2 : 0.0;
-            case 2:
-                return (l1 * l2 == 0.0) ? (l1 != l2 ? 1.0 : 0.0)
-                                        : 1.0 - ((maxdist - rawdist) / (2.0 * std::sqrt(l1) * std::sqrt(l2)));
-            case 3:
-                return maxdist == 0.0 ? 1.0 : rawdist / maxdist;
-            case 4:
-                return maxdist == 0.0 ? 1.0 : (2.0 * rawdist) / (rawdist + maxdist);
-            default: return rawdist;
-        }
-    }
-
     double compute_distance(int is, int js) {
         try {
             int m = len;
@@ -74,7 +58,7 @@ public:
                 cost += ptr_sm(i, ptr_seq(is, i), ptr_seq(js, i));
             }
 
-            return normalize_distance(cost, maxdist, maxdist, maxdist);
+            return normalize_distance(cost, maxdist, maxdist, maxdist, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
@@ -85,6 +69,7 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
+            #pragma omp parallel for collapse(2)
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -104,6 +89,7 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
+            #pragma omp parallel for collapse(2)
             double cmpres = 0;
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
