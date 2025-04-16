@@ -115,12 +115,13 @@ def get_include_dirs():
     Returns:
         list: Paths to include directories.
     """
+    base_dir = Path(__file__).parent.resolve()
     return [
         pybind11.get_include(),
         pybind11.get_include(user=True),
-        'sequenzo/dissimilarity_measures/src/xsimd/include',
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
+        str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
     ]
 
 
