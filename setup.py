@@ -42,8 +42,12 @@ def get_compile_args_for_file(filename):
     """
     Returns appropriate compiler flags depending on whether the file is C or C++.
     """
-    base_cflags = ['-Wall', '-Wextra']
-    base_cppflags = ['-std=c++17'] + base_cflags
+    if sys.platform == 'win32':
+        base_cflags = ['/W4', '/bigobj']
+        base_cppflags = ['/std=c++17'] + base_cflags
+    else:
+        base_cflags = ['-Wall', '-Wextra']
+        base_cppflags = ['-std=c++17'] + base_cflags
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'

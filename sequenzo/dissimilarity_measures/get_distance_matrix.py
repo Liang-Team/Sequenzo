@@ -57,8 +57,6 @@
 """
 import gc
 import warnings
-import os
-import platform
 
 import numpy as np
 import pandas as pd
@@ -70,20 +68,6 @@ from sequenzo.define_sequence_data import SequenceData
 # @numba.jit(nopython=True, parallel=True)
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None):
-    current_os = platform.system()
-
-    try:
-        if current_os == "Linux" or current_os == "Darwin":
-            os.sched_setaffinity(0, {0, 1, 2})
-        elif current_os == "Windows":
-            import psutil
-
-            pid = os.getpid()
-            p = psutil.Process(pid)
-            p.cpu_affinity([0, 1, 2])
-    except AttributeError:
-        print("[!] cpu_affinity() not supported on this platform. Skipping...")
-
 
     from .utils.seqconc import seqconc
     from .utils.seqdss import seqdss
@@ -97,9 +81,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     gc.collect()                           # garbage collection
 
-    print("========= get_distance_matrix =======")
-    print(c_code)  # 是否为 None
-    print(dir(c_code))  # 检查它的属性
+    # print("========= get_distance_matrix =======")
+    # print(c_code)  # 是否为 None
+    # print(dir(c_code))  # 检查它的属性
 
     if opts is not None:
         seqdata = opts.get('seqdata')
@@ -329,12 +313,25 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                   with_missing=with_missing,
                                                   cval=1,
                                                   miss_cost=1)
+                if indel_type == "auto":
+                    indel = sm['indel']
+                    indel_type = "vector" if indel > 1 else "number"
+
+                sm = sm['sm']
+
             elif method == "DHD":
                 print("[>] Creating a 'sm' with the costs derived from the transition rates.\n")
                 sm = get_substitution_cost_matrix(seqdata, method="TRATE",
                                                   with_missing=with_missing,
                                                   cval=4, miss_cost=4, time_varying=True,
                                                   weighted=weighted)
+
+                if indel_type == "auto":
+                    indel = sm['indel']
+                    indel_type = "vector" if indel > 1 else "number"
+
+                sm = sm['sm']
+
             else:
                 raise ValueError("[x] 'sm' is missing.")
 
