@@ -3,7 +3,9 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
-#include <omp.h>
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 #include "utils.h"
 
 namespace py = pybind11;
@@ -69,7 +71,7 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -89,8 +91,8 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for collapse(2)
             double cmpres = 0;
+            #pragma omp parallel for
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
                     if(is == rseq){

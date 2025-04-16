@@ -3,6 +3,9 @@
 #include <vector>
 #include <iostream>
 #include <xsimd/xsimd.hpp>
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -31,7 +34,7 @@ public:
             auto ptr_seqdata_didxs = seqdata_didxs.unchecked<1>();
             auto ptr_dist_dseqs_num = dist_dseqs_num.unchecked<2>();
 
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for
             for(int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     int idx_i = ptr_seqdata_didxs(i);

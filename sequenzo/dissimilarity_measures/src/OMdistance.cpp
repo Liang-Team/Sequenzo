@@ -5,6 +5,9 @@
 #include <cmath>
 #include <iostream>
 #include "utils.h"
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -140,7 +143,7 @@ public:
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -158,8 +161,8 @@ public:
     py::array_t<double> compute_refseq_distances() {
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
-            #pragma omp parallel for collapse(2)
             double cmpres = 0;
+            #pragma omp parallel for
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
                     if(is == rseq){

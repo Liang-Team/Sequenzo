@@ -2,8 +2,11 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
-#include <xsimd/xsimd.hpp>  // 添加 xsimd 库头文件
+#include <xsimd/xsimd.hpp>
 #define WEIGHTED_CLUST_TOL -1e-10
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -46,6 +49,7 @@ public:
 
         constexpr int batch_size = xsimd::batch<double>::size;
 
+        #pragma omp parallel for
         for (int i = 0; i < rows; i++) {
             for (int j = 0; j < cols; j += batch_size) {
                 xsimd::batch<double> batch_vals = xsimd::load_unaligned(&ptr(i, j));
@@ -75,11 +79,11 @@ public:
         xsimd::batch<double> max_val(std::numeric_limits<double>::infinity()); // 默认是正无穷
 
         do {
+            #pragma omp parallel for
             for(int i=0; i<nelement; i++){
                 for(int k=0; k<nclusters; k++){
                     int i_cluster = ptr_centroids(k);
 
-                    // 使用 xsimd 批量处理
                     xsimd::batch<double> diss_val(ptr_diss(i, i_cluster));
                     if(dysma[i] > diss_val.get(0)){
                         dysmb[i] = dysma[i];
@@ -107,6 +111,7 @@ public:
             dzsky = 1;
 
             // 计算 removeCost
+            #pragma omp parallel for
             for(int k=0; k<nclusters; k++){
                 int i = ptr_centroids(k);
                 double removeCost = 0;

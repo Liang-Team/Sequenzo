@@ -3,6 +3,9 @@
 #include <vector>
 #include <iostream>
 #include <xsimd/xsimd.hpp>
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -44,6 +47,7 @@ public:
         }
 
         // 计算每个个体的贡献
+        #pragma omp parallel for
         for (int i = 0; i < ilen; i++) {
             int pos_i = ptr_indiv(i);
             double i_weight = ptr_weights(pos_i);
