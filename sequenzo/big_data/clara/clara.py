@@ -20,6 +20,9 @@ from sequenzo.big_data.clara.utils.davies_bouldin import *
 from sequenzo.big_data.clara.utils.k_medoids_once import *
 from sequenzo.big_data.clara.utils.get_weighted_diss import *
 
+from sequenzo.define_sequence_data import SequenceData
+from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+
 
 def adjustedRandIndex(x, y=None):
     if isinstance(x, np.ndarray):
