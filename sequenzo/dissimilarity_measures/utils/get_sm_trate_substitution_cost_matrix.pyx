@@ -1,69 +1,95 @@
+# cython: boundscheck=False, wraparound=False
 import numpy as np
-cimport numpy as cnp
-from sequenzo.define_sequence_data import SequenceData
-from libc.stdint cimport int32_t
+cimport numpy as np
 
-def get_sm_trate_cost_matrix(seqdata, bint time_varying=False, bint weighted=True, int lag=1, bint count=False):
+import pandas as pd
+from libc.math cimport isnan
+
+def get_sm_trate_cost_matrix(
+    object seqdata,
+    bint time_varying=False,
+    bint weighted=True,
+    int lag=1,
+    bint count=False
+):
+    """
+    Compute substitution cost matrix (transition rate matrix)
+    """
+
+    from sequenzo.define_sequence_data import SequenceData
     if not isinstance(seqdata, SequenceData):
-        raise ValueError("[x] Seqdata must be a pandas DataFrame representing sequences.")
+        raise ValueError("[x] Seqdata must be a pandas DataFrame wrapped in a SequenceData object.")
 
-    cdef cnp.ndarray[double, ndim=1] weights
+    cdef np.ndarray[np.float64_t, ndim=1] weights
     if weighted:
-        weights = seqdata.weights
+        weights = np.asarray(seqdata.weights, dtype=np.float64)
     else:
-        weights = np.ones(seqdata.seqdata.shape[0])
+        weights = np.ones(seqdata.seqdata.shape[0], dtype=np.float64)
 
-    cdef list states = seqdata.states
-    cdef dict statesMapping = seqdata.state_mapping
-
+    states = seqdata.states
+    statesMapping = seqdata.state_mapping
     cdef int _size = len(states) + 1
-    cdef int sdur = seqdata.seqdata.shape[1]
+    df = seqdata.seqdata
+    cdef int n_rows = df.shape[0]
+    cdef int sdur = df.shape[1]
+    cdef int i, j, t, sl, state_x, state_y
+    cdef double PA, PAB
 
-    cdef cnp.ndarray[int32_t, ndim=1] all_transition
     if lag < 0:
-        all_transition = np.arange(abs(lag), sdur, dtype=np.int32)
+        all_transition = list(range(abs(lag), sdur))
     else:
-        all_transition = np.arange(sdur - lag, dtype=np.int32)
+        all_transition = list(range(sdur - lag))
     cdef int num_transition = len(all_transition)
 
-    cdef cnp.ndarray[double, ndim=3] tmat_3d = np.zeros((num_transition, _size, _size))
-    cdef cnp.ndarray[double, ndim=2] tmat_2d = np.zeros((_size, _size))
-
-    cdef int sl, state_x, state_y
-    cdef cnp.ndarray[char, ndim=2] missing_cond
-
-    seqdata = seqdata.seqdata.to_numpy(dtype=np.int32)
+    # convert df to NumPy 2D array of ints
+    seq_mat = df.to_numpy(dtype=np.float64)
+    cdef np.ndarray[np.float64_t, ndim=2] seq_mat_mv = seq_mat
 
     if time_varying:
-        for sl in all_transition:
-            missing_cond = np.not_equal(seqdata[:, [sl + lag]], np.nan)
+        tmat = np.zeros((num_transition, _size, _size), dtype=np.float64)
 
+        for idx, sl in enumerate(all_transition):
             for state_x in statesMapping.values():
-                colx_cond = (seqdata[:, sl] == state_x)
-                PA = np.sum(weights * colx_cond * missing_cond)
+                PA = 0.0
+                for i in range(n_rows):
+                    if seq_mat_mv[i, sl] == state_x and not isnan(seq_mat_mv[i, sl + lag]):
+                        PA += weights[i]
 
                 if PA == 0:
-                    tmat_3d[sl, state_x, :] = 0
+                    tmat[idx, state_x, :] = 0
                 else:
                     for state_y in statesMapping.values():
-                        PAB = np.sum(weights * colx_cond * (seqdata[:, sl + lag] == state_y))
-                        tmat_3d[sl, state_x, state_y] = PAB if count else PAB / PA
+                        PAB = 0.0
+                        for i in range(n_rows):
+                            if (seq_mat_mv[i, sl] == state_x and
+                                not isnan(seq_mat_mv[i, sl + lag]) and
+                                seq_mat_mv[i, sl + lag] == state_y):
+                                PAB += weights[i]
 
-        return tmat_3d
+                        tmat[idx, state_x, state_y] = PAB if count else PAB / PA
 
     else:
-        missing_cond = np.not_equal(seqdata[:, all_transition + lag], np.nan)
+        tmat = np.zeros((_size, _size), dtype=np.float64)
 
         for state_x in statesMapping.values():
-            PA = np.sum(weights * np.sum((seqdata[:, all_transition] == state_x) & missing_cond, axis=1))
+            PA = 0.0
+            for i in range(n_rows):
+                for t in all_transition:
+                    if (seq_mat_mv[i, t] == state_x and
+                        not isnan(seq_mat_mv[i, t + lag])):
+                        PA += weights[i]
 
             if PA == 0:
-                tmat_2d[state_x, :] = 0
+                tmat[state_x, :] = 0
             else:
                 for state_y in statesMapping.values():
-                    PAB = np.sum(weights * np.sum(
-                        (seqdata[:, all_transition] == state_x) & (seqdata[:, all_transition + lag] == state_y),
-                        axis=1))
-                    tmat_2d[state_x, state_y] = PAB if count else PAB / PA
+                    PAB = 0.0
+                    for i in range(n_rows):
+                        for t in all_transition:
+                            if (seq_mat_mv[i, t] == state_x and
+                                seq_mat_mv[i, t + lag] == state_y):
+                                PAB += weights[i]
 
-        return tmat_2d
+                    tmat[state_x, state_y] = PAB if count else PAB / PA
+
+    return tmat

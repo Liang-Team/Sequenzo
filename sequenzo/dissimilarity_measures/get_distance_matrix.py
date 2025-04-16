@@ -593,6 +593,7 @@ if __name__ == '__main__':
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
 
     df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
 
     # time = list(df.columns)[4:]
     time = list(df.columns)[1:]
@@ -601,7 +602,7 @@ if __name__ == '__main__':
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
 
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
     sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
 
