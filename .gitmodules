@@ -1,0 +1,3 @@
+[submodule "sequenzo/dissimilarity_measures/src/xsimd"]
+    path = sequenzo/dissimilarity_measures/src/xsimd
+    url = https://github.com/xtensor-stack/xsimd.git
