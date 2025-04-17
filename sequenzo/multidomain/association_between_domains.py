@@ -89,9 +89,13 @@ def _classify_strength(v):
         v (float): Cramer's V statistic (0 to 1).
 
     Returns:
-        str: Strength level ('None', 'Weak', 'Moderate', 'Strong').
+        str: Strength level as a descriptive label.
     """
     if v < 0.1:
+        print(
+            "\n[!] Note: A Cramer's V below 0.1 suggests no strong linear association. "
+            "However, non-linear dependencies may still exist and are not captured by Cramer's V."
+        )
         return "None"
     elif v < 0.3:
         return "Weak"
@@ -99,6 +103,26 @@ def _classify_strength(v):
         return "Moderate"
     else:
         return "Strong"
+
+
+def _pvalue_to_stars(p):
+    """
+    Converts a p-value to significance stars.
+    Parameters:
+        p (float): P-value
+    Returns:
+        str: Significance stars string
+    """
+    if pd.isna(p):
+        return ""
+    if p < 0.001:
+        return "***"
+    elif p < 0.01:
+        return "**"
+    elif p < 0.05:
+        return "*"
+    else:
+        return ""
 
 
 def _explain_association(result_df):
@@ -123,7 +147,7 @@ def _explain_association(result_df):
 
 def _attach_explanations(result_df):
     """
-    Adds interpretation columns ('strength' and 'explanation') to result DataFrame.
+    Adds interpretation column ('strength') to result DataFrame.
 
     Parameters:
         result_df (pd.DataFrame): Original result table.
@@ -133,13 +157,6 @@ def _attach_explanations(result_df):
     """
     result_df["strength"] = result_df["v"].apply(
         lambda v: _classify_strength(v) if not pd.isna(v) else ""
-    )
-    result_df["explanation"] = result_df.apply(
-        lambda row: (
-            f"{row.name.replace('_with_', ' vs ')}: {_classify_strength(row['v'])} association (V = {row['v']:.3f})"
-            if not pd.isna(row['v']) else ""
-        ),
-        axis=1
     )
     return result_df
 
@@ -155,6 +172,9 @@ def _show_full_dataframe(df):
     Returns:
         pd.DataFrame: Full DataFrame.
     """
+
+    # print(df.to_string(index=True))
+
     with pd.option_context('display.max_columns', None, 'display.width', None, 'display.colheader_justify', 'left'):
         if 'ipykernel' in sys.modules:
             try:
@@ -213,7 +233,7 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
     for i, j in itertools.combinations(range(ndom), 2):
         d1, d2 = seqdata_dom[i], seqdata_dom[j]
         name1, name2 = dnames[i], dnames[j]
-        tabname = f"{name1}_with_{name2}"
+        tabname = f"{name1} vs {name2}"
         tabnames.append(tabname)
 
         xtab = d1.get_xtabs(d2, weighted=weighted)
@@ -264,10 +284,18 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
         # Completely clear attrs to avoid ValueError when printing
         result_df.attrs.clear()
 
+    # After computing result_df
     if explain:
         result_df = _attach_explanations(result_df)
-        for line in _explain_association(result_df):
-            print("💡", line)
+
+        result_df["p(LRT)"] = result_df["p(LRT)"].apply(
+            lambda p: f"{p:.3f} {_pvalue_to_stars(p)}".strip() if not pd.isna(p) else ""
+        )
+
+        # Convert p(v) to string with stars
+        result_df["p(v)"] = result_df["p(v)"].apply(
+            lambda p: f"{p:.3f} {_pvalue_to_stars(p)}".strip() if not pd.isna(p) else ""
+        )
 
     print("\n📜 Full results table:")
     _show_full_dataframe(result_df)
@@ -275,10 +303,9 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
     print("\n📘 Column explanations:")
     print("  - df       : Degrees of freedom for the test (typically 1 for binary state sequences).")
     print("  - LRT      : Likelihood Ratio Test statistic (higher = stronger dependence).")
-    print("  - p(LRT)   : p-value for the LRT statistic (low p => significant association).")
+    print("  - p(LRT)   : p-value for LRT + significance stars: * (p<.05), ** (p<.01), *** (p<.001)")
     print("  - v        : Cramer's V statistic (0 to 1, measures association strength).")
-    print("  - p(v)     : p-value for Cramer's V (based on chi-squared test).")
-    print("  - strength : Qualitative interpretation of Cramer's V ('None', 'Weak', 'Moderate', 'Strong').")
-    print("  - explanation : Human-readable interpretation combining domains and strength.")
-
+    print("  - p(v)     : p-value for Cramer's V (based on chi-squared test) + significance stars: * (p<.05), ** (p<.01), *** (p<.001)")
+    print("  - strength : Qualitative label for association strength based on Cramer's V:")
+    print("               0.00–0.09 → None, 0.10–0.29 → Weak, 0.30–0.49 → Moderate, ≥0.50 → Strong")
 
