@@ -57,7 +57,15 @@ Homepage = "https://github.com/Liang-Team/Sequenzo"
 Documentation = "https://sequenzo.yuqi-liang.tech"
 
 [tool.setuptools]
-package-data = {"sequenzo.datasets" = ["country_co2_emissions.csv", "country_income.csv", "chinese_colonial_territories.csv"]}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"sequenzo.datasets" = ["*.csv"]
+"sequenzo.dissimilarity_measures" = [
+  "src/xsimd/include/**/*.hpp",
+  "src/xsimd/include/**/*.h"
+]
+
 
 [tool.setuptools.packages.find]
 # 这告诉 setuptools：sequenzo 包目录就直接在当前目录下（不是 sequenzo/sequenzo 里）
