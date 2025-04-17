@@ -8,6 +8,7 @@
 
 from .disscenter import disscentertrim
 
+
 def _import_c_code():
     """Lazily import the c_code module to avoid circular dependencies during installation"""
     try:
