@@ -455,8 +455,8 @@ if __name__ == '__main__':
 
     sequence_data = [seq_left, seq_child, seq_marr]
 
-    MD = compute_cat_distance_matrix(sequence_data, method="OM", sm=["TRATE"], indel=[2, 1, 1], what="diss", link="sum")
+    cat_distance_matrix = compute_cat_distance_matrix(sequence_data, method="OM", sm=["TRATE"], indel=[2, 1, 1], what="diss", link="sum")
 
-    print(MD)
+    print(cat_distance_matrix)
 
     print("================")

@@ -4,14 +4,18 @@
 @Time    : 15/04/2025 21:30
 @Desc    : Modular utility functions for CombT (Combined Typology) strategy.
            Split into reusable components to give users control over distance calculation, clustering, and label merging.
+
+           raw ASW - 不低于0.5 也能接受 ， 6
 """
+from collections import Counter
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # 设置后端：非交互式（避免 show() 崩溃）
 import matplotlib.pyplot as plt
-
 import seaborn as sns
+from sklearn.metrics import silhouette_score
+
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.clustering.hierarchical_clustering import Cluster, ClusterQuality
 from sequenzo.visualization.utils.utils import save_and_show_results
@@ -33,6 +37,7 @@ def assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray
     assert all(len(cl) == n for cl in cluster_labels), "[CombT] Cluster label arrays must have the same length."
     combined = [sep.join(str(cl[i]) for cl in cluster_labels) for i in range(n)]
     return pd.Series(combined, index=ids, name="CombT")
+
 
 def get_combt_membership_table(ids: np.ndarray,
                                 cluster_labels: list[np.ndarray],
@@ -91,6 +96,8 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
 
     print("\n[>] CombT Frequency Table:")
     print(freq_table)
+    freq_table.to_csv("freq_table.csv", index=False)
+    print("\n[>] freq_table.csv has been saved.")
 
     # Optional bar plot
     plt.figure(figsize=(10, 5))
@@ -103,7 +110,89 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
     save_and_show_results(save_as="Frequency of Combined Typologies")
     print("\nFrequency of Combined Typologies.png has been saved.")
 
-    return membership_df
+    return diss_matrices, membership_df
+
+
+def compute_silhouette_score(diss_matrix, labels):
+    """
+    Wrapper to compute silhouette with precomputed distance.
+    """
+    return silhouette_score(diss_matrix, labels, metric='precomputed')
+
+
+def merge_sparse_combt_types(distance_matrix,
+                              labels,
+                              min_size=30,  # For sample size about 2,000
+                              verbose=True):
+    """
+    Merge sparse CombT labels based on silhouette score threshold (ASW >= 0.5 strategy).
+
+    Parameters:
+    - distance_matrix: np.ndarray or pd.DataFrame, full square dissimilarity matrix.
+    - labels: array-like of original CombT string labels.
+    - min_size: int, minimum samples per allowed group.
+    - verbose: print steps or not.
+
+    Returns:
+    - new_labels: numpy array of updated labels after merging.
+    """
+    labels = np.array(labels)
+    label_counts = pd.Series(labels).value_counts()
+    original_labels = sorted(label_counts.index.tolist())
+
+    label_map = {label: f"C{i+1}" for i, label in enumerate(original_labels)}
+    numeric_labels = np.array([label_map[l] for l in labels])
+    reverse_map = {v: k for k, v in label_map.items()}
+
+    unique_labels = np.unique(numeric_labels)
+    current_score = compute_silhouette_score(distance_matrix, numeric_labels)
+
+    while current_score >= 0.5:
+        counts = Counter(numeric_labels)
+        small_clusters = [lab for lab, cnt in counts.items() if cnt < min_size]
+        if not small_clusters:
+            break
+
+        merged = False
+        for small in small_clusters:
+            other_labels = [lab for lab in np.unique(numeric_labels) if lab != small]
+
+            best_score = -np.inf
+            best_target = None
+
+            for target in other_labels:
+                temp_labels = numeric_labels.copy()
+                temp_labels[temp_labels == small] = target
+                try:
+                    score = compute_silhouette_score(distance_matrix, temp_labels)
+                    if score > best_score:
+                        best_score = score
+                        best_target = target
+                except Exception:
+                    continue
+
+            if best_score >= 0.5:
+                numeric_labels[numeric_labels == small] = best_target
+                current_score = best_score
+                if verbose:
+                    print(f"[+] Merged {small} → {best_target} | New ASW: {current_score:.4f}")
+                merged = True
+                break
+
+        if not merged:
+            break
+
+    # Convert back to readable labels
+    merged_map = {old: reverse_map[old] for old in np.unique(numeric_labels)}
+    new_combined = [merged_map[l] for l in numeric_labels]
+
+    original_cluster_count = len(set(labels))
+    final_cluster_count = len(set(new_combined))
+
+    print(f"\n[>] CombT clusters before merging: {original_cluster_count}")
+    print(f"[>] CombT clusters after merging: {final_cluster_count}")
+
+    return np.array(new_combined)
 
 
 if __name__ == '__main__':
@@ -129,4 +218,18 @@ if __name__ == '__main__':
         {"method": "OM", "sm": "CONSTANT", "indel": 1},
     ]
 
-    membership_df = get_interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
+    diss_matrices, membership_df = get_interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
+
+    dat_matrix = compute_dat_distance_matrix(domains, method_params=method_params)
+
+    # CombT 作为 label
+    labels = membership_df["CombT"].values
+
+    # 合并稀疏组合类型
+    merged_labels = merge_sparse_combt_types(dat_matrix, labels, min_size=50)
+
+    # 更新 membership 表
+    membership_df["CombT_Merged"] = merged_labels
+
+    membership_df.reset_index().rename(columns={"index": "id"}).to_csv("combt_membership_table.csv", index=False)
+    print("\n[>] combt_membership_table.csv has been saved.")
