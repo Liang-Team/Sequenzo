@@ -42,14 +42,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install Cython pybind11 numpy build cibuildwheel twine
 
-      - name: Clone xsimd with GitHub Token (macOS only)
-        if: runner.os == 'macOS'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p sequenzo/dissimilarity_measures/src
-          git clone --depth 1 https://$GH_TOKEN@github.com/xtensor-stack/xsimd.git sequenzo/dissimilarity_measures/src/xsimd
-
       - name: Build Cython wheels on macOS
         if: runner.os == 'macOS'
         run: |
