@@ -9,7 +9,9 @@
 __version__ = "0.1.5"
 
 # Lazy import: public submodules
-from sequenzo import datasets, visualization, clustering, dissimilarity_measures, big_data, define_sequence_data
+from sequenzo import (datasets, visualization, clustering,
+                      dissimilarity_measures, big_data, define_sequence_data,
+                      multidomain)
 
 
 def __getattr__(name):
@@ -32,6 +34,9 @@ def __getattr__(name):
         elif name == "big_data":
             from sequenzo.big_data import big_data
             return big_data
+        elif name == "multidomain":
+            from sequenzo.multidomain import multidomain
+            return multidomain
     except ImportError as e:
         raise AttributeError(f"Could not import {name}: {e}")
 
@@ -48,4 +53,5 @@ __all__ = [
     'dissimilarity_measures',
     'SequenceData',
     'big_data',
+    'multidomain'
 ]

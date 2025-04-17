@@ -47,7 +47,7 @@ def get_combt_membership_table(ids: np.ndarray,
     return df
 
 
-def interactive_combined_typology(domains, method_params, domain_names=None, norm="zscore"):
+def get_interactive_combined_typology(domains, method_params, domain_names=None, norm="zscore"):
     diss_matrices = compute_domain_distances(domains, method_params)
 
     cluster_labels = []
@@ -129,4 +129,4 @@ if __name__ == '__main__':
         {"method": "OM", "sm": "CONSTANT", "indel": 1},
     ]
 
-    membership_df = interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
+    membership_df = get_interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])

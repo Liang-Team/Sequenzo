@@ -31,26 +31,47 @@ from .clustering import Cluster, ClusterResults, ClusterQuality
 from .big_data.clara.clara import clara
 from .big_data.clara.visualization import plot_scores_from_dataframe
 
+from .multidomain import (create_idcd_sequence_from_csvs,
+                          compute_cat_distance_matrix,
+                          compute_dat_distance_matrix,
+                          get_interactive_combined_typology,
+                          get_association_between_domains)
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
+    # Datasets
     "load_dataset",
     "list_datasets",
+
     "SequenceData",
+
+    # Visualization
     "plot_sequence_index",
     "plot_most_frequent_sequences",
     "plot_single_medoid",
-    "get_distance_matrix",
-    "get_substitution_cost_matrix",
-    "Cluster",
-    "ClusterResults",
-    "ClusterQuality",
     "plot_state_distribution",
     "plot_modal_state",
     "plot_relative_frequency",
     "plot_mean_time",
     "plot_transition_matrix",
-    "clara",
-    "plot_scores_from_dataframe"
-]
 
+    # Dissimilarity measures
+    "get_distance_matrix",
+    "get_substitution_cost_matrix",
+
+    # Hierarchical clustering
+    "Cluster",
+    "ClusterResults",
+    "ClusterQuality",
+
+    # Big data
+    "clara",
+    "plot_scores_from_dataframe",
+
+    # Multi-domain sequence analysis
+    "create_idcd_sequence_from_csvs",
+    "compute_cat_distance_matrix",
+    "compute_dat_distance_matrix",
+    "get_interactive_combined_typology",
+    "get_association_between_domains"
+]
