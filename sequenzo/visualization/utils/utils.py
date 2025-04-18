@@ -168,7 +168,18 @@ def save_figure_to_buffer(fig, dpi: int = 200) -> BytesIO:
     return buffer
 
 
-def save_and_show_results(save_as, dpi=200):
+def save_and_show_results(save_as, dpi=200, show=True):
+    """
+    Save and optionally display matplotlib figure.
+
+    Parameters:
+    - save_as: Optional filename to save the figure to
+    - dpi: Resolution for saved image
+    - show: Whether to display the figure (default: True)
+
+    Returns:
+    - The current figure object (plt.gcf())
+    """
     if save_as:
         # Ensure the filename has an extension
         if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
@@ -176,7 +187,12 @@ def save_and_show_results(save_as, dpi=200):
 
         plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
 
-    plt.show()
-    # Release resources
-    plt.close()
+    if show:
+        plt.show()
+    else:
+        # Don't show, but keep the figure open for further modifications
+        pass
+
+    # Return the current figure
+    return plt.gcf()
 

@@ -364,7 +364,8 @@ class ClusterQuality:
                              grid=True,
                              save_as=None,
                              dpi=200,
-                             figsize=(12, 8)
+                             figsize=(12, 8),
+                             show=True
                              ):
         """
         Plot combined scores for clustering quality metrics with customizable parameters.
@@ -388,6 +389,9 @@ class ClusterQuality:
         :param save_as: File path to save the plot
         :param dpi: DPI for saved image
         :param figsize: Figure size in inches
+        :param show: Whether to display the figure (default: True)
+
+        :return: The figure object
         """
         # Store original scores before normalization
         original_scores = self.scores.copy()
@@ -459,7 +463,7 @@ class ClusterQuality:
         plt.subplots_adjust(bottom=0.1)
 
         # Save and show the plot
-        save_and_show_results(save_as, dpi)
+        return save_and_show_results(save_as, dpi, show=show)
 
 
 class ClusterResults:
