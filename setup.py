@@ -193,7 +193,7 @@ def configure_cython_extensions():
         for path in pyx_paths:
             extra_args = get_compile_args_for_file(path)
             extension = Extension(
-                name=path.replace("/", ".").replace(".pyx", ""),
+                name=str(Path(path).with_suffix("")).replace("/", ".").replace("\\", "."),
                 sources=[path],
                 include_dirs=get_include_dirs(),
                 extra_compile_args=extra_args,
