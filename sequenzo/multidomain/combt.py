@@ -11,7 +11,10 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")  # 设置后端：非交互式（避免 show() 崩溃）
+import os
+# 如果没有 DISPLAY 环境变量（说明是服务器/终端），才设置为 Agg
+if os.environ.get("DISPLAY", "") == "":
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import silhouette_score
@@ -218,17 +221,19 @@ if __name__ == '__main__':
         {"method": "OM", "sm": "CONSTANT", "indel": 1},
     ]
 
+    # TODO：一定要让大家理解这个order很重要 domains = [seq_left, seq_child, seq_marr] 和下面的domains 和 domain_names
     diss_matrices, membership_df = get_interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
 
     dat_matrix = compute_dat_distance_matrix(domains, method_params=method_params)
 
-    # CombT 作为 label
+    # CombT as the label
     labels = membership_df["CombT"].values
 
-    # 合并稀疏组合类型
+    # Merge sparse clusters
+    # 也要让大家理解，要看他们的 proportion
     merged_labels = merge_sparse_combt_types(dat_matrix, labels, min_size=50)
 
-    # 更新 membership 表
+    # Update the membership table
     membership_df["CombT_Merged"] = merged_labels
 
     membership_df.reset_index().rename(columns={"index": "id"}).to_csv("combt_membership_table.csv", index=False)

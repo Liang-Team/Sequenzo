@@ -50,6 +50,7 @@ def compute_dat_distance_matrix(
 
 
 if __name__ == '__main__':
+
     from sequenzo import *
 
     left_df = load_dataset('biofam_left_domain')
@@ -71,7 +72,7 @@ if __name__ == '__main__':
         {"method": "OM", "sm": "TRATE", "indel": "auto"},
         {"method": "OM", "sm": "CONSTANT", "indel": "auto"},
         # {"method": "OM", "sm": "CONSTANT", "indel": 1},
-        {"method": "DHD"}   # 欣怡测试的时候，可以把上面的这一行 comment，然后 comment 这一行
+        {"method": "DHD"}
     ]
 
     dat_matrix = compute_dat_distance_matrix(domains_seq_list, method_params=domain_params)

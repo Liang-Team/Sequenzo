@@ -7,7 +7,7 @@
 from .idcd import create_idcd_sequence_from_csvs
 from .cat import compute_cat_distance_matrix
 from .dat import compute_dat_distance_matrix
-from .combt import get_interactive_combined_typology
+from .combt import get_interactive_combined_typology, merge_sparse_combt_types
 from .association_between_domains import get_association_between_domains
 
 
@@ -16,5 +16,6 @@ __all__ = [
     "compute_cat_distance_matrix",
     "compute_dat_distance_matrix",
     "get_interactive_combined_typology",
-    "get_association_between_domains"
+    "merge_sparse_combt_types",
+    "get_association_between_domains",
 ]

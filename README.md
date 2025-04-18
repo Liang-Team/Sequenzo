@@ -130,10 +130,12 @@ Check out our [contribution guide]() for more details (work in progress).
 * [Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford](https://www.inet.ox.ac.uk/people/jan-meyerhoff-liang)
 
 **Acknowledgements**
-* Technical advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
+* Methodological advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
+* With special thanks to our initial testers (alphabetically ordered): [Joji Chia](https://sociology.illinois.edu/directory/profile/jbchia2), [Kass Gonzalez](https://www.linkedin.com/in/kass-gonzalez-72a778276/), [Sinyee Lu](https://sociology.illinois.edu/directory/profile/qianyil4), [Sohee Shin](https://sociology.illinois.edu/directory/profile/sohees2)
 * Website and related technical support: [Mactavish](https://github.com/mactavishz)
 * Visual design consultant: Changyu Yi
 * Sequence data sources compilation
   * Economics: Jan Meyerhoff-Liang
   * History: Jingrui Chen
 * Yuqi's PhD advisor: [Professor Ridhi Kashyap, University of Oxford](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/)
+
