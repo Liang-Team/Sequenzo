@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 import os
+
 # Set to Agg backend if no DISPLAY environment variable (server/terminal)
 if os.environ.get("DISPLAY", "") == "":
     matplotlib.use("Agg")
@@ -22,7 +23,7 @@ from sequenzo.clustering.hierarchical_clustering import Cluster, ClusterQuality
 from sequenzo.visualization.utils.utils import save_and_show_results
 
 
-def compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray]:
+def _compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray]:
     """
     Compute distance matrices for each domain using specified methods.
 
@@ -48,38 +49,7 @@ def compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray
     return distances
 
 
-def compute_dat_distance_matrix(sequence_objects, method_params, weights=None) -> np.ndarray:
-    """
-    Compute a combined distance matrix using the Distance Additive Trick (DAT).
-
-    Parameters:
-    - sequence_objects: List of sequence data objects, one per domain
-    - method_params: List of parameter dictionaries for distance computation, one per domain
-    - weights: Optional list of weights for each domain (default: equal weights)
-
-    Returns:
-    - Combined distance matrix
-    """
-    distances = compute_domain_distances(sequence_objects, method_params)
-
-    if weights is None:
-        weights = [1.0] * len(distances)
-
-    if len(weights) != len(distances):
-        raise ValueError("[CombT] Number of weights must match number of domains.")
-
-    # Normalize weights
-    weights = np.array(weights) / sum(weights)
-
-    # Compute weighted sum of distance matrices
-    combined_matrix = np.zeros_like(distances[0])
-    for i, dist in enumerate(distances):
-        combined_matrix += weights[i] * dist
-
-    return combined_matrix
-
-
-def assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray, sep: str = "+") -> pd.Series:
+def _assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray, sep: str = "+") -> pd.Series:
     """
     Assemble the combined typology from individual domain cluster labels.
 
@@ -97,10 +67,10 @@ def assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray
     return pd.Series(combined, index=ids, name="CombT")
 
 
-def get_combt_membership_table(ids: np.ndarray,
-                               cluster_labels: list[np.ndarray],
-                               combined_typology: pd.Series,
-                               domain_names: list[str] = None) -> pd.DataFrame:
+def _get_combt_membership_table(ids: np.ndarray,
+                                cluster_labels: list[np.ndarray],
+                                combined_typology: pd.Series,
+                                domain_names: list[str] = None) -> pd.DataFrame:
     """
     Create a membership table that shows the domain cluster and combined typology for each ID.
 
@@ -134,7 +104,7 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
     matplotlib.use('Agg')  # 在函数开始处强制使用Agg后端
 
     try:
-        diss_matrices = compute_domain_distances(domains, method_params)
+        diss_matrices = _compute_domain_distances(domains, method_params)
 
         cluster_labels = []
         ids = domains[0].ids
@@ -169,7 +139,7 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
                                                        show=False)  # 不显示，只返回图形对象
 
                     # 直接保存图形而不显示
-                    fig.savefig(f"Cluster Quality - {domain_names[i]}.png", dpi=300)
+                    fig.savefig(f"Cluster Quality - {domain_names[i]}.png", dpi=200)
                     plt.close(fig)  # 确保关闭图形
 
                     print(
@@ -188,8 +158,8 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
                     except Exception as e:
                         print(f"[!] Invalid input: {e}. Please try again.")
 
-        combt_series = assemble_combined_typology(cluster_labels, ids=ids)
-        membership_df = get_combt_membership_table(ids, cluster_labels, combt_series, domain_names)
+        combt_series = _assemble_combined_typology(cluster_labels, ids=ids)
+        membership_df = _get_combt_membership_table(ids, cluster_labels, combt_series, domain_names)
 
         print("\n[>] Combined Typology Membership Table Preview:")
         print(membership_df.reset_index().rename(columns={"index": "id"}).head())
@@ -218,7 +188,7 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
             plt.tight_layout()
 
             # 直接保存图形而不显示
-            plt.savefig("Frequency of Combined Typologies.png", dpi=300)
+            plt.savefig("Frequency of Combined Typologies.png", dpi=200)
             plt.close()  # 确保关闭图形
 
             print("\n[>] Frequency of Combined Typologies.png has been saved.")
@@ -232,7 +202,7 @@ def get_interactive_combined_typology(domains, method_params, domain_names=None,
         matplotlib.use(original_backend)
 
 
-def compute_silhouette_score(diss_matrix, labels):
+def _compute_silhouette_score(diss_matrix, labels):
     """
     Compute silhouette score with precomputed distance matrix.
 
@@ -250,7 +220,10 @@ def merge_sparse_combt_types(distance_matrix,
                              labels,
                              min_size=30,  # For sample size about 2,000
                              asw_threshold=0.5,  # Silhouette score threshold
-                             verbose=True):
+                             verbose=True,
+                             print_merge_details=True,
+                             visualize_process=True,
+                             visualization_path="merge_progress.png"):
     """
     Merge sparse CombT labels based on silhouette score threshold strategy.
 
@@ -263,6 +236,9 @@ def merge_sparse_combt_types(distance_matrix,
     - min_size: int, minimum samples per allowed group.
     - asw_threshold: float, minimum silhouette score threshold to accept a merge.
     - verbose: bool, print steps or not.
+    - print_merge_details: bool, whether to print detailed merge history at the end.
+    - visualize_process: bool, whether to create a visualization of the merge process.
+    - visualization_path: str, file path to save the visualization (if visualize_process=True).
 
     Returns:
     - new_labels: numpy array of updated labels after merging.
@@ -280,7 +256,8 @@ def merge_sparse_combt_types(distance_matrix,
 
     labels = np.array(labels)
     if len(labels) != distance_matrix.shape[0]:
-        raise ValueError(f"Length of labels ({len(labels)}) does not match distance matrix dimensions ({distance_matrix.shape[0]})")
+        raise ValueError(
+            f"Length of labels ({len(labels)}) does not match distance matrix dimensions ({distance_matrix.shape[0]})")
 
     # Track merge history and quality metrics
     merge_info = {
@@ -299,12 +276,12 @@ def merge_sparse_combt_types(distance_matrix,
     merge_info["initial_cluster_count"] = len(original_labels)
 
     # Create a mapping between string labels and numeric labels
-    label_map = {label: f"C{i+1}" for i, label in enumerate(original_labels)}
+    label_map = {label: f"C{i + 1}" for i, label in enumerate(original_labels)}
     numeric_labels = np.array([label_map[l] for l in labels])
     reverse_map = {v: k for k, v in label_map.items()}
 
     unique_labels = np.unique(numeric_labels)
-    current_score = compute_silhouette_score(distance_matrix, numeric_labels)
+    current_score = _compute_silhouette_score(distance_matrix, numeric_labels)
     merge_info["initial_silhouette"] = current_score
 
     if verbose:
@@ -339,7 +316,7 @@ def merge_sparse_combt_types(distance_matrix,
                 temp_labels = numeric_labels.copy()
                 temp_labels[temp_labels == small] = target
                 try:
-                    score = compute_silhouette_score(distance_matrix, temp_labels)
+                    score = _compute_silhouette_score(distance_matrix, temp_labels)
                     if score > best_score:
                         best_score = score
                         best_target = target
@@ -367,7 +344,8 @@ def merge_sparse_combt_types(distance_matrix,
                 total_merges += 1
 
                 if verbose:
-                    print(f"[+] Merged {small} ({reverse_map[small]}, size={old_count}) → {best_target} ({reverse_map[best_target]}) | New ASW: {current_score:.4f}")
+                    print(
+                        f"[+] Merged {small} ({reverse_map[small]}, size={old_count}) → {best_target} ({reverse_map[best_target]}) | New ASW: {current_score:.4f}")
 
                 merged = True
                 break
@@ -396,16 +374,33 @@ def merge_sparse_combt_types(distance_matrix,
         print(f"[>] Total merges performed: {total_merges}")
         print(f"[>] Final ASW: {current_score:.4f}")
 
+    # Print merge history details if requested
+    if verbose and print_merge_details and merge_info["merge_history"]:
+        print("\n[>] Merge History Details:")
+        for i, merge in enumerate(merge_info["merge_history"]):
+            print(
+                f"  Merge {i + 1}: {merge['source']} (size={merge['source_size']}) → {merge['target']} | ASW: {merge['new_asw']:.4f}")
+
+    # Visualize merge process if requested
+    if visualize_process and merge_info["merge_history"]:
+        try:
+            _plot_merge_progress(merge_info, save_as=visualization_path)
+            if verbose:
+                print(f"\n[>] Merge process visualization saved to: {visualization_path}")
+        except Exception as e:
+            if verbose:
+                print(f"[!] Warning: Could not create merge visualization: {e}")
+
     return np.array(new_combined), merge_info
 
 
-def plot_merge_progress(merge_info, save_as=None):
+def _plot_merge_progress(merge_info, save_as=None):
     """
-    Visualize the progress of the cluster merging process.
+    Internal function to visualize the progress of the cluster merging process.
 
     Parameters:
     - merge_info: dict, merge information returned by merge_sparse_combt_types
-    - save_as: str, filename to save the plot (if None, just display)
+    - save_as: str, filename to save the plot
     """
     if not merge_info["merge_history"]:
         print("No merges were performed.")
@@ -458,8 +453,7 @@ def plot_merge_progress(merge_info, save_as=None):
             plt.tight_layout()
 
             if save_as:
-                plt.savefig(save_as, dpi=300)
-                print(f"[>] Plot saved as {save_as}")
+                plt.savefig(save_as, dpi=200)
 
             plt.close()  # 确保关闭图形
 
@@ -495,7 +489,9 @@ if __name__ == '__main__':
     ]
 
     # NOTE: The order of domains is critical - must match between domains list and domain_names
-    diss_matrices, membership_df = get_interactive_combined_typology(domains, method_params, domain_names=["Left", "Child", "Married"])
+    diss_matrices, membership_df = get_interactive_combined_typology(domains,
+                                                                     method_params,
+                                                                     domain_names=["Left", "Child", "Married"])
 
     dat_matrix = compute_dat_distance_matrix(domains, method_params=method_params)
 
@@ -503,25 +499,20 @@ if __name__ == '__main__':
     labels = membership_df["CombT"].values
 
     # Merge sparse clusters - important to check the proportions before deciding min_size
-    merged_labels, merge_info = merge_sparse_combt_types(
-        distance_matrix=dat_matrix,
-        labels=labels,
-        min_size=50,
-        asw_threshold=0.5,
-        verbose=True
-    )
+    merged_labels, merge_info = merge_sparse_combt_types(distance_matrix=dat_matrix,
+                                                         labels=labels,
+                                                         min_size=50,
+                                                         asw_threshold=0.5,
+                                                         verbose=True,
+                                                         # Optional parameters below, the default is True
+                                                         print_merge_details=True,
+                                                         visualize_process=True,
+                                                         visualization_path="merge_progress_combt.png"
+                                                         )
 
-    # Update the membership table
+    # Update the membership dataframe
     membership_df["CombT_Merged"] = merged_labels
 
     # Save results
     membership_df.reset_index().rename(columns={"index": "id"}).to_csv("combt_membership_table.csv", index=False)
     print("\n[>] combt_membership_table.csv has been saved.")
-
-    # Visualize merge process
-    plot_merge_progress(merge_info, save_as="merge_progress.png")
-
-    # Print merge history details
-    print("\n[>] Merge History Details:")
-    for i, merge in enumerate(merge_info["merge_history"]):
-        print(f"  Merge {i+1}: {merge['source']} (size={merge['source_size']}) → {merge['target']} | ASW: {merge['new_asw']:.4f}")
