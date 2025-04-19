@@ -35,9 +35,6 @@ public:
             dist_matrix = py::array_t<double>({nseq, nseq});
 
             fmatsize = seqlen + 1;
-            fmat.resize(fmatsize);
-            for (int i = 0; i < fmatsize; ++i)
-                fmat[i].resize(fmatsize, 0);
 
             // ==================
             // initialize maxcost
@@ -102,29 +99,28 @@ public:
                 nSuf--;
             }
 
+            std::vector<std::vector<double>> local_fmat(fmatsize, std::vector<double>(fmatsize, 0));
+
             m = mSuf - prefix;
             n = nSuf - prefix;
             for(int i = 0; i < m; i ++)
-                fmat[i][0]  = i * indel;
+                local_fmat[i][0]  = i * indel;
             for(int i = 0; i < n; i ++)
-                fmat[0][i] = i * indel;
+                local_fmat[0][i] = i * indel;
 
             for(int i = prefix+1; i < mSuf; i ++){
                 for(int j = prefix+1; j < nSuf; j ++){
-                    // Use SIMD batch processing to compute min and other operations
-                    xsimd::batch<double> min_batch, j_indel_batch, sub_batch;
+                    double minimum = local_fmat[i-1-prefix][j-prefix] + indel;
+                    double j_indel = local_fmat[i-prefix][j-1-prefix] + indel;
 
-                    // Calculate the three values and perform min operation
-                    min_batch = xsimd::batch<double>(fmat[i-1-prefix][j-prefix] + indel);
-                    j_indel_batch = xsimd::batch<double>(fmat[i-prefix][j-1-prefix] + indel);
-                    sub_batch = xsimd::batch<double>((ptr_seq(is, i-1) == ptr_seq(js, j-1)) ?
-                                                     fmat[i-1-prefix][j-1-prefix] :
-                                                     (fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1))));
+                    double sub = 0;
+                    if(ptr_seq(is, i-1) == ptr_seq(js, j-1)){
+                        sub = local_fmat[i-1-prefix][j-1-prefix];
+                    }else{
+                        sub = local_fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1));
+                    }
 
-                    // Store the result
-                    xsimd::batch<double> result = xsimd::min(min_batch, j_indel_batch);
-                    result = xsimd::min(result, sub_batch);
-                    fmat[i-prefix][j-prefix] = result.get(0);
+                    local_fmat[i-prefix][j-prefix] = std::min({minimum, j_indel, sub});
                 }
             }
 
@@ -133,7 +129,7 @@ public:
             double ml = double(m) * indel;
             double nl = double(n) * indel;
 
-            return normalize_distance(fmat[mSuf-1-prefix][nSuf-1-prefix],maxpossiblecost, ml, nl, norm);
+            return normalize_distance(local_fmat[mSuf-1-prefix][nSuf-1-prefix],maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
@@ -143,14 +139,19 @@ public:
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
-            #pragma omp parallel for
-            for (int i = 0; i < nseq; i++) {
-                for (int j = i; j < nseq; j++) {
-                    double dist = compute_distance(i, j);
-                    buffer(i, j) = dist;
-                    buffer(j, i) = dist;
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(static)
+                for (int i = 0; i < nseq; i++) {
+                    for (int j = i; j < nseq; j++) {
+                        double dist = compute_distance(i, j);
+
+                        buffer(i, j) = dist;
+                        buffer(j, i) = dist;
+                    }
                 }
             }
+
             return dist_matrix;
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
@@ -162,16 +163,19 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             double cmpres = 0;
-            #pragma omp parallel for
-            for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                for (int is = 0; is < nseq; is ++) {
-                    if(is == rseq){
-                        cmpres = 0;
-                    }else{
-                        cmpres = compute_distance(is, rseq);
-                    }
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(static)
+                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
+                    for (int is = 0; is < nseq; is ++) {
+                        if(is == rseq){
+                            cmpres = 0;
+                        }else{
+                            cmpres = compute_distance(is, rseq);
+                        }
 
-                    buffer(is, rseq-rseq1) = cmpres;
+                        buffer(is, rseq-rseq1) = cmpres;
+                    }
                 }
             }
 
@@ -192,7 +196,6 @@ private:
     int alphasize;
     int fmatsize;
     py::array_t<int> seqlength;
-    std::vector<std::vector<double>> fmat;
     py::array_t<double> dist_matrix;
     double maxscost;
 

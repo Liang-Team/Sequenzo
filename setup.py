@@ -116,10 +116,12 @@ def get_compile_args_for_file(filename):
         base_cflags = ['/W4', '/bigobj']
         base_cppflags = ['/std:c++17'] + base_cflags
         openmp_flag = ['/openmp']
+        # openmp_flag = []
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
         openmp_flag = ['-fopenmp'] if has_openmp_support() else []
+        # openmp_flag = []
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'

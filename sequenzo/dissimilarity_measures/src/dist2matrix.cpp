@@ -2,7 +2,6 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
-#include <xsimd/xsimd.hpp>
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -31,20 +30,15 @@ public:
     py::array_t<double> padding_matrix() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
-            auto ptr_seqdata_didxs = seqdata_didxs.unchecked<1>();
-            auto ptr_dist_dseqs_num = dist_dseqs_num.unchecked<2>();
 
-            #pragma omp parallel for
-            for(int i = 0; i < nseq; i++) {
-                for (int j = i; j < nseq; j++) {
-                    int idx_i = ptr_seqdata_didxs(i);
-                    int idx_j = ptr_seqdata_didxs(j);
+            #pragma omp for schedule(static)
+            for(int i=0; i < nseq; i++){
+                for(int j=i; j < nseq; j++){
+                    int idx_i = seqdata_didxs.at(i);
+                    int idx_j = seqdata_didxs.at(j);
 
-                    double dist_value = ptr_dist_dseqs_num(idx_i, idx_j);
-
-                    xsimd::batch<double> dist_batch(dist_value);
-                    buffer(i, j) = dist_batch.get(0);
-                    buffer(j, i) = dist_batch.get(0);
+                    buffer(i, j) = dist_dseqs_num.at(idx_i, idx_j);
+                    buffer(j, i) = buffer(i, j);
                 }
             }
 

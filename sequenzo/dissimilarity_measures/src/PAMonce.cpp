@@ -2,18 +2,14 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
-#include <xsimd/xsimd.hpp>
 #define WEIGHTED_CLUST_TOL -1e-10
-#ifdef _OPENMP
-    #include <omp.h>
-#endif
 
 namespace py = pybind11;
 
 class PAMonce {
 public:
     PAMonce(int nelement, py::array_t<double> diss, py::array_t<int> centroids, int npass, py::array_t<double> weights){
-        py::print("[>] Starting Partitioning Around Medoids (PAMonce)");
+        py::print("[>] Starting Partitioning Around Medoids (PAMonce)...");
         std::cout << std::flush;
 
         try {
@@ -45,30 +41,34 @@ public:
         int rows = buf_info[0];
         int cols = buf_info[1];
 
-        double max_val = -std::numeric_limits<double>::infinity(); // 初始化为负无穷
+        double max_val = -std::numeric_limits<double>::infinity();
 
-        constexpr int batch_size = xsimd::batch<double>::size;
+        #pragma omp parallel
+        {
+            double thread_max = -std::numeric_limits<double>::infinity();
+            #pragma omp for nowait
+            for (int i = 0; i < rows; ++i) {
+                for (int j = 0; j < cols; ++j) {
+                    thread_max = std::max(thread_max, ptr(i, j));
+                }
+            }
 
-        #pragma omp parallel for
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j += batch_size) {
-                xsimd::batch<double> batch_vals = xsimd::load_unaligned(&ptr(i, j));
-                double batch_max = xsimd::reduce_max(batch_vals);
-                max_val = std::max(max_val, batch_max);
+            #pragma omp critical
+            {
+                max_val = std::max(max_val, thread_max);
             }
         }
 
         return max_val;
     }
 
-    py::array_t<int> runclusterloop(){
+    py::array_t<int> runclusterloop() {
         auto ptr_diss = diss.unchecked<2>();
         auto ptr_weights = weights.unchecked<1>();
         auto ptr_centroids = centroids.mutable_unchecked<1>();
-
         auto ptr_clusterid = clusterid.mutable_unchecked<1>();
 
-        for(int i=0; i<nelement; i++){
+        for (int i = 0; i < nelement; i++) {
             ptr_clusterid(i) = -1;
         }
 
@@ -76,104 +76,109 @@ public:
         int hbest = -1, nbest = -1;
         double total = -1;
 
-        xsimd::batch<double> max_val(std::numeric_limits<double>::infinity()); // 默认是正无穷
-
         do {
-            #pragma omp parallel for
-            for(int i=0; i<nelement; i++){
-                for(int k=0; k<nclusters; k++){
+            for (int i = 0; i < nelement; i++) {
+                dysma[i] = maxdist;
+                dysmb[i] = maxdist;
+                for (int k = 0; k < nclusters; k++) {
                     int i_cluster = ptr_centroids(k);
+                    double dist = ptr_diss(i, i_cluster);
 
-                    xsimd::batch<double> diss_val(ptr_diss(i, i_cluster));
-                    if(dysma[i] > diss_val.get(0)){
+                    if (dysma[i] > dist) {
                         dysmb[i] = dysma[i];
-                        dysma[i] = diss_val.get(0);
+                        dysma[i] = dist;
+
                         tclusterid[i] = k;
-                    }else if(dysmb[i] > diss_val.get(0)){
-                        dysmb[i] = diss_val.get(0);
+                    } else if (dysmb[i] > dist) {
+                        dysmb[i] = dist;
                     }
                 }
             }
 
-            // 计算 total
-            if(total < 0){
+            if (total < 0) {
                 total = 0;
-                xsimd::batch<double> batch_total(0.0);
-                for(int i = 0; i < nelement; i++){
-                    xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(i));
-                    xsimd::batch<double> diss_val(dysma[i]);
-                    batch_total += weight * diss_val;
+                #pragma omp parallel for reduction(+:total) schedule(static)
+                for (int i = 0; i < nelement; i++) {
+                    total += ptr_weights(i) * dysma[i];
                 }
-
-                total = xsimd::reduce_add(batch_total);
             }
 
             dzsky = 1;
+            hbest = -1;
+            nbest = -1;
 
-            // 计算 removeCost
-            #pragma omp parallel for
-            for(int k=0; k<nclusters; k++){
+            // 遍历每个聚类中心 i，寻找替换中心 h 的可能性
+            for (int k = 0; k < nclusters; k++) {
                 int i = ptr_centroids(k);
                 double removeCost = 0;
 
-                xsimd::batch<double> batch_removeCost(0.0);
-                for(int j = 0; j < nelement; j++){
-                    if(tclusterid[j] == k){
-                        xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(j));
-                        xsimd::batch<double> diff(dysmb[j] - dysma[j]);
-                        batch_removeCost += weight * diff;
+                // 计算移除该 medoid 的成本
+                #pragma omp parallel for reduction(+:removeCost) schedule(static)
+                for (int j = 0; j < nelement; j++) {
+                    if (tclusterid[j] == k) {
+                        removeCost += ptr_weights(j) * (dysmb[j] - dysma[j]);
                         fvect[j] = dysmb[j];
-                    }else{
+                    } else {
                         fvect[j] = dysma[j];
                     }
                 }
 
-                removeCost = xsimd::reduce_add(batch_removeCost);
+                // 查找最优的新 medoid h
+                #pragma omp parallel
+                {
+                    double local_dzsky = 1;
+                    int local_hbest = -1, local_nbest = -1;
 
-                // 计算 addGain
-                for(int h = 0; h < nelement; h++){
-                    if(ptr_diss(h, i) > 0){
-                        double addGain = removeCost;
+                    #pragma omp for schedule(static)
+                    for (int h = 0; h < nelement; h++) {
+                        if (ptr_diss(h, i) > 0) {
+                            double addGain = removeCost;
+                            for (int j = 0; j < nelement; j++) {
+                                if (ptr_diss(h, j) < fvect[j]) {
+                                    addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
+                                }
+                            }
 
-                        xsimd::batch<double> batch_addGain(addGain);
-
-                        for(int j = 0; j < nelement; j++){
-                            if(ptr_diss(h, j) < fvect[j]){
-                                xsimd::batch<double> weight = xsimd::load_unaligned(&ptr_weights(j));
-                                xsimd::batch<double> diss_val(ptr_diss(h, j));
-                                xsimd::batch<double> fvect_val(fvect[j]);
-                                batch_addGain += weight * (diss_val - fvect_val);
+                            if (local_dzsky > addGain) {
+                                local_dzsky = addGain;
+                                local_hbest = h;
+                                local_nbest = i;
                             }
                         }
+                    }
 
-                        if(dzsky > batch_addGain.get(0)){
-                            dzsky = batch_addGain.get(0);
-                            hbest = h;
-                            nbest = i;
+                    // 合并线程局部结果
+                    #pragma omp critical
+                    {
+                        if (dzsky > local_dzsky) {
+                            dzsky = local_dzsky;
+                            hbest = local_hbest;
+                            nbest = local_nbest;
                         }
                     }
                 }
             }
 
-            // 更新 centroids
-            if(dzsky < WEIGHTED_CLUST_TOL){
-                for(int k=0; k<nclusters; k++){
-                    if(ptr_centroids(k) == nbest){
+            // 更新 medoids
+            if (dzsky < WEIGHTED_CLUST_TOL) {
+                for (int k = 0; k < nclusters; k++) {
+                    if (ptr_centroids(k) == nbest) {
                         ptr_centroids(k) = hbest;
                     }
                 }
-
                 total += dzsky;
             }
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
-        // 更新 clusterid
-        for(int j = 0; j < nelement; j++){
+        // 更新最终聚类分配
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < nelement; j++) {
             ptr_clusterid(j) = ptr_centroids[tclusterid[j]];
         }
 
         return clusterid;
     }
+
 
 private:
     int nelement;

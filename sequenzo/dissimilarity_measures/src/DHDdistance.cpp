@@ -3,17 +3,17 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
+#include "utils.h"
 #ifdef _OPENMP
     #include <omp.h>
 #endif
-#include "utils.h"
 
 namespace py = pybind11;
 
 class DHDdistance{
 public:
     DHDdistance(py::array_t<int> sequences, py::array_t<double> sm, int norm, double maxdist, py::array_t<int> refseqS)
-                : norm(norm), maxdist(maxdist){
+            : norm(norm), maxdist(maxdist){
         py::print("[>] Starting (Dynamic) Hamming Distance(DHD/HAM)...");
         std::cout << std::flush;
 
@@ -71,7 +71,7 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for
+#pragma omp parallel for collapse(2) schedule(static)
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -92,7 +92,7 @@ public:
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
             double cmpres = 0;
-            #pragma omp parallel for
+#pragma omp parallel for collapse(2) schedule(static)
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
                     if(is == rseq){

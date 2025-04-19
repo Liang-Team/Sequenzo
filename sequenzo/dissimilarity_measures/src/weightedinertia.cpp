@@ -2,7 +2,6 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
-#include <xsimd/xsimd.hpp>
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -33,43 +32,65 @@ public:
         auto ptr_indiv = individuals.unchecked<1>();
         auto ptr_weights = weights.unchecked<1>();
 
-        auto ptr_result = result.mutable_unchecked<1>();
+        py::array_t<double> result_local(ilen);
+        auto ptr_result = result_local.mutable_unchecked<1>();
 
-        // 初始化结果为 0
         for (int i = 0; i < ilen; i++) {
-            ptr_result(i) = 0;
+            ptr_result(i) = 0.0;
         }
 
-        // 计算总权重
         double totweights = 0.0;
+
+        #pragma omp parallel for reduction(+:totweights)
         for (int i = 0; i < ilen; i++) {
             totweights += ptr_weights(ptr_indiv(i));
         }
 
-        // 计算每个个体的贡献
-        #pragma omp parallel for
-        for (int i = 0; i < ilen; i++) {
-            int pos_i = ptr_indiv(i);
-            double i_weight = ptr_weights(pos_i);
+        // 每个线程使用局部 result 副本，最后归约合并
+        int nthreads = 1;
+        #pragma omp parallel
+        {
+            #pragma omp single
+            nthreads = omp_get_num_threads();
+        }
 
-            for (int j = i + 1; j < ilen; j++) {
-                int pos_j = ptr_indiv(j);
+        std::vector<std::vector<double>> result_private(nthreads, std::vector<double>(ilen, 0.0));
 
-                double diss = ptr_dist(pos_i, pos_j);
+        #pragma omp parallel
+        {
+            int tid = omp_get_thread_num();
+            auto& local = result_private[tid];
 
-                xsimd::batch<double> diss_batch(diss);
-                xsimd::batch<double> i_weight_batch(i_weight);
+            #pragma omp for schedule(static)
+            for (int i = 0; i < ilen; ++i) {
+                int pos_i = ptr_indiv(i);
+                double i_weight = ptr_weights(pos_i);
 
-                ptr_result(i) += diss_batch.get(0) * ptr_weights(pos_j);
-                ptr_result(j) += diss_batch.get(0) * i_weight_batch.get(0);
+                for (int j = i + 1; j < ilen; ++j) {
+                    int pos_j = ptr_indiv(j);
+                    double diss = ptr_dist(pos_i, pos_j);
+
+                    local[i] += diss * ptr_weights(pos_j);
+                    local[j] += diss * i_weight;
+                }
             }
+        }
 
-            if (totweights > 0) {
+        // 合并各线程的 result_private 到主 result
+        for (int t = 0; t < nthreads; ++t) {
+            for (int i = 0; i < ilen; ++i) {
+                ptr_result(i) += result_private[t][i];
+            }
+        }
+
+        if (totweights > 0) {
+            #pragma omp parallel for
+            for (int i = 0; i < ilen; ++i) {
                 ptr_result(i) /= totweights;
             }
         }
 
-        return result;
+        return result_local;
     }
 
 private:
