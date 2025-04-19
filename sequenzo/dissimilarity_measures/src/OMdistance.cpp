@@ -110,17 +110,20 @@ public:
 
             for(int i = prefix+1; i < mSuf; i ++){
                 for(int j = prefix+1; j < nSuf; j ++){
-                    double minimum = local_fmat[i-1-prefix][j-prefix] + indel;
-                    double j_indel = local_fmat[i-prefix][j-1-prefix] + indel;
+                    // Use SIMD batch processing to compute min and other operations
+                    xsimd::batch<double> min_batch, j_indel_batch, sub_batch;
 
-                    double sub = 0;
-                    if(ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-                        sub = local_fmat[i-1-prefix][j-1-prefix];
-                    }else{
-                        sub = local_fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1));
-                    }
+                    // Calculate the three values and perform min operation
+                    min_batch = xsimd::batch<double>(local_fmat[i-1-prefix][j-prefix] + indel);
+                    j_indel_batch = xsimd::batch<double>(local_fmat[i-prefix][j-1-prefix] + indel);
+                    sub_batch = xsimd::batch<double>((ptr_seq(is, i-1) == ptr_seq(js, j-1)) ?
+                                                     local_fmat[i-1-prefix][j-1-prefix] :
+                                                     (local_fmat[i-1-prefix][j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1))));
 
-                    local_fmat[i-prefix][j-prefix] = std::min({minimum, j_indel, sub});
+                    // Store the result
+                    xsimd::batch<double> result = xsimd::min(min_batch, j_indel_batch);
+                    result = xsimd::min(result, sub_batch);
+                    local_fmat[i-prefix][j-prefix] = result.get(0);
                 }
             }
 

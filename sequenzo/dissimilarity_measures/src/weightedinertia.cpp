@@ -48,17 +48,23 @@ public:
 
         // 每个线程使用局部 result 副本，最后归约合并
         int nthreads = 1;
+        #ifdef _OPENMP
         #pragma omp parallel
         {
             #pragma omp single
             nthreads = omp_get_num_threads();
         }
+        #endif
 
         std::vector<std::vector<double>> result_private(nthreads, std::vector<double>(ilen, 0.0));
 
         #pragma omp parallel
         {
+            #ifdef _OPENMP
             int tid = omp_get_thread_num();
+            #else
+            int tid = 0;
+            #endif
             auto& local = result_private[tid];
 
             #pragma omp for schedule(static)
