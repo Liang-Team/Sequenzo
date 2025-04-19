@@ -36,7 +36,9 @@ from .multidomain import (create_idcd_sequence_from_csvs,
                           compute_dat_distance_matrix,
                           get_interactive_combined_typology,
                           merge_sparse_combt_types,
-                          get_association_between_domains)
+                          get_association_between_domains,
+                          cmdscale,
+                          find_optimal_mds_dimension)
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
@@ -75,5 +77,7 @@ __all__ = [
     "compute_dat_distance_matrix",
     "get_interactive_combined_typology",
     "merge_sparse_combt_types",
-    "get_association_between_domains"
+    "get_association_between_domains",
+    "cmdscale",
+    "find_optimal_mds_dimension"
 ]
