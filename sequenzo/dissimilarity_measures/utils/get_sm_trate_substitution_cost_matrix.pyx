@@ -5,7 +5,7 @@ cimport numpy as np
 import pandas as pd
 from libc.math cimport isnan
 
-def get_sm_trate_cost_matrix(
+def get_sm_trate_substitution_cost_matrix(
     object seqdata,
     bint time_varying=False,
     bint weighted=True,

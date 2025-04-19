@@ -7,7 +7,7 @@
 
 import pandas as pd
 import numpy as np
-from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_cost_matrix
+from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
 from sequenzo.define_sequence_data import SequenceData
 
 
@@ -70,7 +70,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
         print(f"  - Computing transition probabilities for: [{', '.join(map(str, seqdata.states))}]")   # Because the matrix CLARA is passing in is a number
 
         if time_varying:
-            tr = get_sm_trate_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag)
+            tr = get_sm_trate_substitution_cost_matrix(seqdata, time_varying=True, weighted=weighted, lag=lag)
 
             tmat = tr.shape[1]               # Number of states (since tr is three dimensions np.ndarray, the first dimension is time)
             time = seqdata.seqdata.shape[1]  # Total number of time points
@@ -116,7 +116,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
                         costs[t, j, i] = cost
 
         else:
-            tr = get_sm_trate_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag)
+            tr = get_sm_trate_substitution_cost_matrix(seqdata, time_varying=False, weighted=weighted, lag=lag)
 
             tmat = tr.shape[0]
             costs = np.zeros((alphsize, alphsize))
