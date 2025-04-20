@@ -14,7 +14,8 @@ from sequenzo.visualization.utils import (
     save_figure_to_buffer,
     create_standalone_legend,
     combine_plot_with_legend,
-    save_and_show_results
+    save_and_show_results,
+    determine_layout
 )
 
 
@@ -28,6 +29,8 @@ def plot_state_distribution(seqdata: SequenceData,
                             save_as=None,
                             dpi=200,
                             layout='column',
+                            nrows: int = None,
+                            ncols: int = None,
                             stacked=True) -> None:
     """
     Creates state distribution plots for different groups, showing how state
@@ -61,20 +64,15 @@ def plot_state_distribution(seqdata: SequenceData,
     num_groups = len(groups)
 
     # Calculate figure size and layout based on number of groups and specified layout
-    if layout == 'column':
-        # 3xn layout (3 columns)
-        ncols = 3
-        nrows = (num_groups + ncols - 1) // ncols  # Ceiling division
-        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
-                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
-        axes = axes.flatten()
-    else:  # 'grid' layout
-        # nxn layout
-        ncols = int(np.ceil(np.sqrt(num_groups)))
-        nrows = ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
-                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
-        axes = axes.flatten()
+    nrows, ncols = determine_layout(num_groups, layout=layout, nrows=nrows, ncols=ncols)
+
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(figsize[0] * ncols, figsize[1] * nrows),
+        gridspec_kw={'wspace': 0.2, 'hspace': 0.3}
+    )
+    axes = axes.flatten()
 
     # Create state mapping from numerical values back to state names
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
@@ -108,14 +106,15 @@ def plot_state_distribution(seqdata: SequenceData,
                     for i in range(1, len(seqdata.states) + 1)}
 
             # Add time point and distribution to the list
-            distributions.append(dict(time=col, **dist))
+            # distributions.append(dict(time=col, **dist))
+            distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
         # Ensure percentages sum to exactly 100% to avoid gaps
         for j in range(len(distributions)):
-            total_percentage = sum(distributions[j][state] for state in seqdata.states)
+            total_percentage = sum(distributions[j][str(state)] for state in seqdata.states)
             if total_percentage < 100:
                 top_state = seqdata.states[-1]
-                distributions[j][top_state] += (100 - total_percentage)
+                distributions[j][str(top_state)] += (100 - total_percentage)
 
         # Convert to DataFrame for plotting
         dist_df = pd.DataFrame(distributions)
@@ -265,7 +264,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
                 for i in range(1, len(seqdata.states) + 1)}
 
         # Add time point and distribution to the list
-        distributions.append(dict(time=col, **dist))
+        # distributions.append(dict(time=col, **dist))
+        distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
     # Ensure percentages sum to exactly 100% to avoid gaps
     for i in range(len(distributions)):

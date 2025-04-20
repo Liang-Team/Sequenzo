@@ -43,7 +43,7 @@ class SequenceData:
         missing_handling: dict = None,
         void: str = "%",
         nr: str = "*",
-        cpal: list = None
+        custom_colors: list = None
     ):
         """
         Initialize the SequenceData object.
@@ -60,7 +60,7 @@ class SequenceData:
         :param missing_handling: Dict specifying handling for missing values (left, right, gaps).
         :param void: Symbol for void elements (default: "%").
         :param nr: Symbol for missing values (default: "*").
-        :param cpal: Custom color palette for visualization.
+        :param custom_colors: Custom color palette for visualization.
         """
         # Ensure time_type is either "year" or "age"
         if time_type not in ["year", "age"]:
@@ -93,7 +93,7 @@ class SequenceData:
         self.missing_handling = missing_handling or {"left": np.nan, "right": "DEL", "gaps": np.nan}
         self.void = void
         self.nr = nr
-        self.cpal = cpal
+        self.custom_colors = custom_colors
 
         # Validate parameters
         self._validate_parameters()
@@ -197,18 +197,23 @@ class SequenceData:
             self.seqdata.index = self.ids
 
     def _assign_colors(self, reverse_colors=True):
-        """Assigns a color palette using the Spectral scheme by default."""
+        """Assigns a color palette using user-defined or default Spectral palette."""
         num_states = len(self.states)
 
-        if num_states <= 20:
-            spectral_colors = sns.color_palette("Spectral", num_states)
+        if self.custom_colors:
+            if len(self.custom_colors) != num_states:
+                raise ValueError("Length of custom_colors must match number of states.")
+            color_list = self.custom_colors
         else:
-            spectral_colors = sns.color_palette("cubehelix", num_states)
+            if num_states <= 20:
+                color_list = sns.color_palette("Spectral", num_states)
+            else:
+                color_list = sns.color_palette("cubehelix", num_states)
 
-        if reverse_colors:
-            spectral_colors = list(reversed(spectral_colors))
+            if reverse_colors:
+                color_list = list(reversed(color_list))
 
-        self.color_map = {state: spectral_colors[i] for i, state in enumerate(self.states)}
+        self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
 
     def get_colormap(self):
         """Returns a ListedColormap for visualization."""

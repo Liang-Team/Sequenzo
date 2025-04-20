@@ -17,20 +17,60 @@ from sequenzo.visualization.utils import (
     save_figure_to_buffer,
     create_standalone_legend,
     combine_plot_with_legend,
-    save_and_show_results
+    save_and_show_results,
+    determine_layout
 )
+
+
+def sort_sequences_by_structure(seqdata, method="first_marriage", target_state=3, mask=None):
+    """
+    根据结构信息对 SequenceData 中的序列排序。
+
+    :param seqdata: SequenceData object
+    :param method: str, 排序方式
+    :param target_state: int, first_marriage 时的目标状态
+    :param mask: np.array(bool), 若提供则只对该子集排序
+    :return: np.array 排序索引（相对于原始顺序）
+    """
+    values = seqdata.values.copy()
+    time_points = np.arange(values.shape[1])
+
+    if mask is not None:
+        values = values[mask]
+
+    if method == "first_marriage":
+        sort_keys = np.array([
+            np.where(row == target_state)[0][0] if target_state in row else 99
+            for row in values
+        ])
+    elif method == "transition_count":
+        sort_keys = np.sum(values[:, 1:] != values[:, :-1], axis=1)
+    elif method == "final_state":
+        sort_keys = values[:, -1]
+    elif method == "happiness_slope":
+        sort_keys = np.array([
+            np.polyfit(time_points, row, 1)[0] for row in values
+        ])
+    else:
+        raise ValueError(f"Unsupported method: {method}")
+
+    return np.argsort(sort_keys)
 
 
 def plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
                         categories=None,
+                        sort_by=None,
                         figsize=(10, 6),
                         title=None,
                         xlabel="Time",
                         ylabel="Sequences",
                         save_as=None,
                         dpi=200,
-                        layout='column'):
+                        layout='column',
+                        nrows: int = None,
+                        ncols: int = None
+                        ):
     """
     Creates sequence index plots, optionally grouped by categories.
 
@@ -57,20 +97,15 @@ def plot_sequence_index(seqdata: SequenceData,
     num_groups = len(groups)
 
     # Calculate figure size and layout based on number of groups and specified layout
-    if layout == 'column':
-        # 3xn layout (3 columns)
-        ncols = 3
-        nrows = (num_groups + ncols - 1) // ncols  # Ceiling division
-        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
-                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
-        axes = axes.flatten()
-    else:  # 'grid' layout
-        # nxn layout
-        ncols = int(np.ceil(np.sqrt(num_groups)))
-        nrows = ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(figsize[0] * ncols, figsize[1] * nrows),
-                                 gridspec_kw={'wspace': 0.2, 'hspace': 0.3})
-        axes = axes.flatten()
+    nrows, ncols = determine_layout(num_groups, layout=layout, nrows=nrows, ncols=ncols)
+
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(figsize[0] * ncols, figsize[1] * nrows),
+        gridspec_kw={'wspace': 0.2, 'hspace': 0.3}
+    )
+    axes = axes.flatten()
 
     # Create a plot for each group
     for i, group in enumerate(groups):
@@ -90,7 +125,11 @@ def plot_sequence_index(seqdata: SequenceData,
         if np.isnan(group_sequences).any():
             group_sequences = np.where(np.isnan(group_sequences), -1, group_sequences)
 
-        sorted_indices = np.lexsort(group_sequences.T[::-1])
+        if sort_by is not None:
+            sorted_indices = sort_sequences_by_structure(seqdata=seqdata, method=sort_by, mask=mask)
+        else:
+            sorted_indices = np.lexsort(group_sequences.T[::-1])
+
         sorted_data = group_sequences[sorted_indices]
 
         # Plot on the corresponding axis

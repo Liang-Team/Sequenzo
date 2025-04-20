@@ -196,3 +196,47 @@ def save_and_show_results(save_as, dpi=200, show=True):
     # Return the current figure
     return plt.gcf()
 
+
+def determine_layout(num_items: int,
+                     layout: str = 'column',
+                     nrows: Optional[int] = None,
+                     ncols: Optional[int] = None) -> Tuple[int, int]:
+    """
+    Determine subplot layout (rows, columns) based on the number of items to plot.
+    TODO: 1. change to all visualizations that require multiple graphs 2. 发包，因为我也改了颜色了
+
+    Parameters:
+        num_items (int): Total number of subplots needed.
+        layout (str): Layout strategy ('column' or 'grid'), used if nrows/ncols not provided.
+        nrows (int, optional): Number of rows (manual override).
+        ncols (int, optional): Number of columns (manual override).
+
+    Returns:
+        Tuple[int, int]: A tuple of (nrows, ncols) for subplot layout.
+
+    Raises:
+        ValueError: If layout config is invalid or does not fit all subplots.
+    """
+    # Check partial input
+    if (nrows is None and ncols is not None) or (ncols is None and nrows is not None):
+        raise ValueError("If manually specifying layout, both 'nrows' and 'ncols' must be provided.")
+
+    # Manual override
+    if nrows is not None and ncols is not None:
+        total_slots = nrows * ncols
+        if total_slots < num_items:
+            raise ValueError(f"Provided layout ({nrows}x{ncols}) is too small for {num_items} plots.")
+        return nrows, ncols
+
+    # Automatic layout
+    if layout == 'column':
+        ncols = 3
+        nrows = (num_items + ncols - 1) // ncols
+    elif layout == 'grid':
+        ncols = int(np.ceil(np.sqrt(num_items)))
+        nrows = (num_items + ncols - 1) // ncols
+    else:
+        raise ValueError(f"Unsupported layout style: '{layout}'")
+
+    return nrows, ncols
+
