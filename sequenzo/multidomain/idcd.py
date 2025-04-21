@@ -9,29 +9,54 @@ import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 
 
-def _generate_combined_sequence_from_csv(csv_paths: list[str], time_cols: list[str], id_col: str = "id") -> pd.DataFrame:
+def _generate_combined_sequence_from_csv(csv_paths: list[str],
+                                         time_cols: list[str],
+                                         id_col: str = "id") -> pd.DataFrame:
     """
     Load multiple CSVs, extract time sequences, and combine into a multidomain sequence.
     Only observed combinations will be used.
 
     Parameters:
-    - csv_paths: List of file paths, each containing one domain's sequence data
-    - time_cols: Time columns to extract and align
-    - id_col: ID column to align on
+        csv_paths: List of file paths, each containing one domain's sequence data
+        time_cols: Time columns to extract and align
+        id_col: ID column to align on
 
     Returns:
-    - combined_df: DataFrame with combined state sequences
-    """
-    domain_dfs = [pd.read_csv(path) for path in csv_paths]
+        combined_df: DataFrame with combined state sequences
 
-    # Check alignment by id
-    for df in domain_dfs:
-        assert id_col in df.columns
+    Raises:
+        ValueError: If any CSV is missing required columns
+    """
+    import os
+    domain_dfs = []
+
+    for idx, path in enumerate(csv_paths):
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            raise ValueError(f"Failed to read CSV at '{path}': {str(e)}")
+
+        # Check if ID column exists
+        if id_col not in df.columns:
+            raise ValueError(
+                f"Missing ID column '{id_col}' in file: {path}\n"
+                f"Available columns: {list(df.columns)}"
+            )
+
+        # Check if all time columns exist
+        missing_cols = [col for col in time_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"Missing time columns {missing_cols} in file: {path}\n"
+                f"Available columns: {list(df.columns)}"
+            )
+
+        df = df.copy()
         df.sort_values(by=id_col, inplace=True)
         df.reset_index(drop=True, inplace=True)
-        assert all(col in df.columns for col in time_cols), "All time columns must exist in every domain."
+        domain_dfs.append(df)
 
-    # Combine states
+    # Combine states row-wise
     combined_matrix = []
     for i in range(domain_dfs[0].shape[0]):
         row = []
@@ -42,6 +67,7 @@ def _generate_combined_sequence_from_csv(csv_paths: list[str], time_cols: list[s
 
     combined_df = pd.DataFrame(combined_matrix, columns=time_cols)
     combined_df.insert(0, id_col, domain_dfs[0][id_col].values)
+
     return combined_df
 
 
@@ -81,7 +107,8 @@ def create_idcd_sequence_from_csvs(
             label_parts = []
             for i, token in enumerate(parts):
                 mapping = domain_state_labels[i]
-                label_parts.append(mapping.get(int(token), str(token)))
+                # The states can be strings or numbers
+                label_parts.append(mapping.get(token, str(token)))
             pretty_labels.append('+'.join(label_parts))
     else:
         pretty_labels = observed_states.index.tolist()
