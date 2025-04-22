@@ -20,6 +20,16 @@ from sequenzo.visualization.utils import (
 )
 
 
+# Delay imports to avoid circular dependency issues during installation
+def _get_standard_scaler():
+    try:
+        from sklearn.preprocessing import StandardScaler
+        return StandardScaler
+    except ImportError:
+        print("Warning: Not able to install StandardScaler。Please ensure that you have installed scikit-learn successfully.")
+        return None
+
+
 def plot_relative_frequency(seqdata: SequenceData,
                distance_matrix: np.ndarray,
                num_groups: int = 12,

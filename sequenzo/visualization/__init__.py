@@ -16,16 +16,6 @@ from .plot_state_distribution import plot_state_distribution
 from .plot_modal_state import plot_modal_state
 
 
-# Delay imports to avoid circular dependency issues during installation
-def _get_standard_scaler():
-    try:
-        from sklearn.preprocessing import StandardScaler
-        return StandardScaler
-    except ImportError:
-        print("Warning: Not able to install StandardScaler。Please ensure that you have installed scikit-learn successfully.")
-        return None
-
-
 __all__ = [
     "plot_mean_time",
     "plot_most_frequent_sequences",
