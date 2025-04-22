@@ -17,6 +17,8 @@
     1. Cluster Class: Performs hierarchical clustering on a precomputed distance matrix.
     2. ClusterQuality Class: Evaluates the quality of clustering for different numbers of clusters using various metrics.
     3. ClusterResults Class: Analyzes and visualizes the clustering results (e.g., membership tables and cluster distributions).
+
+    Note that the CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -25,7 +27,7 @@ import pandas as pd
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
 from scipy.spatial.distance import squareform
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, silhouette_samples
 from fastcluster import linkage
 
 from .utils.point_biserial import point_biserial
@@ -235,11 +237,20 @@ class ClusterQuality:
         """
         Compute Weighted Silhouette Score (ASWw).
         """
+        sil_samples = silhouette_samples(self.matrix, labels, metric="precomputed")
         cluster_sizes = np.bincount(labels)[1:]
         total_points = len(labels)
         weights = cluster_sizes / total_points
-        silhouette_scores = [silhouette_score(self.matrix, labels, metric="precomputed")]
-        return np.sum(weights * silhouette_scores)
+        mean_silhouette_per_cluster = []
+
+        for cluster_id in range(1, len(cluster_sizes) + 1):
+            sil_vals = sil_samples[labels == cluster_id]
+            if len(sil_vals) > 0:
+                mean_silhouette_per_cluster.append(np.mean(sil_vals))
+            else:
+                mean_silhouette_per_cluster.append(0.0)
+
+        return np.sum(weights * np.array(mean_silhouette_per_cluster))
 
     def _compute_homogeneity(self, labels) -> float:
         """
@@ -261,13 +272,46 @@ class ClusterQuality:
 
     def _compute_calinski_harabasz(self, labels) -> float:
         """
-        Compute Calinski-Harabasz Index (CH).
+        Pseudo Calinski-Harabasz score using distance matrix.
+        Approximates between-cluster and within-cluster dispersion
+        based only on distances.
+
+        Returns a value similar in spirit to traditional CH index.
         """
         n_samples = len(labels)
-        n_clusters = len(np.unique(labels))
-        within_var = np.sum([np.var(self.matrix[labels == cluster]) for cluster in np.unique(labels)])
-        total_var = np.var(self.matrix)
-        return (total_var - within_var) * (n_samples - n_clusters) / (within_var * (n_clusters - 1))
+        unique_clusters = np.unique(labels)
+        n_clusters = len(unique_clusters)
+
+        if n_clusters <= 1 or n_clusters >= n_samples:
+            return np.nan  # CH undefined
+
+        # Compute total mean of distances (upper triangle only to avoid redundancy)
+        triu_indices = np.triu_indices_from(self.matrix, k=1)
+        total_mean = np.mean(self.matrix[triu_indices])
+
+        # Initialize within and between-cluster variances
+        within_ss = 0.0
+        between_ss = 0.0
+
+        for cluster in unique_clusters:
+            indices = np.where(labels == cluster)[0]
+            if len(indices) < 2:
+                continue
+
+            # Within-cluster sum of squares (mean squared pairwise distance)
+            submatrix = self.matrix[np.ix_(indices, indices)]
+            intra_dists = submatrix[np.triu_indices_from(submatrix, k=1)]
+            within_mean = np.mean(intra_dists)
+            within_ss += len(indices) * (within_mean ** 2)
+
+            # Between-cluster dispersion approximated by cluster center's distance to global mean
+            cluster_mean_dist = np.mean(self.matrix[indices][:, indices].flatten())
+            between_ss += len(indices) * ((cluster_mean_dist - total_mean) ** 2)
+
+        if within_ss == 0:
+            return np.nan  # Avoid division by zero
+
+        return (between_ss / (n_clusters - 1)) / (within_ss / (n_samples - n_clusters))
 
     def _compute_r2(self, labels) -> float:
         """
