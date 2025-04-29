@@ -12,8 +12,8 @@ import matplotlib
 import os
 
 # Set to Agg backend if no DISPLAY environment variable (server/terminal)
-if os.environ.get("DISPLAY", "") == "":
-    matplotlib.use("Agg")
+# if os.environ.get("DISPLAY", "") == "":
+#     matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import silhouette_score
