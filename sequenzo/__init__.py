@@ -37,7 +37,7 @@ from .multidomain import (create_idcd_sequence_from_csvs,
                           get_interactive_combined_typology,
                           merge_sparse_combt_types,
                           get_association_between_domains,
-                          linked_polyad
+                          linked_polyadic_sequence_analysis
                           )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -78,5 +78,5 @@ __all__ = [
     "get_interactive_combined_typology",
     "merge_sparse_combt_types",
     "get_association_between_domains",
-    "linked_polyad"
+    "linked_polyadic_sequence_analysis"
 ]

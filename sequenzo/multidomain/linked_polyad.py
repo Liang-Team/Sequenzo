@@ -43,26 +43,28 @@ from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
 
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import multiprocessing
 import platform
+
 if platform.system() != "Windows":
     multiprocessing.set_start_method("fork", force=True)
 
 
-def linked_polyad(seqlist: List[SequenceData],
-                  a: int = 1,
-                  method: str = "OM",
-                  distance_parameters: dict = None,
-                  weights: np.ndarray = None,
-                  role_weights: List[float] = None,
-                  T: int = 1000,
-                  random_seed: int = 36963,
-                  replace: bool = True,
-                  n_jobs: int = 1,
-                  verbose: bool = True,
-                  return_df: bool = False) -> Union[Dict, pd.DataFrame]:
+def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
+                                      a: int = 1,
+                                      method: str = "OM",
+                                      distance_parameters: dict = None,
+                                      weights: np.ndarray = None,
+                                      role_weights: List[float] = None,
+                                      T: int = 1000,
+                                      random_seed: int = 36963,
+                                      replace: bool = True,
+                                      n_jobs: int = 1,
+                                      verbose: bool = True,
+                                      return_df: bool = False) -> Union[Dict, pd.DataFrame]:
     """
     Calculate U and V statistics for linked polyadic sequence data.
 
