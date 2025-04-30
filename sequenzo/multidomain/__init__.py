@@ -9,6 +9,7 @@ from .cat import compute_cat_distance_matrix
 from .dat import compute_dat_distance_matrix
 from .combt import get_interactive_combined_typology, merge_sparse_combt_types
 from .association_between_domains import get_association_between_domains
+from .linked_polyad import linked_polyad
 
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "get_interactive_combined_typology",
     "merge_sparse_combt_types",
     "get_association_between_domains",
+    "linked_polyad"
 ]

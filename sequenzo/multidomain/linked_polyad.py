@@ -16,6 +16,22 @@
     7. Outputs include observed distances, randomized distances, U, V, V>0.95 dummy, and mean observed/random distances
 
     All calculations faithfully replicate the logic and outputs of the original R implementation.
+
+    Note:
+    You may encounter the following error during execution, especially when running the script inside PyCharm:
+
+    Traceback (most recent call last):
+      File "/Applications/PyCharm.app/Contents/plugins/python/helpers/pydev/_pydevd_bundle/pydevd_comm.py", line 293, in _on_run
+        r = self.sock.recv(1024)
+    OSError: [Errno 9] Bad file descriptor
+    This error is related to PyCharm's debugger trying to manage communication sockets while multiprocessing or background progress bars (like tqdm) are active.
+    It does not affect the actual computation or results of the linked_polyad function. You can safely ignore it.
+
+    To suppress it or avoid seeing it:
+
+    Run the script outside the PyCharm debugger (e.g., from terminal or using “Run” instead of “Debug”).
+
+    Alternatively, disable progress bars or multiprocessing (e.g., set n_jobs=1 and disable=True in tqdm, if available in the function).
 """
 import numpy as np
 import random
@@ -26,11 +42,19 @@ import pandas as pd
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.define_sequence_data import SequenceData
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+import multiprocessing
+import platform
+if platform.system() != "Windows":
+    multiprocessing.set_start_method("fork", force=True)
+
 
 def linked_polyad(seqlist: List[SequenceData],
                   a: int = 1,
-                  method: str = "HAM",
-                  distance_kwargs: dict = None,
+                  method: str = "OM",
+                  distance_parameters: dict = None,
                   weights: np.ndarray = None,
                   role_weights: List[float] = None,
                   T: int = 1000,
@@ -45,7 +69,7 @@ def linked_polyad(seqlist: List[SequenceData],
     :param seqlist: List of SequenceData objects to analyze.
     :param a: Randomization type. 1 = resample sequences; 2 = resample states within sequences.
     :param method: Distance measure method ('HAM', 'OM', 'CHI2', etc.).
-    :param distance_kwargs: Dictionary of additional keyword arguments for distance calculation.
+    :param distance_parameters: Dictionary of additional keyword arguments for distance calculation.
     :param weights: Sampling weights for sequences when generating random polyads.
     :param role_weights: Role-specific importance weights for different sequence sources.
     :param T: Number of randomizations performed.
@@ -65,14 +89,13 @@ def linked_polyad(seqlist: List[SequenceData],
     - 'observed.dist': Array of observed polyadic distances
     - 'random.dist': Array of randomized polyadic distances
     """
-    if distance_kwargs is None:
-        distance_kwargs = {}
+    if distance_parameters is None:
+        distance_parameters = {}
 
     P = len(seqlist)
     n = seqlist[0].n_sequences
     seq_length = seqlist[0].n_steps
 
-    # Check all SequenceData objects compatible
     for sd in seqlist:
         assert isinstance(sd, SequenceData)
         assert sd.n_sequences == n
@@ -82,52 +105,67 @@ def linked_polyad(seqlist: List[SequenceData],
         role_weights = [1.0 / P] * P
     role_weights = np.array(role_weights)
 
-    # Concatenate all sequences
-    all_sequences = np.vstack([sd.to_numeric() for sd in seqlist])
-    all_ids = np.concatenate([sd.ids for sd in seqlist])
+    # 添加角色标签 + 唯一 ID
+    tagged_dfs = []
+    for i, sd in enumerate(seqlist):
+        df = sd.to_dataframe().copy()
+        df["__id__"] = [f"R{i}_{j}" for j in range(sd.n_sequences)]
+        tagged_dfs.append(df)
 
-    # Compute full distance matrix
-    alldist = get_distance_matrix(all_sequences, method=method, **distance_kwargs)
+    data_concat = pd.concat(tagged_dfs, axis=0).reset_index(drop=True)
+    merged_seqdata = SequenceData(
+        data=data_concat,
+        time=seqlist[0].time,
+        time_type="age",
+        states=[i for i in range(1, len(seqlist[0].states) + 1)],
+        id_col="__id__"
+    )
 
-    # Precompute indices shifts for generations
+    alldist = get_distance_matrix(merged_seqdata, method=method, **distance_parameters)
+    alldist = np.asarray(alldist)
+
     cj = np.array([n * p for p in range(P)])
-
-    # Random generator
     rng = np.random.default_rng(seed=random_seed)
 
-    def random_sample_once():
+    if weights is None:
+        weights = np.ones(n) / n
+
+    def random_sample_once(_):
+        local_rng = np.random.default_rng(random_seed + _)
+        sample_indices = (cj + local_rng.choice(n, size=P, replace=replace, p=weights)).astype(int).flatten()
+
         if a == 1:
-            sample_indices = cj + rng.choice(n, size=P, replace=replace, p=weights)
             return np.mean(alldist[np.ix_(sample_indices, sample_indices)][np.triu_indices(P, 1)])
         elif a == 2:
-            sample_indices = cj + rng.choice(n, size=P, replace=replace, p=weights)
-            sampled_sequences = all_sequences[sample_indices]
-            shuffled = np.array([rng.choice(seq, size=seq_length, replace=replace) for seq in sampled_sequences])
-            dmatrix = get_distance_matrix(shuffled, method=method, **distance_kwargs)
-            return np.mean(dmatrix[np.triu_indices(P, 1)])
+            df = merged_seqdata.to_dataframe().drop(columns="__id__")
+            sampled = df.iloc[sample_indices].reset_index(drop=True)
+            shuffled = sampled.apply(lambda row: local_rng.choice(row, size=seq_length, replace=replace),
+                                     axis=1, result_type="broadcast")
+            shuffled["__id__"] = [f"Rand_{_}_{j}" for j in range(len(shuffled))]
+            seq_shuffled = SequenceData(
+                data=shuffled,
+                time=merged_seqdata.time,
+                time_type=merged_seqdata.time_type,
+                states=merged_seqdata.states,
+                id_col="__id__"
+            )
+            dmat = get_distance_matrix(seq_shuffled, method=method, **distance_parameters)
+            return np.mean(np.asarray(dmat)[np.triu_indices(P, 1)])
         else:
             raise ValueError("Invalid randomization type 'a'. Should be 1 or 2.")
 
-    # Perform T randomizations
-    if verbose:
-        iterator = tqdm(range(T), desc="Randomizing polyads")
-    else:
-        iterator = range(T)
-
-    random_dists = Parallel(n_jobs=n_jobs)(delayed(random_sample_once)() for _ in iterator)
+    iterator = tqdm(range(T), desc="Randomizing polyads") if verbose else range(T)
+    random_dists = Parallel(n_jobs=n_jobs)(delayed(random_sample_once)(i) for i in iterator)
     random_dists = np.array(random_dists)
 
-    # Compute observed distances
     observed_dists = []
     for i in range(n):
-        indices = cj + i
+        indices = [i + n * p for p in range(P)]
         obs_dist = np.mean(alldist[np.ix_(indices, indices)][np.triu_indices(P, 1)])
         observed_dists.append(obs_dist)
     observed_dists = np.array(observed_dists)
 
     mean_rand_dist = np.mean(random_dists)
-
-    # Compute U and V
     U = mean_rand_dist - observed_dists
     V = np.array([(observed_dists[i] < random_dists).mean() for i in range(n)])
     V_95 = (V > 0.95).astype(int)
@@ -150,3 +188,7 @@ def linked_polyad(seqlist: List[SequenceData],
         }, index=pd.RangeIndex(start=1, stop=len(result['U']) + 1, name="PolyadID"))
     else:
         return result
+
+
+if __name__ == '__main__':
+    pass

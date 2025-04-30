@@ -31,7 +31,9 @@ def plot_state_distribution(seqdata: SequenceData,
                             layout='column',
                             nrows: int = None,
                             ncols: int = None,
-                            stacked=True) -> None:
+                            stacked=True,
+                            show=False,
+                            include_legend=True) -> None:
     """
     Creates state distribution plots for different groups, showing how state
     prevalence changes over time within each group.
@@ -53,7 +55,10 @@ def plot_state_distribution(seqdata: SequenceData,
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
         return _plot_state_distribution_single(
-            seqdata=seqdata, figsize=figsize, title=title, xlabel=xlabel, ylabel=ylabel, save_as=save_as, dpi=dpi, stacked=stacked
+            seqdata=seqdata, figsize=figsize,
+            title=title, xlabel=xlabel, ylabel=ylabel,
+            save_as=save_as, dpi=dpi, stacked=stacked,
+            show=show, include_legend=include_legend
         )
 
     # Ensure ID columns match (convert if needed)
@@ -218,6 +223,8 @@ def plot_state_distribution(seqdata: SequenceData,
     plt.show()
     plt.close()
 
+    return fig
+
 
 def _plot_state_distribution_single(seqdata: SequenceData,
                                     figsize=(12, 7),
@@ -226,7 +233,9 @@ def _plot_state_distribution_single(seqdata: SequenceData,
                                     ylabel="State Distribution (%)",
                                     stacked=True,
                                     save_as=None,
-                                    dpi=200) -> None:
+                                    dpi=200,
+                                    show=False,
+                                    include_legend=True) -> None:
     """
     Creates a state distribution plot showing how the prevalence of states changes over time,
     with enhanced color vibrancy.
@@ -331,10 +340,15 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     ax.set_ylim(0, 100)
 
     # Add legend
-    legend = ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5),
-                       frameon=False, fontsize=10)
+    if include_legend:
+        legend = ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5),
+                           frameon=False, fontsize=10)
 
     # Adjust layout to make room for the legend
     plt.tight_layout()
 
-    save_and_show_results(save_as, dpi=200)
+    save_and_show_results(save_as, dpi=200, show=show)
+
+    return fig
+
+
