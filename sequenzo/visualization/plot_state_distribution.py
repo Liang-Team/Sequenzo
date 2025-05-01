@@ -134,7 +134,7 @@ def plot_state_distribution(seqdata: SequenceData,
         if stacked:
             # Create a stacked area plot
             ax.stackplot(range(len(dist_df)),
-                         [dist_df[state] for state in seqdata.states],
+                         [dist_df[str(state)] for state in seqdata.states],
                          labels=seqdata.labels,
                          colors=base_colors,
                          alpha=1.0)
@@ -145,7 +145,7 @@ def plot_state_distribution(seqdata: SequenceData,
         else:
             # Create a line plot
             for state, label, color in zip(seqdata.states, seqdata.labels, base_colors):
-                ax.plot(range(len(dist_df)), dist_df[state],
+                ax.plot(range(len(dist_df)), dist_df[str(state)],
                         label=label, color=color,
                         linewidth=2.5, marker='o', markersize=5)
 
@@ -194,7 +194,7 @@ def plot_state_distribution(seqdata: SequenceData,
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
     # Create standalone legend
-    colors = {state: seqdata.color_map[state] for state in seqdata.states}
+    colors = dict(zip(seqdata.labels, [seqdata.color_map[state] for state in seqdata.states]))
     legend_buffer = create_standalone_legend(
         colors=colors,
         labels=seqdata.labels,
@@ -279,7 +279,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     # Ensure percentages sum to exactly 100% to avoid gaps
     for i in range(len(distributions)):
         # Get sum of all state percentages for this time point
-        total_percentage = sum(distributions[i][state] for state in seqdata.states)
+        total_percentage = sum(distributions[i][str(state)] for state in seqdata.states)
 
         # If there's a gap, add the difference to the top-most state
         if total_percentage < 100:
@@ -302,8 +302,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     if stacked:
         # Create a stacked area plot with enhanced colors
         ax.stackplot(range(len(dist_df)),
-                     [dist_df[state] for state in seqdata.states],
-                     labels=seqdata.states,
+                     [dist_df[str(state)] for state in seqdata.states],
+                     labels=seqdata.labels,
                      colors=base_colors,
                      alpha=1.0)  # Full opacity for maximum vibrancy
 
@@ -313,7 +313,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     else:
         # Create a line plot with enhanced colors
         for i, state in enumerate(seqdata.states):
-            ax.plot(range(len(dist_df)), dist_df[state],
+            ax.plot(range(len(dist_df)), dist_df[str(state)],
                     label=state, color=base_colors[i],
                     linewidth=2.5, marker='o', markersize=5)
 
@@ -347,7 +347,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     # Adjust layout to make room for the legend
     plt.tight_layout()
 
-    save_and_show_results(save_as, dpi=200, show=show)
+    save_and_show_results(save_as, dpi=dpi, show=show)
 
     return fig
 

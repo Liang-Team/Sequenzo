@@ -18,6 +18,32 @@
     As a result, `alphabet` is automatically set to `states` upon initialization, and kept as a semantic alias for clarity
     and potential compatibility. Users should treat `states` as the definitive state space and are not required to provide
     `alphabet` separately.
+
+    # ----------------------------------------------------------------------
+    # [Hint] Handling the ID column for sequence analysis
+    # ----------------------------------------------------------------------
+
+    # STEP 1: Check if your DataFrame already has a column representing unique entity IDs
+    # For example, check if "Entity ID" or "country" or any other identifier exists:
+    print(df.columns)
+
+    # If your data already has an ID column (e.g., 'Entity ID'), you can directly use it:
+    seq = SequenceData(df, id_col='Entity ID', time=..., states=..., time_type='year')
+
+    # ----------------------------------------------------------------------
+    # STEP 2: If your data has NO ID column, use the helper function below
+    # ----------------------------------------------------------------------
+    from sequenzo.utils import assign_unique_ids
+
+    # This will insert a new ID column named 'Entity ID' as the first column
+    df = assign_unique_ids(df, id_col_name='Entity ID')
+
+    # Optional: Save it for future use to avoid repeating this step
+    df.to_csv('your_dataset_with_ids.csv', index=False)
+
+    # Then you can use it like this:
+    seq = SequenceData(df, id_col='Entity ID', time=..., states=..., time_type='year')
+
 """
 # Only applicable to Python 3.7+, add this line to defer type annotation evaluation
 from __future__ import annotations
@@ -149,6 +175,28 @@ class SequenceData:
                 f"    Hint: Check spelling or formatting. Data contains these unique values: {sorted(data_values)}"
             )
 
+        # ----------------
+        # Check if ID column is provided and valid
+        if self.id_col is None or self.id_col not in self.data.columns:
+            raise ValueError(
+                f"[!] You must specify a valid `id_col` parameter that exists in your dataset.\n"
+                f"    ID is required to uniquely identify each sequence (e.g., individuals).\n"
+                f"    → Hint: If your data does not have an ID column yet, you can use the helper function:\n\n"
+                f"        from sequenzo.utils import assign_unique_ids\n"
+                f"        df = assign_unique_ids(df, id_col_name='Entity ID')\n"
+                f"        df.to_csv('your_dataset_with_ids.csv', index=False)\n\n"
+                f"    This will permanently assign unique IDs to your dataset for future use."
+            )
+
+        self.ids = np.array(self.data[self.id_col].values)
+
+        # Validate ID uniqueness and length
+        if len(self.ids) != len(self.data):
+            raise ValueError(f"[!] Length of ID column ('{self.id_col}') must match number of rows in the dataset.")
+        if len(np.unique(self.ids)) != len(self.ids):
+            raise ValueError(f"[!] IDs in column '{self.id_col}' must be unique.")
+
+        # ----------------
         if self.alphabet and set(self.alphabet) != set(self.states):
             raise ValueError("'alphabet' must match 'states'.")
 
@@ -164,16 +212,6 @@ class SequenceData:
                     f"    Detected non-string labels: {non_string_labels}\n"
                     f"    Example fix: instead of using `labels = [1, 2, 3]`, use `labels = ['Single', 'Married', 'Divorced']`."
                 )
-
-        # Check ids
-        if self.ids is not None:
-            if len(self.ids) != len(self.data):
-                raise ValueError("'ids' must match the length of 'data'.")
-
-            if len(np.unique(self.ids)) != len(self.ids):
-                raise ValueError("'ids' must be unique.")
-        else:
-            self.ids = np.arange(len(self.data))
 
         # Check weights
         if self.weights is not None:
@@ -257,31 +295,41 @@ class SequenceData:
         return ListedColormap([self.color_map[state] for state in self.states])
 
     def describe(self):
-        """Prints an overview of the sequence dataset."""
-        print(f"[>] Number of sequences: {len(self.seqdata)}")
-        
-        if self.ismissing:
-            lengths = self.seqdata.apply(lambda row: (row != len(self.states)).sum(), axis=1)
-            print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+        """
+        Prints an overview of the sequence dataset.
 
-            # print some missing information
-            missing_index = self.seqdata.stack()[self.seqdata.stack() == len(self.states)].index.get_level_values(0).tolist()
-            missing_count = len(missing_index)
-
-            # NOTE:
+        # NOTE:
             # Printing 'missing_index' directly may cause issues in Jupyter Notebook/Lab if the list is too long.
             # For example, if there are thousands of sequences with missing values, the full list can easily exceed
             # the IOPub data rate limit (1MB/sec by default), which will interrupt output to the client.
             # To avoid this, it's safer to only display a subset (e.g., the first 10) or add a 'verbose' flag to control output.
+        """
+        print(f"[>] Number of sequences: {len(self.seqdata)}")
+        print(f"[>] Number of time points: {self.n_steps}")
 
-            # print(f"[>] There are {missing_count} sequences with missing values, which are {missing_index}")
-            print(f"[>] There are {missing_count} sequences with missing values.")
-            print(f"    First few missing sequence IDs: {missing_index[:10]} ...")
+        if self.ismissing:
+            lengths = self.seqdata.apply(lambda row: (row != len(self.states)).sum(), axis=1)
+            print(f"[>] Min/Max sequence length: {lengths.min()} / {lengths.max()}")
+
+            # Identify missing values and related IDs
+            missing_locs = self.seqdata.stack()[self.seqdata.stack() == len(self.states)].index.get_level_values(0)
+            missing_count = len(missing_locs)
+            unique_missing_ids = missing_locs.unique().tolist()
+            print(f"[>] There are {missing_count} missing values across {len(unique_missing_ids)} sequences.")
+            print(f"    First few missing sequence IDs: {unique_missing_ids[:10]} ...")
+
+            # Find and display sequences with the most missing points
+            missing_counts = self.seqdata.isin([len(self.states)]).sum(axis=1)
+            most_missing = missing_counts[missing_counts > 0].sort_values(ascending=False).head(5)
+            print("[>] Top sequences with the most missing time points:")
+            print("    (Each row shows a sequence ID and its number of missing values)\n")
+            print(most_missing.rename("Missing Count").to_frame().rename_axis("Sequence ID"))
 
         else:
-            print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
+            print(
+                f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
 
-        print(f"[>] Alphabet: {self.alphabet}")
+        print(f"[>] States: {self.states}")
 
     def get_legend(self):
         """Returns the legend handles and labels for visualization."""

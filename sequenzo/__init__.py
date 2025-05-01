@@ -14,7 +14,14 @@
 from .datasets import load_dataset, list_datasets
 
 # Import the core functions that should be directly available from the sequenzo package
+
+from .data_preprocessing.helpers import (assign_unique_ids,
+                                         wide_to_long_format_data,
+                                         long_to_wide_format_data,
+                                         summarize_missing_values)
+
 from sequenzo.define_sequence_data import *
+
 from .visualization import (plot_sequence_index,
                             plot_most_frequent_sequences,
                             plot_single_medoid,
@@ -45,6 +52,12 @@ __all__ = [
     # Datasets
     "load_dataset",
     "list_datasets",
+
+    # Data preprocessing
+    "assign_unique_ids",
+    "wide_to_long_format_data",
+    "long_to_wide_format_data",
+    "summarize_missing_values",
 
     "SequenceData",
 

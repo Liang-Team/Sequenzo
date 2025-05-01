@@ -8,3 +8,6 @@ joblib==1.2.0  # Version compatible with Python 3.11
 fastcluster==1.2.6  # Compatible with scipy >= 1.6.3
 pillow==9.4.0  # Compatible with Python 3.11
 pybind11>=2.10.0  # Python 3.11 requires >= 2.10.0
+cython>=0.29.21
+docutils>=0.17
+missingno>=0.5.2,<0.6.0

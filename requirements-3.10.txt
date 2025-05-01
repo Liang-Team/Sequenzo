@@ -8,3 +8,6 @@ joblib==1.1.0
 fastcluster==1.2.6
 pillow==9.1.0
 pybind11>=2.6.0
+cython>=0.29.21
+docutils>=0.17
+missingno>=0.5.2,<0.6.0

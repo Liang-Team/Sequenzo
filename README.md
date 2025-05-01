@@ -122,6 +122,18 @@ Check out our [contribution guide]() for more details (work in progress).
 * Write code? Submit a pull request to enhance Sequenzo.
 * Testing? Try Sequenzo and share your feedback. Every suggestion counts!
 
+If you're contributing or debugging, use:
+
+```bash
+pip install -r requirements-3.10.txt  # Or matching your Python version
+```
+    
+For standard installation, use:
+
+```bash
+pip install .  # Uses pyproject.toml
+```
+
 ## Team
 
 **Authors**
