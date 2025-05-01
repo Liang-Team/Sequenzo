@@ -26,14 +26,14 @@ Whether you are working with **people, places, or policies**, Sequenzo helps unc
 
 Sequenzo outperforms traditional R-based tools in social sequence analysis, delivering faster processing and superior efficiency, especially for large-scale datasets. **No big data? No problem. You don’t need big data to benefit as Sequenzo is designed to enhance sequence analysis at any scale, making complex methods accessible to everyone.**
 
-## Target Audience
+## Target Users
 
 Sequenzo is designed for:
 
 - 🧑‍🎓 Quantitative researchers in sociology, demography, political science, economics, management, etc.
 - 📊 Data scientists, data analysts, and business analysts working on trajectory/time-series clustering
 - 🧑‍🏫 Educators teaching courses involving social sequence data
-- 🔁 Users familiar with R packages like `TraMineR` who want a Python-native alternative
+- 🔁 Users familiar with R packages such as `TraMineR` who want a Python-native alternative
 
 
 ## Why Choose Sequenzo?
@@ -54,12 +54,21 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 Sequenzo provides pre-built Python wheels for maximum compatibility:
 
-| Platform        | Architecture       | Python Versions | Status     |
-|-----------------|--------------------|------------------|------------|
-| **macOS**       | universal2 (x86_64 + arm64) | 3.9, 3.10, 3.11 | Built-in wheel |
-| **Windows**     | win32, AMD64       | 3.9, 3.10, 3.11 | Built-in wheel |
-| **Linux (glibc)** | i686, x86_64      | 3.9, 3.10, 3.11 | `manylinux2014` |
-| **Linux (musl)** | i686, x86_64      | 3.9, 3.10, 3.11 | `musllinux_1_2` |
+| Platform         | Architecture              | Python Versions      | Status            |
+|------------------|---------------------------|-----------------------|-------------------|
+| **macOS**        | universal2 (x86_64 + arm64) | 3.9, 3.10, 3.11     | ✅ Built-in wheel |
+| **Windows**      | AMD64                     | 3.9, 3.10, 3.11       | ✅ Built-in wheel |
+| **Linux (glibc)**| x86_64 (`manylinux2014`)  | 3.9, 3.10, 3.11       | ✅ Built-in wheel |
+
+**Windows (win32)** and **Linux (i686)** are dropped due to:
+
+- Extremely low usage in modern systems (post-2020)
+- Memory limitations (≤ 4GB) unsuitable for scientific computing workloads
+- Increasing incompatibility with packages such as `numpy`, `scipy`, and `pybind11`
+- Frequent build failures and maintenance overhead in CI/CD pipelines
+
+Wheels for **musllinux (e.g., Alpine Linux)** are not currently built. If you need support, feel free to open an issue.
+
 
 ## Installation
 
