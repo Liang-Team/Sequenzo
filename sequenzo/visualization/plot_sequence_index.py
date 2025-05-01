@@ -189,7 +189,7 @@ def plot_sequence_index(seqdata: SequenceData,
     colors = {state: seqdata.color_map[state] for state in seqdata.states}
     legend_buffer = create_standalone_legend(
         colors=colors,
-        labels=seqdata.states,
+        labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(figsize[0] * ncols, 1),
         fontsize=10,

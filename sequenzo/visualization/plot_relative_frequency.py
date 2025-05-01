@@ -146,7 +146,10 @@ def plot_relative_frequency(seqdata: SequenceData,
                   f"{p_value_text} ({stars_explanation})")
 
     # **LEGEND BELOW PLOTS**
-    legend_patches = [Rectangle((0, 0), 1, 1, color=state_palette[state], label=state) for state in seqdata.states]
+    legend_patches = [
+        Rectangle((0, 0), 1, 1, color=state_palette[state], label=label)
+        for state, label in zip(seqdata.states, seqdata.labels)
+    ]
 
     # Automatically adjust legend layout (maximum of 7 items per row)
     ncol = min(7, len(seqdata.states))  # Maximum of 7 legend items per row

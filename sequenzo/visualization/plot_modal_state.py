@@ -191,7 +191,7 @@ def plot_modal_state(seqdata: SequenceData,
     # Create standalone legend
     legend_buffer = create_standalone_legend(
         colors=colors,
-        labels=seqdata.states,
+        labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(fig_width, 1),
         fontsize=10,

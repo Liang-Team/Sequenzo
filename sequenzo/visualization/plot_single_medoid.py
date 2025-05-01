@@ -61,9 +61,8 @@ def plot_single_medoid(seqdata: SequenceData,
 
     # Display legend if required
     if show_legend:
-        handles, labels = ax.get_legend_handles_labels()
-        by_label = dict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), title="States", bbox_to_anchor=(1.05, 1), loc='upper left')
+        handles, labels = seqdata.get_legend()
+        ax.legend(handles, labels, title="States", bbox_to_anchor=(1.05, 1), loc='upper left')
 
     # Set plot title
     ax.set_title(title if title else f"Medoid Sequence (ID: {medoid_index}, Coverage: {coverage * 100:.2f}%)")

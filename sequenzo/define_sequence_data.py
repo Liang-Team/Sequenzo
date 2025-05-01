@@ -2,7 +2,22 @@
 @Author  : 梁彧祺
 @File    : define_sequence_data.py
 @Time    : 05/02/2025 12:47
-@Desc    : Optimized SequenceData class with integrated color scheme & legend handling.
+@Desc    :
+
+    Optimized SequenceData class with integrated color scheme & legend handling.
+
+    Note on `states` and `alphabet`:
+
+    In traditional sequence analysis tools (e.g., TraMineR), the `alphabet` refers to the full set of distinct states
+    found in the data and is often inferred automatically from the observed sequences.
+
+    However, in this implementation, we require the user to explicitly provide the set of `states`. This explicit control
+    is essential for ensuring consistent ordering of states, reproducibility of visualizations, and compatibility across
+    sequence datasets — especially when certain states may not appear in a given subset of the data.
+
+    As a result, `alphabet` is automatically set to `states` upon initialization, and kept as a semantic alias for clarity
+    and potential compatibility. Users should treat `states` as the definitive state space and are not required to provide
+    `alphabet` separately.
 """
 # Only applicable to Python 3.7+, add this line to defer type annotation evaluation
 from __future__ import annotations
@@ -116,18 +131,40 @@ class SequenceData:
         return self.seqdata.to_numpy(dtype=np.int32)
 
     def __repr__(self):
-        return f"SequenceData({len(self.seqdata)} sequences, Alphabet: {self.alphabet})"
+        return f"SequenceData({len(self.seqdata)} sequences, States: {self.states})"
 
     def _validate_parameters(self):
-        """Ensures correct input parameters."""
+        """Ensures correct input parameters and checks consistency with data."""
         # Check states, alphabet, labels
         if not self.states:
             raise ValueError("'states' must be provided.")
+
+        # Validate that states are present in the actual data values
+        data_values = set(self.data[self.time].stack().dropna().unique())
+        unmatched_states = [s for s in self.states if s not in data_values]
+
+        if unmatched_states:
+            raise ValueError(
+                f"[!] The following provided 'states' are not found in the data: {unmatched_states}\n"
+                f"    Hint: Check spelling or formatting. Data contains these unique values: {sorted(data_values)}"
+            )
+
         if self.alphabet and set(self.alphabet) != set(self.states):
             raise ValueError("'alphabet' must match 'states'.")
-        if self.labels and len(self.labels) != len(self.states):
-            raise ValueError("'labels' must match the length of 'states'.")
-        
+
+        if self.labels:
+            if len(self.labels) != len(self.states):
+                raise ValueError("'labels' must match the length of 'states'.")
+
+            # Ensure labels are all strings
+            non_string_labels = [label for label in self.labels if not isinstance(label, str)]
+            if non_string_labels:
+                raise TypeError(
+                    f"[!] All elements in 'labels' must be strings for proper visualization (e.g., for legends or annotations).\n"
+                    f"    Detected non-string labels: {non_string_labels}\n"
+                    f"    Example fix: instead of using `labels = [1, 2, 3]`, use `labels = ['Single', 'Married', 'Divorced']`."
+                )
+
         # Check ids
         if self.ids is not None:
             if len(self.ids) != len(self.data):
@@ -230,7 +267,16 @@ class SequenceData:
             # print some missing information
             missing_index = self.seqdata.stack()[self.seqdata.stack() == len(self.states)].index.get_level_values(0).tolist()
             missing_count = len(missing_index)
-            print(f"[>] There are {missing_count} sequences with missing values, which are {missing_index}")
+
+            # NOTE:
+            # Printing 'missing_index' directly may cause issues in Jupyter Notebook/Lab if the list is too long.
+            # For example, if there are thousands of sequences with missing values, the full list can easily exceed
+            # the IOPub data rate limit (1MB/sec by default), which will interrupt output to the client.
+            # To avoid this, it's safer to only display a subset (e.g., the first 10) or add a 'verbose' flag to control output.
+
+            # print(f"[>] There are {missing_count} sequences with missing values, which are {missing_index}")
+            print(f"[>] There are {missing_count} sequences with missing values.")
+            print(f"    First few missing sequence IDs: {missing_index[:10]} ...")
 
         else:
             print(f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
@@ -241,9 +287,9 @@ class SequenceData:
         """Returns the legend handles and labels for visualization."""
         self.legend_handles = [plt.Rectangle((0, 0), 1, 1,
                                              color=self.color_map[state],
-                                             label=state) for state in
-                               self.states]
-        return [handle for handle in self.legend_handles], self.states
+                                             label=label)
+                               for state, label in zip(self.states, self.labels)]
+        return [handle for handle in self.legend_handles], self.labels
 
     def to_dataframe(self) -> pd.DataFrame:
         """Returns the processed sequence dataset as a DataFrame."""

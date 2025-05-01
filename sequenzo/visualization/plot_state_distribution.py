@@ -135,7 +135,7 @@ def plot_state_distribution(seqdata: SequenceData,
             # Create a stacked area plot
             ax.stackplot(range(len(dist_df)),
                          [dist_df[state] for state in seqdata.states],
-                         labels=seqdata.states,
+                         labels=seqdata.labels,
                          colors=base_colors,
                          alpha=1.0)
 
@@ -144,9 +144,9 @@ def plot_state_distribution(seqdata: SequenceData,
             ax.set_axisbelow(True)
         else:
             # Create a line plot
-            for k, state in enumerate(seqdata.states):
+            for state, label, color in zip(seqdata.states, seqdata.labels, base_colors):
                 ax.plot(range(len(dist_df)), dist_df[state],
-                        label=state, color=base_colors[k],
+                        label=label, color=color,
                         linewidth=2.5, marker='o', markersize=5)
 
             # Add grid lines
@@ -197,7 +197,7 @@ def plot_state_distribution(seqdata: SequenceData,
     colors = {state: seqdata.color_map[state] for state in seqdata.states}
     legend_buffer = create_standalone_legend(
         colors=colors,
-        labels=seqdata.states,
+        labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(figsize[0] * ncols, 1),
         fontsize=10,
