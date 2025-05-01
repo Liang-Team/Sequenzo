@@ -66,12 +66,14 @@ jobs:
       # 不支持 32-bit Windows：几乎没人用了、内存限制太严重、生态系统正在放弃、PyPI 上传倾向 64-bit
       # 我们的项目里有大量的 Cython 模块、.cpp / .pyx 扩展、pybind11 接口
       # 这些都是 为 CPython 编译的本地扩展，PyPy 对它们支持很不完善，编译也会失败
+      # Linux 也如此，禁止使用 32-bit，因为主流 Linux 发行版（Ubuntu, Debian, CentOS 等）早已默认发布 64-bit 系统。
       - name: Build wheels with cibuildwheel
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
           CIBW_SKIP: "pp*"
           CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_ARCHS_LINUX: "x86_64"
 
       - name: List wheel files (Linux/macOS only)
         if: runner.os != 'Windows'
