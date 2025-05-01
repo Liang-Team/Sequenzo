@@ -52,13 +52,23 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 ## Platform Compatibility
 
-Sequenzo provides pre-built Python wheels for maximum compatibility:
+Sequenzo provides pre-built Python wheels for maximum compatibility — no need to compile from source.
 
-| Platform         | Architecture              | Python Versions      | Status            |
-|------------------|---------------------------|-----------------------|-------------------|
-| **macOS**        | universal2 (x86_64 + arm64) | 3.9, 3.10, 3.11     | ✅ Built-in wheel |
-| **Windows**      | AMD64                     | 3.9, 3.10, 3.11       | ✅ Built-in wheel |
-| **Linux (glibc)**| x86_64 (`manylinux2014`)  | 3.9, 3.10, 3.11       | ✅ Built-in wheel |
+| Platform         | Architecture                  | Python Versions      | Status            |
+|------------------|-------------------------------|-----------------------|-------------------|
+| **macOS**        | `universal2` (Intel + Apple Silicon) | 3.9, 3.11       | ✅ Pre-built wheel |
+| **Windows**      | `AMD64` (64-bit)              | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
+| **Linux (glibc)**| `x86_64` (standard Linux)     | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
+| **Linux (musl)** | `x86_64` (Alpine Linux)       | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
+
+
+What do these terms mean?
+- **universal2 (macOS)**: One wheel supports both Intel (x86_64) and Apple Silicon (arm64) Macs.
+- **manylinux2014 (glibc-based Linux)**: Compatible with most mainstream Linux distributions (e.g., Ubuntu, Debian, CentOS).
+- **musllinux_1_2 (musl-based Linux)**: For lightweight Alpine Linux environments, common in Docker containers.
+- **AMD64 (Windows)**: Standard 64-bit Windows system architecture.
+
+All of these wheels are pre-built and available on PyPI — so `pip install sequenzo` should work on supported platforms, without needing a compiler.
 
 **Windows (win32)** and **Linux (i686)** are dropped due to:
 
@@ -66,8 +76,6 @@ Sequenzo provides pre-built Python wheels for maximum compatibility:
 - Memory limitations (≤ 4GB) unsuitable for scientific computing workloads
 - Increasing incompatibility with packages such as `numpy`, `scipy`, and `pybind11`
 - Frequent build failures and maintenance overhead in CI/CD pipelines
-
-Wheels for **musllinux (e.g., Alpine Linux)** are not currently built. If you need support, feel free to open an issue.
 
 
 ## Installation
