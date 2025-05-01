@@ -11,3 +11,4 @@ pybind11>=2.6.0
 cython>=0.29.21
 docutils>=0.17
 missingno>=0.5.2,<0.6.0
+tqdm>=4.62.3,<5.0.0
