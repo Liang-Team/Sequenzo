@@ -68,6 +68,9 @@ jobs:
           CIBW_SKIP: "pp*"
           CIBW_ARCHS_WINDOWS: "AMD64"
 
+      - name: List all wheel outputs (debug)
+        run: find dist/ -type f -name "*.whl" -print
+
       # 这样就能看到 actions 机器上， wheel 文件是否生成成功
       # Windows 的 bash 环境一样支持 ls，并不会有问题。这样最简洁、最少坑
       - name: Show dist content
