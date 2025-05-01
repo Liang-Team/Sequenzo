@@ -37,10 +37,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # 安装依赖时指定仅安装已有 wheel，不构建源码包，防止 linux 系统里面 scipy 问题
+      # 项目依赖了 scipy，而 scipy 在 Linux 上 从源码构建时依赖 OpenBLAS（或 MKL）库 来支持矩阵/线性代数功能。
+      # 但 GitHub Actions 的基础镜像里默认没装 OpenBLAS 开发库，所以构建失败了。
+      # 这通常发生在 构建轮子的时候自动触发了某些依赖（比如 scipy）从源码编译，而不是直接使用已有 wheel。
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install Cython pybind11 numpy build cibuildwheel twine
+          pip install --prefer-binary numpy scipy
+          pip install --prefer-binary Cython pybind11 build cibuildwheel twine
 
       - name: Build Cython wheels on macOS
         if: runner.os == 'macOS'
