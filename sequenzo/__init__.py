@@ -51,7 +51,13 @@ from .prefix_tree import (
     build_prefix_tree,
     compute_prefix_count,
     IndividualDivergence,
-    extract_sequences
+    extract_sequences,
+    get_state_space,
+    compute_branching_factor,
+    compute_js_divergence,
+    compute_composite_score,
+    convert_to_prefix_tree_data,
+    plot_system_indicators
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -104,5 +110,11 @@ __all__ = [
     "build_prefix_tree",
     "compute_prefix_count",
     "IndividualDivergence",
-    "extract_sequences"
+    "extract_sequences",
+    "get_state_space",
+    "compute_branching_factor",
+    "compute_js_divergence",
+    "compute_composite_score",
+    "convert_to_prefix_tree_data",
+    "plot_system_indicators"
 ]

@@ -22,6 +22,8 @@ states = get_state_space(sequences)
 # ------------------------
 tree = build_prefix_tree(sequences)
 
+print(tree.describe())
+
 # ------------------------
 # Step 3: 计算系统层指标
 # ------------------------
