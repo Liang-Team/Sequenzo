@@ -9,9 +9,9 @@
 __version__ = "0.1.9"
 
 # Lazy import: public submodules
-from sequenzo import (datasets, visualization, clustering,
+from sequenzo import (datasets, data_preprocessing, visualization, clustering,
                       dissimilarity_measures, big_data, define_sequence_data,
-                      multidomain)
+                      multidomain, prefix_tree)
 
 
 def __getattr__(name):
@@ -19,6 +19,8 @@ def __getattr__(name):
         if name == "datasets":
             from sequenzo import datasets
             return datasets
+        elif name == "data_preprocessing":
+            from sequenzo import data_preprocessing
         elif name == "visualization":
             from sequenzo import visualization
             return visualization
@@ -35,8 +37,11 @@ def __getattr__(name):
             from sequenzo.big_data import big_data
             return big_data
         elif name == "multidomain":
-            from sequenzo.multidomain import multidomain
+            from sequenzo import multidomain
             return multidomain
+        elif name == "prefix_tree":
+            from sequenzo import prefix_tree
+            return prefix_tree
     except ImportError as e:
         raise AttributeError(f"Could not import {name}: {e}")
 
@@ -48,10 +53,12 @@ SequenceData = define_sequence_data.SequenceData
 
 __all__ = [
     'datasets',
+    'data_preprocessing',
     'visualization',
     'clustering',
     'dissimilarity_measures',
     'SequenceData',
     'big_data',
-    'multidomain'
+    'multidomain',
+    'prefix_tree'
 ]

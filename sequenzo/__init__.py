@@ -47,6 +47,13 @@ from .multidomain import (create_idcd_sequence_from_csvs,
                           linked_polyadic_sequence_analysis
                           )
 
+from .prefix_tree import (
+    build_prefix_tree,
+    compute_prefix_count,
+    IndividualDivergence,
+    extract_sequences
+)
+
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
@@ -91,5 +98,11 @@ __all__ = [
     "get_interactive_combined_typology",
     "merge_sparse_combt_types",
     "get_association_between_domains",
-    "linked_polyadic_sequence_analysis"
+    "linked_polyadic_sequence_analysis",
+
+    # Prefix Tree
+    "build_prefix_tree",
+    "compute_prefix_count",
+    "IndividualDivergence",
+    "extract_sequences"
 ]
