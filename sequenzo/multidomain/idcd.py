@@ -106,10 +106,13 @@ def create_idcd_sequence_from_csvs(
             parts = state.split("+")
             label_parts = []
             for i, token in enumerate(parts):
-                mapping = domain_state_labels[i]
-                # The states can be strings or numbers
-                label_parts.append(mapping.get(token, str(token)))
-            pretty_labels.append('+'.join(label_parts))
+                try:
+                    key = int(token) if token.isdigit() else token
+                    label = domain_state_labels[i].get(key, str(token))
+                except Exception:
+                    label = str(token)
+                label_parts.append(label)
+            pretty_labels.append(' + '.join(label_parts))  # 更清晰的拼接格式
     else:
         pretty_labels = observed_states.index.tolist()
 

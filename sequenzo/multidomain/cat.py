@@ -388,12 +388,34 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             # This step will hide the state concatenation,
             # And the returned result will convert the MD strings into numbers.
             # for example : '1+2+3' --> 1, '1+4+6' --> 2
-            newseqdata = pd.DataFrame(newseqdata, index=channels[0].seqdata.index, columns=md_cnames)
+            newseqdata_df = pd.DataFrame(newseqdata, columns=md_cnames)
+            newseqdata_df.insert(0, channels[0].id_col, channels[0].ids)
+
+            # Reconstruct multi-domain labels for composite states
+            domain_labels = [channel.labels for channel in
+                             channels]  # e.g., [["At home", "Left home"], ["No child", "Child"]]
+
+            md_labels = []
+            for md_state in states_space:
+                parts = md_state.split(ch_sep)  # e.g., ["0", "1"]
+                if len(parts) != len(domain_labels):
+                    md_labels.append(md_state)  # fallback if structure doesn't match
+                else:
+                    label_parts = []
+                    for val, dom_lab in zip(parts, domain_labels):
+                        try:
+                            label_parts.append(dom_lab[int(val)])
+                        except (ValueError, IndexError):
+                            label_parts.append(str(val))  # fallback if unexpected value
+                    md_labels.append(" + ".join(label_parts))
+
             with contextlib.redirect_stdout(io.StringIO()):
-                newseqdata_seq = SequenceData(newseqdata,
+                newseqdata_seq = SequenceData(newseqdata_df,
                                               time=md_cnames,
                                               time_type=channels[0].time_type,
-                                              states=states_space)
+                                              states=states_space,
+                                              labels=md_labels,
+                                              id_col=channels[0].id_col)
 
             newindel = np.max(newindel)
             with contextlib.redirect_stdout(io.StringIO()):

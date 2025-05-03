@@ -12,6 +12,7 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
+# dependencies 是运行时依赖，也就是用户 pip install sequenzo 时会自动装的内容
 [project]
 name = "sequenzo"
 description = "A fast, scalable and intuitive Python package for social sequence analysis."
@@ -31,7 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
     "numpy>=1.19.5,<2.0",
     "pandas>=1.2.5",
@@ -45,6 +46,8 @@ dependencies = [
     "fastcluster>=1.2.6",
     "joblib>=1.0.1",
     "docutils>=0.17",
+    "tqdm>=4.62.3,<5.0.0",
+    "missingno>=0.5.2,<0.6.0",
 ]
 
 [project.optional-dependencies]
