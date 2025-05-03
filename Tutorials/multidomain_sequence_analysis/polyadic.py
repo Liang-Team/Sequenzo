@@ -74,7 +74,7 @@ seq_parent = SequenceData(
 )
 
 # 3. Run linked_polyad analysis
-result_df = linked_polyadic_sequence_analysis(
+result_df, merged_seq_data = linked_polyadic_sequence_analysis(
     seqlist=[seq_child, seq_parent],
     # method="OM",  # or "HAM", "OMspell", "CHI2"
     method="HAM",
