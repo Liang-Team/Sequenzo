@@ -58,6 +58,7 @@ seq_child = SequenceData(
     time_type="age",
     time=[str(i) for i in range(15, 40)],
     states=["S", "M0", "M1", "M2", "M3+", "D"],
+    labels=["S", "M0", "M1", "M2", "M3+", "D"],
     id_col="id",
     weights=None
 )
@@ -67,6 +68,7 @@ seq_parent = SequenceData(
     time_type="age",
     time=[str(i) for i in range(15, 40)],
     states=["S", "M0", "M1", "M2", "M3+", "D"],
+    labels=["S", "M0", "M1", "M2", "M3+", "D"],
     id_col="id",
     weights=None
 )

@@ -6,9 +6,11 @@
 """
 from collections import defaultdict, Counter
 import numpy as np
+from scipy.stats import zscore
+from numpy import array
 from scipy.spatial.distance import jensenshannon
 
-from sequenzo.visualization.utils import save_and_show_results, save_figure_to_buffer
+from sequenzo.visualization.utils import save_and_show_results
 import matplotlib.pyplot as plt
 from typing import List, Optional, Dict
 
@@ -32,6 +34,18 @@ class PrefixTree:
 
     def get_prefixes_at_depth(self, depth):
         return [k for k in self.counts if len(k) == depth]
+
+    def get_children(self, prefix):
+        """
+        Given a prefix (as a list or tuple), return its immediate children in the tree.
+
+        Returns:
+            dict: mapping from child state -> subtree dict
+        """
+        node = self.root
+        for state in prefix:
+            node = node.get(state, {})
+        return node
 
     def get_children_count(self, prefix):
         node = self.root
@@ -118,45 +132,28 @@ def build_prefix_tree(sequences):
     return tree
 
 
-import matplotlib.pyplot as plt
-from typing import List, Optional, Dict
-from scipy.stats import zscore
-from numpy import array
-from sequenzo.visualization.utils import save_and_show_results
-
 def plot_system_indicators(prefix_counts: List[float],
-                            branching_factors: List[float],
-                            js_divergence: Optional[List[float]] = None,
-                            composite_score: Optional[List[float]] = None,
-                            save_as: Optional[str] = None,
-                            dpi: int = 200,
-                            custom_colors: Optional[Dict[str, str]] = None,
-                            show: bool = True,
-                            norm: bool = False) -> None:
+                           branching_factors: List[float],
+                           js_divergence: Optional[List[float]] = None,
+                           composite_score: Optional[List[float]] = None,
+                           save_as: Optional[str] = None,
+                           dpi: int = 200,
+                           custom_colors: Optional[Dict[str, str]] = None,
+                           show: bool = True,
+                           plot_distributions: bool = False) -> None:
     """
-    Plot system-level indicators over time.
-
-    Parameters:
-        prefix_counts (List[float]): Time series of prefix count values.
-        branching_factors (List[float]): Time series of branching factors.
-        js_divergence (List[float], optional): JS divergence values over time.
-        composite_score (List[float], optional): Composite divergence score.
-        save_as (str, optional): File path to save the figure (e.g., 'divergence.png').
-        dpi (int): Image resolution.
-        custom_colors (dict, optional): Custom color mapping (e.g., {'Prefix Count': 'red'}).
-        show (bool): Whether to display the plot.
-        norm (bool): Whether to z-score normalize all indicators.
+    Plot system-level indicators over time using:
+    - Left axis: raw prefix counts
+    - Right axis: z-score of other indicators
+    - Optionally: individual raw distribution plots of all indicators
     """
     T = len(prefix_counts)
     x = list(range(1, T + 1))
 
-    if norm:
-        prefix_counts = zscore(array(prefix_counts))
-        branching_factors = zscore(array(branching_factors))
-        if js_divergence:
-            js_divergence = zscore(array(js_divergence))
-        if composite_score:
-            composite_score = zscore(array(composite_score))
+    # Normalize others
+    bf_z = zscore(array(branching_factors))
+    js_z = zscore(array(js_divergence)) if js_divergence else None
+    composite_z = zscore(array(composite_score)) if composite_score else None
 
     color_defaults = {
         "Prefix Count": "#1f77b4",
@@ -166,21 +163,54 @@ def plot_system_indicators(prefix_counts: List[float],
     }
     colors = {**color_defaults, **(custom_colors or {})}
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(x, prefix_counts, marker='o', label='Prefix Count', color=colors["Prefix Count"])
-    ax.plot(x, branching_factors, marker='s', label='Branching Factor', color=colors["Branching Factor"])
+    # --- Main line plot with dual axes ---
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    ax1.set_xlabel("Time (t)")
+    ax1.set_ylabel("Prefix Count", color=colors["Prefix Count"])
+    ax1.plot(x, prefix_counts, marker='o', color=colors["Prefix Count"], label="Prefix Count")
+    ax1.tick_params(axis='y', labelcolor=colors["Prefix Count"])
+    ax1.grid(True)
 
-    if js_divergence is not None:
-        ax.plot(x, js_divergence, marker='^', label='JS Divergence', color=colors["JS Divergence"])
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Z-score (Other Indicators)")
+    ax2.plot(x, bf_z, marker='s', label='Branching Factor (z)', color=colors["Branching Factor"])
+    if js_z is not None:
+        ax2.plot(x, js_z, marker='^', label='JS Divergence (z)', color=colors["JS Divergence"])
+    if composite_z is not None:
+        ax2.plot(x, composite_z, linestyle='--', label='Composite Score (z)', color=colors["Composite Score"])
 
-    if composite_score is not None:
-        ax.plot(x, composite_score, linestyle='--', label='Composite Score', color=colors["Composite Score"])
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
 
-    ax.set_title("System-Level Trajectory Indicators Over Time", fontsize=14)
-    ax.set_xlabel("Time (t)", fontsize=12)
-    ax.set_ylabel("Value" + (" (z-score)" if norm else ""), fontsize=12)
-    ax.grid(True)
-    ax.legend()
-    plt.tight_layout()
+    ax1.set_title("System-Level Trajectory Indicators: Raw vs. Normalized")
+    fig.tight_layout()
 
     save_and_show_results(save_as=save_as, dpi=dpi, show=show)
+
+    # --- Distribution plots if requested ---
+    if plot_distributions:
+        raw_data = {
+            "Prefix Count": prefix_counts,
+            "Branching Factor": branching_factors,
+        }
+        if js_divergence:
+            raw_data["JS Divergence"] = js_divergence
+        if composite_score:
+            raw_data["Composite Score"] = composite_score
+
+        n = len(raw_data)
+        fig, axes = plt.subplots(1, n, figsize=(4 * n, 4))
+        if n == 1:
+            axes = [axes]
+
+        for ax, (label, values) in zip(axes, raw_data.items()):
+            sns.histplot(values, kde=True, ax=ax, color=colors.get(label, None))
+            ax.set_title(f"{label} Distribution")
+            ax.set_xlabel("Value")
+            ax.set_ylabel("Density")
+
+        fig.tight_layout()
+        suffix = "_distributions" if save_as else None
+        dist_path = save_as.replace(".png", f"{suffix}.png") if save_as else None
+        save_and_show_results(save_as=dist_path, dpi=dpi, show=show)
