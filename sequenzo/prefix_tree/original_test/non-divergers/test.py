@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import sys
 
-df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/Sequenzo-main/sequenzo/prefix_tree/df.csv')
+df = pd.read_csv('/sequenzo/prefix_tree/df.csv')
 
 # ================================
 # Step 1: 筛选主流个体（non-diverged）

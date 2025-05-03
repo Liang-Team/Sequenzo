@@ -167,4 +167,5 @@ pip install .  # Uses pyproject.toml
   * Economics: Jan Meyerhoff-Liang
   * History: Jingrui Chen
 * Yuqi's PhD advisor: [Professor Ridhi Kashyap, University of Oxford](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/)
+* Yuqi's original programming mentor: [JiangHuShiNian](https://github.com/jianghushinian)
 
