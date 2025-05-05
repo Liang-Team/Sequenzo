@@ -608,6 +608,6 @@ if __name__ == '__main__':
 
     refseq = [[0, 1, 2], [99, 100]]
     om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
-    print(om)
+    # print(om)
 
     print("================")
