@@ -53,6 +53,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     for i, (seq, freq) in enumerate(zip(df['sequence'], df['freq'])):
         left = 0  # Starting x position
         for t, state_idx in enumerate(seq):
+            state_colors = seqdata.color_map_by_label
             state_label = inv_state_mapping.get(state_idx, "Unknown")  # Get the actual state name
             color = state_colors.get(state_label, "gray")  # Get the corresponding color
 

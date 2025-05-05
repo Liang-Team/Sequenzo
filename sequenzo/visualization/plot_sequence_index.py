@@ -4,12 +4,9 @@
 @Time    : 29/12/2024 09:08
 @Desc    : 
     Generate sequence index plots.
-    TODO: when not single, graphs are not yet integrated with SequenceData
-    including pre-loaded colormap, legend
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
 
 from sequenzo import SequenceData
 from sequenzo.visualization.utils import (
@@ -186,7 +183,7 @@ def plot_sequence_index(seqdata: SequenceData,
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
     # Create standalone legend
-    colors = {state: seqdata.color_map[state] for state in seqdata.states}
+    colors = seqdata.color_map_by_label
     legend_buffer = create_standalone_legend(
         colors=colors,
         labels=seqdata.labels,
@@ -299,4 +296,3 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     save_and_show_results(save_as, dpi=200)
-

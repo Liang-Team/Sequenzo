@@ -123,14 +123,14 @@ class SequenceData:
         # No longer support this feature as we encourage users to clean the time variables.
         # TODO: might implement a helper function for users to clean up their time variables.
         self.cleaned_time = time
-
         self.states = states
-        self.alphabet = states or sorted(set(data[time].stack().dropna().unique()))
+        self.alphabet = states or sorted(set(data[time].stack().unique()))
         self.labels = labels or states
         self.id_col = id_col
         self.ids = np.array(data[id_col].values) if self.id_col else data.index
         self.weights = weights
         self.start = start
+        # TODO 这个没有用，要看看是否需要去除
         self.missing_handling = missing_handling or {"left": np.nan, "right": "DEL", "gaps": np.nan}
         self.void = void
         self.nr = nr
@@ -142,6 +142,11 @@ class SequenceData:
         # Extract & process sequences
         self.seqdata = self._extract_sequences()
         self._process_missing_values()
+
+        # The following two lines of code are for visualization
+        self.state_to_label = dict(zip(self.states, self.labels))
+        self.label_to_state = dict(zip(self.labels, self.states))
+
         self._convert_states()
 
         # Assign colors & save legend
@@ -166,7 +171,7 @@ class SequenceData:
             raise ValueError("'states' must be provided.")
 
         # Validate that states are present in the actual data values
-        data_values = set(self.data[self.time].stack().dropna().unique())
+        data_values = set(self.data[self.time].stack().unique())
         unmatched_states = [s for s in self.states if s not in data_values]
 
         if unmatched_states:
@@ -243,7 +248,29 @@ class SequenceData:
         self.ismissing = self.seqdata.isna().any().any()
 
         if self.ismissing:
-            self.states.append("Missing")
+            # 判断 states 中是否已经含有 Missing（无论是字符串还是 np.nan）
+            if "Missing" not in self.states and not any(pd.isna(s) for s in self.states):
+                # 自动判断 states 是字符串型还是数字型
+                example_missing = "'Missing'" if all(isinstance(s, str) for s in self.states) else "np.nan"
+                quote = "" if example_missing == "np.nan" else "'"
+
+                print(
+                    "[!] Detected missing values (empty cells) in the sequence data.\n"
+                    f"    → Automatically added {example_missing} to `states` and `labels` for compatibility.\n"
+                    "    However, it's strongly recommended to manually include it when defining `states` and `labels`.\n"
+                    "    For example:\n\n"
+                    f"        states = [{quote}At Home{quote}, {quote}Left Home{quote}, {example_missing}]\n"
+                    f"        labels = [{quote}At Home{quote}, {quote}Left Home{quote}, {quote}Missing{quote}]\n\n"
+                    "    This ensures consistent color mapping and avoids unexpected visualization errors."
+                )
+
+                # 添加 missing 到 states 和 labels
+                if example_missing == "'Missing'":
+                    self.states.append("Missing")
+                    self.labels.append("Missing")
+                else:
+                    self.states.append(np.nan)
+                    self.labels.append("Missing")
 
     def _convert_states(self):
         """
@@ -258,7 +285,9 @@ class SequenceData:
         correct_order = self.states
 
         # Create the state mapping with correct order
-        self.state_mapping = {state: idx + 1 for idx, state in enumerate(correct_order)}
+        self.state_mapping = {original_state: i + 1 for i, original_state in enumerate(self.states)}
+        # 保留下面的映射关系，这样后面 legend 和绘图都能用 numeric 编码了
+        self.inverse_state_mapping = {v: k for k, v in self.state_mapping.items()}
 
         # Apply the mapping
         # If there are missing values, replace them with the last index + 1
@@ -288,11 +317,20 @@ class SequenceData:
             if reverse_colors:
                 color_list = list(reversed(color_list))
 
-        self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
+        # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
+        # 这样所有 color map key 是 1, 2, 3...，就可以和 imshow(vmin=1, vmax=N) 对齐
+        self.color_map = {i + 1: color_list[i] for i in range(num_states)}
+
+        # 构造以 label 为 key 的 color_map（用于 legend）
+        self.color_map_by_label = {
+            self.state_to_label[state]: self.color_map[self.state_mapping[state]]
+            for state in self.states
+        }
 
     def get_colormap(self):
         """Returns a ListedColormap for visualization."""
-        return ListedColormap([self.color_map[state] for state in self.states])
+        # return ListedColormap([self.color_map[state] for state in self.states])
+        return ListedColormap([self.color_map[i + 1] for i in range(len(self.states))])
 
     def describe(self):
         """
@@ -330,14 +368,23 @@ class SequenceData:
                 f"[>] Min/Max sequence length: {self.seqdata.notna().sum(axis=1).min()} / {self.seqdata.notna().sum(axis=1).max()}")
 
         print(f"[>] States: {self.states}")
+        print(f"[>] Labels: {self.labels}")
 
     def get_legend(self):
         """Returns the legend handles and labels for visualization."""
-        self.legend_handles = [plt.Rectangle((0, 0), 1, 1,
-                                             color=self.color_map[state],
-                                             label=label)
-                               for state, label in zip(self.states, self.labels)]
-        return [handle for handle in self.legend_handles], self.labels
+        # self.legend_handles = [plt.Rectangle((0, 0), 1, 1,
+        #                                      color=self.color_map[state],
+        #                                      label=label)
+        #                        for state, label in zip(self.states, self.labels)]
+        # return [handle for handle in self.legend_handles], self.labels
+
+        self.legend_handles = [
+            plt.Rectangle((0, 0), 1, 1,
+                          color=self.color_map[i + 1],
+                          label=self.labels[i])
+            for i in range(len(self.states))
+        ]
+        return self.legend_handles, self.labels
 
     def to_dataframe(self) -> pd.DataFrame:
         """Returns the processed sequence dataset as a DataFrame."""

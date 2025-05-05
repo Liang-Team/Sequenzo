@@ -32,7 +32,7 @@ def plot_state_distribution(seqdata: SequenceData,
                             nrows: int = None,
                             ncols: int = None,
                             stacked=True,
-                            show=False,
+                            show=True,
                             include_legend=True) -> None:
     """
     Creates state distribution plots for different groups, showing how state
@@ -128,7 +128,10 @@ def plot_state_distribution(seqdata: SequenceData,
         ax = axes[i]
 
         # Get colors for each state
-        base_colors = [seqdata.color_map[state] for state in seqdata.states]
+        # seqdata.states 是整数编码（如 1, 2, ...）
+        # seqdata.state_mapping[state] 把整数映射为 label（如 'Married', 'Single'）
+        # seqdata.color_map[...] 用 label 取颜色
+        base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
 
         # Plot the data
         if stacked:
@@ -194,7 +197,7 @@ def plot_state_distribution(seqdata: SequenceData,
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
     # Create standalone legend
-    colors = dict(zip(seqdata.labels, [seqdata.color_map[state] for state in seqdata.states]))
+    colors = dict(zip(seqdata.labels, [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]))
     legend_buffer = create_standalone_legend(
         colors=colors,
         labels=seqdata.labels,
@@ -220,10 +223,13 @@ def plot_state_distribution(seqdata: SequenceData,
     plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
     plt.imshow(combined_img)
     plt.axis('off')
-    plt.show()
+    if show or save_as:  # 显示或保存都需要触发
+        plt.show()
     plt.close()
 
-    return fig
+    # 不再返回 fig，避免它被环境自动渲染重复
+    return None
+    # return fig
 
 
 def _plot_state_distribution_single(seqdata: SequenceData,
@@ -296,7 +302,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     fig, ax = plt.subplots(figsize=figsize)
 
     # Get colors for each state and enhance vibrancy
-    base_colors = [seqdata.color_map[state] for state in seqdata.states]
+    base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
 
     # Plot the data
     if stacked:
@@ -349,6 +355,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     save_and_show_results(save_as, dpi=dpi, show=show)
 
-    return fig
+    # return fig
+    # 不再返回 fig，避免它被环境自动渲染重复
+    return None
 
 

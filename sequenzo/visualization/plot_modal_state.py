@@ -108,7 +108,7 @@ def plot_modal_state(seqdata: SequenceData,
         ax.sharey(axes[0])
 
     # Get colors for states
-    colors = {state: seqdata.color_map[state] for state in seqdata.states}
+    colors = seqdata.color_map_by_label
 
     # Process each group
     for i, group in enumerate(group_labels):

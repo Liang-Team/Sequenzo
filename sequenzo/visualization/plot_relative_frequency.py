@@ -6,6 +6,7 @@
     Generate sequence relative frequency plots with medoids and dissimilarities.
     TODO: Update the xticks.
 """
+import pandas as pd
 import numpy as np
 from scipy.stats import f_oneway
 # from sklearn.preprocessing import StandardScaler
@@ -16,7 +17,8 @@ import seaborn as sns
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    save_and_show_results
+    save_and_show_results,
+    set_up_time_labels_for_x_axis
 )
 
 
@@ -26,15 +28,16 @@ def _get_standard_scaler():
         from sklearn.preprocessing import StandardScaler
         return StandardScaler
     except ImportError:
-        print("Warning: Not able to install StandardScaler。Please ensure that you have installed scikit-learn successfully.")
+        print(
+            "Warning: Not able to install StandardScaler。Please ensure that you have installed scikit-learn successfully.")
         return None
 
 
 def plot_relative_frequency(seqdata: SequenceData,
-               distance_matrix: np.ndarray,
-               num_groups: int = 12,
-               save_as=None,
-               dpi=200):
+                            distance_matrix: np.ndarray,
+                            num_groups: int = 12,
+                            save_as=None,
+                            dpi=200):
     """
     Generate a sequence relative frequency (seqrf) plot.
 
@@ -44,6 +47,9 @@ def plot_relative_frequency(seqdata: SequenceData,
     :param save_as: (str, optional) File path to save the plot.
     :param dpi: (int) Resolution of the saved plot.
     """
+    if isinstance(distance_matrix, pd.DataFrame):
+        distance_matrix = distance_matrix.to_numpy()
+
     # Compute medoids and dissimilarities
     rep_sequences, dissimilarities, group_labels = _compute_seqrf(seqdata, distance_matrix, num_groups)
 
@@ -57,30 +63,35 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # Use color mapping stored in SequenceData
     state_palette = seqdata.color_map
-    inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
 
     # **LEFT PLOT: Group Medoids (Sequence Index Plot)**
     ax = axes[0]
     for i, seq in enumerate(rep_sequences):
         for t, state_idx in enumerate(seq):
-            state_label = inv_state_mapping.get(state_idx, "Unknown")
-            color = state_palette.get(state_label, "gray")
+            color = state_palette.get(state_idx, "gray")  # 直接用整数查颜色
             ax.add_patch(Rectangle((t, i), 1, 1, color=color))
 
     ax.set_xlim(0, seqdata.values.shape[1])
     ax.set_ylim(-0.5, len(rep_sequences) - 0.5)
-    ax.set_xticks(range(seqdata.values.shape[1]))
     ax.set_title("Group Medoids", fontsize=14)
     ax.set_xlabel("Time", fontsize=12)
     ax.set_ylabel("Frequency Group", fontsize=12)
 
     # X-axis labels
-    ax.set_xticks(range(seqdata.values.shape[1]))
-    ax.set_xticklabels(range(1, seqdata.values.shape[1] + 1), fontsize=10, ha='right', color='black')
+    # TODO 权宜之计，不然 index plot 里面没有，但是这里有但是在 quickstart 和 multidomain main_tutorial 里面
+    # 因为time一个数字一个string导致不一样，太麻烦了
+    # 仅显示一部分 xticks，避免过于密集
+    xtick_positions = np.arange(len(seqdata.cleaned_time))
+    skip = max(1, len(seqdata.cleaned_time) // 8)  # 每隔几个显示一个（可调）
+    visible_positions = xtick_positions[::skip]
+    visible_labels = [seqdata.cleaned_time[i] for i in visible_positions]
+
+    ax.set_xticks(visible_positions)
+    ax.set_xticklabels(visible_labels, fontsize=10, rotation=0, ha='right', color='gray')
 
     # Y-axis labels
     ax.set_yticks(range(0, num_groups, max(1, num_groups // 10)))
-    ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=10, color='black')
+    ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=10, color='gray')
 
     # **Remove unwanted black outlines**
     ax.spines["top"].set_visible(False)
@@ -119,7 +130,8 @@ def plot_relative_frequency(seqdata: SequenceData,
     box_ax.set_ylabel("Group", fontsize=12)
 
     # Adjust layout
-    plt.subplots_adjust(bottom=0.25, wspace=0.4)
+    # TODO 出现问题的地方 - 状态多了就有问题(quickstart) ，状态比较少就没问题 Tutorial/multidomain/main_tutorial
+    plt.subplots_adjust(bottom=0.23, wspace=0.4)
 
     # **Representation Quality Stats**
     r_squared, f_statistic, p_value = _compute_r2_f_statistic(distance_matrix, group_labels)
@@ -147,19 +159,34 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # **LEGEND BELOW PLOTS**
     legend_patches = [
-        Rectangle((0, 0), 1, 1, color=state_palette[state], label=label)
-        for state, label in zip(seqdata.states, seqdata.labels)
+        Rectangle((0, 0), 1, 1, color=seqdata.color_map_by_label[label], label=label)
+        for label in seqdata.labels
     ]
 
     # Automatically adjust legend layout (maximum of 7 items per row)
-    ncol = min(7, len(seqdata.states))  # Maximum of 7 legend items per row
+    # ncol = min(7, len(seqdata.states))  # Maximum of 7 legend items per row
+    # legend = fig.legend(
+    #     handles=legend_patches,
+    #     loc='lower center',
+    #     ncol=ncol,
+    #     fontsize=12,
+    #     frameon=False,
+    #     bbox_to_anchor=(0.5, 0.05)  # Position legend at the bottom center
+    # )
+
+    # Estimate how many rows are needed for the legend
+    max_items_per_row = 5
+    n_states = len(seqdata.states)
+    ncol = min(max_items_per_row, n_states)
+    nrow = (n_states + max_items_per_row - 1) // max_items_per_row  # 向上取整
+
     legend = fig.legend(
         handles=legend_patches,
         loc='lower center',
         ncol=ncol,
         fontsize=12,
         frameon=False,
-        bbox_to_anchor=(0.5, 0.05)  # Position legend at the bottom center
+        bbox_to_anchor=(0.5, 0.05 + 0.015 * (nrow - 1))  # 动态向上移动避免遮挡文本
     )
 
     # Display statistical information below the legend
@@ -176,7 +203,7 @@ def plot_relative_frequency(seqdata: SequenceData,
 
 
 def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups: int = 10,
-                  weights: np.ndarray = None, grouping_method: str = "first"):
+                   weights: np.ndarray = None, grouping_method: str = "first"):
     """
     Compute the representative sequences (medoids) for each frequency group in a SequenceData object.
 
@@ -201,10 +228,10 @@ def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups:
 
     # **Step 2: Standardize MDS coordinates and sort**
     # 获取 StandardScaler
-    scaler = _get_standard_scaler()
-    if scaler is None:
-        # 提供替代实现或报错
+    scaler_class = _get_standard_scaler()
+    if scaler_class is None:
         raise ImportError("需要 scikit-learn 来执行此功能。请安装: pip install scikit-learn")
+    scaler = scaler_class()  # 实例化对象
     mds_coords_1d = scaler.fit_transform(mds_coords_1d.reshape(-1, 1)).flatten()
 
     # Eigenvector direction in np.linalg.eigh() may differ from R, causing cmdscale() to output reversed coordinates.
@@ -248,7 +275,8 @@ def _compute_seqrf(seqdata: SequenceData, distance_matrix: np.ndarray, n_groups:
 
     # **Step 5: Compute distances to medoid for each group**
     dissimilarities = [
-        distance_matrix[np.ix_(group, [medoid_idx])].flatten() for group, medoid_idx in zip(frequency_groups, medoid_indices)
+        distance_matrix[np.ix_(group, [medoid_idx])].flatten() for group, medoid_idx in
+        zip(frequency_groups, medoid_indices)
     ]
 
     # **Step 6: Assign group labels**
@@ -340,4 +368,3 @@ def _compute_r2_f_statistic(distance_matrix: np.ndarray, group_labels: np.ndarra
 
     r_squared = float(ss_between / total_var) if total_var > 0 else 0.0
     return r_squared, float(f_statistic), float(p_value)
-

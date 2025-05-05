@@ -16,7 +16,8 @@ from sequenzo import SequenceData
 
 
 def set_up_time_labels_for_x_axis(seqdata: SequenceData,
-                                  ax: Axes) -> None:
+                                  ax: Axes,
+                                  color: str = "gray") -> None:
     """
     Helper function to set up time labels for the x-axis.
 
@@ -42,10 +43,7 @@ def set_up_time_labels_for_x_axis(seqdata: SequenceData,
 
     # Set x-ticks and labels dynamically
     ax.set_xticks(xtick_positions)
-    ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color="black")
-    # Note that here is black, but in the index plot the x label is gray
-    # as I set it in the index plot function: ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
-    # TODO: think about the uniform color setting for the x label in the whole project
+    ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color=color)
 
 
 def create_standalone_legend(
@@ -168,7 +166,7 @@ def save_figure_to_buffer(fig, dpi: int = 200) -> BytesIO:
     return buffer
 
 
-def save_and_show_results(save_as, dpi=200, show=True):
+def save_and_show_results(save_as=None, dpi=200, show=True):
     """
     Save and optionally display matplotlib figure.
 
@@ -181,20 +179,20 @@ def save_and_show_results(save_as, dpi=200, show=True):
     - The current figure object (plt.gcf())
     """
     if save_as:
-        # Ensure the filename has an extension
         if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
-            save_as = f"{save_as}.png"  # Add default .png extension
-
+            save_as += '.png'
         plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
 
-    if show:
+    # Show if explicitly requested or if saving (for visual confirmation)
+    if show or save_as:
         plt.show()
-    else:
-        # Don't show, but keep the figure open for further modifications
-        pass
+
+    # Prevent memory leak by closing after show/save
+    plt.close()
 
     # Return the current figure
     return plt.gcf()
+
 
 
 def determine_layout(num_items: int,
