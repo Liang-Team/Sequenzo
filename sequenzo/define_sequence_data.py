@@ -123,9 +123,9 @@ class SequenceData:
         # No longer support this feature as we encourage users to clean the time variables.
         # TODO: might implement a helper function for users to clean up their time variables.
         self.cleaned_time = time
-        self.states = states
-        self.alphabet = states or sorted(set(data[time].stack().unique()))
-        self.labels = labels or states
+        self.states = states.copy()
+        self.alphabet = states.copy() or sorted(set(data[time].stack().unique()))
+        self.labels = labels or states.copy()
         self.id_col = id_col
         self.ids = np.array(data[id_col].values) if self.id_col else data.index
         self.weights = weights

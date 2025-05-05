@@ -131,7 +131,10 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # Adjust layout
     # TODO 出现问题的地方 - 状态多了就有问题(quickstart) ，状态比较少就没问题 Tutorial/multidomain/main_tutorial
-    plt.subplots_adjust(bottom=0.23, wspace=0.4)
+    # plt.subplots_adjust(bottom=0.23, wspace=0.4)
+    num_legend_items = len(state_palette)
+    bottom_margin = min(0.3, 0.14 + num_legend_items * 0.015)
+    plt.subplots_adjust(bottom=bottom_margin, wspace=0.4)
 
     # **Representation Quality Stats**
     r_squared, f_statistic, p_value = _compute_r2_f_statistic(distance_matrix, group_labels)
