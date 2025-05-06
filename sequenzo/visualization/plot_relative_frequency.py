@@ -72,7 +72,7 @@ def plot_relative_frequency(seqdata: SequenceData,
             ax.add_patch(Rectangle((t, i), 1, 1, color=color))
 
     ax.set_xlim(0, seqdata.values.shape[1])
-    ax.set_ylim(-0.5, len(rep_sequences) - 0.5)
+    ax.set_ylim(0, len(rep_sequences))
     ax.set_title("Group Medoids", fontsize=14)
     ax.set_xlabel("Time", fontsize=12)
     ax.set_ylabel("Frequency Group", fontsize=12)
