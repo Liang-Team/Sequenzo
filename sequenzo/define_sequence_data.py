@@ -459,8 +459,8 @@ class SequenceData:
         v1 = self.flatten()
         v2 = other.flatten()
 
-        n1 = len(self.alphabet)
-        n2 = len(other.alphabet)
+        n1 = len(self.states)
+        n2 = len(other.states)
 
         table = np.zeros((n1, n2), dtype=np.float64)
 
