@@ -600,6 +600,9 @@ class ClusterResults:
         # Set the Y-axis range to prevent text overflow
         ax.set_ylim(0, distribution['Count'].max() * 1.2)
 
+        # Ensure Y-axis uses integer ticks
+        plt.gca().yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
         # Add percentage labels on top of bars
         for p, (_, row) in zip(ax.patches, distribution.iterrows()):
             height = p.get_height()
@@ -627,6 +630,13 @@ class ClusterResults:
 
         # Adjust layout
         plt.tight_layout()
+
+        # Adjust layout to make room for the note
+        plt.subplots_adjust(bottom=0.13)
+
+        # Add a note about normalization
+        norm_note = f"Note: Y-axis shows entity counts; percentages above bars indicate their relative frequency."
+        plt.figtext(0.5, 0.01, norm_note, ha='center', fontsize=10, style='italic')
 
         # Save and show the plot
         from sequenzo.visualization.utils import save_and_show_results
