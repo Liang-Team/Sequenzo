@@ -459,6 +459,8 @@ class SequenceData:
         v1 = self.flatten()
         v2 = other.flatten()
 
+        # Equivalent to self.alphabet,
+        # but alphabet cannot be used directly, because it does not account for missing values
         n1 = len(self.states)
         n2 = len(other.states)
 

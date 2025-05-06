@@ -595,15 +595,17 @@ class ClusterResults:
 
         # Create bar plot with a more poetic, fresh color palette
         # 'muted', 'pastel', and 'husl' are good options for fresher colors
-        ax = sns.barplot(x='Cluster', y='Count', hue='Cluster', data=distribution,
-                         palette='pastel', legend=False)
+        ax = sns.barplot(x='Cluster', y='Count', data=distribution, palette='pastel')
+
+        # Set the Y-axis range to prevent text overflow
+        ax.set_ylim(0, distribution['Count'].max() * 1.2)
 
         # Add percentage labels on top of bars
-        for i, p in enumerate(ax.patches):
+        for p, (_, row) in zip(ax.patches, distribution.iterrows()):
             height = p.get_height()
-            percentage = distribution.iloc[i]['Percentage']
+            percentage = row['Percentage']
             ax.text(p.get_x() + p.get_width() / 2., height + 0.5,
-                    f'{percentage}%', ha="center", fontsize=9)
+                    f'{percentage:.1f}%', ha="center", fontsize=9)
 
         # Set a simple label for entity count at the top
         if title is None:
