@@ -154,6 +154,7 @@ def plot_modal_state(seqdata: SequenceData,
         # Create bars with consistent width
         for j, (state, freq) in enumerate(zip(modal_states, modal_freqs)):
             if state is not None:
+                state = seqdata.state_to_label[state]
                 ax.bar(x[j], freq, width=bar_width, color=colors[state],
                        edgecolor='white', linewidth=0.5)
 

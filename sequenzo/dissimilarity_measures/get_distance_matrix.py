@@ -56,6 +56,7 @@
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
 """
 import gc
+import time
 import warnings
 
 import numpy as np
@@ -136,8 +137,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         raise ValueError("[!] 'seqdata' must be a state sequence object created with SequenceData")
 
     nseqs = seqdata.seqdata.shape[0]
-    states = seqdata.states
-    nstates = len(states)
+    nstates = len(seqdata.states)
     seqs_dlens = np.unique(seqlength(seqdata))
 
     # check method
@@ -356,7 +356,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
 
     else:
-        dseqs_num = np.unique(seqdata_num, axis=0)
+        dseqs_num, half_matrix_id = np.unique(seqdata_num, axis=0, return_index=True)
+        half_matrix_id = seqdata.ids[half_matrix_id]
 
     # Check that dseqs_num does not exceed the max allowed number
     if check_max_size:
@@ -432,10 +433,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_dur = dseqs_dur[dseqs_oidxs, :] - c
 
         # Get DSS
-        # for example: "0-1-1-1-2-2-3-2-2" ---> "0-1-2-3-2"
         seqdata_dss = seqdss(seqdata, with_missing)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
-        # dseqs_num[dseqs_num < 0] = np.nan
+        half_matrix_id = seqdata.ids[dseqs_oidxs]
 
         if method == "OMspell":
             _seqlength = seqlength(dseqs_num)
@@ -467,15 +467,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
     del ndn
     del seq_or_spell
-
-    # Compute the sequence lengths
-    # Modified dseqs.num for OMspell, NMSMST, SVRspell
-    dseqs_lens = seqlength(dseqs_num)
-    ds = "spell " if method in ["OMspell"] else ""
-    dl = dseqs_lens[:-1] if refseq_type == "sequence" and len(dseqs_lens) > 1 else dseqs_lens
-    print(f"[>] Sequence {ds}length: min/max = {min(dl)} / {max(dl)}.\n")
-    del ds
-    del dl
 
     # =================
     # Compute Distances
@@ -526,13 +517,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         _dist_matrix = dist_matrix.reshape((nunique1, nunique2))
 
 
-        if full_matrix:
-            dist_matrix = _dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2]
+        dist_matrix = _dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2]
 
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
-
-        else:
-            dist_matrix = pd.DataFrame(_dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
+        dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
     else:
         refseq_id = np.array([-1, -1])
@@ -573,7 +560,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
         else:
-            _matrix = pd.DataFrame(dist_matrix, index=seqdata.ids, columns=seqdata.ids)
+            dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
 
     print("[>] Computed Successfully.")
     return dist_matrix
@@ -590,24 +577,65 @@ if __name__ == '__main__':
 
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
 
-    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # ===============================
+    #             Sohee
+    # ===============================
+    df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
+    time_list = list(df.columns)[1:133]
+    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+
+    # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
+
+    # ===============================
+    #             kass
+    # ===============================
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/kass/wide_civil_final_df.csv')
+    # time_list = list(df.columns)[1:]
+    # states = ['Extensive Warfare', 'Limited Violence', 'No Violence', 'Pervasive Warfare', 'Prolonged Warfare',
+    #           'Serious Violence', 'Serious Warfare', 'Sporadic Violence', 'Technological Warfare', 'Total Warfare']
+    # sequence_data = SequenceData(df, time=time_list, time_type="year", states=states, id_col="COUNTRY")
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+
+
+    # ===============================
+    #             CO2
+    # ===============================
+    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+
+
+    # ===============================
+    #            detailed
+    # ===============================
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-
     # time = list(df.columns)[4:]
-    time = list(df.columns)[1:]
-
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
-    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="CONSTANT", indel="auto")
 
-    refseq = [[0, 1, 2], [99, 100]]
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # om.to_csv("", index=False)
+
+
+    # ===============================
+    #             broad
+    # ===============================
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    # time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="CONSTANT", indel="auto")
+
+    # refseq = [[0, 1, 2], [99, 100]]
     # print(om)
 
     print("================")
