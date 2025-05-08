@@ -55,6 +55,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
         for t, state_idx in enumerate(seq):
             state_colors = seqdata.color_map_by_label
             state_label = inv_state_mapping.get(state_idx, "Unknown")  # Get the actual state name
+            state_label = seqdata.state_to_label[state_label]
             color = state_colors.get(state_label, "gray")  # Get the corresponding color
 
             width = 1  # Width of each time slice

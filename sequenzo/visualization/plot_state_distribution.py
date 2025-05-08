@@ -118,7 +118,7 @@ def plot_state_distribution(seqdata: SequenceData,
         for j in range(len(distributions)):
             total_percentage = sum(distributions[j][str(state)] for state in seqdata.states)
             if total_percentage < 100:
-                top_state = seqdata.states[-1]
+                top_state = str(seqdata.states[-1])
                 distributions[j][str(top_state)] += (100 - total_percentage)
 
         # Convert to DataFrame for plotting
@@ -157,7 +157,7 @@ def plot_state_distribution(seqdata: SequenceData,
 
         # Set group title
         group_title = f"{group} (n = {len(group_seq_df)})"
-        ax.set_title(group_title, fontsize=12, loc='right')
+        ax.text(0.95, 1.02, group_title, transform=ax.transAxes, fontsize=12, ha='right', va='bottom', color='black')
 
         # Set y-axis limits from 0 to 100%
         ax.set_ylim(0, 100)
@@ -179,7 +179,7 @@ def plot_state_distribution(seqdata: SequenceData,
         if i % ncols == 0:
             ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
 
-        if i >= num_groups - ncols:
+        # if i >= num_groups - ncols:
             ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
 
     # Hide unused subplots
@@ -290,7 +290,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
         # If there's a gap, add the difference to the top-most state
         if total_percentage < 100:
             # Get the last (top-most) state in your stack
-            top_state = seqdata.states[-1]
+            top_state = str(seqdata.states[-1])
             # Add the difference to make total exactly 100%
             distributions[i][top_state] += (100 - total_percentage)
 
