@@ -18,7 +18,8 @@ from .datasets import load_dataset, list_datasets
 from .data_preprocessing.helpers import (assign_unique_ids,
                                          wide_to_long_format_data,
                                          long_to_wide_format_data,
-                                         summarize_missing_values)
+                                         summarize_missing_values,
+                                         replace_cluster_id_by_labels)
 
 from sequenzo.define_sequence_data import *
 
@@ -29,7 +30,8 @@ from .visualization import (plot_sequence_index,
                             plot_modal_state,
                             plot_relative_frequency,
                             plot_mean_time,
-                            plot_transition_matrix)
+                            plot_transition_matrix,
+                            )
 
 from .dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from .dissimilarity_measures.get_substitution_cost_matrix import get_substitution_cost_matrix
@@ -71,6 +73,7 @@ __all__ = [
     "wide_to_long_format_data",
     "long_to_wide_format_data",
     "summarize_missing_values",
+    "replace_cluster_id_by_labels",
 
     "SequenceData",
 

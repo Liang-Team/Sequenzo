@@ -7,12 +7,14 @@
 from .helpers import (assign_unique_ids,
                       wide_to_long_format_data,
                       long_to_wide_format_data,
-                      summarize_missing_values)
+                      summarize_missing_values,
+                      replace_cluster_id_by_labels)
 
 
 __all__ = [
     "assign_unique_ids",
     "wide_to_long_format_data",
     "long_to_wide_format_data",
-    "summarize_missing_values"
+    "summarize_missing_values",
+    "replace_cluster_id_by_labels"
 ]

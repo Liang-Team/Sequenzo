@@ -156,7 +156,7 @@ def plot_state_distribution(seqdata: SequenceData,
             ax.grid(True, linestyle='-', alpha=0.2)
 
         # Set group title
-        group_title = f"{categories} {group} (n = {len(group_seq_df)})"
+        group_title = f"{group} (n = {len(group_seq_df)})"
         ax.set_title(group_title, fontsize=12, loc='right')
 
         # Set y-axis limits from 0 to 100%

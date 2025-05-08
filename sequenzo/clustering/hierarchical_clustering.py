@@ -540,7 +540,7 @@ class ClusterResults:
 
         # Generate cluster labels
         cluster_labels = fcluster(self.linkage_matrix, t=num_clusters, criterion="maxclust")
-        return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster ID": cluster_labels})
+        return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster": cluster_labels})
 
     def get_cluster_distribution(self, num_clusters) -> pd.DataFrame:
         """
@@ -556,7 +556,7 @@ class ClusterResults:
         memberships_df = self.get_cluster_memberships(num_clusters)
 
         # Count entities in each cluster
-        cluster_counts = memberships_df['Cluster ID'].value_counts().sort_index()
+        cluster_counts = memberships_df['Cluster'].value_counts().sort_index()
 
         # Calculate percentages
         total_entities = len(memberships_df)

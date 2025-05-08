@@ -158,7 +158,7 @@ def plot_sequence_index(seqdata: SequenceData,
         ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
 
         # Add group title
-        group_title = f"{categories} {group} (n = {num_sequences})"
+        group_title = f"{group} (n = {num_sequences})"
         ax.set_title(group_title, fontsize=12, loc='right')
 
         # Add axis labels
