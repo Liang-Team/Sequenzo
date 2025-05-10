@@ -166,7 +166,7 @@ def plot_sequence_index(seqdata: SequenceData,
             ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
 
         # if i >= num_groups - ncols:
-            ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+        ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
 
     # Hide unused subplots
     for j in range(i + 1, len(axes)):

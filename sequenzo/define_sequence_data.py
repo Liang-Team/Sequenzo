@@ -249,7 +249,10 @@ class SequenceData:
 
         if self.ismissing:
             # 判断 states 中是否已经含有 Missing（无论是字符串还是 np.nan）
-            if "Missing" not in self.states and not any(pd.isna(s) for s in self.states):
+            # 兼容用户传进来的各种形式的“missing”
+            if (not any(s.lower() == "missing" for s in self.states if isinstance(s, str))
+                and not any(pd.isna(s) for s in self.states)):
+
                 # 自动判断 states 是字符串型还是数字型
                 example_missing = "'Missing'" if all(isinstance(s, str) for s in self.states) else "np.nan"
                 quote = "" if example_missing == "np.nan" else "'"
@@ -267,10 +270,20 @@ class SequenceData:
                 # 添加 missing 到 states 和 labels
                 if example_missing == "'Missing'":
                     self.states.append("Missing")
+                    self.labels = [label for label in self.labels   # 去除所有大小写混杂的 "missing"
+                                   if not (isinstance(label, str) and label.lower() == "missing")]
                     self.labels.append("Missing")
+
                 else:
                     self.states.append(np.nan)
+                    self.labels = [label for label in self.labels  # 去除所有大小写混杂的 "missing"
+                                   if not (isinstance(label, str) and label.lower() == "missing")]
                     self.labels.append("Missing")
+
+            else:
+                self.states = [state for state in self.states  # 去除所有大小写混杂的 "missing"
+                               if not (isinstance(state, str) and state.lower() == "missing")]
+                self.states.append("Missing")
 
     def _convert_states(self):
         """
