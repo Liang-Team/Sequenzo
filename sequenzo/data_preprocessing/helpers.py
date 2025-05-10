@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import missingno as msno
+from typing import Union, List
 
 
 def assign_unique_ids(df: pd.DataFrame, id_col_name: str = "Entity ID") -> pd.DataFrame:
@@ -26,29 +27,10 @@ def assign_unique_ids(df: pd.DataFrame, id_col_name: str = "Entity ID") -> pd.Da
     return df
 
 
-def wide_to_long_format_data(df: pd.DataFrame,
-                             id_col: str,
-                             time_cols: list,
-                             var_name="time",
-                             value_name="state") -> pd.DataFrame:
-    """
-    Convert a wide-format sequence DataFrame to long format.
-
-    :param df: Wide-format DataFrame.
-    :param id_col: Column with unique IDs.
-    :param time_cols: Columns containing time steps.
-    :param var_name: Name for the time variable in long format.
-    :param value_name: Name for the state value.
-    :return: Long-format DataFrame.
-    """
-    return df.melt(id_vars=[id_col], value_vars=time_cols,
-                   var_name=var_name, value_name=value_name)
-
-
 def long_to_wide_format_data(df: pd.DataFrame,
                              id_col: str,
                              time_col: str,
-                             value_col: str) -> pd.DataFrame:
+                             value_col: Union[str, List[str]]) -> pd.DataFrame:
     """
     Convert a long-format DataFrame to wide format.
 
@@ -66,25 +48,66 @@ def long_to_wide_format_data(df: pd.DataFrame,
     time_col : str
         The name of the column containing time points (must be a string, not a list).
 
-    value_col : str
-        The name of the column containing state values (must be a string, not a list).
+    value_col : Union[str, List[str]]
+        The name(s) of the column(s) containing state values.
+        Can be a single string or a list of strings.
 
     Returns:
     -------
     pd.DataFrame
-        A wide-format DataFrame with one row per ID and one column per time point.
-        The column names are taken from the unique values in `time_col`.
+        A wide-format DataFrame with one row per ID and one column per time point for each value column.
+        The column names are taken from the unique values in `time_col` combined with value column names.
 
     Notes:
     -----
     - This function assumes `df` is already in long format.
-    - `time_col` and `value_col` must be column *names* (strings), not lists of columns.
+    - `time_col` must be a column *name* (string), not a list.
     - The top-left "column name" in the output (from pivot) may carry over as a column index name;
       this is removed automatically for clean output.
+    - If multiple value columns are provided, the result will have multi-level columns.
     """
-    wide = df.pivot(index=id_col, columns=time_col, values=value_col).reset_index()
+    # Ensure value_col is a list for consistency
+    if isinstance(value_col, str):
+        value_col = [value_col]
+
+    wide_list = []
+
+    for col in value_col:
+        pivoted = df.pivot(index=id_col, columns=time_col, values=col).add_prefix(f'{col}_').reset_index()
+        wide_list.append(pivoted)
+
+    # Merge all pivoted DataFrames on the ID column
+    wide = wide_list[0]
+    for w in wide_list[1:]:
+        wide = pd.merge(wide, w, on=id_col, how='outer')
+
     wide.columns.name = None  # Remove residual column group name from pivot
     return wide
+
+
+def wide_to_long_format_data(df: pd.DataFrame,
+                             id_col: str,
+                             time_cols: Union[List[str], List[List[str]]],
+                             var_name="time",
+                             value_name="state") -> pd.DataFrame:
+    """
+    Convert a wide-format DataFrame to long format.
+
+    :param df: Wide-format DataFrame.
+    :param id_col: Column with unique IDs.
+    :param time_cols: List of time columns or a list of lists if multiple value columns.
+    :param var_name: Name for the time variable in long format.
+    :param value_name: Name for the state value.
+    :return: Long-format DataFrame.
+    """
+    if isinstance(time_cols[0], str):
+        return df.melt(id_vars=[id_col], value_vars=time_cols, var_name=var_name, value_name=value_name)
+    else:
+        long_dfs = []
+        for cols in time_cols:
+            long_df = df.melt(id_vars=[id_col], value_vars=cols, var_name=var_name, value_name=value_name)
+            long_dfs.append(long_df)
+        return pd.concat(long_dfs, ignore_index=True).reset_index(drop=True)
 
 
 def summarize_missing_values(df: pd.DataFrame,
@@ -188,3 +211,46 @@ def replace_cluster_id_by_labels(df, mapping=None, new_cluster_column_name='Clus
     return df
 
 
+if __name__ == '__main__':
+    # Example long-format data
+    data = {
+        'id': ['A', 'A', 'A', 'B', 'B', 'C', 'C', 'C'],
+        'time': ['T1', 'T2', 'T3', 'T1', 'T2', 'T1', 'T2', 'T3'],
+        'value1': [10, 20, 30, 40, 50, 60, 70, 80],
+        'value2': [1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8]
+    }
+
+    df = pd.DataFrame(data)
+    print(df)
+
+    # Test with a single value column
+    print("\nTest with a single value column:")
+    first_df = long_to_wide_format_data(df, 'id', 'time', 'value1')
+    print(first_df)
+
+    # Test with multiple value columns
+    print("\nTest with multiple value columns:")
+    second_df = long_to_wide_format_data(df, 'id', 'time', ['value1', 'value2'])
+    print(second_df)
+    print('end')
+
+    # ------------------------------------
+    # data = {
+    #     'id': ['A', 'B', 'C'],
+    #     'T1_value1': [10, 40, 60],
+    #     'T2_value1': [20, 50, 70],
+    #     'T3_value1': [30, None, 80],
+    #     'T1_value2': [1.1, 4.4, 6.6],
+    #     'T2_value2': [2.2, 5.5, 7.7],
+    #     'T3_value2': [3.3, None, 8.8]
+    # }
+    # df = pd.DataFrame(data)
+    #
+    # print(df)
+    #
+    # print("\nTest with single value column:")
+    # print(wide_to_long_format_data(df, 'id', ['T1_value1', 'T2_value1', 'T3_value1']))
+    #
+    # print("\nTest with multiple value columns:")
+    # print(wide_to_long_format_data(df, 'id',
+    #                                [['T1_value1', 'T2_value1', 'T3_value1'], ['T1_value2', 'T2_value2', 'T3_value2']]))
