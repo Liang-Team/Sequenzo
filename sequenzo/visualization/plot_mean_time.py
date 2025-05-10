@@ -36,7 +36,7 @@ def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
     df_long['state'] = df_long['state_idx'].map(state_mapping)
 
     # Calculate total counts and mean time for each state
-    state_counts = df_long['state'].value_counts()
+    state_counts = df_long['state'].value_counts(dropna=False)
     mean_times = state_counts / n_sequences
 
     # Use groupby to calculate state occurrences per sequence in one go
