@@ -26,8 +26,9 @@ def get_sm_trate_substitution_cost_matrix(
     else:
         weights = np.ones(seqdata.seqdata.shape[0], dtype=np.float64)
 
-    states = seqdata.states
-    statesMapping = seqdata.state_mapping
+    states = seqdata.states.copy()
+    statesMapping = seqdata.state_mapping.copy()
+
     cdef int _size = len(states) + 1
     df = seqdata.seqdata
     cdef int n_rows = df.shape[0]
@@ -39,6 +40,7 @@ def get_sm_trate_substitution_cost_matrix(
         all_transition = list(range(abs(lag), sdur))
     else:
         all_transition = list(range(sdur - lag))
+
     cdef int num_transition = len(all_transition)
 
     # convert df to NumPy 2D array of ints
@@ -75,8 +77,7 @@ def get_sm_trate_substitution_cost_matrix(
             PA = 0.0
             for i in range(n_rows):
                 for t in all_transition:
-                    if (seq_mat_mv[i, t] == state_x and
-                        not isnan(seq_mat_mv[i, t + lag])):
+                    if (seq_mat_mv[i, t] == state_x and not isnan(seq_mat_mv[i, t + lag])):
                         PA += weights[i]
 
             if PA == 0:
@@ -86,8 +87,7 @@ def get_sm_trate_substitution_cost_matrix(
                     PAB = 0.0
                     for i in range(n_rows):
                         for t in all_transition:
-                            if (seq_mat_mv[i, t] == state_x and
-                                seq_mat_mv[i, t + lag] == state_y):
+                            if (seq_mat_mv[i, t] == state_x and seq_mat_mv[i, t + lag] == state_y):
                                 PAB += weights[i]
 
                     tmat[state_x, state_y] = PAB if count else PAB / PA

@@ -136,7 +136,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False,
     # =================================
     # Process the Cost of Missing Value
     # =================================
-    if with_missing and miss_cost_fixed:
+    if seqdata.ismissing and miss_cost_fixed:
         if time_varying:
             costs[:, alphsize - 1, :alphsize - 1] = miss_cost
             costs[:, :alphsize - 1, alphsize - 1] = miss_cost
