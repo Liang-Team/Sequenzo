@@ -47,7 +47,7 @@ def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
 
     # Create result DataFrame
     mean_time_df = pd.DataFrame({
-        'State': states,
+        'State': seqdata.labels,
         'MeanTime': [mean_times.get(state, 0) for state in states],
         'StandardError': [std_errors.get(state, 0) for state in states]
     })
@@ -121,7 +121,7 @@ def plot_mean_time(seqdata: SequenceData,
     if title:
         ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
     ax.set_xlabel(x_label, fontsize=12)
-    ax.set_ylabel(y_label, fontsize=12)
+    ax.set_ylabel(y_label, fontsize=12, labelpad=15)
 
     # Clean white background with light grid
     ax.set_facecolor('white')
@@ -133,8 +133,18 @@ def plot_mean_time(seqdata: SequenceData,
         spine.set_color('#CCCCCC')  # Light gray border
         spine.set_linewidth(0.5)
 
-    # Adjust layout
+    # Adjust layout(1/2)
     plt.subplots_adjust(left=0.3)
+
+    # Add a note about normalization
+    relative_threshold = 0.01
+    max_val = mean_time_df['MeanTime'].max()
+    too_many_small = np.sum(mean_time_df['MeanTime'] < relative_threshold * max_val) >= 1
+    if too_many_small:
+        norm_note = f"Note: Some bars may appear as zero, but actually have small non-zero values."
+        plt.figtext(0.5, -0.02, norm_note, ha='center', fontsize=10, style='italic')
+
+    # Adjust layout(2/2)
     plt.tight_layout()
 
     save_and_show_results(save_as, dpi=200)
