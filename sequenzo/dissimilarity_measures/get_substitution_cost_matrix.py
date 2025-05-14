@@ -7,13 +7,18 @@
 
 import pandas as pd
 import numpy as np
+
 from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
 from sequenzo.define_sequence_data import SequenceData
+from get_distance_matrix import with_missing_warned
 
+def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, time_varying=False,
+                                 weighted=True, transition="both", lag=1, miss_cost_fixed=None,
+                                 **kwargs):
+    if 'with_missing' in kwargs and not with_missing_warned:
+        print("[!] 'with_missing' has been removed and is ignored.")
+        print("    Missing values are always included by default, consistent with TraMineR.")
 
-def get_substitution_cost_matrix(seqdata, method, cval=None, with_missing=False, miss_cost=None,
-                                 time_varying=False, weighted=True, transition="both", lag=1,
-                                 miss_cost_fixed=None):
     # ================
     # Check Parameters
     # ================

@@ -64,11 +64,13 @@ import pandas as pd
 
 from sequenzo.define_sequence_data import SequenceData
 
+with_missing_warned = False
+
 
 # @profile
 # @numba.jit(nopython=True, parallel=True)
-def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, with_missing=False, full_matrix=True,
-                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None):
+def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,
+                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None, **kwargs):
 
     from .utils.seqconc import seqconc
     from .utils.seqdss import seqdss
@@ -93,12 +95,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         norm = opts.get('norm') or "none"
         indel = opts.get('indel') or "auto"
         sm = opts.get('sm')
-        with_missing = opts.get('with_missing') or False
         full_matrix = opts.get('full_matrix') or True
         tpow = opts.get('tpow') or 1.0
         expcost = opts.get('expcost') or 0.5
         weighted = opts.get('weighted') or True
         check_max_size = opts.get('check_max_size') or True
+
+    if 'with_missing' in kwargs:
+        print("[!] 'with_missing' has been removed and is ignored.")
+        print("    Missing values are always included by default, consistent with TraMineR.")
+
+        with_missing_warned = True
 
     # ======================================
     # Check Arguments With Deprecated Values
@@ -181,20 +188,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             print(f"[!] Warning: empty sequences {emptyseq}.\n")
 
     print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
-
-    # check with_missing
-    # has_seqdata_missings = seqdata.ismissing
-    # has_refseq_missings = (
-    #                         refseq_type == "sequence" and
-    #                         any(np.isnan(x) for seq in refseq for x in seq)
-    #                       )
-    # if with_missing and not has_seqdata_missings and not has_refseq_missings:
-    #     with_missing = False
-    #     print("  - get_distance_matrix: 'with_missing' set as False as 'SequenceData' has no missing values.")
-    # if not with_missing and (has_seqdata_missings or has_refseq_missings):
-    #     with_missing = True
-    #     print("[!] 'with_missing' must be True when 'seqdata' or 'refseq' contain missing values.")
-    #     print("  - get_distance_matrix: 'with_missing' set as True as 'SequenceData' has missing values.")
 
     # check norm
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
@@ -310,7 +303,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
             sm = get_substitution_cost_matrix(seqdata,
                                               method=sm,
-                                              with_missing=with_missing,
                                               cval=cost,
                                               miss_cost=cost,
                                               time_varying=tv,
@@ -327,8 +319,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         else:
             if method == "HAM":
                 print("[>] Creating a 'sm' with a single substitution cost of 1.\n")
-                sm = get_substitution_cost_matrix(seqdata, method="CONSTANT",
-                                                  with_missing=with_missing,
+                sm = get_substitution_cost_matrix(seqdata,
+                                                  method="CONSTANT",
                                                   cval=1,
                                                   miss_cost=1)
                 if indel_type == "auto":
@@ -339,8 +331,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
             elif method == "DHD":
                 print("[>] Creating a 'sm' with the costs derived from the transition rates.\n")
-                sm = get_substitution_cost_matrix(seqdata, method="TRATE",
-                                                  with_missing=with_missing,
+                sm = get_substitution_cost_matrix(seqdata,
+                                                  method="TRATE",
                                                   cval=4, miss_cost=4, time_varying=True,
                                                   weighted=weighted)
 
@@ -447,7 +439,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_dur = dseqs_dur[dseqs_oidxs, :] - c
 
         # Get DSS
-        seqdata_dss = seqdss(seqdata, with_missing)
+        seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
         half_matrix_id = seqdata.ids[dseqs_oidxs]
 
@@ -595,13 +587,13 @@ if __name__ == '__main__':
     # ===============================
     #             Sohee
     # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
-    # time_list = list(df.columns)[1:133]
-    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
+    time_list = list(df.columns)[1:133]
+    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
 
@@ -629,12 +621,12 @@ if __name__ == '__main__':
     # ===============================
     #            detailed
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    time = list(df.columns)[4:]
-    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    # time = list(df.columns)[4:]
+    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
     # om.to_csv("", index=False)
 
@@ -642,12 +634,12 @@ if __name__ == '__main__':
     # ===============================
     #             broad
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
-    time = list(df.columns)[4:]
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    # time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
     # refseq = [[0, 1, 2], [99, 100]]
     # print(om)

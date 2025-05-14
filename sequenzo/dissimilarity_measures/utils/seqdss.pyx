@@ -3,7 +3,7 @@ cimport numpy as cnp
 from sequenzo.define_sequence_data import SequenceData
 from libc.stdint cimport int32_t
 
-def seqdss(seqdata, bint with_missing=False):
+def seqdss(seqdata):
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[!] data is NOT a sequence object, see SequenceData to create one.")
 
