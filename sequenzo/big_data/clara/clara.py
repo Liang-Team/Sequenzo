@@ -137,7 +137,9 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         diss = diss.values
         _diss = diss.copy()
         _diss = get_weighted_diss(_diss, ac2['aggWeights'])
-        hc = fastcluster.linkage(_diss, method='ward')
+        # TODO : fastcluster 里是否还有其他函数，可以放这个权重矩阵在里面？如果没有，可能我们自己就要写了（C++）。
+        # TODO : 找到 fastcluster 的源码
+        hc = fastcluster.linkage(_diss, method='ward', )
         del _diss
 
         # For each number of clusters
