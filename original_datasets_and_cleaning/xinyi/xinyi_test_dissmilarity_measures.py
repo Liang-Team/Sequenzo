@@ -7,6 +7,8 @@
 import pandas as pd
 import time
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
@@ -14,11 +16,24 @@ from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_mat
 # CSV 文件路径列表
 csv_files = [
     # 'country_co2_emissions_missing.csv',
-    'sampled_1000_data.csv'
+    # 'sampled_1000_data.csv',
+    # 'sampled_5000_data.csv',
+    # 'sampled_10000_data.csv',
+    # 'sampled_15000_data.csv',
+    # 'sampled_20000_data.csv',
+    # 'sampled_25000_data.csv',
+    # 'sampled_30000_data.csv',
+    # 'sampled_35000_data.csv',
+    # 'sampled_38900_data.csv',
+    # 'sampled_40000_data.csv',
+    'sampled_45000_data.csv',
+    # 'sampled_50000_data.csv',
+    # 'sampled_55000_data.csv',
+    # 'sampled_60000_data.csv',
 ]
 
 # data_dir = '/home/xinyi/data/detailed_data'
-data_dir = 'D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data'
+data_dir = 'D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []
@@ -33,16 +48,22 @@ for filename in csv_files:
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
 
-    _time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    _time = list(df.columns)[4:]
+    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']]
+    df = df.duplicated(subset=['worker_id'], keep=False)
 
-    # data = SequenceData(df, time=_time, time_type="age", id_col="worker_id", states=states)
-    data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
+    # _time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+
+    data = SequenceData(df, time=_time, time_type="age", id_col="worker_id", states=states)
+    # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
+
+    refseq = [[0, 1, 2], [99, 100]]
 
     start_time = time.time()
-    refseq = [[0, 1, 2], [99, 100]]
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="TRATE", indel="auto")
-    print(diss)
+    diss = get_distance_matrix(seqdata=data, method="LCP", sm="TRATE", indel="auto")
+    # print(diss)
     end_time = time.time()
 
     runtime = end_time - start_time
@@ -50,6 +71,8 @@ for filename in csv_files:
     filenames.append(filename)
 
     print(f"File: {filename}, Runtime: {runtime} seconds")
+
+print(runtimes)
 
 # 绘制折线图
 # plt.figure(figsize=(10, 6))

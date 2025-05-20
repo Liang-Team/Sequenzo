@@ -9,7 +9,8 @@ from .seqconc import seqconc
 from .seqdss import seqdss
 from .seqdur import seqdur
 from .seqlength import seqlength
+from .get_LCP_length_for_2_seq import get_LCP_length_for_2_seq
 
 __all__ = [
-    # Add other functions as needed
+    'get_LCP_length_for_2_seq'
 ]

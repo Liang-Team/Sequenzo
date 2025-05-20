@@ -5,6 +5,7 @@
 @Desc    : 
 """
 from .utils import get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength
+from .utils import get_LCP_length_for_2_seq
 from .get_distance_matrix import get_distance_matrix
 from .get_substitution_cost_matrix import get_substitution_cost_matrix
 
@@ -23,7 +24,8 @@ def _import_c_code():
 
 __all__ = [
     "get_distance_matrix",
-    "get_substitution_cost_matrix"
+    "get_substitution_cost_matrix",
+    "get_LCP_length_for_2_seq"
     # Add other functions as needed
 ]
 

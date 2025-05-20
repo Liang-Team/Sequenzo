@@ -149,7 +149,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # check method
     om_methods = ["OM", "OMspell"]
-    methods = om_methods + ["HAM", "DHD"]
+    methods = om_methods + ["HAM", "DHD", "LCP", "RLCP"]
 
     if method not in methods:
         raise ValueError(f"[!] Invalid 'method': {method}. Expected one of {methods}")
@@ -236,7 +236,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Check Arguments Not Yet Implemented
     # ===================================
     # norm: all but  SVRspell, NMS, NMSMST
-    if norm != "none" and method not in ["OM", "OMspell","HAM", "DHD"]:
+    if norm != "none" and method not in ["OM", "OMspell","HAM", "DHD", "LCP", "RLCP"]:
         raise ValueError(f"[x] norm is not matched with {method}.")
 
     # ===============================
@@ -262,6 +262,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if norm == "auto":
         if method in ["OM", "HAM", "DHD"]:
             norm = "maxlength"
+        elif method in ["LCP", "RLCP"]:
+            norm = "gmean"
         elif method in ["OMspell"]:
             norm = "YujianBo"
         else:
@@ -276,7 +278,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         indel_type = "number"
 
     # OM, OMspell, HAM, DHD
-    elif method in om_methods + ["HAM", "DHD"]:
+    if method in om_methods + ["HAM", "DHD"]:
         if sm_type == "matrix":
             # TODO : checkcost()
             a = 1
@@ -345,7 +347,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             else:
                 raise ValueError("[x] 'sm' is missing.")
 
-    else:
+    elif method not in ["CHI2", "EUCLID", "LCP", "RLCP", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] No known 'sm' preparation for {method}.")
 
     # ===========================
@@ -461,6 +463,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         for i in range(np.max(seqs_dlens)):  # seqs_dlens has here only one value
             max_cost += np.max(sm[i, :, :])
 
+    # LCP
+    elif method == "LCP":
+        sign = 1
+
+    # RLCP
+    elif method == "RLCP":
+        sign = -1
+
     del index_map
 
     # ===========================
@@ -520,6 +530,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       refseq_id)
             dist_matrix = DHD.compute_refseq_distances()
 
+        elif method == "LCP" or method == "RLCP":
+            LCP = c_code.LCPdistance(dseqs_num,
+                                     norm_num,
+                                     sign,
+                                     refseq_id)
+            dist_matrix = LCP.compute_all_distances()
+
         _dist_matrix = dist_matrix.reshape((nunique1, nunique2))
 
 
@@ -559,6 +576,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       refseq_id)
             dist_matrix = DHD.compute_all_distances()
 
+        elif method == "LCP" or method == "RLCP":
+            LCP = c_code.LCPdistance(dseqs_num,
+                                     norm_num,
+                                     sign,
+                                     refseq_id)
+            dist_matrix = LCP.compute_all_distances()
+
         if full_matrix:
             _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
             _dist2matrix = _matrix.padding_matrix()
@@ -587,13 +611,13 @@ if __name__ == '__main__':
     # ===============================
     #             Sohee
     # ===============================
-    df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
-    time_list = list(df.columns)[1:133]
-    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
+    # time_list = list(df.columns)[1:133]
+    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
+    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
 
@@ -605,17 +629,17 @@ if __name__ == '__main__':
     # states = ['Extensive Warfare', 'Limited Violence', 'No Violence', 'Pervasive Warfare', 'Prolonged Warfare',
     #           'Serious Violence', 'Serious Warfare', 'Sporadic Violence', 'Technological Warfare', 'Total Warfare']
     # sequence_data = SequenceData(df, time=time_list, time_type="year", states=states, id_col="COUNTRY")
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
 
 
     # ===============================
     #             CO2
     # ===============================
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    time = list(df.columns)[1:]
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    om = get_distance_matrix(sequence_data, method="HAM", sm="TRATE", indel="auto")
 
 
     # ===============================
@@ -626,7 +650,7 @@ if __name__ == '__main__':
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
 
     # om.to_csv("", index=False)
 
@@ -639,7 +663,7 @@ if __name__ == '__main__':
     # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
 
     # refseq = [[0, 1, 2], [99, 100]]
     # print(om)

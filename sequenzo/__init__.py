@@ -35,6 +35,7 @@ from .visualization import (plot_sequence_index,
 
 from .dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from .dissimilarity_measures.get_substitution_cost_matrix import get_substitution_cost_matrix
+from .dissimilarity_measures.utils.get_LCP_length_for_2_seq import get_LCP_length_for_2_seq
 
 from .clustering import Cluster, ClusterResults, ClusterQuality
 from .big_data.clara.clara import clara
@@ -90,6 +91,7 @@ __all__ = [
     # Dissimilarity measures
     "get_distance_matrix",
     "get_substitution_cost_matrix",
+    "get_LCP_length_for_2_seq",
 
     # Hierarchical clustering
     "Cluster",
