@@ -12,10 +12,10 @@ pybind11_include = pybind11.get_include()
 ext_modules = [
     Extension(
         'c_code',
-        [r'/home/xinyi/test/module.cpp'],
+        [r'/home/xinyi_test/test/module.cpp'],
         include_dirs=[
             pybind11_include,
-            r'/home/xinyi/test/xsimd/include'
+            r'/home/xinyi_test/test/xsimd/include'
         ],
         language='c++',
         extra_compile_args=['-O2', '-std=c++17'],

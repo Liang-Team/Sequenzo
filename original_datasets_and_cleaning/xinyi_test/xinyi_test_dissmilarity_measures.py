@@ -17,7 +17,7 @@ from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_mat
 csv_files = [
     # 'country_co2_emissions_missing.csv',
     # 'sampled_1000_data.csv',
-    # 'sampled_5000_data.csv',
+    'sampled_5000_data.csv',
     # 'sampled_10000_data.csv',
     # 'sampled_15000_data.csv',
     # 'sampled_20000_data.csv',
@@ -26,14 +26,15 @@ csv_files = [
     # 'sampled_35000_data.csv',
     # 'sampled_38900_data.csv',
     # 'sampled_40000_data.csv',
-    'sampled_45000_data.csv',
+    # 'sampled_45000_data.csv',
     # 'sampled_50000_data.csv',
     # 'sampled_55000_data.csv',
     # 'sampled_60000_data.csv',
 ]
 
-# data_dir = '/home/xinyi/data/detailed_data'
-data_dir = 'D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data'
+# data_dir = '/home/xinyi_test/data/detailed_data'
+# data_dir = 'D:/college/research/QiQi/sequenzo/files/detialed_transposed.csv'
+data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\broad_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []
@@ -43,15 +44,16 @@ filenames = []
 for filename in csv_files:
     file_path = os.path.join(data_dir, filename)
     df = pd.read_csv(file_path)
+    # df = pd.read_csv(data_dir)
 
-    # _time = list(df.columns)[4:]
+    # _time = list(df.columns)[1:]
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
 
     _time = list(df.columns)[4:]
     states = ['Non-computing', 'Non-technical computing', 'Technical computing']
     df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']]
-    df = df.duplicated(subset=['worker_id'], keep=False)
+    df = df.drop_duplicates(subset=['worker_id'])
 
     # _time = list(df.columns)[1:]
     # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
@@ -62,7 +64,7 @@ for filename in csv_files:
     refseq = [[0, 1, 2], [99, 100]]
 
     start_time = time.time()
-    diss = get_distance_matrix(seqdata=data, method="LCP", sm="TRATE", indel="auto")
+    diss = get_distance_matrix(seqdata=data, method="OM", sm="TRATE", indel="auto")
     # print(diss)
     end_time = time.time()
 

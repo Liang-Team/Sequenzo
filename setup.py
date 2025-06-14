@@ -116,12 +116,15 @@ def get_compile_args_for_file(filename):
         base_cflags = ['/W4', '/bigobj']
         base_cppflags = ['/std:c++17'] + base_cflags
         openmp_flag = ['/openmp']
-        # openmp_flag = []
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
         openmp_flag = ['-fopenmp'] if has_openmp_support() else []
-        # openmp_flag = []
+
+    if sys.platform == 'win32':
+        compile_args = ["/O2", "/arch:AVX2"]
+    else:
+        compile_args = ["-O3", "-march=native", "-ffast-math"]
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
@@ -134,9 +137,9 @@ def get_compile_args_for_file(filename):
         arch_flags = []
 
     if filename.endswith(".cpp"):
-        return base_cppflags + arch_flags + openmp_flag
+        return base_cppflags + arch_flags + openmp_flag + compile_args
     else:
-        return base_cflags + arch_flags + openmp_flag
+        return base_cflags + arch_flags + openmp_flag + compile_args
 
 
 def get_include_dirs():

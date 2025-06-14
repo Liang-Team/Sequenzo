@@ -611,13 +611,13 @@ if __name__ == '__main__':
     # ===============================
     #             Sohee
     # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/sohee/sequence_data.csv')
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
     # time_list = list(df.columns)[1:133]
     # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
     # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
-    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
 
@@ -639,18 +639,18 @@ if __name__ == '__main__':
     time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
-    om = get_distance_matrix(sequence_data, method="HAM", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 
     # ===============================
     #            detailed
     # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
     # time = list(df.columns)[4:]
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     # om.to_csv("", index=False)
 
@@ -663,7 +663,7 @@ if __name__ == '__main__':
     # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     # refseq = [[0, 1, 2], [99, 100]]
     # print(om)

@@ -399,7 +399,7 @@ if __name__ == '__main__':
     import pandas as pd  # Import necesarry packages
 
     df = pd.read_csv('D:/country_co2_emissions_missing.csv')
-    # df = pd.read_csv('/home/xinyi/data/detailed_data/sampled_1000_data.csv')
+    # df = pd.read_csv('/home/xinyi_test/data/detailed_data/sampled_1000_data.csv')
 
     time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']

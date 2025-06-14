@@ -34,7 +34,7 @@ class WcAggregateCasesInternal:
 
         mcorr = [np.nan] * lx
 
-        def myfunction(group):
+        def _compute_weight_each_group_and_sum(group):
             first_element = group.iloc[0]
 
             for idx in group:
@@ -47,7 +47,7 @@ class WcAggregateCasesInternal:
             'id': ids
         })
 
-        grouped = df.groupby('id')['index'].apply(myfunction)
+        grouped = df.groupby('id')['index'].apply(_compute_weight_each_group_and_sum)
 
         agg_df = pd.DataFrame(grouped.tolist(), columns=['aggIndex', 'aggWeights'])
 

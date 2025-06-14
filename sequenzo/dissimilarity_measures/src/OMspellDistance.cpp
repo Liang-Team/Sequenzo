@@ -132,40 +132,40 @@ public:
             int nn = ptr_len(js);
             int mSuf = mm + 1, nSuf = nn + 1;
 
-            std::vector<std::vector<double>> fmat(fmatsize, std::vector<double>(fmatsize, 0));
+            std::vector<double> prev(fmatsize, 0.0);
+            std::vector<double> curr(fmatsize, 0.0);
 
-            fmat[0][0] = 0;
-
-            for (int ii = 1; ii < mSuf; ii++) {
-                i_state = ptr_seq(is, ii - 1);
-                fmat[ii][0] = fmat[ii - 1][0] + getIndel(is, ii - 1, i_state);
-            }
+            prev[0] = 0;
+            curr[0] = 0;
 
             for (int ii = 1; ii < nSuf; ii++) {
                 j_state = ptr_seq(js, ii - 1);
-                fmat[0][ii] = fmat[0][ii - 1] + getIndel(js, ii - 1, j_state);
+                prev[ii] = prev[ii-1] + getIndel(js, ii-1, j_state);
             }
 
             for (int i = 1; i < mSuf; i++) {
                 i_state = ptr_seq(is, i - 1);
+                curr[0] = prev[0] + getIndel(is, i - 1, i_state);
 
                 for (int j = 1; j < nSuf; j++) {
                     j_state = ptr_seq(js, j - 1);
 
-                    xsimd::batch<double, xsimd::default_arch> minimum_batch = fmat[i - 1][j] + getIndel(is, i - 1, i_state);
-                    xsimd::batch<double, xsimd::default_arch> j_indel_batch = fmat[i][j - 1] + getIndel(js, j - 1, j_state);
-                    xsimd::batch<double, xsimd::default_arch> sub_batch = fmat[i - 1][j - 1] + getSubCost(i_state, j_state, is, i - 1, js, j - 1);
+                    xsimd::batch<double, xsimd::default_arch> minimum_batch = prev[j] + getIndel(is, i - 1, i_state);
+                    xsimd::batch<double, xsimd::default_arch> j_indel_batch = curr[j - 1] + getIndel(js, j - 1, j_state);
+                    xsimd::batch<double, xsimd::default_arch> sub_batch = prev[j - 1] + getSubCost(i_state, j_state, is, i - 1, js, j - 1);
 
                     xsimd::batch<double> result = xsimd::min(xsimd::min(minimum_batch, j_indel_batch), sub_batch);
-                    fmat[i][j] = result.get(0);
+                    curr[j] = result.get(0);
                 }
+
+                std::swap(prev, curr);
             }
 
             maxpossiblecost = std::abs(nn - mm) * indel + maxscost * std::min(mm, nn);
             double ml = double(mm) * indel;
             double nl = double(nn) * indel;
 
-            return normalize_distance(fmat[mSuf - 1][nSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;

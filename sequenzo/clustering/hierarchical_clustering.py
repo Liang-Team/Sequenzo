@@ -216,7 +216,7 @@ class ClusterQuality:
 
         for k in range(2, self.max_clusters + 1):
             # fcluster() performs the final 'pruning' step on the results computed by the Rust code that generates a tree.
-            labels = fcluster(self.linkage_matrix, k, criterion="maxclust")
+            labels = fcluster(self.linkage_matrix, t=4, criterion="maxclust")
             self.scores["ASW"].append(self._compute_silhouette(labels))
             self.scores["ASWw"].append(self._compute_weighted_silhouette(labels))
             self.scores["HG"].append(self._compute_homogeneity(labels))
