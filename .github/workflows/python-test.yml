@@ -16,16 +16,8 @@ jobs:
         python-version: ['3.9', '3.10', '3.11']
 
     steps:
-      - name: Checkout target branch code (safe)
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.ref }}
-
-      - name: Fetch PR branch changes
-        run: git fetch origin +refs/pull/${{ github.event.pull_request.number }}/merge
-
-      - name: Checkout PR changes
-        run: git checkout -qf FETCH_HEAD
 
       - name: Set up Python
         uses: actions/setup-python@v4
