@@ -7,14 +7,14 @@
 from .aggregatecases import *
 from .davies_bouldin import *
 from .wfcmdd import *
-from .k_medoids_once import k_medoids_once
+from sequenzo.clustering.KMedoids import KMedoids
 
 
 def _import_c_code():
     """Lazily import the c_code module to avoid circular dependencies during installation"""
     try:
-        from sequenzo.dissimilarity_measures import c_code
-        return c_code
+        from sequenzo.clustering import clustering_c_code
+        return clustering_c_code
     except ImportError:
         # If the C extension cannot be imported, return None
         print(
@@ -23,5 +23,5 @@ def _import_c_code():
 
 
 __all__ = [
-    'k_medoids_once'
+    'KMedoids'
 ]

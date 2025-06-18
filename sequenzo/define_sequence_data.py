@@ -125,9 +125,9 @@ class SequenceData:
         self.cleaned_time = time
         self.states = states.copy()
         self.alphabet = states.copy() or sorted(set(data[time].stack().unique()))
-        self.labels = labels or states.copy()
+        self.labels = labels or [str(s) for s in states]
         self.id_col = id_col
-        self.ids = np.array(data[id_col].values) if self.id_col else data.index
+        self.ids = np.array(self.data[self.id_col].values) if self.id_col else data.index
         self.weights = weights
         self.start = start
         # TODO 这个没有用，要看看是否需要去除
@@ -182,7 +182,7 @@ class SequenceData:
 
         # ----------------
         # Check if ID column is provided and valid
-        if self.id_col is None or self.id_col not in self.data.columns:
+        if self.id_col is not None and self.id_col not in self.data.columns:
             raise ValueError(
                 f"[!] You must specify a valid `id_col` parameter that exists in your dataset.\n"
                 f"    ID is required to uniquely identify each sequence (e.g., individuals).\n"
@@ -193,7 +193,8 @@ class SequenceData:
                 f"    This will permanently assign unique IDs to your dataset for future use."
             )
 
-        self.ids = np.array(self.data[self.id_col].values)
+        # Because it is already implemented at initialization time
+        # self.ids = np.array(self.data[self.id_col].values)
 
         # Validate ID uniqueness and length
         if len(self.ids) != len(self.data):

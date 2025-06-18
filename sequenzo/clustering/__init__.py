@@ -10,8 +10,8 @@ from .hierarchical_clustering import Cluster, ClusterResults, ClusterQuality
 def _import_c_code():
     """Lazily import the c_code module to avoid circular dependencies during installation"""
     try:
-        from sequenzo.dissimilarity_measures.src import c_code
-        return c_code
+        from sequenzo.clustering.src import clustering_c_code
+        return clustering_c_code
     except ImportError:
         # If the C extension cannot be imported, return None
         print(
@@ -22,7 +22,7 @@ def _import_c_code():
 __all__ = [
     "Cluster",
     "ClusterResults",
-    "ClusterQuality"
-    "k_medoids"
+    "ClusterQuality",
+    "KMedoids",
     # Add other functions as needed
 ]

@@ -2,22 +2,12 @@
 #include "OMdistance.cpp"
 #include "OMspellDistance.cpp"
 #include "dist2matrix.cpp"
-#include "weightedinertia.cpp"
-#include "PAMonce.cpp"
 #include "DHDdistance.cpp"
 #include "LCPdistance.cpp"
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(c_code, m) {
-    py::class_<PAMonce>(m, "PAMonce")
-            .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
-            .def("runclusterloop", &PAMonce::runclusterloop);
-
-    py::class_<weightedinertia>(m, "weightedinertia")
-            .def(py::init<py::array_t<double>, py::array_t<int>, py::array_t<double>>())
-            .def("tmrWeightedInertiaContrib", &weightedinertia::tmrWeightedInertiaContrib);
-
     py::class_<dist2matrix>(m, "dist2matrix")
             .def(py::init<int, py::array_t<int>, py::array_t<double>>())
             .def("padding_matrix", &dist2matrix::padding_matrix);

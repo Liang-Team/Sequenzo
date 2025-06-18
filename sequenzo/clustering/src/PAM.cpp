@@ -12,7 +12,7 @@ public:
     // Constructor: Initializes the PAM algorithm with required parameters.
     PAM(int nelements, py::array_t<double> diss,
         py::array_t<int> centroids, int npass, py::array_t<double> weights) {
-        py::print("[>] starts PAM builded... ");
+        py::print("[>] Starting Partitioning Around Medoids (PAM)...");
 
         try {
             this->nelements = nelements;
@@ -31,27 +31,47 @@ public:
         } catch (const exception &e) {
             py::print("Error: ", e.what()); // Error handling
         }
-
-        py::print("PAM built\n");
     }
 
     // Computes the maximum distance between any two elements in the distance matrix.
     void computeMaxDist() {
-        auto ptr_diss = diss.unchecked<2>(); // Get access to the distance matrix
+        auto ptr_diss = diss.unchecked<2>();
 
-        double local_max = 0.0;
-
-        // Parallel loop to find the maximum distance
-        #pragma omp parallel for reduction(max : local_max) schedule(static)
-        for (int i = 0; i < nelements; ++i) {
-            for (int j = i + 1; j < nelements; ++j) {
-                double val = ptr_diss(i, j);
-                if (val > local_max) local_max = val; // Update the max distance
-            }
+        // The manual array collects the thread maxima
+        int nthreads = 1;
+        #pragma omp parallel
+        {
+            #pragma omp single
+            nthreads = omp_get_num_threads();
         }
 
-        maxdist = 1.1 * local_max + 1.0;
+        std::vector<double> thread_max(nthreads, 0.0);
+
+        #pragma omp parallel
+        {
+            int tid = omp_get_thread_num();
+            double local = 0.0;
+
+            #pragma omp for schedule(static)
+            for (int i = 0; i < nelements; ++i) {
+                for (int j = i + 1; j < nelements; ++j) {
+                    double val = ptr_diss(i, j);
+                    if (val > local) local = val;
+                }
+            }
+
+            thread_max[tid] = local;
+        }
+
+        // Final reduction (serial, fast)
+        double max_val = 0.0;
+        for (double val : thread_max) {
+            if (val > max_val) max_val = val;
+        }
+
+        maxdist = 1.1 * max_val + 1.0;
     }
+
 
     // Runs the PAM clustering loop, repeatedly updating centroids and assigning elements to clusters.
     py::array_t<int> runclusterloop() {
@@ -67,16 +87,7 @@ public:
         double total = -1.0;
         int nclusters = static_cast<int>(centroids.size());
 
-        py::print("Centroids lists (in):");
-
-        // Print initial centroids
-        for (icluster = 0; icluster < nclusters; icluster++) {
-            py::print(" ", ptr_centroids[icluster]);
-        }
-
         do {
-            py::print("BUILD dysma, dysmb\n");
-
             // Parallel loop to update dysma and dysmb based on current centroids
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < nelements; i++) {
@@ -112,8 +123,6 @@ public:
             }
 
             dzsky = 1; // Initialize dzsky to 1 for the change cost comparison
-
-            py::print("Computing change costs\n");
 
             // Parallel loop to compute the cost of switching elements' medoids
             #pragma omp parallel for schedule(dynamic)
@@ -168,8 +177,6 @@ public:
 
             // If there was an improvement in the total cost, update the centroids
             if (dzsky < 0) {
-                cout << "swp new " << hbest << " <-> " << nbest << " old; decreasing diss. by " << dzsky << endl;
-
                 for (k = 0; k < nclusters; k++) {
                     if (ptr_centroids[k] == nbest) {
                         ptr_centroids[k] = hbest; // Swap the medoids
@@ -177,7 +184,6 @@ public:
                 }
 
                 total += dzsky; // Update the total cost
-                py::print(" Total:", total);
             }
 
             ipass++; // Increment pass count
@@ -186,13 +192,6 @@ public:
                 break; // Break if max passes reached
             }
         } while (dzsky < 0); // Repeat until no improvement
-
-        py::print("Centroids lists (out):");
-
-        // Print the final centroids
-        for (icluster = 0; icluster < nclusters; icluster++) {
-            py::print(ptr_centroids[icluster]);
-        }
 
         return getResultArray(); // Return the final cluster assignments
     }
@@ -213,22 +212,14 @@ public:
 
 
 protected:
-    int nelements; // Number of elements to cluster
-    py::array_t<double> diss; // Distance matrix
-    py::array_t<int> centroids; // Initial centroids
-    int npass; // Number of passes for the algorithm
+    int nelements;               // Number of elements to cluster
+    py::array_t<double> diss;    // Distance matrix
+    py::array_t<int> centroids;  // Initial centroids
+    int npass;                   // Number of passes for the algorithm
     py::array_t<double> weights; // Element weights
-    vector<int> tclusterid; // Cluster IDs for each element
-    vector<double> dysmb; // Temporary variable for distances
-    int nclusters; // Number of clusters
-    double maxdist; // Maximum distance value
-    vector<double> dysma; // Temporary variable for distances
+    vector<int> tclusterid;      // Cluster IDs for each element
+    vector<double> dysmb;        // Temporary variable for distances
+    int nclusters;               // Number of clusters
+    double maxdist;              // Maximum distance value
+    vector<double> dysma;        // Temporary variable for distances
 };
-
-// Pybind11 module definition
-PYBIND11_MODULE(pam_cpp, m) {
-    py::class_<PAM>(m, "PAM")
-            .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
-            .def("computeMaxDist", &PAM::computeMaxDist) // Expose computeMaxDist method
-            .def("runclusterloop", &PAM::runclusterloop); // Expose runclusterloop method
-}

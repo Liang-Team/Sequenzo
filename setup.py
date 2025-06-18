@@ -142,11 +142,11 @@ def get_compile_args_for_file(filename):
         return base_cflags + arch_flags + openmp_flag + compile_args
 
 
-def get_include_dirs():
+def get_dissimilarity_measures_include_dirs():
     """
-    Collects all required include directories for compiling C++ and Cython code.
+    Collects all required include directories for compiling C++ and Cython code in dissimilarity measures.
     Returns:
-        list: Paths to include directories.
+        list: Paths to include directories in dissimilarity measures.
     """
     base_dir = Path(__file__).parent.resolve()
     return [
@@ -155,6 +155,20 @@ def get_include_dirs():
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
         str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
+        'sequenzo/clustering/src/',
+    ]
+
+def get_clustering_include_dirs():
+    """
+    Collects all required include directories for compiling C++ and Cython code in clustering measures.
+    Returns:
+        list: Paths to include directories in clustering measures.
+    """
+    return [
+        pybind11.get_include(),
+        pybind11.get_include(user=True),
+        numpy.get_include(),
+        'sequenzo/clustering/src/',
     ]
 
 
@@ -165,16 +179,28 @@ def configure_cpp_extension():
         list: A list with one or zero configured Pybind11Extension.
     """
     try:
-        ext_module = Pybind11Extension(
+        diss_ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
             sources=glob('sequenzo/dissimilarity_measures/src/*.cpp'),
-            include_dirs=get_include_dirs(),
+            include_dirs=get_dissimilarity_measures_include_dirs(),
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             language='c++',
             define_macros=[('VERSION_INFO', '"0.0.1"')],
         )
-        print("C++ extension configured successfully")
-        return [ext_module]
+        print("  - Dissimilarity measures C++ extension configured successfully.")
+
+        clustering_ext_module = Pybind11Extension(
+            'sequenzo.clustering.clustering_c_code',
+            sources=glob('sequenzo/clustering/src/*.cpp'),
+            include_dirs=get_clustering_include_dirs(),
+            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            language='c++',
+            define_macros=[('VERSION_INFO', '"0.0.1"')],
+        )
+        print("  - Clustering C++ extension configured successfully.")
+
+        print("C++ extension configured successfully.")
+        return [diss_ext_module, clustering_ext_module]
     except Exception as e:
         print(f"Failed to configure C++ extension: {e}")
         print("Fallback: Python-only functionality will be used.")
@@ -204,7 +230,7 @@ def configure_cython_extensions():
             extension = Extension(
                 name=str(Path(path).with_suffix("")).replace("/", ".").replace("\\", "."),
                 sources=[path],
-                include_dirs=get_include_dirs(),
+                include_dirs=get_dissimilarity_measures_include_dirs(),
                 extra_compile_args=extra_args,
             )
             extensions.append(extension)
@@ -228,6 +254,7 @@ class BuildExt(build_ext):
 
 # Ensure necessary folders exist to prevent file not found errors
 os.makedirs("sequenzo/dissimilarity_measures/src", exist_ok=True)
+os.makedirs("sequenzo/clustering/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/utils", exist_ok=True)
 
 # Run the actual setup process

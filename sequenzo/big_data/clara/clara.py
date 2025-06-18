@@ -17,7 +17,7 @@ from itertools import product
 
 from sequenzo.big_data.clara.utils.aggregatecases import *
 from sequenzo.big_data.clara.utils.davies_bouldin import *
-from sequenzo.big_data.clara.utils.k_medoids_once import *
+from sequenzo.clustering.KMedoids import *
 from sequenzo.big_data.clara.utils.get_weighted_diss import *
 
 from sequenzo.define_sequence_data import SequenceData
@@ -147,7 +147,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         for k in kvals:
             # Weighted PAM clustering on subsample
-            clustering = k_medoids_once(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
+            clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
             medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
             medoids = medoids.to_numpy().flatten()
 

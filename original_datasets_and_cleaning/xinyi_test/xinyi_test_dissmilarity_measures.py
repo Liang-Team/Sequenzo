@@ -12,6 +12,7 @@ import seaborn as sns
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+from sequenzo.clustering.KMedoids import KMedoids
 
 # CSV 文件路径列表
 csv_files = [
@@ -65,6 +66,10 @@ for filename in csv_files:
 
     start_time = time.time()
     diss = get_distance_matrix(seqdata=data, method="OM", sm="TRATE", indel="auto")
+
+    # centroids = [1, 50, 100, 150]
+    # clustering = KMedoids(diss=diss, k=4, method='pamonce')
+    # print(clustering)
     # print(diss)
     end_time = time.time()
 
