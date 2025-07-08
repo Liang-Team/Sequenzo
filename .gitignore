@@ -34,6 +34,7 @@ dist/
 
 # 如果你有 cpp 源码用于 Pybind11
 !sequenzo/dissimilarity_measures/src/*.cpp
+!sequenzo/clustering/src/*.cpp
 
 
 

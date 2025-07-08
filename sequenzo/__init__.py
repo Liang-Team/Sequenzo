@@ -15,6 +15,7 @@ from .datasets import load_dataset, list_datasets
 
 # Import the core functions that should be directly available from the sequenzo package
 
+from .data_preprocessing import helpers
 from .data_preprocessing.helpers import (assign_unique_ids,
                                          wide_to_long_format_data,
                                          long_to_wide_format_data,
@@ -70,6 +71,7 @@ __all__ = [
     "list_datasets",
 
     # Data preprocessing
+    "helpers",
     "assign_unique_ids",
     "wide_to_long_format_data",
     "long_to_wide_format_data",
