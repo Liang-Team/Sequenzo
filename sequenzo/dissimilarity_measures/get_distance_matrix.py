@@ -84,10 +84,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     gc.collect()                           # garbage collection
 
-    # print("========= get_distance_matrix =======")
-    # print(c_code)  # 是否为 None
-    # print(dir(c_code))  # 检查它的属性
-
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -587,6 +583,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
             _dist2matrix = _matrix.padding_matrix()
 
+            # _dist_matrix = np.zeros((nseqs, nseqs), dtype=np.float64)  # 初始化完整距离矩阵
+            # idx = seqdata_didxs
+            # _dist_matrix = dist_matrix[idx[:, None], idx[None, :]]  # 广播索引
+
             dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
         else:
@@ -617,7 +617,7 @@ if __name__ == '__main__':
     # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
     # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
-    # om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
 

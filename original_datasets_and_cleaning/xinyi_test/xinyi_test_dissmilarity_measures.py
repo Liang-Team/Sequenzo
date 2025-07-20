@@ -17,8 +17,16 @@ from sequenzo.clustering.KMedoids import KMedoids
 # CSV 文件路径列表
 csv_files = [
     # 'country_co2_emissions_missing.csv',
+    # 'sampled_500_data.csv',
     # 'sampled_1000_data.csv',
-    'sampled_5000_data.csv',
+    # 'sampled_1500_data.csv',
+    # 'sampled_2000_data.csv',
+    # 'sampled_2500_data.csv',
+    # 'sampled_3000_data.csv',
+    # 'sampled_3500_data.csv',
+    # 'sampled_4000_data.csv',
+    # 'sampled_4500_data.csv',
+    # 'sampled_5000_data.csv',
     # 'sampled_10000_data.csv',
     # 'sampled_15000_data.csv',
     # 'sampled_20000_data.csv',
@@ -29,7 +37,7 @@ csv_files = [
     # 'sampled_40000_data.csv',
     # 'sampled_45000_data.csv',
     # 'sampled_50000_data.csv',
-    # 'sampled_55000_data.csv',
+    'sampled_55000_data.csv',
     # 'sampled_60000_data.csv',
 ]
 
@@ -47,7 +55,7 @@ for filename in csv_files:
     df = pd.read_csv(file_path)
     # df = pd.read_csv(data_dir)
 
-    # _time = list(df.columns)[1:]
+    # _time = list(df.columns)[4:]
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
 
@@ -65,7 +73,7 @@ for filename in csv_files:
     refseq = [[0, 1, 2], [99, 100]]
 
     start_time = time.time()
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="TRATE", indel="auto")
+    diss = get_distance_matrix(seqdata=data, method="RLCP", sm="TRATE", indel="auto")
 
     # centroids = [1, 50, 100, 150]
     # clustering = KMedoids(diss=diss, k=4, method='pamonce')
