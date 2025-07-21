@@ -155,7 +155,6 @@ def get_dissimilarity_measures_include_dirs():
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
         str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
-        str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'eigen'),
         'sequenzo/clustering/src/',
     ]
 

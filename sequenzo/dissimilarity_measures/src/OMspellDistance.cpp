@@ -177,7 +177,7 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for collapse(2) schedule(static)
+#pragma omp parallel for schedule(static)
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
                     double dist = compute_distance(i, j);
@@ -198,7 +198,7 @@ public:
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
             double cmpres = 0;
-            #pragma omp parallel for collapse(2) schedule(static)
+#pragma omp parallel for schedule(static)
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
                     if(is == rseq){

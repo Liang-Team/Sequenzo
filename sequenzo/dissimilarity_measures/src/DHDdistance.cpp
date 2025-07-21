@@ -60,7 +60,7 @@ public:
             // 使用 SIMD 批量处理
             const int simd_width = xsimd::batch<double>::size;
             int i = 0;
-
+            
             for(; i + simd_width <= minimum; i += simd_width) {
                 alignas(32) double tmp[simd_width];
                 for(int j = 0; j < simd_width; j++) {
@@ -70,7 +70,7 @@ public:
                 xsimd::batch<double> costs = xsimd::load_unaligned(tmp);
                 cost += xsimd::reduce_add(costs);
             }
-
+            
             // 处理剩余部分
             for(; i < minimum; i++) {
                 cost += ptr_sm(i, ptr_seq(is, i), ptr_seq(js, i));
