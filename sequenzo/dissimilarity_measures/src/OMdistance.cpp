@@ -169,8 +169,8 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             double cmpres = 0;
-            #pragma omp parallel
-            {
+//            #pragma omp parallel
+//            {
                 #pragma omp for schedule(static)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                     for (int is = 0; is < nseq; is ++) {
@@ -183,7 +183,7 @@ public:
                         buffer(is, rseq-rseq1) = cmpres;
                     }
                 }
-            }
+//            }
 
             return refdist_matrix;
         } catch (const std::exception& e) {

@@ -87,12 +87,15 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-#pragma omp parallel for collapse(2) schedule(static)
-            for (int i = 0; i < nseq; i++) {
-                for (int j = i; j < nseq; j++) {
-                    double dist = compute_distance(i, j);
-                    buffer(i, j) = dist;
-                    buffer(j, i) = dist;
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(static)
+                for (int i = 0; i < nseq; i++) {
+                    for (int j = i; j < nseq; j++) {
+                        double dist = compute_distance(i, j);
+                        buffer(i, j) = dist;
+                        buffer(j, i) = dist;
+                    }
                 }
             }
 
@@ -108,16 +111,19 @@ public:
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
             double cmpres = 0;
-#pragma omp parallel for collapse(2) schedule(static)
-            for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                for (int is = 0; is < nseq; is ++) {
-                    if(is == rseq){
-                        cmpres = 0;
-                    }else{
-                        cmpres = compute_distance(is, rseq);
-                    }
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(static)
+                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
+                    for (int is = 0; is < nseq; is ++) {
+                        if(is == rseq){
+                            cmpres = 0;
+                        }else{
+                            cmpres = compute_distance(is, rseq);
+                        }
 
-                    buffer(is, rseq-rseq1) = cmpres;
+                        buffer(is, rseq-rseq1) = cmpres;
+                    }
                 }
             }
 
