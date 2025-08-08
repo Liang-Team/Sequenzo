@@ -3,6 +3,10 @@
 @File    : system_level_indicators.py
 @Time    : 02/05/2025 11:06
 @Desc    : 
+    This module includes tools for building prefix trees, computing prefix counts, branching factors, and Jensen-Shannon divergence,
+    as well as generating composite scores to summarize system-level sequence diversity and complexity over time.
+    Visualization functions are also provided to plot these indicators and their distributions, 
+    supporting comprehensive analysis of sequence system dynamics.
 """
 from collections import defaultdict, Counter
 import numpy as np
@@ -135,7 +139,6 @@ def build_prefix_tree(sequences):
 def plot_system_indicators(prefix_counts: List[float],
                            branching_factors: List[float],
                            js_divergence: Optional[List[float]] = None,
-                           composite_score: Optional[List[float]] = None,
                            save_as: Optional[str] = None,
                            dpi: int = 200,
                            custom_colors: Optional[Dict[str, str]] = None,
@@ -153,13 +156,11 @@ def plot_system_indicators(prefix_counts: List[float],
     # Normalize others
     bf_z = zscore(array(branching_factors))
     js_z = zscore(array(js_divergence)) if js_divergence else None
-    composite_z = zscore(array(composite_score)) if composite_score else None
 
     color_defaults = {
         "Prefix Count": "#1f77b4",
         "Branching Factor": "#ff7f0e",
         "JS Divergence": "#2ca02c",
-        "Composite Score": "#000000",
     }
     colors = {**color_defaults, **(custom_colors or {})}
 
@@ -176,8 +177,6 @@ def plot_system_indicators(prefix_counts: List[float],
     ax2.plot(x, bf_z, marker='s', label='Branching Factor (z)', color=colors["Branching Factor"])
     if js_z is not None:
         ax2.plot(x, js_z, marker='^', label='JS Divergence (z)', color=colors["JS Divergence"])
-    if composite_z is not None:
-        ax2.plot(x, composite_z, linestyle='--', label='Composite Score (z)', color=colors["Composite Score"])
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
@@ -196,8 +195,6 @@ def plot_system_indicators(prefix_counts: List[float],
         }
         if js_divergence:
             raw_data["JS Divergence"] = js_divergence
-        if composite_score:
-            raw_data["Composite Score"] = composite_score
 
         n = len(raw_data)
         fig, axes = plt.subplots(1, n, figsize=(4 * n, 4))

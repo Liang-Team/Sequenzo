@@ -153,19 +153,24 @@ pip install .  # Uses pyproject.toml
 
 ## Team
 
-**Authors**
+**Paper Authors**
 * [Yuqi Liang, University of Oxford](https://www.yuqi-liang.tech/)
 * [Xinyi Li, Heilongjiang University](https://github.com/Fantasy201)
 * [Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford](https://www.inet.ox.ac.uk/people/jan-meyerhoff-liang)
 
-**Acknowledgements**
-* Methodological advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
+**Package Contributors**
+* [Liangxingyun He, Stockholm School of Economics, Sweden](https://www.linkedin.com/in/liangxingyun-he-6aa128304/): 
+  - Sequence data sources compilation, analysis and tutorials for education
+  - Translation of the documentation into Chinese
 * With special thanks to our initial testers (alphabetically ordered): [Joji Chia](https://sociology.illinois.edu/directory/profile/jbchia2), [Kass Gonzalez](https://www.linkedin.com/in/kass-gonzalez-72a778276/), [Sinyee Lu](https://sociology.illinois.edu/directory/profile/qianyil4), [Sohee Shin](https://sociology.illinois.edu/directory/profile/sohees2)
 * Website and related technical support: [Mactavish](https://github.com/mactavishz)
+* PAM clustering algorithm implementation: Cheng Deng
+* Sequence data sources compilation - History: Jingrui Chen
 * Visual design consultant: Changyu Yi
-* Sequence data sources compilation
-  * Economics: Jan Meyerhoff-Liang
-  * History: Jingrui Chen
+
+**Acknowledgements**
+
+* Methodological advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
 * Yuqi's PhD advisor: [Professor Ridhi Kashyap, University of Oxford](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/)
 * Yuqi's original programming mentor: [JiangHuShiNian](https://github.com/jianghushinian)
 

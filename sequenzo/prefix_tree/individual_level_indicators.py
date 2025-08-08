@@ -3,6 +3,12 @@
 @File    : individual_level_indicators.py
 @Time    : 02/05/2025 11:07
 @Desc    : 
+    This module provides methods for calculating individual-level indicators in sequence data analysis.
+    It includes tools to assess sequence divergence, identify divergence timing, measure prefix rarity,
+    and evaluate path uniqueness for individuals or groups. 
+    
+    These indicators help quantify how typical or unique an individual's sequence is within a population, 
+    and can be used for both overall and subgroup analyses.
 """
 from collections import defaultdict, Counter
 import numpy as np
@@ -94,98 +100,6 @@ class IndividualDivergence:
                     break
             years.append(year)
         return years
-
-    # def compute_diverged(self, method="rank", threshold=0.15, min_year=3):
-    #     """
-    #     Compute whether each individual diverged from mainstream trajectories.
-    #
-    #     :param method: Method to define divergence.
-    #                    - "rank": uses bottom `threshold` fraction of ranked prefix frequencies (e.g., 0.15 = bottom 15%).
-    #                    - "frequency": absolute frequency threshold (e.g., 0.01).
-    #     :param threshold: Divergence cutoff depending on method.
-    #     :param min_year: Minimum year (1-indexed) before which divergence is not counted (default = 3).
-    #     :return: List of binary flags (1 = diverged, 0 = not diverged).
-    #     """
-    #     diverged_flags = []
-    #     N = len(self.sequences)
-    #
-    #     for seq in self.sequences:
-    #         prefix = []
-    #         diverged = 0
-    #         for t in range(self.T):
-    #             if t + 1 < min_year:
-    #                 prefix.append(seq[t])
-    #                 continue
-    #
-    #             prefix.append(seq[t])
-    #             prefix_tuple = tuple(prefix)
-    #
-    #             if method == "rank":
-    #                 freq_map = self.prefix_freq_by_year[t]
-    #                 sorted_prefixes = sorted(freq_map.items(), key=lambda x: x[1])
-    #                 cutoff_index = int(len(sorted_prefixes) * threshold)
-    #                 tail_prefixes = set(k for k, _ in sorted_prefixes[:cutoff_index])
-    #                 if prefix_tuple in tail_prefixes:
-    #                     diverged = 1
-    #                     break
-    #
-    #             elif method == "frequency":
-    #                 freq = self.prefix_freq_by_year[t][prefix_tuple] / N
-    #                 if freq < threshold:
-    #                     diverged = 1
-    #                     break
-    #
-    #             else:
-    #                 raise ValueError("Method must be either 'rank' or 'frequency'")
-    #
-    #         diverged_flags.append(diverged)
-    #     return diverged_flags
-    #
-    # def compute_divergence_year(self, method="rank", threshold=0.15, min_year=3):
-    #     """
-    #     Compute the year at which each individual diverged from the mainstream.
-    #
-    #     :param method: Method to define divergence.
-    #                    - "rank": uses bottom `threshold` fraction of ranked prefix frequencies.
-    #                    - "frequency": absolute frequency threshold (e.g., <0.01).
-    #     :param threshold: Divergence cutoff depending on method.
-    #     :param min_year: Minimum year (1-indexed) to begin evaluating divergence (default = 3).
-    #     :return: List of divergence years (1-indexed), or None if no divergence.
-    #     """
-    #     divergence_years = []
-    #     N = len(self.sequences)
-    #
-    #     for seq in self.sequences:
-    #         prefix = []
-    #         year = None
-    #         for t in range(self.T):
-    #             if t + 1 < min_year:
-    #                 prefix.append(seq[t])
-    #                 continue
-    #
-    #             prefix.append(seq[t])
-    #             prefix_tuple = tuple(prefix)
-    #
-    #             if method == "rank":
-    #                 freq_map = self.prefix_freq_by_year[t]
-    #                 sorted_prefixes = sorted(freq_map.items(), key=lambda x: x[1])
-    #                 cutoff_index = int(len(sorted_prefixes) * threshold)
-    #                 tail_prefixes = set(k for k, _ in sorted_prefixes[:cutoff_index])
-    #                 if prefix_tuple in tail_prefixes:
-    #                     year = t + 1
-    #                     break
-    #
-    #             elif method == "frequency":
-    #                 freq = self.prefix_freq_by_year[t][prefix_tuple] / N
-    #                 if freq < threshold:
-    #                     year = t + 1
-    #                     break
-    #
-    #             else:
-    #                 raise ValueError("Method must be either 'rank' or 'frequency'")
-    #
-    #         divergence_years.append(year)
-    #     return divergence_years
 
     def compute_prefix_rarity_score(self):
         rarity_scores = []
