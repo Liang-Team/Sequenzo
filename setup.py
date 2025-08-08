@@ -7,6 +7,22 @@
 This file is maintained for backward compatibility and to handle C++ & Cython extension compilation.
 Most configuration is now in pyproject.toml.
 
+Architecture Control (macOS):
+    # Intel Mac only (faster compilation, smaller files)
+    export SEQUENZO_ARCH=x86_64
+    pip install -e .
+    
+    # Apple Silicon only
+    export SEQUENZO_ARCH=arm64
+    pip install -e .
+    
+    # Universal Binary (default, works on all Macs)
+    export ARCHFLAGS="-arch x86_64 -arch arm64"
+    pip install -e .
+    
+    # Let system auto-detect (recommended for most users)
+    pip install -e .
+
 Suggested command lines for developers:
     # 编译所有 Cython + C++
     python setup.py build_ext --inplace
@@ -57,14 +73,43 @@ ensure_xsimd_exists()
 
 def get_mac_arch():
     """
-    Detects the current macOS architecture.
+    Intelligently detects the target macOS architecture for compilation.
+    
+    Priority:
+    1. ARCHFLAGS environment variable (user override)
+    2. SEQUENZO_ARCH environment variable (project-specific)
+    3. Current hardware architecture
+    
     Returns:
-        str: 'x86_64' or 'arm64' depending on the Mac hardware.
+        str or list: Architecture string(s) for compilation
     """
+    # Check for user-specified architecture flags
+    archflags = os.environ.get('ARCHFLAGS', '').strip()
+    if archflags:
+        # Parse ARCHFLAGS like "-arch x86_64 -arch arm64"
+        archs = []
+        parts = archflags.split()
+        for i, part in enumerate(parts):
+            if part == '-arch' and i + 1 < len(parts):
+                archs.append(parts[i + 1])
+        if archs:
+            print(f"[SETUP] Using ARCHFLAGS architectures: {archs}")
+            return archs
+    
+    # Check for project-specific override
+    project_arch = os.environ.get('SEQUENZO_ARCH', '').strip()
+    if project_arch:
+        print(f"[SETUP] Using SEQUENZO_ARCH: {project_arch}")
+        return project_arch
+    
+    # Default: detect current hardware
     try:
-        return subprocess.check_output(['uname', '-m']).decode().strip()
+        hardware_arch = subprocess.check_output(['uname', '-m']).decode().strip()
+        print(f"[SETUP] Using hardware architecture: {hardware_arch}")
+        return hardware_arch
     except Exception:
-        return None
+        print("[SETUP] Warning: Could not detect architecture, defaulting to x86_64")
+        return 'x86_64'
 
 
 def has_openmp_support():
@@ -129,10 +174,22 @@ def get_compile_args_for_file(filename):
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
         arch = get_mac_arch()
-        if arch in ('x86_64', 'arm64'):
+        
+        # Handle both single architecture and multiple architectures
+        if isinstance(arch, list):
+            # Multiple architectures (Universal Binary)
+            arch_flags = []
+            for a in arch:
+                if a in ('x86_64', 'arm64'):
+                    arch_flags.extend(['-arch', a])
+        elif isinstance(arch, str) and arch in ('x86_64', 'arm64'):
+            # Single architecture
             arch_flags = ['-arch', arch]
         else:
+            # Unknown or unsupported architecture
             arch_flags = []
+            if arch:
+                print(f"[SETUP] Warning: Unsupported architecture '{arch}', skipping arch flags")
     else:
         arch_flags = []
 
@@ -243,13 +300,25 @@ def configure_cython_extensions():
 
 class BuildExt(build_ext):
     """
-    Custom build_ext class that prints architecture info on macOS.
+    Custom build_ext class with enhanced architecture and OpenMP reporting.
     """
     def build_extensions(self):
         if sys.platform == 'darwin':
             arch = get_mac_arch()
-            print(f"Compiling extensions for macOS [{arch}]...")
+            if isinstance(arch, list):
+                print(f"[SETUP] Compiling Universal Binary for macOS: {arch}")
+            else:
+                print(f"[SETUP] Compiling for macOS [{arch}]")
+            
+            # Show OpenMP status
+            if has_openmp_support():
+                print("[SETUP] ✅ OpenMP support detected - parallel compilation enabled")
+            else:
+                print("[SETUP] ⚠️  OpenMP not available - using serial compilation")
+        
+        print(f"[SETUP] Building {len(self.extensions)} extension(s)...")
         super().build_extensions()
+        print("[SETUP] ✅ Extension compilation completed!")
 
 
 # Ensure necessary folders exist to prevent file not found errors
