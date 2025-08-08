@@ -115,18 +115,6 @@ def compute_js_divergence(sequences, state_set):
     return js_scores
 
 
-def compute_composite_score(prefix_counts, branching_factors, js_divergence=None):
-    pc_z = (np.array(prefix_counts) - np.mean(prefix_counts)) / np.std(prefix_counts)
-    bf_z = (np.array(branching_factors) - np.mean(branching_factors)) / np.std(branching_factors)
-    score = pc_z + bf_z
-
-    if js_divergence is not None:
-        js_z = (np.array(js_divergence) - np.mean(js_divergence)) / np.std(js_divergence)
-        score += js_z
-
-    return score.tolist()
-
-
 def build_prefix_tree(sequences):
     tree = PrefixTree()
     tree.total_sequences = len(sequences)

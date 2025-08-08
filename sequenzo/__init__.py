@@ -64,6 +64,16 @@ from .prefix_tree import (
     plot_system_indicators
 )
 
+from .suffix_tree import (
+    build_suffix_tree,
+    compute_suffix_count,
+    compute_merging_factor,
+    compute_js_convergence,
+    IndividualConvergence,
+    convert_to_suffix_tree_data,
+    plot_convergence_indicators
+)
+
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
@@ -123,5 +133,14 @@ __all__ = [
     "compute_js_divergence",
     "compute_composite_score",
     "convert_to_prefix_tree_data",
-    "plot_system_indicators"
+    "plot_system_indicators",
+
+    # Suffix Tree
+    "build_suffix_tree",
+    "compute_suffix_count",
+    "compute_merging_factor",
+    "compute_js_convergence",
+    "IndividualConvergence",
+    "convert_to_suffix_tree_data",
+    "plot_convergence_indicators"
 ]
