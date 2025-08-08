@@ -10,7 +10,6 @@ from .system_level_indicators import (
     compute_prefix_count,
     compute_branching_factor,
     compute_js_divergence,
-    compute_composite_score,
     plot_system_indicators
 )
 
@@ -28,7 +27,6 @@ __all__ = [
     "compute_prefix_count",
     "compute_branching_factor",
     "compute_js_divergence",
-    "compute_composite_score",
     "plot_system_indicators",
 
     # Individual-level

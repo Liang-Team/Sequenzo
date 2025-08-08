@@ -2,7 +2,9 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #include <random>
 #include <cfloat>
 

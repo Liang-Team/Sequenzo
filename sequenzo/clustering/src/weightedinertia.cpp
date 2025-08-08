@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 #ifdef _OPENMP
-    #include <omp.h>
+#include <omp.h>
 #endif
 
 namespace py = pybind11;

@@ -2,7 +2,9 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 #define WEIGHTED_CLUST_TOL -1e-10
 using namespace std;
 namespace py = pybind11;
@@ -39,20 +41,29 @@ public:
 
         // The manual array collects the thread maxima
         int nthreads = 1;
+        #ifdef _OPENMP
         #pragma omp parallel
         {
             #pragma omp single
             nthreads = omp_get_num_threads();
         }
+        #endif
 
         std::vector<double> thread_max(nthreads, 0.0);
 
+        #ifdef _OPENMP
         #pragma omp parallel
         {
             int tid = omp_get_thread_num();
+        #else
+        {
+            int tid = 0;
+        #endif
             double local = 0.0;
 
+            #ifdef _OPENMP
             #pragma omp for schedule(static)
+            #endif
             for (int i = 0; i < nelements; ++i) {
                 for (int j = i + 1; j < nelements; ++j) {
                     double val = ptr_diss(i, j);

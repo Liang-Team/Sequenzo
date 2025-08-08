@@ -59,7 +59,6 @@ from .prefix_tree import (
     get_state_space,
     compute_branching_factor,
     compute_js_divergence,
-    compute_composite_score,
     convert_to_prefix_tree_data,
     plot_system_indicators
 )
@@ -131,7 +130,6 @@ __all__ = [
     "get_state_space",
     "compute_branching_factor",
     "compute_js_divergence",
-    "compute_composite_score",
     "convert_to_prefix_tree_data",
     "plot_system_indicators",
 
