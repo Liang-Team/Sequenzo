@@ -115,9 +115,15 @@ def get_mac_arch():
 def has_openmp_support():
     """
     Check if the current compiler supports OpenMP.
+    Can be forced via SEQUENZO_ENABLE_OPENMP environment variable.
     Returns:
         bool
     """
+    # Check for forced OpenMP enable (for CI/CD)
+    if os.environ.get('SEQUENZO_ENABLE_OPENMP', '').strip().lower() in ('1', 'true', 'on', 'yes'):
+        print("[SETUP] 🚀 OpenMP force-enabled via SEQUENZO_ENABLE_OPENMP")
+        return True
+    
     if getattr(has_openmp_support, "_checked", False):
         return has_openmp_support._result
 
@@ -160,11 +166,29 @@ def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
         base_cflags = ['/W4', '/bigobj']
         base_cppflags = ['/std:c++17'] + base_cflags
-        openmp_flag = ['/openmp']
+        
+        # Windows OpenMP support
+        if has_openmp_support():
+            openmp_flag = ['/openmp']
+            print("[SETUP] 🪟 Windows OpenMP flags: /openmp")
+        else:
+            openmp_flag = []
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
-        openmp_flag = ['-fopenmp'] if has_openmp_support() else []
+        
+        # OpenMP flags with platform-specific optimization
+        if has_openmp_support():
+            if sys.platform == 'darwin':
+                # macOS: 使用libomp，分离编译和链接标志
+                openmp_flag = ['-Xpreprocessor', '-fopenmp']
+                print("[SETUP] 🍎 macOS OpenMP flags: -Xpreprocessor -fopenmp")
+            else:
+                # Linux/Other: 使用libgomp
+                openmp_flag = ['-fopenmp']  
+                print("[SETUP] 🐧 Linux OpenMP flags: -fopenmp")
+        else:
+            openmp_flag = []
 
     if sys.platform == 'win32':
         compile_args = ["/O2", "/arch:AVX2"]
@@ -229,6 +253,17 @@ def get_clustering_include_dirs():
     ]
 
 
+def get_link_args():
+    """获取平台特定的链接参数"""
+    if has_openmp_support():
+        if sys.platform == 'darwin':
+            return ['-lomp']
+        elif sys.platform == 'win32':
+            return []  # Windows MSVC自动链接
+        else:
+            return ['-lgomp']
+    return []
+
 def configure_cpp_extension():
     """
     Configures the Pybind11 C++ extension module.
@@ -236,11 +271,14 @@ def configure_cpp_extension():
         list: A list with one or zero configured Pybind11Extension.
     """
     try:
+        link_args = get_link_args()
+        
         diss_ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
             sources=glob('sequenzo/dissimilarity_measures/src/*.cpp'),
             include_dirs=get_dissimilarity_measures_include_dirs(),
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.0.1"')],
         )
@@ -251,6 +289,7 @@ def configure_cpp_extension():
             sources=glob('sequenzo/clustering/src/*.cpp'),
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.0.1"')],
         )

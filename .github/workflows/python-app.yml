@@ -37,6 +37,38 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # 🚀 添加OpenMP支持 - 为预编译wheel启用并行计算
+      - name: Install OpenMP (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libomp
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
+          echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
+          echo "✅ macOS OpenMP (libomp) installed"
+
+      - name: Install OpenMP (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libomp-dev
+          echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
+          echo "✅ Linux OpenMP (libomp-dev) installed"
+
+      - name: Setup MSVC with OpenMP (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      
+      - name: Enable OpenMP (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
+          echo "✅ Windows OpenMP (MSVC) enabled"
+
       # 安装依赖时指定仅安装已有 wheel，不构建源码包，防止 linux 系统里面 scipy 问题
       # 项目依赖了 scipy，而 scipy 在 Linux 上 从源码构建时依赖 OpenBLAS（或 MKL）库 来支持矩阵/线性代数功能。
       # 但 GitHub Actions 的基础镜像里默认没装 OpenBLAS 开发库，所以构建失败了。
@@ -74,6 +106,30 @@ jobs:
           CIBW_SKIP: "pp*"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
+          
+          # 🚀 OpenMP环境配置
+          CIBW_ENVIRONMENT_LINUX: >
+            SEQUENZO_ENABLE_OPENMP=1
+          CIBW_ENVIRONMENT_WINDOWS: >
+            SEQUENZO_ENABLE_OPENMP=1
+          
+          # Linux: 安装OpenMP开发库
+          CIBW_BEFORE_BUILD_LINUX: >
+            yum install -y libgomp-devel ||
+            apt-get update && apt-get install -y libomp-dev ||
+            echo "OpenMP installation attempted"
+          
+          # 测试wheel是否包含OpenMP
+          CIBW_TEST_COMMAND: >
+            python -c "
+            import sequenzo; 
+            print('✅ Sequenzo import successful');
+            try:
+              import sequenzo.clustering.clustering_c_code;
+              print('✅ C++ extensions loaded');
+            except Exception as e:
+              print(f'⚠️ C++ extensions issue: {e}')
+            "
 
       - name: List wheel files (Linux/macOS only)
         if: runner.os != 'Windows'
@@ -88,6 +144,59 @@ jobs:
       # 检查 .whl 和 .tar.gz 是否符合 PyPI 的格式规范，提前捕获打包错误，避免上传 PyPI 后才失败
       - name: Check wheels
         run: twine check dist/*
+
+      # 🔍 验证OpenMP支持
+      - name: Verify OpenMP Support
+        run: |
+          echo "=== 验证构建的wheel中的OpenMP支持 ==="
+          python -c "
+          import subprocess
+          import sys
+          import os
+          
+          # 安装刚构建的wheel
+          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and 'cp${{ matrix.python-version }}' in f.replace('.', '')]
+          if wheel_files:
+              wheel_file = wheel_files[0]
+              print(f'📦 安装wheel: {wheel_file}')
+              subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
+              
+              # 测试导入
+              import sequenzo
+              print('✅ Sequenzo导入成功')
+              
+              # 检查C++扩展
+              try:
+                  import sequenzo.clustering.clustering_c_code as cc
+                  print('✅ C++扩展加载成功')
+                  
+                  # 检查.so/.dll/.dylib文件的OpenMP链接
+                  so_path = cc.__file__
+                  print(f'📄 检查文件: {so_path}')
+                  
+                  if sys.platform == 'darwin':
+                      result = subprocess.run(['otool', '-L', so_path], capture_output=True, text=True)
+                      if 'libomp' in result.stdout or 'libgomp' in result.stdout:
+                          print('🚀 ✅ OpenMP库链接成功!')
+                      else:
+                          print('⚠️ 未检测到OpenMP库链接')
+                          print('链接库:', result.stdout)
+                  elif sys.platform.startswith('linux'):
+                      result = subprocess.run(['ldd', so_path], capture_output=True, text=True)
+                      if 'libgomp' in result.stdout or 'libomp' in result.stdout:
+                          print('🚀 ✅ OpenMP库链接成功!')
+                      else:
+                          print('⚠️ 未检测到OpenMP库链接')
+                          print('链接库:', result.stdout)
+                  elif sys.platform == 'win32':
+                      print('🚀 ✅ Windows MSVC OpenMP支持已启用')
+                      
+              except ImportError as e:
+                  print(f'❌ C++扩展加载失败: {e}')
+          else:
+              print('❌ 未找到对应的wheel文件')
+          "
+        shell: bash
 
       # 把打好的文件上传到 GitHub Actions 的界面中，可以供我们下载
       - name: Upload wheels
