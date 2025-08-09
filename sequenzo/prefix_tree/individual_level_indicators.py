@@ -121,6 +121,58 @@ class IndividualDivergence:
             years.append(year)
         return years
 
+    def compute_prefix_rarity_per_year(self, as_dataframe: bool = True, column_prefix: str = "t", zscore: bool = False):
+        """
+        Compute per-year prefix rarity scores for each individual.
+
+        For each individual i and year t (1..T), rarity score is defined as:
+            rarity_{i,t} = -log( freq(prefix_{i,t}) / N )
+        where prefix_{i,t} is the sequence of observed states up to year t for individual i,
+        freq(prefix) counts how many individuals share that exact prefix up to year t,
+        and N is the total number of individuals.
+
+        Parameters
+        ----------
+        as_dataframe : bool, default True
+            If True, returns a pandas DataFrame with columns f"{column_prefix}1"..f"{column_prefix}T".
+            If False, returns a NumPy array of shape (N, T).
+        column_prefix : str, default "t"
+            Column name prefix when returning a DataFrame.
+        zscore : bool, default False
+            If True, z-standardize the rarity scores column-wise (by year).
+
+        Returns
+        -------
+        pandas.DataFrame or np.ndarray
+            Per-year rarity scores (optionally z-scored).
+        """
+        N = len(self.sequences)
+        rarity_matrix = []
+
+        for seq in self.sequences:
+            prefix = []
+            score_list = []
+            for t in range(self.T):
+                prefix.append(seq[t])
+                freq = self.prefix_freq_by_year[t][tuple(prefix)] / N
+                score_list.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score_list)
+
+        rarity_arr = np.array(rarity_matrix, dtype=float)
+
+        if zscore:
+            # Column-wise z-score; handle zero-std columns gracefully (leave as NaN)
+            col_means = np.nanmean(rarity_arr, axis=0)
+            col_stds = np.nanstd(rarity_arr, axis=0)
+            with np.errstate(invalid='ignore', divide='ignore'):
+                rarity_arr = (rarity_arr - col_means) / col_stds
+
+        if not as_dataframe:
+            return rarity_arr
+
+        columns = [f"{column_prefix}{t+1}" for t in range(self.T)]
+        return pd.DataFrame(rarity_arr, columns=columns)
+
     def compute_prefix_rarity_score(self):
         rarity_scores = []
         N = len(self.sequences)
