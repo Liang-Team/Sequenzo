@@ -16,6 +16,7 @@ from scipy.spatial.distance import jensenshannon
 
 from sequenzo.visualization.utils import save_and_show_results
 import matplotlib.pyplot as plt
+import seaborn as sns
 from typing import List, Optional, Dict
 
 
@@ -158,7 +159,6 @@ def plot_system_indicators(prefix_counts: List[float],
     ax1.set_ylabel("Prefix Count", color=colors["Prefix Count"])
     ax1.plot(x, prefix_counts, marker='o', color=colors["Prefix Count"], label="Prefix Count")
     ax1.tick_params(axis='y', labelcolor=colors["Prefix Count"])
-    ax1.grid(True)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel("Z-score (Other Indicators)")
@@ -199,3 +199,181 @@ def plot_system_indicators(prefix_counts: List[float],
         suffix = "_distributions" if save_as else None
         dist_path = save_as.replace(".png", f"{suffix}.png") if save_as else None
         save_and_show_results(save_as=dist_path, dpi=dpi, show=show)
+
+
+def plot_system_indicators_multiple_comparison(
+    groups_data: Dict[str, Dict[str, List[float]]],
+    group_names: Optional[List[str]] = None,
+    subplot_titles: Optional[List[str]] = None,
+    x_values: Optional[List] = None,
+    x_label: str = "Time (t)",
+    legend_loc: str = 'lower right',
+    save_as: Optional[str] = None,
+    figsize: Optional[tuple] = None,
+    dpi: int = 300,
+    custom_colors: Optional[Dict[str, str]] = None,
+    show: bool = True
+) -> None:
+    """
+    Plot system-level indicators comparison across multiple groups using dual y-axis design.
+    
+    Parameters:
+    -----------
+    groups_data : Dict[str, Dict[str, List[float]]]
+        Dictionary with group names as keys and data dictionaries as values.
+        Each data dict should contain 'prefix_counts', 'branching_factors', and 'js_scores'.
+        Example: {
+            "Group1": {
+                "prefix_counts": [10, 15, 20, ...],
+                "branching_factors": [1.2, 1.5, 1.8, ...], 
+                "js_scores": [0.1, 0.2, 0.15, ...]
+            },
+            "Group2": {...}
+        }
+    group_names : Optional[List[str]]
+        Custom names for groups. If None, uses keys from groups_data.
+        Used for default subplot titles if subplot_titles is not provided.
+    subplot_titles : Optional[List[str]]
+        Custom titles for each subplot. If None, uses default format:
+        "{group_name} - System-Level Trajectory Indicators: Raw vs. Normalized"
+    x_values : Optional[List]
+        Custom x-axis values. If None, uses 1, 2, 3, ...
+    x_label : str
+        Label for x-axis. Default: "Time (t)"
+    legend_loc : str
+        Legend location. Options: 'upper left', 'upper right', 'lower left', 
+        'lower right', 'center', 'best', etc. Default: 'lower right'
+    save_as : Optional[str]
+        File path to save the plot (without extension)
+    figsize : Optional[tuple]
+        Figure size (width, height). If None, auto-calculated based on number of groups
+    dpi : int
+        DPI for saving. Default: 300
+    custom_colors : Optional[Dict[str, str]]
+        Custom colors for indicators. Default uses standard colors.
+    show : bool
+        Whether to show the plot. Default: True
+        
+    Example:
+    --------
+    >>> data = {
+    ...     "India": {
+    ...         "prefix_counts": india_prefix_counts,
+    ...         "branching_factors": india_branching_factors,
+    ...         "js_scores": india_js_scores
+    ...     },
+    ...     "US": {
+    ...         "prefix_counts": us_prefix_counts,
+    ...         "branching_factors": us_branching_factors,
+    ...         "js_scores": us_js_scores
+    ...     }
+    ... }
+    >>> plot_system_indicators_multiple_comparison(
+    ...     groups_data=data,
+    ...     x_label="Years",
+    ...     legend_loc='upper right',
+    ...     save_as="multi_country_comparison"
+    ... )
+    
+    >>> # With custom subplot titles
+    >>> plot_system_indicators_multiple_comparison(
+    ...     groups_data=data,
+    ...     subplot_titles=["印度发展轨迹", "美国发展轨迹"],
+    ...     x_label="年份",
+    ...     save_as="custom_titles_comparison"
+    ... )
+    """
+    
+    # Validate input
+    if not groups_data:
+        raise ValueError("groups_data cannot be empty")
+    
+    # Get group names
+    if group_names is None:
+        group_names = list(groups_data.keys())
+    
+    if len(group_names) != len(groups_data):
+        raise ValueError("Length of group_names must match number of groups in groups_data")
+    
+    # Validate subplot_titles
+    if subplot_titles is not None and len(subplot_titles) != len(groups_data):
+        raise ValueError("Length of subplot_titles must match number of groups in groups_data")
+    
+    # Get first group to determine data length
+    first_group_data = list(groups_data.values())[0]
+    T = len(first_group_data['prefix_counts'])
+    
+    # Set x values
+    if x_values is None:
+        x_values = list(range(1, T + 1))
+    
+    if len(x_values) != T:
+        raise ValueError("Length of x_values must match data length")
+    
+    # Color settings
+    color_defaults = {
+        "Prefix Count": "#1f77b4",
+        "Branching Factor": "#ff7f0e",
+        "JS Divergence": "#2ca02c",
+    }
+    colors = {**color_defaults, **(custom_colors or {})}
+    
+    # Calculate figure size
+    n_groups = len(groups_data)
+    if figsize is None:
+        figsize = (12, 4 * n_groups + 2)  # Dynamic height based on number of groups
+    
+    # Create subplots
+    fig, axes = plt.subplots(n_groups, 1, figsize=figsize)
+    
+    # Handle single group case
+    if n_groups == 1:
+        axes = [axes]
+    
+    # Plot each group
+    for i, (group_key, group_name) in enumerate(zip(groups_data.keys(), group_names)):
+        data = groups_data[group_key]
+        ax = axes[i]
+        
+        # Validate data completeness
+        required_keys = ['prefix_counts', 'branching_factors', 'js_scores']
+        for key in required_keys:
+            if key not in data:
+                raise ValueError(f"Missing '{key}' in data for group '{group_key}'")
+        
+        # Normalize data (z-score)
+        bf_z = zscore(array(data['branching_factors']))
+        js_z = zscore(array(data['js_scores']))
+        
+        # Left y-axis: raw prefix counts
+        ax.set_ylabel("Prefix Count", color=colors["Prefix Count"])
+        ax.plot(x_values, data['prefix_counts'], marker='o', 
+                color=colors["Prefix Count"], label="Prefix Count")
+        ax.tick_params(axis='y', labelcolor=colors["Prefix Count"])
+        
+        # Right y-axis: normalized indicators
+        ax_twin = ax.twinx()
+        ax_twin.set_ylabel("Z-score (Other Indicators)")
+        ax_twin.plot(x_values, bf_z, marker='s', 
+                     label='Branching Factor (z)', color=colors["Branching Factor"])
+        ax_twin.plot(x_values, js_z, marker='^', 
+                     label='JS Divergence (z)', color=colors["JS Divergence"])
+        
+        # Legend
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax_twin.get_legend_handles_labels()
+        ax_twin.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
+        
+        # Title and labels
+        if subplot_titles is not None:
+            title = subplot_titles[i]
+        else:
+            title = f"{group_name} - System-Level Trajectory Indicators: Raw vs. Normalized"
+        ax.set_title(title)
+        
+        # Only set x-label for the bottom subplot
+        if i == n_groups - 1:
+            ax.set_xlabel(x_label)
+    
+    plt.tight_layout()
+    save_and_show_results(save_as=save_as, dpi=dpi, show=show)
