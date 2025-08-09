@@ -140,10 +140,51 @@ def plot_system_indicators(
     plot_distributions: bool = False,
 ) -> None:
     """
-    Plot system-level indicators over time using:
-    - Left axis: raw prefix counts
-    - Right axis: z-score of other indicators
-    - Optionally: individual raw distribution plots of all indicators
+    Plot a single group's system-level indicators using the same visual style as
+    `plot_system_indicators_multiple_comparison`, but for one subplot.
+
+    Design:
+    - Left y-axis: raw Prefix Count
+    - Right y-axis: z-score of Branching Factor and (optionally) JS Divergence
+    - Consistent colors/markers and legend handling with the multi-comparison API
+
+    Parameters:
+    - prefix_counts: List[float]
+        Raw prefix counts per time step
+    - branching_factors: List[float]
+        Branching factor per time step
+    - js_divergence: Optional[List[float]]
+        JS divergence per time step; if None, only branching factor is shown on right axis
+    - x_values: Optional[List]
+        Custom x-axis ticks (e.g., years). If None, uses 1..T. Length must equal data length
+    - x_label: str
+        Label for x-axis. Default: "Time (t)"
+    - legend_loc: str
+        Legend location, e.g., 'upper left', 'upper right', 'lower right', 'best', etc. Default: 'lower right'
+    - save_as: Optional[str]
+        If provided, save the figure to this path (png). DPI controlled by `dpi`
+    - figsize: Optional[tuple]
+        Figure size (width, height). Default: (12, 6)
+    - dpi: int
+        Figure DPI when saving. Default: 300
+    - custom_colors: Optional[Dict[str, str]]
+        Optional color overrides. Keys: "Prefix Count", "Branching Factor", "JS Divergence"
+    - show: bool
+        Whether to display the figure
+    - plot_distributions: bool
+        If True, additionally show raw distributions (histograms) of indicators
+
+    Example:
+    >>> plot_system_indicators(
+    ...     prefix_counts=india_prefix_counts,
+    ...     branching_factors=india_branching_factors,
+    ...     js_divergence=india_js_scores,
+    ...     x_values=[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019],
+    ...     x_label="Year",
+    ...     legend_loc="lower right",
+    ...     figsize=(12, 6),
+    ...     dpi=300,
+    ... )
     """
     T = len(prefix_counts)
     # Set x values to align with multi-group API
