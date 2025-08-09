@@ -125,14 +125,20 @@ def build_prefix_tree(sequences):
     return tree
 
 
-def plot_system_indicators(prefix_counts: List[float],
-                           branching_factors: List[float],
-                           js_divergence: Optional[List[float]] = None,
-                           save_as: Optional[str] = None,
-                           dpi: int = 200,
-                           custom_colors: Optional[Dict[str, str]] = None,
-                           show: bool = True,
-                           plot_distributions: bool = False) -> None:
+def plot_system_indicators(
+    prefix_counts: List[float],
+    branching_factors: List[float],
+    js_divergence: Optional[List[float]] = None,
+    x_values: Optional[List] = None,
+    x_label: str = "Time (t)",
+    legend_loc: str = 'lower right',
+    save_as: Optional[str] = None,
+    figsize: Optional[tuple] = None,
+    dpi: int = 300,
+    custom_colors: Optional[Dict[str, str]] = None,
+    show: bool = True,
+    plot_distributions: bool = False,
+) -> None:
     """
     Plot system-level indicators over time using:
     - Left axis: raw prefix counts
@@ -140,7 +146,11 @@ def plot_system_indicators(prefix_counts: List[float],
     - Optionally: individual raw distribution plots of all indicators
     """
     T = len(prefix_counts)
-    x = list(range(1, T + 1))
+    # Set x values to align with multi-group API
+    if x_values is None:
+        x_values = list(range(1, T + 1))
+    if len(x_values) != T:
+        raise ValueError("Length of x_values must match data length")
 
     # Normalize others
     bf_z = zscore(array(branching_factors))
@@ -154,21 +164,23 @@ def plot_system_indicators(prefix_counts: List[float],
     colors = {**color_defaults, **(custom_colors or {})}
 
     # --- Main line plot with dual axes ---
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.set_xlabel("Time (t)")
+    if figsize is None:
+        figsize = (12, 6)
+    fig, ax1 = plt.subplots(figsize=figsize)
+    ax1.set_xlabel(x_label)
     ax1.set_ylabel("Prefix Count", color=colors["Prefix Count"])
-    ax1.plot(x, prefix_counts, marker='o', color=colors["Prefix Count"], label="Prefix Count")
+    ax1.plot(x_values, prefix_counts, marker='o', color=colors["Prefix Count"], label="Prefix Count")
     ax1.tick_params(axis='y', labelcolor=colors["Prefix Count"])
 
     ax2 = ax1.twinx()
     ax2.set_ylabel("Z-score (Other Indicators)")
-    ax2.plot(x, bf_z, marker='s', label='Branching Factor (z)', color=colors["Branching Factor"])
+    ax2.plot(x_values, bf_z, marker='s', label='Branching Factor (z)', color=colors["Branching Factor"])
     if js_z is not None:
-        ax2.plot(x, js_z, marker='^', label='JS Divergence (z)', color=colors["JS Divergence"])
+        ax2.plot(x_values, js_z, marker='^', label='JS Divergence (z)', color=colors["JS Divergence"])
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
 
     ax1.set_title("System-Level Trajectory Indicators: Raw vs. Normalized")
     fig.tight_layout()
