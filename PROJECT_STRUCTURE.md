@@ -4,23 +4,20 @@
 
 ```
 Sequenzo-main/
-├── __init__.py                 # ✅ 重要！包的顶级初始化文件
+├── __init__.py                 # ✅ 包的顶级初始化文件
 ├── setup.py                    # 包构建配置
 ├── pyproject.toml              # 现代包配置
-├── README.md                   # 项目主要说明
+├── README.md                   # 项目主要说明（用户文档）
 ├── LICENSE                     # 许可证
 │
-├── docs/                       # 📚 技术文档
-│   ├── README.md              # 文档说明
-│   ├── OPENMP_FIX_SUMMARY.md  # OpenMP修复报告
+├── developer/                  # 🔧 开发者工具包（内部专用）
+│   ├── README.md              # 开发者指南
+│   ├── test_openmp.py         # 通用OpenMP检测工具
+│   ├── check_windows_openmp.py # Windows专用检测工具
+│   ├── OPENMP_FIX_SUMMARY.md  # OpenMP修复技术报告
 │   ├── OPENMP_ENHANCEMENT.md  # CI/CD增强指南
-│   ├── WINDOWS_OPENMP_GUIDE.md # Windows用户指南
-│   └── ARCHITECTURE_GUIDE.md  # 架构编译指南
-│
-├── tools/                      # 🔧 开发工具
-│   ├── README.md              # 工具说明
-│   ├── test_openmp.py         # 通用OpenMP检测
-│   └── check_windows_openmp.py # Windows专用检测
+│   ├── WINDOWS_OPENMP_GUIDE.md # Windows开发指南
+│   └── ARCHITECTURE_GUIDE.md  # macOS架构编译指南
 │
 ├── sequenzo/                   # 📦 主要包代码
 │   ├── __init__.py            # 包初始化
@@ -38,7 +35,7 @@ Sequenzo-main/
 │   ├── test_basic.py
 │   └── test_pam_and_kmedoids.py
 │
-├── Tutorials/                  # 📖 教程和示例
+├── Tutorials/                  # 📖 用户教程和示例
 │   ├── 01_quickstart.ipynb
 │   └── ...
 │
@@ -56,42 +53,75 @@ Sequenzo-main/
 └── original_datasets_and_cleaning/ # 原始数据和清理脚本
 ```
 
-## 🎯 主要改进
+## 🎯 重要改进: 统一开发者材料
 
-### ✅ 已完成的整理
-1. **创建了 `docs/` 目录** - 所有技术文档集中管理
-2. **创建了 `tools/` 目录** - 开发和测试工具集中管理
-3. **移动了 OpenMP 相关文件** - 不再散落在根目录
-4. **添加了说明文档** - 每个目录都有 README.md
+### ✅ 解决的问题
+1. **避免误解**: 之前的 `docs/` 容易被误认为用户文档
+2. **逻辑统一**: 工具和文档本质上是"连体婴"，都是开发者专用
+3. **使用便利**: 所有开发相关的材料现在都在一个地方
 
-### 📋 文件分类说明
+### 📂 目录定位说明
 
-#### 🔧 tools/ - 开发工具
-- `test_openmp.py` - **通用版本** (macOS/Linux/Windows)
-- `check_windows_openmp.py` - **Windows专用** (详细检测)
+#### 🔧 `developer/` - 开发者专用工具包
+**受众**: 开发者、维护者、贡献者  
+**性质**: 内部开发材料，不面向最终用户  
+**内容**:
+- OpenMP检测和诊断工具
+- 技术实施文档和故障排查指南
+- 平台特定的开发配置指南
+- CI/CD配置和维护文档
 
-#### 📚 docs/ - 技术文档
-- 面向开发者的技术文档
-- OpenMP支持的完整实现记录
-- 平台特定的使用指南
+#### 📖 `Tutorials/` - 用户教程
+**受众**: 最终用户、研究人员、学习者  
+**性质**: 面向用户的学习材料  
+**内容**:
+- 快速入门教程
+- 功能演示示例
+- 使用场景指南
 
-#### 💡 使用建议
+#### 🧪 `tests/` - 自动化测试
+**受众**: 开发者、CI/CD系统  
+**性质**: 质量保证和回归测试  
 
-**对于Windows学生**:
+## 💡 使用指南
+
+### 🧑‍💻 开发者工作流
 ```bash
-python tools/check_windows_openmp.py
+# 1. 环境设置和验证
+python developer/test_openmp.py          # 通用检测
+python developer/check_windows_openmp.py # Windows专用
+
+# 2. 了解技术架构
+less developer/OPENMP_FIX_SUMMARY.md
+
+# 3. 解决平台特定问题
+less developer/WINDOWS_OPENMP_GUIDE.md   # Windows
+less developer/ARCHITECTURE_GUIDE.md     # macOS
 ```
 
-**对于macOS/Linux开发者**:
+### 👥 用户学习路径
 ```bash
-python tools/test_openmp.py
+# 用户从这里开始学习
+jupyter notebook Tutorials/01_quickstart.ipynb
 ```
 
-**查看文档**:
-- 技术细节: `docs/OPENMP_FIX_SUMMARY.md`
-- Windows指南: `docs/WINDOWS_OPENMP_GUIDE.md`
-- 工具说明: `tools/README.md`
+### 🔧 维护者操作
+```bash
+# 查看CI/CD配置和维护指南
+less developer/OPENMP_ENHANCEMENT.md
+less .github/workflows/python-app.yml
+```
+
+## 🎉 结构优势
+
+1. **📋 清晰分离**: 开发者材料 vs 用户材料
+2. **🔍 易于发现**: 所有开发工具集中在一个位置
+3. **🛠️ 便于维护**: 相关的工具和文档放在一起
+4. **📚 逻辑统一**: 避免了人为的工具/文档分离
 
 ---
 
-⚠️ **重要**: `__init__.py` 是包的核心文件，绝对不能删除！
+⚠️ **重要提醒**: 
+- `developer/` 目录是**内部开发材料**，不是用户文档
+- 用户文档主要在项目根目录的 `README.md` 和 `Tutorials/` 目录
+- `__init__.py` 等核心文件请勿随意删除或移动
