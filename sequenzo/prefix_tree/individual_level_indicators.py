@@ -210,6 +210,162 @@ class IndividualDivergence:
             uniqueness_scores.append(count)
         return uniqueness_scores
 
+
+def plot_prefix_rarity_distribution(
+    data,
+    group_names=None,
+    show_threshold=True,
+    z_threshold=1.5,
+    threshold_label=None,
+    colors=None,
+    figsize=(10, 6),
+    save_as=None,
+    dpi=300,
+    show=True
+):
+    """
+    Plot prefix rarity score distribution(s) with optional z-score threshold line.
+    
+    Parameters:
+    -----------
+    data : dict or list or array-like
+        If dict: {"group1": [scores], "group2": [scores], ...} for multi-group comparison
+        If list/array: single group scores
+    group_names : list, optional
+        Custom names for groups. If None and data is dict, uses keys.
+        If None and data is list/array, uses "Group"
+    show_threshold : bool, default=True
+        Whether to show the z-score threshold line
+    z_threshold : float, default=1.5
+        Z-score threshold value for the vertical line
+    threshold_label : str, optional
+        Custom label for threshold line. If None, uses "z = {z_threshold}"
+    colors : list or dict, optional
+        Colors for each group. If None, uses default palette
+    figsize : tuple, default=(10, 6)
+        Figure size (width, height)
+    save_as : str, optional
+        Path to save the figure (without extension)
+    dpi : int, default=300
+        DPI for saving
+    show : bool, default=True
+        Whether to display the plot
+        
+    Returns:
+    --------
+    dict: Statistics including threshold value in original scale (if show_threshold=True)
+    
+    Example:
+    --------
+    # Single group
+    >>> plot_prefix_rarity_distribution(india_scores)
+    
+    # Multi-group comparison
+    >>> data = {"India": india_scores, "US": us_scores}
+    >>> plot_prefix_rarity_distribution(
+    ...     data, 
+    ...     show_threshold=True,
+    ...     z_threshold=1.5,
+    ...     save_as="rarity_comparison"
+    ... )
+    
+    # Custom colors and no threshold
+    >>> plot_prefix_rarity_distribution(
+    ...     data,
+    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"},
+    ...     show_threshold=False
+    ... )
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    
+    # Process input data
+    if isinstance(data, dict):
+        # Multi-group case
+        groups = data
+        if group_names is None:
+            group_names = list(groups.keys())
+    else:
+        # Single group case
+        if group_names is None:
+            group_names = ["Group"]
+        groups = {group_names[0]: data}
+    
+    # Set up colors
+    if colors is None:
+        default_colors = ["#E8B88A", "#A3BFD9", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
+        if isinstance(colors, dict):
+            color_map = colors
+        else:
+            color_map = dict(zip(group_names, default_colors[:len(group_names)]))
+    elif isinstance(colors, dict):
+        color_map = colors
+    else:
+        color_map = dict(zip(group_names, colors))
+    
+    # Calculate threshold if needed
+    stats = {}
+    if show_threshold:
+        # Combine all data to calculate overall mean and std
+        all_scores = []
+        for scores in groups.values():
+            all_scores.extend(scores)
+        all_scores = np.array(all_scores)
+        mean_score = np.mean(all_scores)
+        std_score = np.std(all_scores)
+        x_thresh = mean_score + z_threshold * std_score
+        
+        stats = {
+            'mean': mean_score,
+            'std': std_score,
+            'threshold_value': x_thresh,
+            'z_threshold': z_threshold
+        }
+    
+    # Create plot
+    plt.figure(figsize=figsize)
+    
+    # Plot distributions
+    for group_name in group_names:
+        if group_name in groups:
+            scores = groups[group_name]
+            color = color_map.get(group_name, "#1f77b4")
+            sns.kdeplot(scores, label=group_name, fill=True, color=color, linewidth=2)
+    
+    # Add threshold line if requested
+    if show_threshold:
+        plt.axvline(x_thresh, color="grey", linestyle="--", linewidth=1.5)
+        
+        # Dynamic text positioning
+        ax = plt.gca()
+        y_max = ax.get_ylim()[1]
+        text_y = y_max * 0.85
+        
+        # Custom or default threshold label
+        if threshold_label is None:
+            threshold_label = f"z = {z_threshold}"
+        
+        plt.text(x_thresh + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02, 
+                text_y, threshold_label, color="grey", fontsize=11)
+    
+    # Formatting
+    plt.xlabel("Prefix Rarity Score", fontsize=13)
+    plt.ylabel("Density", fontsize=13)
+    if len(group_names) > 1:
+        plt.legend(title="Group")
+    sns.despine()
+    plt.tight_layout()
+    
+    # Save and show
+    if save_as:
+        plt.savefig(f"{save_as}.png", dpi=dpi, bbox_inches='tight')
+    
+    if show:
+        plt.show()
+    
+    return stats
+
     def compute_path_uniqueness_by_group(sequences, group_labels):
         """
         Compute path uniqueness within each subgroup defined by group_labels.

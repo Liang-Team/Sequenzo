@@ -61,7 +61,8 @@ from .prefix_tree import (
     compute_js_divergence,
     convert_to_prefix_tree_data,
     plot_system_indicators,
-    plot_system_indicators_multiple_comparison
+    plot_system_indicators_multiple_comparison,
+    plot_prefix_rarity_distribution
 )
 
 from .suffix_tree import (
@@ -134,6 +135,7 @@ __all__ = [
     "convert_to_prefix_tree_data",
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
+    "plot_prefix_rarity_distribution",
 
     # Suffix Tree
     "build_suffix_tree",
