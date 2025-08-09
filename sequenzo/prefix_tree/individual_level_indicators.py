@@ -366,7 +366,242 @@ def plot_prefix_rarity_distribution(
     
     return stats
 
-    def compute_path_uniqueness_by_group(sequences, group_labels):
+
+def plot_individual_indicators_correlation(
+    df,
+    indicator_columns=None,
+    correlation_method='pearson',
+    group_column=None,
+    figsize=(10, 8),
+    cmap='RdBu_r',
+    center=0,
+    annot=True,
+    fmt='.2f',
+    save_as=None,
+    dpi=300,
+    show=True
+):
+    """
+    Plot correlation heatmap of individual-level indicators with beautiful styling.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame containing individual-level indicators
+    indicator_columns : list, optional
+        List of column names to include in correlation analysis.
+        If None, automatically detects indicator columns (diverged, divergence_year, 
+        prefix_rarity_score, path_uniqueness, etc.)
+    correlation_method : str, default='pearson'
+        Correlation method: 'pearson', 'spearman', 'kendall'
+    group_column : str, optional
+        Column name for grouping (e.g., 'country'). If provided, shows separate 
+        heatmaps for each group
+    figsize : tuple, default=(10, 8)
+        Figure size (width, height)
+    cmap : str, default='RdBu_r'
+        Colormap for heatmap. Options: 'RdBu_r', 'coolwarm', 'viridis', 'plasma'
+    center : float, default=0
+        Value to center the colormap at
+    annot : bool, default=True
+        Whether to annotate cells with correlation values
+    fmt : str, default='.2f'
+        Format for annotations
+    save_as : str, optional
+        Path to save the figure (without extension)
+    dpi : int, default=300
+        DPI for saving
+    show : bool, default=True
+        Whether to display the plot
+        
+    Returns:
+    --------
+    dict: Correlation matrix/matrices and statistics
+    
+    Example:
+    --------
+    # Basic usage
+    >>> plot_individual_indicators_correlation(df)
+    
+    # Custom indicators with grouping
+    >>> plot_individual_indicators_correlation(
+    ...     df, 
+    ...     indicator_columns=['diverged', 'prefix_rarity_score', 'path_uniqueness'],
+    ...     group_column='country',
+    ...     correlation_method='spearman'
+    ... )
+    
+    # Custom styling
+    >>> plot_individual_indicators_correlation(
+    ...     df,
+    ...     cmap='plasma',
+    ...     figsize=(12, 10),
+    ...     save_as="indicators_correlation_heatmap"
+    ... )
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    import numpy as np
+    
+    # Auto-detect indicator columns if not provided
+    if indicator_columns is None:
+        # Common individual-level indicator patterns
+        potential_indicators = [
+            'diverged', 'first_divergence_year', 'divergence_year',
+            'prefix_rarity_score', 'path_uniqueness',
+            'rarity_score', 'uniqueness_score'
+        ]
+        indicator_columns = [col for col in df.columns if col in potential_indicators]
+        
+        # Also include numeric columns that might be indicators
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if col not in indicator_columns and any(
+                keyword in col.lower() for keyword in 
+                ['score', 'index', 'count', 'factor', 'rate', 'ratio']
+            ):
+                indicator_columns.append(col)
+    
+    # Filter and clean data
+    df_indicators = df[indicator_columns].copy()
+    
+    # Handle missing values and convert data types
+    for col in df_indicators.columns:
+        if df_indicators[col].dtype == 'object':
+            # Try to convert to numeric
+            df_indicators[col] = pd.to_numeric(df_indicators[col], errors='coerce')
+    
+    # Remove columns with too many missing values (>50%)
+    valid_cols = []
+    for col in df_indicators.columns:
+        if df_indicators[col].notna().sum() / len(df_indicators) > 0.5:
+            valid_cols.append(col)
+    
+    df_indicators = df_indicators[valid_cols]
+    
+    # Drop rows with any missing values for correlation calculation
+    df_clean = df_indicators.dropna()
+    
+    if len(df_clean) == 0:
+        raise ValueError("No valid data remaining after cleaning. Check for missing values.")
+    
+    # Calculate correlations
+    results = {}
+    
+    if group_column is None or group_column not in df.columns:
+        # Single correlation matrix
+        corr_matrix = df_clean.corr(method=correlation_method)
+        results['overall'] = corr_matrix
+        
+        # Create plot
+        plt.figure(figsize=figsize)
+        
+        # Create mask for upper triangle (optional - makes it cleaner)
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        
+        # Generate heatmap
+        sns.heatmap(
+            corr_matrix,
+            mask=mask,
+            annot=annot,
+            fmt=fmt,
+            cmap=cmap,
+            center=center,
+            square=True,
+            cbar_kws={"shrink": .8, "label": f"{correlation_method.title()} Correlation"},
+            linewidths=0.5
+        )
+        
+        plt.title(f"Individual-Level Indicators Correlation Heatmap\n({correlation_method.title()} Correlation)", 
+                 fontsize=14, pad=20)
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        
+    else:
+        # Group-based correlation matrices
+        groups = df[group_column].unique()
+        n_groups = len(groups)
+        
+        # Calculate subplot layout
+        if n_groups <= 2:
+            nrows, ncols = 1, n_groups
+            figsize = (figsize[0] * n_groups, figsize[1])
+        else:
+            ncols = min(3, n_groups)
+            nrows = (n_groups + ncols - 1) // ncols
+            figsize = (figsize[0] * ncols, figsize[1] * nrows)
+        
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+        if n_groups == 1:
+            axes = [axes]
+        elif nrows == 1:
+            axes = axes
+        else:
+            axes = axes.flatten()
+        
+        for i, group in enumerate(groups):
+            group_data = df[df[group_column] == group][indicator_columns].dropna()
+            
+            if len(group_data) < 2:
+                print(f"Warning: Group '{group}' has insufficient data for correlation")
+                continue
+                
+            corr_matrix = group_data.corr(method=correlation_method)
+            results[group] = corr_matrix
+            
+            # Create mask for upper triangle
+            mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+            
+            # Plot heatmap
+            sns.heatmap(
+                corr_matrix,
+                mask=mask,
+                annot=annot,
+                fmt=fmt,
+                cmap=cmap,
+                center=center,
+                square=True,
+                cbar=i == 0,  # Only show colorbar for first subplot
+                cbar_kws={"shrink": .8, "label": f"{correlation_method.title()} Correlation"} if i == 0 else {},
+                linewidths=0.5,
+                ax=axes[i]
+            )
+            
+            axes[i].set_title(f"{group}\n({len(group_data)} individuals)", fontsize=12)
+            axes[i].set_xticks(axes[i].get_xticks())
+            axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, ha='right')
+            axes[i].set_yticks(axes[i].get_yticks())
+            axes[i].set_yticklabels(axes[i].get_yticklabels(), rotation=0)
+        
+        # Hide unused subplots
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+        
+        plt.suptitle(f"Individual-Level Indicators Correlation by {group_column.title()}\n({correlation_method.title()} Correlation)", 
+                    fontsize=16, y=0.98)
+    
+    plt.tight_layout()
+    
+    # Save and show
+    if save_as:
+        plt.savefig(f"{save_as}.png", dpi=dpi, bbox_inches='tight')
+    
+    if show:
+        plt.show()
+    
+    # Add summary statistics
+    results['summary'] = {
+        'method': correlation_method,
+        'n_indicators': len(valid_cols),
+        'indicators_included': valid_cols,
+        'sample_size': len(df_clean) if group_column is None else {group: len(df[df[group_column] == group].dropna()) for group in df[group_column].unique()}
+    }
+    
+    return results
+
+
+def compute_path_uniqueness_by_group(sequences, group_labels):
         """
         Compute path uniqueness within each subgroup defined by group_labels.
         :param sequences: List of sequences.

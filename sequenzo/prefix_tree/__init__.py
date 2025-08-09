@@ -14,7 +14,7 @@ from .system_level_indicators import (
     plot_system_indicators_multiple_comparison
 )
 
-from .individual_level_indicators import IndividualDivergence, plot_prefix_rarity_distribution
+from .individual_level_indicators import IndividualDivergence, plot_prefix_rarity_distribution, plot_individual_indicators_correlation
 
 from .utils import (
     extract_sequences,
@@ -34,6 +34,7 @@ __all__ = [
     # Individual-level
     "IndividualDivergence",
     "plot_prefix_rarity_distribution",
+    "plot_individual_indicators_correlation",
 
     # Utilities
     "extract_sequences",

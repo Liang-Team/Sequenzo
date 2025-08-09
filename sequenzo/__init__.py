@@ -62,7 +62,8 @@ from .prefix_tree import (
     convert_to_prefix_tree_data,
     plot_system_indicators,
     plot_system_indicators_multiple_comparison,
-    plot_prefix_rarity_distribution
+    plot_prefix_rarity_distribution,
+    plot_individual_indicators_correlation
 )
 
 from .suffix_tree import (
@@ -136,6 +137,7 @@ __all__ = [
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
     "plot_prefix_rarity_distribution",
+    "plot_individual_indicators_correlation",
 
     # Suffix Tree
     "build_suffix_tree",
