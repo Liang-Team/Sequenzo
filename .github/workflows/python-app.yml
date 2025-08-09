@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # 🚀 添加OpenMP支持 - 为预编译wheel启用并行计算
+      # Add OpenMP support - enable parallel build for prebuilt wheels
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -47,7 +47,7 @@ jobs:
           echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "✅ macOS OpenMP (libomp) installed"
+          echo "OK macOS OpenMP (libomp) installed"
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -55,7 +55,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libomp-dev
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "✅ Linux OpenMP (libomp-dev) installed"
+          echo "OK Linux OpenMP (libomp-dev) installed"
 
       - name: Setup MSVC with OpenMP (Windows)
         if: runner.os == 'Windows'
@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
-          echo "✅ Windows OpenMP (MSVC) enabled"
+          echo "OK Windows OpenMP (MSVC) enabled"
 
       # 安装依赖时指定仅安装已有 wheel，不构建源码包，防止 linux 系统里面 scipy 问题
       # 项目依赖了 scipy，而 scipy 在 Linux 上 从源码构建时依赖 OpenBLAS（或 MKL）库 来支持矩阵/线性代数功能。
@@ -107,7 +107,7 @@ jobs:
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
           
-          # 🚀 OpenMP环境配置
+          # OpenMP environment configuration
           CIBW_ENVIRONMENT_LINUX: >
             SEQUENZO_ENABLE_OPENMP=1
           CIBW_ENVIRONMENT_WINDOWS: >
@@ -123,12 +123,12 @@ jobs:
           CIBW_TEST_COMMAND: >
             python -c "
             import sequenzo; 
-            print('✅ Sequenzo import successful');
+             print('Sequenzo import successful');
             try:
               import sequenzo.clustering.clustering_c_code;
-              print('✅ C++ extensions loaded');
+               print('C++ extensions loaded');
             except Exception as e:
-              print(f'⚠️ C++ extensions issue: {e}')
+               print(f'WARNING C++ extensions issue: {e}')
             "
 
       - name: List wheel files (Linux/macOS only)
@@ -145,7 +145,7 @@ jobs:
       - name: Check wheels
         run: twine check dist/*
 
-      # 🔍 验证OpenMP支持
+      # Verify OpenMP support
       - name: Verify OpenMP Support
         run: |
           echo "=== 验证构建的wheel中的OpenMP支持 ==="
@@ -158,43 +158,43 @@ jobs:
           wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and 'cp${{ matrix.python-version }}' in f.replace('.', '')]
           if wheel_files:
               wheel_file = wheel_files[0]
-              print(f'📦 安装wheel: {wheel_file}')
+              print(f'Installing wheel: {wheel_file}')
               subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
               
               # 测试导入
               import sequenzo
-              print('✅ Sequenzo导入成功')
+              print('Sequenzo导入成功')
               
               # 检查C++扩展
               try:
                   import sequenzo.clustering.clustering_c_code as cc
-                  print('✅ C++扩展加载成功')
+                  print('C++扩展加载成功')
                   
                   # 检查.so/.dll/.dylib文件的OpenMP链接
                   so_path = cc.__file__
-                  print(f'📄 检查文件: {so_path}')
+                  print(f'检查文件: {so_path}')
                   
                   if sys.platform == 'darwin':
                       result = subprocess.run(['otool', '-L', so_path], capture_output=True, text=True)
                       if 'libomp' in result.stdout or 'libgomp' in result.stdout:
-                          print('🚀 ✅ OpenMP库链接成功!')
+                          print('OpenMP库链接成功!')
                       else:
-                          print('⚠️ 未检测到OpenMP库链接')
+                          print('WARNING 未检测到OpenMP库链接')
                           print('链接库:', result.stdout)
                   elif sys.platform.startswith('linux'):
                       result = subprocess.run(['ldd', so_path], capture_output=True, text=True)
                       if 'libgomp' in result.stdout or 'libomp' in result.stdout:
-                          print('🚀 ✅ OpenMP库链接成功!')
+                          print('OpenMP库链接成功!')
                       else:
-                          print('⚠️ 未检测到OpenMP库链接')
+                          print('WARNING 未检测到OpenMP库链接')
                           print('链接库:', result.stdout)
                   elif sys.platform == 'win32':
-                      print('🚀 ✅ Windows MSVC OpenMP支持已启用')
+                      print('Windows MSVC OpenMP支持已启用')
                       
               except ImportError as e:
-                  print(f'❌ C++扩展加载失败: {e}')
+                  print(f'ERROR C++扩展加载失败: {e}')
           else:
-              print('❌ 未找到对应的wheel文件')
+              print('ERROR 未找到对应的wheel文件')
           "
         shell: bash
 

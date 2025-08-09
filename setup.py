@@ -121,7 +121,7 @@ def has_openmp_support():
     """
     # Check for forced OpenMP enable (for CI/CD)
     if os.environ.get('SEQUENZO_ENABLE_OPENMP', '').strip().lower() in ('1', 'true', 'on', 'yes'):
-        print("[SETUP] 🚀 OpenMP force-enabled via SEQUENZO_ENABLE_OPENMP")
+        print("[SETUP] OpenMP force-enabled via SEQUENZO_ENABLE_OPENMP")
         return True
     
     if getattr(has_openmp_support, "_checked", False):
@@ -179,7 +179,7 @@ def get_compile_args_for_file(filename):
         # Windows OpenMP support
         if has_openmp_support():
             openmp_flag = ['/openmp']
-            print("[SETUP] 🪟 Windows OpenMP flags: /openmp")
+            print("[SETUP] Windows OpenMP flags: /openmp")
         else:
             openmp_flag = []
     else:
@@ -191,11 +191,11 @@ def get_compile_args_for_file(filename):
             if sys.platform == 'darwin':
                 # macOS: 使用libomp，分离编译和链接标志
                 openmp_flag = ['-Xpreprocessor', '-fopenmp']
-                print("[SETUP] 🍎 macOS OpenMP flags: -Xpreprocessor -fopenmp")
+                print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp")
             else:
                 # Linux/Other: 使用libgomp
                 openmp_flag = ['-fopenmp']  
-                print("[SETUP] 🐧 Linux OpenMP flags: -fopenmp")
+                print("[SETUP] Linux OpenMP flags: -fopenmp")
         else:
             openmp_flag = []
 
@@ -360,13 +360,13 @@ class BuildExt(build_ext):
             
             # Show OpenMP status
             if has_openmp_support():
-                print("[SETUP] ✅ OpenMP support detected - parallel compilation enabled")
+                print("[SETUP] OpenMP support detected - parallel compilation enabled")
             else:
-                print("[SETUP] ⚠️  OpenMP not available - using serial compilation")
+                print("[SETUP] OpenMP not available - using serial compilation")
         
         print(f"[SETUP] Building {len(self.extensions)} extension(s)...")
         super().build_extensions()
-        print("[SETUP] ✅ Extension compilation completed!")
+        print("[SETUP] Extension compilation completed!")
 
 
 # Ensure necessary folders exist to prevent file not found errors
