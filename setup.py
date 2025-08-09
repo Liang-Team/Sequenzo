@@ -131,15 +131,24 @@ def has_openmp_support():
         test_code = '#include <omp.h>\nint main() { return 0; }'
         temp_dir = tempfile.gettempdir()
         source_path = os.path.join(temp_dir, 'test_openmp.cpp')
-        binary_path = os.path.join(temp_dir, 'test_openmp')
-
+        
         with open(source_path, 'w') as f:
             f.write(test_code)
 
-        result = subprocess.run(
-            ['clang++', '-fopenmp', source_path, '-o', binary_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+        if sys.platform == 'win32':
+            # Windows: 尝试MSVC编译器
+            binary_path = os.path.join(temp_dir, 'test_openmp.exe')
+            result = subprocess.run(
+                ['cl', '/openmp', source_path, '/Fe:' + binary_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            # macOS/Linux: 使用clang++/g++
+            binary_path = os.path.join(temp_dir, 'test_openmp')
+            result = subprocess.run(
+                ['clang++', '-fopenmp', source_path, '-o', binary_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
 
         # Clean up
         os.remove(source_path)

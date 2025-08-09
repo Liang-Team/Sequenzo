@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-OpenMP功能验证脚本
-用于验证sequenzo是否正确链接了OpenMP库并可以使用并行计算
+@Author  : Yuqi Liang 梁彧祺
+@File    : setup.py
+@Time    : 09/08/2025 09:30
+@Desc    : 
+    OpenMP功能验证脚本
+    用于验证sequenzo是否正确链接了OpenMP库并可以使用并行计算
 """
 
 import subprocess
