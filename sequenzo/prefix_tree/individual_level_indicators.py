@@ -66,14 +66,34 @@ class IndividualDivergence:
             flags.append(diverged)
         return flags
 
-    def compute_divergence_year(self, z_threshold=1.5, min_t=3, window=1):
+    def compute_first_divergence_year(self, z_threshold=1.5, min_t=3, window=1):
         """
-        Compute divergence year based on rarity score z-scores.
+        Compute the first divergence year for each individual based on rarity score z-scores.
+        
+        Returns the earliest year when an individual's trajectory diverges from the mainstream,
+        defined as having z-scores above threshold for consecutive years.
 
-        :param z_threshold: Z-score threshold for defining divergence.
-        :param min_t: Minimum year (1-indexed) considered valid for divergence.
-        :param window: Number of consecutive high-z years to confirm divergence.
-        :return: List of divergence years (1-indexed), or None if no divergence detected.
+        Note on Zero Variance Years:
+        When standard deviation of rarity scores approaches zero within a given year, 
+        z-scores become undefined (NaN), indicating absence of divergence from mainstream. 
+        This is conceptually appropriate as it reflects periods where all individuals 
+        follow similar trajectories, consistent with strong institutional constraints 
+        or normative expectations at specific life course stages.
+
+        Parameters:
+        -----------
+        z_threshold : float, default=1.5
+            Z-score threshold for defining divergence from mainstream
+        min_t : int, default=3
+            Minimum year (1-indexed) considered valid for divergence detection
+        window : int, default=1
+            Number of consecutive high-z years required to confirm divergence
+            
+        Returns:
+        --------
+        List[Optional[int]]
+            List of first divergence years (1-indexed) for each individual.
+            None indicates no divergence detected for that individual.
         """
         N = len(self.sequences)
         rarity_matrix = []
@@ -114,6 +134,69 @@ class IndividualDivergence:
                 score += -math.log(freq + 1e-10)  # small constant to avoid log(0)
             rarity_scores.append(score)
         return rarity_scores
+
+    def diagnose_divergence_calculation(self, z_threshold=1.5, min_t=3, window=1):
+        """
+        Diagnostic function to analyze divergence year calculation and identify 
+        years with insufficient variance (std ≈ 0) that cannot trigger divergence.
+        
+        This is methodologically appropriate: when all individuals follow similar 
+        trajectories in a given year, no divergence should be detected.
+        
+        Returns:
+        --------
+        dict: Diagnostic information including:
+            - years_with_zero_variance: List of years where std ≈ 0
+            - rarity_std_by_year: Standard deviation of rarity scores per year
+            - n_individuals_with_divergence: Count of individuals with any divergence
+            - divergence_year_distribution: Value counts of divergence years
+        """
+        N = len(self.sequences)
+        rarity_matrix = []
+
+        # Calculate rarity scores (same as in compute_divergence_year)
+        for seq in self.sequences:
+            prefix = []
+            score = []
+            for t in range(self.T):
+                prefix.append(seq[t])
+                freq = self.prefix_freq_by_year[t][tuple(prefix)] / N
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
+
+        rarity_df = pd.DataFrame(rarity_matrix)
+        
+        # Calculate standard deviations by year
+        rarity_std_by_year = rarity_df.std(axis=0)
+        years_with_zero_variance = []
+        
+        # Identify years with near-zero variance (threshold can be adjusted)
+        for t, std_val in enumerate(rarity_std_by_year):
+            if pd.isna(std_val) or std_val < 1e-10:
+                years_with_zero_variance.append(t + 1)  # 1-indexed
+        
+        # Calculate z-scores
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        
+        # Count individuals with divergence
+        divergence_years = self.compute_first_divergence_year(z_threshold, min_t, window)
+        n_individuals_with_divergence = sum(1 for year in divergence_years if year is not None)
+        
+        # Distribution of divergence years
+        divergence_year_counts = pd.Series(divergence_years).value_counts(dropna=False).sort_index()
+        
+        return {
+            'years_with_zero_variance': years_with_zero_variance,
+            'rarity_std_by_year': rarity_std_by_year.tolist(),
+            'n_individuals_with_divergence': n_individuals_with_divergence,
+            'divergence_year_distribution': divergence_year_counts.to_dict(),
+            'total_individuals': N,
+            'parameters_used': {
+                'z_threshold': z_threshold,
+                'min_t': min_t, 
+                'window': window
+            }
+        }
 
     def compute_path_uniqueness(self):
         uniqueness_scores = []

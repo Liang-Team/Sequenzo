@@ -60,7 +60,8 @@ from .prefix_tree import (
     compute_branching_factor,
     compute_js_divergence,
     convert_to_prefix_tree_data,
-    plot_system_indicators
+    plot_system_indicators,
+    plot_system_indicators_multiple_comparison
 )
 
 from .suffix_tree import (
@@ -132,6 +133,7 @@ __all__ = [
     "compute_js_divergence",
     "convert_to_prefix_tree_data",
     "plot_system_indicators",
+    "plot_system_indicators_multiple_comparison",
 
     # Suffix Tree
     "build_suffix_tree",

@@ -38,7 +38,7 @@ composite_score = compute_composite_score(prefix_counts, branching_factors, js_s
 # ------------------------
 divergence = IndividualDivergence(sequences)
 df["diverged"] = divergence.compute_diverged()
-df["divergence_year"] = divergence.compute_divergence_year()
+df["divergence_year"] = divergence.compute_first_divergence_year()
 df["prefix_rarity_score"] = divergence.compute_prefix_rarity_score()
 df["path_uniqueness"] = divergence.compute_path_uniqueness()
 
