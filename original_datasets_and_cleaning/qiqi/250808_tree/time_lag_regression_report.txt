@@ -1,5 +1,5 @@
 Time Lag Ordinal Regression Report
-Generated: 2025-08-09 14:34:54
+Generated: 2025-08-09 20:44:17
 
 RESEARCH QUESTION: Does t-year rarity_score predict t+1 year seniority?
 
@@ -17,6 +17,7 @@ Time Lag Structure:
 Controls used:
 - Numeric controls: ['whether_bachelor_university_prestigious', 'work_years', 'gender_female']
 - Categorical controls (one-hot): ['highest_educational_degree', 'internationalization', 'simplified_company_size']
+- rarity_score standardized to z-score within country (1 unit = +1 SD)
 
 Seniority encoding:
 - Junior -> 0
@@ -33,74 +34,469 @@ Notes:
 - Positive coefficient: higher rarity predicts higher future seniority
 - Negative coefficient: higher rarity predicts lower future seniority
 
+Fixed effects included:
+- Year FE via dummies on year_current (drop_first)
+- No individual FE; pooled across workers
+
 Country-level summary (one row per country):
-country           method  coef_rarity       se     pval  PseudoR2      N
-  india OrderedLogit_Lag     0.098213 0.002462 0.000000  0.009262 115047
-     us OrderedLogit_Lag     0.010596 0.002174 0.000001  0.003083 178605
+country           method  coef_rarity_z       se         pval  PseudoR2      N  AME_rarity_per1SD
+  india OrderedLogit_Lag       0.106868 0.005996 4.638305e-71  0.026469 115047           0.043675
+     us OrderedLogit_Lag      -0.023589 0.004930 1.715126e-06  0.018828 178605          -0.008084
+
+Average Marginal Effects (on expected seniority, E[Y]) by Country:
+
+- us: AME(E[Y]) for rarity_score (per +1 SD) = -0.008084 (derivative)
+- india: AME(E[Y]) for rarity_score (per +1 SD) = 0.043675 (derivative)
 
 ================================================================================
 Country: us | Model: ordered_logit_lag
 ================================================================================
                                OrderedModel Results                               
 ==================================================================================
-Dep. Variable:     seniority_ordinal_next   Log-Likelihood:            -1.7581e+05
-Model:                       OrderedModel   AIC:                         3.517e+05
-Method:                Maximum Likelihood   BIC:                         3.518e+05
+Dep. Variable:     seniority_ordinal_next   Log-Likelihood:            -1.7303e+05
+Model:                       OrderedModel   AIC:                         3.461e+05
+Method:                Maximum Likelihood   BIC:                         3.463e+05
 Date:                    Sat, 09 Aug 2025                                         
-Time:                            14:34:54                                         
+Time:                            20:44:17                                         
 No. Observations:                  178605                                         
-Df Residuals:                      178590                                         
-Df Model:                              10                                         
+Df Residuals:                      178582                                         
+Df Model:                              18                                         
 =====================================================================================================================
                                                         coef    std err          z      P>|z|      [0.025      0.975]
 ---------------------------------------------------------------------------------------------------------------------
-rarity_score                                          0.0106      0.002      4.874      0.000       0.006       0.015
-whether_bachelor_university_prestigious               0.0049      0.011      0.440      0.660      -0.017       0.027
-work_years                                            0.0209      0.001     31.465      0.000       0.020       0.022
-gender_female                                        -0.0194      0.012     -1.583      0.113      -0.043       0.005
-highest_educational_degree_Bachelor                  -0.0142      0.011     -1.265      0.206      -0.036       0.008
-internationalization_Local                            0.0081      0.021      0.396      0.692      -0.032       0.048
-internationalization_Multinational                   -0.0042      0.021     -0.197      0.843      -0.046       0.037
-simplified_company_size_Medium (51-500 employees)    -0.0183      0.013     -1.426      0.154      -0.044       0.007
-simplified_company_size_Micro (0-10 employees)       -0.0032      0.030     -0.107      0.915      -0.063       0.056
-simplified_company_size_Small (11-50 employees)       0.0027      0.020      0.132      0.895      -0.037       0.043
-0/1                                                  -4.3139      0.034   -126.731      0.000      -4.381      -4.247
-1/2                                                  -0.2333      0.023    -10.180      0.000      -0.278      -0.188
-2/3                                                   1.5094      0.004    399.688      0.000       1.502       1.517
-3/4                                                   0.4929      0.005    109.269      0.000       0.484       0.502
-4/5                                                   0.8012      0.010     84.306      0.000       0.783       0.820
+rarity_score_z                                       -0.0236      0.005     -4.784      0.000      -0.033      -0.014
+whether_bachelor_university_prestigious              -0.1426      0.011    -12.575      0.000      -0.165      -0.120
+work_years                                            0.0231      0.001     34.469      0.000       0.022       0.024
+gender_female                                         0.0445      0.012      3.632      0.000       0.021       0.069
+highest_educational_degree_Advanced Degree           -0.0009      0.011     -0.076      0.939      -0.023       0.021
+internationalization_Multinational                    0.1631      0.011     15.118      0.000       0.142       0.184
+internationalization_International                   -0.0339      0.021     -1.621      0.105      -0.075       0.007
+simplified_company_size_Large (500+ employees)       -0.0065      0.031     -0.209      0.835      -0.067       0.054
+simplified_company_size_Small (11-50 employees)       0.0698      0.035      1.966      0.049       0.000       0.139
+simplified_company_size_Medium (51-500 employees)     0.0354      0.032      1.107      0.268      -0.027       0.098
+year_2                                                0.2263      0.023      9.923      0.000       0.182       0.271
+year_3                                                0.4114      0.022     18.327      0.000       0.367       0.455
+year_4                                                0.5871      0.022     26.476      0.000       0.544       0.631
+year_5                                                0.7444      0.022     33.885      0.000       0.701       0.788
+year_6                                                0.8723      0.022     39.934      0.000       0.829       0.915
+year_7                                                0.9686      0.022     44.485      0.000       0.926       1.011
+year_8                                                1.0497      0.022     48.291      0.000       1.007       1.092
+year_9                                                1.0918      0.022     50.219      0.000       1.049       1.134
+0/1                                                  -3.6593      0.043    -85.087      0.000      -3.744      -3.575
+1/2                                                  -0.2470      0.024    -10.493      0.000      -0.293      -0.201
+2/3                                                   1.5366      0.004    407.435      0.000       1.529       1.544
+3/4                                                   0.5038      0.005    111.819      0.000       0.495       0.513
+4/5                                                   0.8049      0.009     84.895      0.000       0.786       0.824
 =====================================================================================================================
 
+Marginal Effects (APE) by Variable:
+(Change in probability for each seniority level per 1-unit increase)
+------------------------------------------------------------
+
+Variable: rarity_score_z
+  Seniority Level Effects:
+    Junior (level 0): 0.000214
+    Assistant (level 1): 0.000242
+    Regular (level 2): 0.004695
+    Senior (level 3): -0.003148
+    Leader (level 4): -0.001741
+    Chief or founder (level 5): -0.000262
+  Method: Numerical APE (dx=0.0001) computed over 5000 samples
+
+Variable: whether_bachelor_university_prestigious
+  Seniority Level Effects:
+    Junior (level 0): 0.001337
+    Assistant (level 1): 0.001508
+    Regular (level 2): 0.027969
+    Senior (level 3): -0.019049
+    Leader (level 4): -0.010237
+    Chief or founder (level 5): -0.001528
+  Method: Discrete APE (0→1) over all observations
+
+Variable: work_years
+  Seniority Level Effects:
+    Junior (level 0): -0.000209
+    Assistant (level 1): -0.000237
+    Regular (level 2): -0.004597
+    Senior (level 3): 0.003082
+    Leader (level 4): 0.001705
+    Chief or founder (level 5): 0.000256
+  Method: Numerical APE (dx=0.0001) computed over 5000 samples
+
+Variable: gender_female
+  Seniority Level Effects:
+    Junior (level 0): -0.000398
+    Assistant (level 1): -0.000450
+    Regular (level 2): -0.008913
+    Senior (level 3): 0.005941
+    Leader (level 4): 0.003320
+    Chief or founder (level 5): 0.000501
+  Method: Discrete APE (0→1) over all observations
+
+Variable: highest_educational_degree_Advanced Degree
+  Seniority Level Effects:
+    Junior (level 0): 0.000008
+    Assistant (level 1): 0.000009
+    Regular (level 2): 0.000171
+    Senior (level 3): -0.000114
+    Leader (level 4): -0.000063
+    Chief or founder (level 5): -0.000010
+  Method: Discrete APE (0→1) over all observations
+
+Variable: internationalization_Multinational
+  Seniority Level Effects:
+    Junior (level 0): -0.001457
+    Assistant (level 1): -0.001647
+    Regular (level 2): -0.032654
+    Senior (level 3): 0.021763
+    Leader (level 4): 0.012161
+    Chief or founder (level 5): 0.001834
+  Method: Discrete APE (0→1) over all observations
+
+Variable: internationalization_International
+  Seniority Level Effects:
+    Junior (level 0): 0.000312
+    Assistant (level 1): 0.000352
+    Regular (level 2): 0.006705
+    Senior (level 3): -0.004525
+    Leader (level 4): -0.002473
+    Chief or founder (level 5): -0.000371
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Large (500+ employees)
+  Seniority Level Effects:
+    Junior (level 0): 0.000059
+    Assistant (level 1): 0.000066
+    Regular (level 2): 0.001290
+    Senior (level 3): -0.000864
+    Leader (level 4): -0.000478
+    Chief or founder (level 5): -0.000072
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Small (11-50 employees)
+  Seniority Level Effects:
+    Junior (level 0): -0.000614
+    Assistant (level 1): -0.000695
+    Regular (level 2): -0.014052
+    Senior (level 3): 0.009292
+    Leader (level 4): 0.005271
+    Chief or founder (level 5): 0.000798
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Medium (51-500 employees)
+  Seniority Level Effects:
+    Junior (level 0): -0.000318
+    Assistant (level 1): -0.000359
+    Regular (level 2): -0.007070
+    Senior (level 3): 0.004717
+    Leader (level 4): 0.002632
+    Chief or founder (level 5): 0.000397
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_2
+  Seniority Level Effects:
+    Junior (level 0): -0.001911
+    Assistant (level 1): -0.002162
+    Regular (level 2): -0.046276
+    Senior (level 3): 0.029633
+    Leader (level 4): 0.017944
+    Chief or founder (level 5): 0.002771
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_3
+  Seniority Level Effects:
+    Junior (level 0): -0.003267
+    Assistant (level 1): -0.003705
+    Regular (level 2): -0.085673
+    Senior (level 3): 0.052690
+    Leader (level 4): 0.034494
+    Chief or founder (level 5): 0.005461
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_4
+  Seniority Level Effects:
+    Junior (level 0): -0.004407
+    Assistant (level 1): -0.005007
+    Regular (level 2): -0.123876
+    Senior (level 3): 0.073260
+    Leader (level 4): 0.051643
+    Chief or founder (level 5): 0.008386
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_5
+  Seniority Level Effects:
+    Junior (level 0): -0.005256
+    Assistant (level 1): -0.005984
+    Regular (level 2): -0.159243
+    Senior (level 3): 0.090427
+    Leader (level 4): 0.068628
+    Chief or founder (level 5): 0.011428
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_6
+  Seniority Level Effects:
+    Junior (level 0): -0.005941
+    Assistant (level 1): -0.006772
+    Regular (level 2): -0.187715
+    Senior (level 3): 0.103658
+    Leader (level 4): 0.082733
+    Chief or founder (level 5): 0.014037
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_7
+  Seniority Level Effects:
+    Junior (level 0): -0.006358
+    Assistant (level 1): -0.007255
+    Regular (level 2): -0.209803
+    Senior (level 3): 0.112790
+    Leader (level 4): 0.094359
+    Chief or founder (level 5): 0.016267
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_8
+  Seniority Level Effects:
+    Junior (level 0): -0.006688
+    Assistant (level 1): -0.007639
+    Regular (level 2): -0.228597
+    Senior (level 3): 0.120488
+    Leader (level 4): 0.104267
+    Chief or founder (level 5): 0.018170
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_9
+  Seniority Level Effects:
+    Junior (level 0): -0.006831
+    Assistant (level 1): -0.007806
+    Regular (level 2): -0.238459
+    Senior (level 3): 0.123964
+    Leader (level 4): 0.109854
+    Chief or founder (level 5): 0.019277
+  Method: Discrete APE (0→1) over all observations
+
+------------------------------------------------------------
 ================================================================================
 Country: india | Model: ordered_logit_lag
 ================================================================================
                                OrderedModel Results                               
 ==================================================================================
-Dep. Variable:     seniority_ordinal_next   Log-Likelihood:            -1.2681e+05
-Model:                       OrderedModel   AIC:                         2.537e+05
-Method:                Maximum Likelihood   BIC:                         2.538e+05
+Dep. Variable:     seniority_ordinal_next   Log-Likelihood:            -1.2461e+05
+Model:                       OrderedModel   AIC:                         2.493e+05
+Method:                Maximum Likelihood   BIC:                         2.495e+05
 Date:                    Sat, 09 Aug 2025                                         
-Time:                            14:34:54                                         
+Time:                            20:44:17                                         
 No. Observations:                  115047                                         
-Df Residuals:                      115032                                         
-Df Model:                              10                                         
+Df Residuals:                      115024                                         
+Df Model:                              18                                         
 =====================================================================================================================
                                                         coef    std err          z      P>|z|      [0.025      0.975]
 ---------------------------------------------------------------------------------------------------------------------
-rarity_score                                          0.0982      0.002     39.899      0.000       0.093       0.103
-whether_bachelor_university_prestigious              -0.0008      0.018     -0.044      0.965      -0.035       0.034
-work_years                                            0.0593      0.002     26.231      0.000       0.055       0.064
-gender_female                                        -0.0519      0.013     -3.959      0.000      -0.078      -0.026
-highest_educational_degree_Bachelor                  -0.0214      0.015     -1.430      0.153      -0.051       0.008
-internationalization_Local                           -0.0275      0.020     -1.369      0.171      -0.067       0.012
-internationalization_Multinational                    0.0182      0.018      1.014      0.310      -0.017       0.053
-simplified_company_size_Medium (51-500 employees)    -0.0564      0.015     -3.673      0.000      -0.087      -0.026
-simplified_company_size_Micro (0-10 employees)       -0.0711      0.034     -2.085      0.037      -0.138      -0.004
-simplified_company_size_Small (11-50 employees)       0.0965      0.024      4.062      0.000       0.050       0.143
-0/1                                                  -2.5230      0.041    -61.324      0.000      -2.604      -2.442
-1/2                                                  -1.3708      0.031    -43.948      0.000      -1.432      -1.310
-2/3                                                   1.2633      0.004    293.785      0.000       1.255       1.272
-3/4                                                   0.4982      0.005     97.976      0.000       0.488       0.508
-4/5                                                   1.4245      0.015     96.229      0.000       1.395       1.453
+rarity_score_z                                        0.1069      0.006     17.824      0.000       0.095       0.119
+whether_bachelor_university_prestigious              -0.0108      0.018     -0.613      0.540      -0.045       0.024
+work_years                                            0.0705      0.002     30.819      0.000       0.066       0.075
+gender_female                                        -0.0720      0.013     -5.448      0.000      -0.098      -0.046
+highest_educational_degree_Advanced Degree            0.1733      0.015     11.610      0.000       0.144       0.203
+internationalization_International                   -0.1181      0.020     -5.833      0.000      -0.158      -0.078
+internationalization_Multinational                   -0.0366      0.016     -2.279      0.023      -0.068      -0.005
+simplified_company_size_Large (500+ employees)        0.1829      0.034      5.305      0.000       0.115       0.250
+simplified_company_size_Small (11-50 employees)       0.2403      0.038      6.373      0.000       0.166       0.314
+simplified_company_size_Medium (51-500 employees)     0.2871      0.034      8.328      0.000       0.220       0.355
+year_2                                                0.2938      0.026     11.358      0.000       0.243       0.344
+year_3                                                0.5695      0.026     22.285      0.000       0.519       0.620
+year_4                                                0.7770      0.025     30.572      0.000       0.727       0.827
+year_5                                                0.9266      0.025     36.464      0.000       0.877       0.976
+year_6                                                1.0247      0.026     40.169      0.000       0.975       1.075
+year_7                                                1.0997      0.026     42.840      0.000       1.049       1.150
+year_8                                                1.1596      0.026     44.885      0.000       1.109       1.210
+year_9                                                1.1937      0.026     45.861      0.000       1.143       1.245
+0/1                                                  -1.7140      0.048    -35.638      0.000      -1.808      -1.620
+1/2                                                  -1.3382      0.031    -42.931      0.000      -1.399      -1.277
+2/3                                                   1.2897      0.004    299.664      0.000       1.281       1.298
+3/4                                                   0.5224      0.005    103.223      0.000       0.512       0.532
+4/5                                                   1.4302      0.015     96.775      0.000       1.401       1.459
 =====================================================================================================================
 
+Marginal Effects (APE) by Variable:
+(Change in probability for each seniority level per 1-unit increase)
+------------------------------------------------------------
+
+Variable: rarity_score_z
+  Seniority Level Effects:
+    Junior (level 0): -0.003170
+    Assistant (level 1): -0.000858
+    Regular (level 2): -0.020712
+    Senior (level 3): 0.013243
+    Leader (level 4): 0.011255
+    Chief or founder (level 5): 0.000242
+  Method: Numerical APE (dx=0.0001) computed over 5000 samples
+
+Variable: whether_bachelor_university_prestigious
+  Seniority Level Effects:
+    Junior (level 0): 0.000323
+    Assistant (level 1): 0.000087
+    Regular (level 2): 0.002098
+    Senior (level 3): -0.001345
+    Leader (level 4): -0.001138
+    Chief or founder (level 5): -0.000024
+  Method: Discrete APE (0→1) over all observations
+
+Variable: work_years
+  Seniority Level Effects:
+    Junior (level 0): -0.002091
+    Assistant (level 1): -0.000566
+    Regular (level 2): -0.013660
+    Senior (level 3): 0.008734
+    Leader (level 4): 0.007423
+    Chief or founder (level 5): 0.000159
+  Method: Numerical APE (dx=0.0001) computed over 5000 samples
+
+Variable: gender_female
+  Seniority Level Effects:
+    Junior (level 0): 0.002169
+    Assistant (level 1): 0.000586
+    Regular (level 2): 0.013880
+    Senior (level 3): -0.008986
+    Leader (level 4): -0.007490
+    Chief or founder (level 5): -0.000160
+  Method: Discrete APE (0→1) over all observations
+
+Variable: highest_educational_degree_Advanced Degree
+  Seniority Level Effects:
+    Junior (level 0): -0.004866
+    Assistant (level 1): -0.001325
+    Regular (level 2): -0.034235
+    Senior (level 3): 0.021019
+    Leader (level 4): 0.018993
+    Chief or founder (level 5): 0.000414
+  Method: Discrete APE (0→1) over all observations
+
+Variable: internationalization_International
+  Seniority Level Effects:
+    Junior (level 0): 0.003647
+    Assistant (level 1): 0.000983
+    Regular (level 2): 0.022517
+    Senior (level 3): -0.014840
+    Leader (level 4): -0.012052
+    Chief or founder (level 5): -0.000256
+  Method: Discrete APE (0→1) over all observations
+
+Variable: internationalization_Multinational
+  Seniority Level Effects:
+    Junior (level 0): 0.001081
+    Assistant (level 1): 0.000293
+    Regular (level 2): 0.007104
+    Senior (level 3): -0.004527
+    Leader (level 4): -0.003867
+    Chief or founder (level 5): -0.000083
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Large (500+ employees)
+  Seniority Level Effects:
+    Junior (level 0): -0.005623
+    Assistant (level 1): -0.001514
+    Regular (level 2): -0.034874
+    Senior (level 3): 0.022761
+    Leader (level 4): 0.018847
+    Chief or founder (level 5): 0.000403
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Small (11-50 employees)
+  Seniority Level Effects:
+    Junior (level 0): -0.006512
+    Assistant (level 1): -0.001777
+    Regular (level 2): -0.047888
+    Senior (level 3): 0.028387
+    Leader (level 4): 0.027186
+    Chief or founder (level 5): 0.000604
+  Method: Discrete APE (0→1) over all observations
+
+Variable: simplified_company_size_Medium (51-500 employees)
+  Seniority Level Effects:
+    Junior (level 0): -0.007926
+    Assistant (level 1): -0.002159
+    Regular (level 2): -0.056893
+    Senior (level 3): 0.034212
+    Leader (level 4): 0.032058
+    Chief or founder (level 5): 0.000708
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_2
+  Seniority Level Effects:
+    Junior (level 0): -0.008017
+    Assistant (level 1): -0.002178
+    Regular (level 2): -0.057998
+    Senior (level 3): 0.033709
+    Leader (level 4): 0.033724
+    Chief or founder (level 5): 0.000760
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_3
+  Seniority Level Effects:
+    Junior (level 0): -0.014310
+    Assistant (level 1): -0.003913
+    Regular (level 2): -0.113548
+    Senior (level 3): 0.059873
+    Leader (level 4): 0.070229
+    Chief or founder (level 5): 0.001669
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_4
+  Seniority Level Effects:
+    Junior (level 0): -0.018176
+    Assistant (level 1): -0.005000
+    Regular (level 2): -0.156131
+    Senior (level 3): 0.075940
+    Leader (level 4): 0.100861
+    Chief or founder (level 5): 0.002506
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_5
+  Seniority Level Effects:
+    Junior (level 0): -0.020667
+    Assistant (level 1): -0.005706
+    Regular (level 2): -0.186902
+    Senior (level 3): 0.085833
+    Leader (level 4): 0.124260
+    Chief or founder (level 5): 0.003184
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_6
+  Seniority Level Effects:
+    Junior (level 0): -0.021998
+    Assistant (level 1): -0.006091
+    Regular (level 2): -0.207337
+    Senior (level 3): 0.090974
+    Leader (level 4): 0.140766
+    Chief or founder (level 5): 0.003686
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_7
+  Seniority Level Effects:
+    Junior (level 0): -0.023052
+    Assistant (level 1): -0.006394
+    Regular (level 2): -0.222999
+    Senior (level 3): 0.095174
+    Leader (level 4): 0.153206
+    Chief or founder (level 5): 0.004065
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_8
+  Seniority Level Effects:
+    Junior (level 0): -0.023588
+    Assistant (level 1): -0.006556
+    Regular (level 2): -0.235643
+    Senior (level 3): 0.096811
+    Leader (level 4): 0.164550
+    Chief or founder (level 5): 0.004426
+  Method: Discrete APE (0→1) over all observations
+
+Variable: year_9
+  Seniority Level Effects:
+    Junior (level 0): -0.024373
+    Assistant (level 1): -0.006771
+    Regular (level 2): -0.242271
+    Senior (level 3): 0.099728
+    Leader (level 4): 0.169132
+    Chief or founder (level 5): 0.004555
+  Method: Discrete APE (0→1) over all observations
+
+------------------------------------------------------------
