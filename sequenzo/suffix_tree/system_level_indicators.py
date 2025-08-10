@@ -1,12 +1,12 @@
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : system_level_indicators.py
-@Time    : 08/08/2025 15:42
+@Time    : 02/05/2025 11:06
 @Desc    : 
-    This module provides tools for building suffix trees and computing convergence indicators including suffix counts, 
-    merging factors, and Jensen-Shannon convergence measures. These indicators quantify how trajectories consolidate 
-    toward shared futures and identify convergence patterns in sequence systems over time. Visualization functions 
-    support comprehensive analysis of system-level convergence dynamics.
+    This module includes tools for building suffix trees, computing suffix counts, merging factors, and Jensen-Shannon convergence,
+    as well as generating composite scores to summarize system-level sequence convergence and consolidation over time.
+    Visualization functions are also provided to plot these indicators and their distributions, 
+    supporting comprehensive analysis of sequence system dynamics.
 """
 from collections import defaultdict, Counter
 import numpy as np
@@ -27,12 +27,10 @@ class SuffixTree:
         self.total_sequences = 0
 
     def insert(self, sequence):
-        """Insert all suffixes of a sequence into the tree."""
         suffix = []
         node = self.root
-        # Process sequence in reverse to build suffixes
-        for state in reversed(sequence):
-            suffix.insert(0, state)  # Build suffix from end to start
+        for state in sequence:
+            suffix.append(state)
             key = tuple(suffix)
             self.counts[key] += 1
             if state not in node:
@@ -40,13 +38,12 @@ class SuffixTree:
             node = node[state]
 
     def get_suffixes_at_depth(self, depth):
-        """Get all suffixes of a specific length."""
         return [k for k in self.counts if len(k) == depth]
 
     def get_children(self, suffix):
         """
         Given a suffix (as a list or tuple), return its immediate children in the tree.
-        
+
         Returns:
             dict: mapping from child state -> subtree dict
         """
@@ -56,14 +53,12 @@ class SuffixTree:
         return node
 
     def get_children_count(self, suffix):
-        """Count immediate children of a given suffix."""
         node = self.root
         for state in suffix:
             node = node.get(state, {})
         return len(node)
 
     def describe(self):
-        """Print a structural overview of the suffix tree."""
         depths = [len(k) for k in self.counts.keys()]
         max_depth = max(depths) if depths else 0
         total_suffixes = len(self.counts)
@@ -79,9 +74,9 @@ class SuffixTree:
     def __repr__(self):
         """
         Returns a brief textual summary of the suffix tree object.
-        
+
         Note:
-            This method provides a lightweight, one-line overview
+            This method is intended to provide a lightweight, one-line overview
             (e.g., max depth and total suffix count). For a full structural report
             including per-level statistics, use the `.describe()` method instead.
         """
@@ -89,54 +84,23 @@ class SuffixTree:
         return f"SuffixTree(max_depth={max(depths) if depths else 0}, total_suffixes={len(self.counts)})"
 
 
-def build_suffix_tree(sequences):
-    """
-    Build a suffix tree from a list of sequences.
-    
-    :param sequences: List of sequences (each sequence is a list/tuple of states).
-    :return: SuffixTree object with all sequences inserted.
-    """
-    tree = SuffixTree()
-    tree.total_sequences = len(sequences)
-    for seq in sequences:
-        for t in range(len(seq)):
-            tree.insert(seq[t:])  # Insert suffix starting at position t
-    return tree
-
-
 def compute_suffix_count(tree, max_depth):
-    """Compute suffix count at each depth - measures path consolidation toward shared futures."""
     return [len(tree.get_suffixes_at_depth(t)) for t in range(1, max_depth + 1)]
 
 
-def compute_merging_factor(sequences, max_depth):
-    """Compute merging factor - measures how different pasts converge into shared futures."""
-    T = max_depth
-    result = [0]  # No merging at t=1
-    
-    for t in range(2, T + 1):
-        # Get all suffixes starting at time t
-        suffix_to_prefixes = defaultdict(set)
-        
-        for seq in sequences:
-            if len(seq) >= t:
-                suffix = tuple(seq[t-1:])  # Suffix from time t onward
-                prefix = tuple(seq[:t-1])   # Prefix up to time t-1
-                suffix_to_prefixes[suffix].add(prefix)
-        
-        if not suffix_to_prefixes:
+def compute_merging_factor(tree, max_depth):
+    result = []
+    for t in range(2, max_depth + 1):
+        suffixes = tree.get_suffixes_at_depth(t - 1)
+        if not suffixes:
             result.append(0)
             continue
-            
-        # Calculate average number of distinct prefixes per suffix
-        prefix_counts = [len(prefixes) for prefixes in suffix_to_prefixes.values()]
-        result.append(np.mean(prefix_counts))
-    
-    return result
+        child_counts = [tree.get_children_count(s) for s in suffixes]
+        result.append(np.mean(child_counts))
+    return [0] + result  # pad to align with suffix count
 
 
 def compute_js_convergence(sequences, state_set):
-    """Compute Jensen-Shannon convergence - measures stabilization in state distributions over time."""
     T = len(sequences[0])
     distros = []
     for t in range(T):
@@ -145,30 +109,89 @@ def compute_js_convergence(sequences, state_set):
         dist = dist / dist.sum()
         distros.append(dist)
 
-    # JS convergence: declining JS divergence indicates convergence
     js_scores = [0.0]
     for t in range(1, T):
         js = jensenshannon(distros[t], distros[t - 1])
-        js_scores.append(1.0 - js)  # Invert: higher values = more convergence
+        js_scores.append(js)
     return js_scores
 
 
-def plot_convergence_indicators(suffix_counts: List[float],
-                               merging_factors: List[float],
-                               js_convergence: Optional[List[float]] = None,
-                               save_as: Optional[str] = None,
-                               dpi: int = 200,
-                               custom_colors: Optional[Dict[str, str]] = None,
-                               show: bool = True,
-                               plot_distributions: bool = False) -> None:
+def build_suffix_tree(sequences):
+    tree = SuffixTree()
+    tree.total_sequences = len(sequences)
+    for seq in sequences:
+        for t in range(len(seq)):
+            tree.insert(seq[t:])
+    return tree
+
+
+def plot_system_indicators(
+    suffix_counts: List[float],
+    merging_factors: List[float],
+    js_convergence: Optional[List[float]] = None,
+    x_values: Optional[List] = None,
+    x_label: str = "Time (t)",
+    legend_loc: str = 'lower right',
+    save_as: Optional[str] = None,
+    figsize: Optional[tuple] = None,
+    dpi: int = 300,
+    custom_colors: Optional[Dict[str, str]] = None,
+    show: bool = True,
+    plot_distributions: bool = False,
+) -> None:
     """
-    Plot system-level convergence indicators over time using:
-    - Left axis: raw suffix counts
-    - Right axis: z-score of other indicators
-    - Optionally: individual raw distribution plots of all indicators
+    Plot a single group's system-level indicators using the same visual style as
+    `plot_system_indicators_multiple_comparison`, but for one subplot.
+
+    Design:
+    - Left y-axis: raw Suffix Count
+    - Right y-axis: z-score of Merging Factor and (optionally) JS Convergence
+    - Consistent colors/markers and legend handling with the multi-comparison API
+
+    Parameters:
+    - suffix_counts: List[float]
+        Raw suffix counts per time step
+    - merging_factors: List[float]
+        Merging factor per time step
+    - js_convergence: Optional[List[float]]
+        JS convergence per time step; if None, only merging factor is shown on right axis
+    - x_values: Optional[List]
+        Custom x-axis ticks (e.g., years). If None, uses 1..T. Length must equal data length
+    - x_label: str
+        Label for x-axis. Default: "Time (t)"
+    - legend_loc: str
+        Legend location, e.g., 'upper left', 'upper right', 'lower right', 'best', etc. Default: 'lower right'
+    - save_as: Optional[str]
+        If provided, save the figure to this path (png). DPI controlled by `dpi`
+    - figsize: Optional[tuple]
+        Figure size (width, height). Default: (12, 6)
+    - dpi: int
+        Figure DPI when saving. Default: 300
+    - custom_colors: Optional[Dict[str, str]]
+        Optional color overrides. Keys: "Suffix Count", "Merging Factor", "JS Convergence"
+    - show: bool
+        Whether to display the figure
+    - plot_distributions: bool
+        If True, additionally show raw distributions (histograms) of indicators
+
+    Example:
+    >>> plot_system_indicators(
+    ...     suffix_counts=india_suffix_counts,
+    ...     merging_factors=india_merging_factors,
+    ...     js_convergence=india_js_scores,
+    ...     x_values=[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019],
+    ...     x_label="Year",
+    ...     legend_loc="lower right",
+    ...     figsize=(12, 6),
+    ...     dpi=300,
+    ... )
     """
     T = len(suffix_counts)
-    x = list(range(1, T + 1))
+    # Set x values to align with multi-group API
+    if x_values is None:
+        x_values = list(range(1, T + 1))
+    if len(x_values) != T:
+        raise ValueError("Length of x_values must match data length")
 
     # Normalize others
     mf_z = zscore(array(merging_factors))
@@ -182,24 +205,25 @@ def plot_convergence_indicators(suffix_counts: List[float],
     colors = {**color_defaults, **(custom_colors or {})}
 
     # --- Main line plot with dual axes ---
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.set_xlabel("Time (t)")
+    if figsize is None:
+        figsize = (12, 6)
+    fig, ax1 = plt.subplots(figsize=figsize)
+    ax1.set_xlabel(x_label)
     ax1.set_ylabel("Suffix Count", color=colors["Suffix Count"])
-    ax1.plot(x, suffix_counts, marker='o', color=colors["Suffix Count"], label="Suffix Count")
+    ax1.plot(x_values, suffix_counts, marker='o', color=colors["Suffix Count"], label="Suffix Count")
     ax1.tick_params(axis='y', labelcolor=colors["Suffix Count"])
-    ax1.grid(True)
 
     ax2 = ax1.twinx()
-    ax2.set_ylabel("Z-score (Convergence Indicators)")
-    ax2.plot(x, mf_z, marker='s', label='Merging Factor (z)', color=colors["Merging Factor"])
+    ax2.set_ylabel("Z-score (Other Indicators)")
+    ax2.plot(x_values, mf_z, marker='s', label='Merging Factor (z)', color=colors["Merging Factor"])
     if js_z is not None:
-        ax2.plot(x, js_z, marker='^', label='JS Convergence (z)', color=colors["JS Convergence"])
+        ax2.plot(x_values, js_z, marker='^', label='JS Convergence (z)', color=colors["JS Convergence"])
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
 
-    ax1.set_title("System-Level Convergence Indicators: Raw vs. Normalized")
+    ax1.set_title("System-Level Trajectory Indicators: Raw vs. Normalized")
     fig.tight_layout()
 
     save_and_show_results(save_as=save_as, dpi=dpi, show=show)
@@ -228,3 +252,181 @@ def plot_convergence_indicators(suffix_counts: List[float],
         suffix = "_distributions" if save_as else None
         dist_path = save_as.replace(".png", f"{suffix}.png") if save_as else None
         save_and_show_results(save_as=dist_path, dpi=dpi, show=show)
+
+
+def plot_system_indicators_multiple_comparison(
+    groups_data: Dict[str, Dict[str, List[float]]],
+    group_names: Optional[List[str]] = None,
+    subplot_titles: Optional[List[str]] = None,
+    x_values: Optional[List] = None,
+    x_label: str = "Time (t)",
+    legend_loc: str = 'lower right',
+    save_as: Optional[str] = None,
+    figsize: Optional[tuple] = None,
+    dpi: int = 300,
+    custom_colors: Optional[Dict[str, str]] = None,
+    show: bool = True
+) -> None:
+    """
+    Plot system-level indicators comparison across multiple groups using dual y-axis design.
+    
+    Parameters:
+    -----------
+    groups_data : Dict[str, Dict[str, List[float]]]
+        Dictionary with group names as keys and data dictionaries as values.
+        Each data dict should contain 'suffix_counts', 'merging_factors', and 'js_convergence'.
+        Example: {
+            "Group1": {
+                "suffix_counts": [10, 15, 20, ...],
+                "merging_factors": [1.2, 1.5, 1.8, ...], 
+                "js_convergence": [0.1, 0.2, 0.15, ...]
+            },
+            "Group2": {...}
+        }
+    group_names : Optional[List[str]]
+        Custom names for groups. If None, uses keys from groups_data.
+        Used for default subplot titles if subplot_titles is not provided.
+    subplot_titles : Optional[List[str]]
+        Custom titles for each subplot. If None, uses default format:
+        "{group_name} - System-Level Trajectory Indicators: Raw vs. Normalized"
+    x_values : Optional[List]
+        Custom x-axis values. If None, uses 1, 2, 3, ...
+    x_label : str
+        Label for x-axis. Default: "Time (t)"
+    legend_loc : str
+        Legend location. Options: 'upper left', 'upper right', 'lower left', 
+        'lower right', 'center', 'best', etc. Default: 'lower right'
+    save_as : Optional[str]
+        File path to save the plot (without extension)
+    figsize : Optional[tuple]
+        Figure size (width, height). If None, auto-calculated based on number of groups
+    dpi : int
+        DPI for saving. Default: 300
+    custom_colors : Optional[Dict[str, str]]
+        Custom colors for indicators. Default uses standard colors.
+    show : bool
+        Whether to show the plot. Default: True
+        
+    Example:
+    --------
+    >>> data = {
+    ...     "India": {
+    ...         "suffix_counts": india_suffix_counts,
+    ...         "merging_factors": india_merging_factors,
+    ...         "js_convergence": india_js_scores
+    ...     },
+    ...     "US": {
+    ...         "suffix_counts": us_suffix_counts,
+    ...         "merging_factors": us_merging_factors,
+    ...         "js_convergence": us_js_scores
+    ...     }
+    ... }
+    >>> plot_system_indicators_multiple_comparison(
+    ...     groups_data=data,
+    ...     x_label="Years",
+    ...     legend_loc='upper right',
+    ...     save_as="multi_country_comparison"
+    ... )
+    
+    >>> # With custom subplot titles
+    >>> plot_system_indicators_multiple_comparison(
+    ...     groups_data=data,
+    ...     subplot_titles=["印度发展轨迹", "美国发展轨迹"],
+    ...     x_label="年份",
+    ...     save_as="custom_titles_comparison"
+    ... )
+    """
+    
+    # Validate input
+    if not groups_data:
+        raise ValueError("groups_data cannot be empty")
+    
+    # Get group names
+    if group_names is None:
+        group_names = list(groups_data.keys())
+    
+    if len(group_names) != len(groups_data):
+        raise ValueError("Length of group_names must match number of groups in groups_data")
+    
+    # Validate subplot_titles
+    if subplot_titles is not None and len(subplot_titles) != len(groups_data):
+        raise ValueError("Length of subplot_titles must match number of groups in groups_data")
+    
+    # Get first group to determine data length
+    first_group_data = list(groups_data.values())[0]
+    T = len(first_group_data['suffix_counts'])
+    
+    # Set x values
+    if x_values is None:
+        x_values = list(range(1, T + 1))
+    
+    if len(x_values) != T:
+        raise ValueError("Length of x_values must match data length")
+    
+    # Color settings
+    color_defaults = {
+        "Suffix Count": "#1f77b4",
+        "Merging Factor": "#ff7f0e",
+        "JS Convergence": "#2ca02c",
+    }
+    colors = {**color_defaults, **(custom_colors or {})}
+    
+    # Calculate figure size
+    n_groups = len(groups_data)
+    if figsize is None:
+        figsize = (12, 4 * n_groups + 2)  # Dynamic height based on number of groups
+    
+    # Create subplots
+    fig, axes = plt.subplots(n_groups, 1, figsize=figsize)
+    
+    # Handle single group case
+    if n_groups == 1:
+        axes = [axes]
+    
+    # Plot each group
+    for i, (group_key, group_name) in enumerate(zip(groups_data.keys(), group_names)):
+        data = groups_data[group_key]
+        ax = axes[i]
+        
+        # Validate data completeness
+        required_keys = ['suffix_counts', 'merging_factors', 'js_convergence']
+        for key in required_keys:
+            if key not in data:
+                raise ValueError(f"Missing '{key}' in data for group '{group_key}'")
+        
+        # Normalize data (z-score)
+        mf_z = zscore(array(data['merging_factors']))
+        js_z = zscore(array(data['js_convergence']))
+        
+        # Left y-axis: raw suffix counts
+        ax.set_ylabel("Suffix Count", color=colors["Suffix Count"])
+        ax.plot(x_values, data['suffix_counts'], marker='o', 
+                color=colors["Suffix Count"], label="Suffix Count")
+        ax.tick_params(axis='y', labelcolor=colors["Suffix Count"])
+        
+        # Right y-axis: normalized indicators
+        ax_twin = ax.twinx()
+        ax_twin.set_ylabel("Z-score (Other Indicators)")
+        ax_twin.plot(x_values, mf_z, marker='s', 
+                     label='Merging Factor (z)', color=colors["Merging Factor"])
+        ax_twin.plot(x_values, js_z, marker='^', 
+                     label='JS Convergence (z)', color=colors["JS Convergence"])
+        
+        # Legend
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax_twin.get_legend_handles_labels()
+        ax_twin.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
+        
+        # Title and labels
+        if subplot_titles is not None:
+            title = subplot_titles[i]
+        else:
+            title = f"{group_name} - System-Level Trajectory Indicators: Raw vs. Normalized"
+        ax.set_title(title)
+        
+        # Only set x-label for the bottom subplot
+        if i == n_groups - 1:
+            ax.set_xlabel(x_label)
+    
+    plt.tight_layout()
+    save_and_show_results(save_as=save_as, dpi=dpi, show=show)
