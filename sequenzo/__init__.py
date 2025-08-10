@@ -73,7 +73,8 @@ from .suffix_tree import (
     compute_js_convergence,
     IndividualConvergence,
     convert_to_suffix_tree_data,
-    plot_convergence_indicators
+    plot_system_indicators,
+    plot_system_indicators_multiple_comparison,
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -146,5 +147,6 @@ __all__ = [
     "compute_js_convergence",
     "IndividualConvergence",
     "convert_to_suffix_tree_data",
-    "plot_convergence_indicators"
+    "plot_system_indicators",
+    "plot_system_indicators_multiple_comparison",
 ]

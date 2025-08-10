@@ -10,7 +10,8 @@ from .system_level_indicators import (
     compute_suffix_count,
     compute_merging_factor,
     compute_js_convergence,
-    plot_convergence_indicators
+    plot_system_indicators,
+    plot_system_indicators_multiple_comparison,
 )
 
 from .individual_level_indicators import IndividualConvergence
@@ -27,7 +28,9 @@ __all__ = [
     "compute_suffix_count",
     "compute_merging_factor",
     "compute_js_convergence",
-    "plot_convergence_indicators",
+    # plotting
+    "plot_system_indicators",
+    "plot_system_indicators_multiple_comparison",
 
     # Individual-level
     "IndividualConvergence",
