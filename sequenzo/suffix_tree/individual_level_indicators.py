@@ -669,100 +669,89 @@ class IndividualConvergence:
 
 def plot_suffix_rarity_distribution(
     data,
+    # === Core Parameters ===
     group_names=None,
-    show_threshold=True,
-    z_threshold=1.5,
-    threshold_label=None,
-    is_standardized_score=False,
     colors=None,
+    # === Threshold Settings ===
+    show_threshold=True,
+    threshold_method="top_proportion",  # Changed default to top_proportion
+    proportion_p=0.05,  # Simplified parameter name, default 5%
+    # === Plotting Options ===
     figsize=(10, 6),
+    kde_bw=None,
+    # === Export Options ===
     save_as=None,
     dpi=300,
     show=True,
-    threshold_method="quantile",
-    quantile_p: float = 0.10,
-    additional_quantiles=None,
-    kde_bw: float | None = None,
-    top_proportion_p: float = 0.10,
-    topk_min_count: int = 1
+    # === Parameters for Different Methods ===
+    z_threshold=1.5,
+    is_standardized_score=False,
+    quantile_p=0.10
 ):
     """
-    Plot suffix rarity score distribution(s) with optional threshold line(s).
+    Plot suffix rarity score distribution(s) with clean threshold lines.
     
-    Parameters:
-    -----------
-    data : dict or list or array-like
-        If dict: {"group1": [scores], "group2": [scores], ...} for multi-group comparison
-        If list/array: single group scores
+    Parameters
+    ----------
+    data : dict or array-like
+        Data to plot. If dict: {"group1": scores1, "group2": scores2}
+        If array-like: single group data
     group_names : list, optional
-        Custom names for groups. If None and data is dict, uses keys.
-        If None and data is list/array, uses "Group"
-    show_threshold : bool, default=True
-        Whether to show threshold line(s)
-    z_threshold : float, default=1.5
-        Backward-compat for z-score method. Ignored when threshold_method='quantile'.
-    threshold_label : str, optional
-        Custom label for threshold line. If None, uses appropriate default.
-        When drawing multiple quantiles (additional_quantiles provided), per-quantile
-        labels like 'p07', 'p10' will be used and this parameter will be ignored.
-    is_standardized_score : bool, default=False
-        If True and threshold_method='zscore', draws threshold at -z_threshold.
-        If threshold_method='quantile', draws quantile on the provided scale directly.
-    colors : list or dict, optional
-        Colors for each group. If None, uses default palette
-    figsize : tuple, default=(10, 6)
+        Custom group names. Auto-detected from dict keys if not provided
+    colors : dict or list, optional
+        Colors for groups. If None, uses default palette
+    
+    show_threshold : bool, default True
+        Whether to show threshold vertical lines
+    threshold_method : str, default "top_proportion"
+        Threshold method:
+        - "top_proportion": Select top proportion_p% most extreme values
+        - "quantile": Use quantile_p percentile 
+        - "zscore": Use z-score threshold (for standardized data)
+    proportion_p : float, default 0.05
+        Proportion for top_proportion method (e.g., 0.05 = top 5%)
+    
+    figsize : tuple, default (10, 6)
         Figure size (width, height)
+    kde_bw : float, optional
+        KDE bandwidth adjustment. If None, uses seaborn default
+    
     save_as : str, optional
-        Path to save the figure (without extension)
-    dpi : int, default=300
-        DPI for saving
-    show : bool, default=True
-        Whether to display the plot
-    threshold_method : {'quantile', 'zscore', 'z'}, default 'quantile'
-        Method to compute threshold line(s).
-        - 'quantile': per-group quantile threshold; robust and simple. Default p10.
-        - 'zscore'/'z'  : mean - z_threshold*std (or -z_threshold if is_standardized_score=True).
-    quantile_p : float, default 0.10
-        Main quantile to draw (e.g., 0.10 for p10). Used when threshold_method='quantile'.
-    additional_quantiles : list[float] | None, default None
-        Optional extra quantiles to draw for sensitivity analysis (e.g., [0.07, 0.15]).
-    kde_bw : float | None, default None
-        If provided, passed to seaborn.kdeplot as bw_adjust to control smoothing.
+        Save path (without extension)
+    dpi : int, default 300
+        Resolution for saved figure
+    show : bool, default True
+        Whether to display plot
         
-    Returns:
-    --------
-    dict: Statistics including threshold value(s) per group (if show_threshold=True)
+    Returns
+    -------
+    dict
+        Statistics including threshold values per group
     
-    Example:
+    Examples
     --------
-    # Single group (raw rarity scores)
-    >>> plot_suffix_rarity_distribution(india_scores)
+    # Basic usage - top 5% threshold (default)
+    >>> plot_suffix_rarity_distribution({"India": india_scores, "US": us_scores})
     
-    # Multi-group comparison (raw scores)
-    >>> data = {"India": india_scores, "US": us_scores}
+    # Custom threshold proportion  
     >>> plot_suffix_rarity_distribution(
-    ...     data, 
-    ...     show_threshold=True,
-    ...     z_threshold=1.5,
+    ...     data={"India": india_scores, "US": us_scores},
+    ...     proportion_p=0.03,  # top 3%
     ...     save_as="rarity_comparison"
     ... )
     
-    # Standardized rarity scores (correct threshold representation)
-    >>> india_std_scores = indiv_convergence_india.compute_standardized_rarity_score(max_t=8, window=1)
-    >>> us_std_scores = indiv_convergence_us.compute_standardized_rarity_score(max_t=8, window=1)
+    # Quantile-based threshold
     >>> plot_suffix_rarity_distribution(
-    ...     {"India": india_std_scores, "US": us_std_scores},
-    ...     is_standardized_score=True,
-    ...     z_threshold=1.5,
-    ...     threshold_label="z = -1.5 (convergence boundary)",
-    ...     save_as="standardized_rarity_comparison"
+    ...     data={"India": india_scores, "US": us_scores},
+    ...     threshold_method="quantile",
+    ...     quantile_p=0.10,  # 10th percentile
     ... )
     
-    # Custom colors and no threshold
+    # Clean plot without thresholds
     >>> plot_suffix_rarity_distribution(
-    ...     data,
-    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"},
-    ...     show_threshold=False
+    ...     data, 
+    ...     show_threshold=False,
+    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"}
     ... )
     """
     import matplotlib.pyplot as plt
@@ -790,12 +779,21 @@ def plot_suffix_rarity_distribution(
     else:
         color_map = dict(zip(group_names, colors))
     
-    # Normalize method then prepare stats
-    threshold_method = (threshold_method or "quantile").lower()
-    # Allow standardized scores to be used with 'zscore' or rank-based 'topk' methods safely
-    if is_standardized_score and threshold_method not in {"zscore", "z", "topk", "top_proportion", "proportion", "rank"}:
-        print("Warning: is_standardized_score=True but threshold_method is not 'zscore'/'topk'. Auto-switching to 'zscore'.")
-        threshold_method = "zscore"
+    # Normalize method and prepare stats
+    threshold_method = (threshold_method or "top_proportion").lower()
+    
+    # Handle legacy parameter mapping
+    if threshold_method in {"top_proportion", "topk", "proportion", "rank"}:
+        # Use the simplified proportion_p parameter
+        top_proportion_p = proportion_p
+        topk_min_count = 1
+    elif threshold_method == "quantile":
+        # Use quantile_p for quantile method
+        pass
+    elif threshold_method in {"zscore", "z"} and is_standardized_score:
+        # Auto-handle standardized scores
+        pass
+    
     stats = {"per_group": {}, "threshold_method": threshold_method}
 
     # Validate quantiles if needed
@@ -805,14 +803,7 @@ def plot_suffix_rarity_distribution(
     quantiles_to_draw = None
     if threshold_method == "quantile":
         _check_q(quantile_p)
-        # Build list of quantiles for drawing (main + optional sensitivity)
-        quantiles_to_draw = [quantile_p]
-        if additional_quantiles is not None:
-            # Deduplicate while preserving order
-            for q in additional_quantiles:
-                _check_q(q)
-                if q not in quantiles_to_draw:
-                    quantiles_to_draw.append(float(q))
+        quantiles_to_draw = [quantile_p]  # Simplified - no additional_quantiles
         # Per-group quantile(s)
         for g in group_names:
             if g in groups:
@@ -841,7 +832,7 @@ def plot_suffix_rarity_distribution(
                     "is_group_relative": True,
                     "threshold_value": primary_value,
                     "primary_quantile": primary_label,
-            "prop_below": prop_below
+                    "prop_below": prop_below
                 }
     elif threshold_method in {"zscore", "z"}:
         # z-score method (backward compatibility)
@@ -868,8 +859,9 @@ def plot_suffix_rarity_distribution(
                 }
     elif threshold_method in {"topk", "top_proportion", "proportion", "rank"}:
         # Rank-based proportion selection within each group: pick top p% (smallest values)
-        if not (0 < float(top_proportion_p) < 1):
-            raise ValueError(f"top_proportion_p must be in (0,1), got {top_proportion_p}")
+        if not (0 < float(proportion_p) < 1):
+            raise ValueError(f"proportion_p must be in (0,1), got {proportion_p}")
+        top_proportion_p = proportion_p  # Map to internal variable
         for g in group_names:
             if g in groups:
                 arr = np.asarray(groups[g], dtype=float)
@@ -939,24 +931,17 @@ def plot_suffix_rarity_distribution(
                     for k_idx, (q_lbl, xg) in enumerate(sorted(thresholds_g.items())):
                         if np.isnan(xg):
                             continue
-                        # Slightly stagger text placement if multiple lines and groups
-                        y_text = text_y - k_idx * (y_max * 0.06)
+                        # Clean threshold line without text label
                         plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
-                        plt.text(xg + x_offset, y_text, f"{g}: {q_lbl}", fontsize=10, ha="left", va="top", color=color)
                 elif threshold_method in {"zscore", "z"}:
                     xg = stats["per_group"][g]["threshold_value"]
-                    lbl = threshold_label or f"z = -{z_threshold}"
+                    # Clean threshold line without text label
                     plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
-                    plt.text(xg + x_offset, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
-                else:  # topk
+                else:  # top_proportion
                     xg = stats["per_group"][g]["threshold_value"]
-                    k = stats["per_group"][g]["k"]
-                    n = stats["per_group"][g]["n"]
-                    p = stats["per_group"][g]["prop_selected"]
-                    lbl = threshold_label or f"top {int(round(top_proportion_p*100))}% (k={k}/{n})"
                     if np.isfinite(xg):
+                        # Clean threshold line without text label
                         plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
-                        plt.text(xg + x_offset, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
     
     # Formatting
     if is_standardized_score:
