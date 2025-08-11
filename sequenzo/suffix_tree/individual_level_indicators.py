@@ -568,10 +568,6 @@ class IndividualConvergence:
         return uniqueness_scores
 
 
-def _removed_prefix_rarity_distribution_placeholder():
-    return None
-
-
 def plot_suffix_rarity_distribution(
     data,
     group_names=None,
@@ -583,10 +579,14 @@ def plot_suffix_rarity_distribution(
     figsize=(10, 6),
     save_as=None,
     dpi=300,
-    show=True
+    show=True,
+    threshold_method="quantile",
+    quantile_p: float = 0.10,
+    additional_quantiles=None,
+    kde_bw: float | None = None
 ):
     """
-    Plot suffix rarity score distribution(s) with optional z-score threshold line.
+    Plot suffix rarity score distribution(s) with optional threshold line(s).
     
     Parameters:
     -----------
@@ -597,15 +597,16 @@ def plot_suffix_rarity_distribution(
         Custom names for groups. If None and data is dict, uses keys.
         If None and data is list/array, uses "Group"
     show_threshold : bool, default=True
-        Whether to show the z-score threshold line
+        Whether to show threshold line(s)
     z_threshold : float, default=1.5
-        Z-score threshold value for the vertical line
+        Backward-compat for z-score method. Ignored when threshold_method='quantile'.
     threshold_label : str, optional
-        Custom label for threshold line. If None, uses appropriate default
+        Custom label for threshold line. If None, uses appropriate default.
+        When drawing multiple quantiles (additional_quantiles provided), per-quantile
+        labels like 'p07', 'p10' will be used and this parameter will be ignored.
     is_standardized_score : bool, default=False
-        If True, treats data as standardized rarity scores (already z-scored) and draws 
-        threshold line directly at -z_threshold. If False, calculates threshold 
-        as mean - z_threshold * std of the raw data.
+        If True and threshold_method='zscore', draws threshold at -z_threshold.
+        If threshold_method='quantile', draws quantile on the provided scale directly.
     colors : list or dict, optional
         Colors for each group. If None, uses default palette
     figsize : tuple, default=(10, 6)
@@ -616,10 +617,20 @@ def plot_suffix_rarity_distribution(
         DPI for saving
     show : bool, default=True
         Whether to display the plot
+    threshold_method : {'quantile', 'zscore', 'z'}, default 'quantile'
+        Method to compute threshold line(s).
+        - 'quantile': per-group quantile threshold; robust and simple. Default p10.
+        - 'zscore'/'z'  : mean - z_threshold*std (or -z_threshold if is_standardized_score=True).
+    quantile_p : float, default 0.10
+        Main quantile to draw (e.g., 0.10 for p10). Used when threshold_method='quantile'.
+    additional_quantiles : list[float] | None, default None
+        Optional extra quantiles to draw for sensitivity analysis (e.g., [0.07, 0.15]).
+    kde_bw : float | None, default None
+        If provided, passed to seaborn.kdeplot as bw_adjust to control smoothing.
         
     Returns:
     --------
-    dict: Statistics including threshold value in original scale (if show_threshold=True)
+    dict: Statistics including threshold value(s) per group (if show_threshold=True)
     
     Example:
     --------
@@ -669,57 +680,129 @@ def plot_suffix_rarity_distribution(
             group_names = ["Group"]
         groups = {group_names[0]: data}
     
-    # Set up colors
+    # Set up colors (simplified)
     if colors is None:
         default_colors = ["#A3BFD9", "#E8B88A", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
-        if isinstance(colors, dict):
-            color_map = colors
-        else:
-            color_map = dict(zip(group_names, default_colors[:len(group_names)]))
+        color_map = dict(zip(group_names, default_colors[:len(group_names)]))
     elif isinstance(colors, dict):
         color_map = colors
     else:
         color_map = dict(zip(group_names, colors))
     
-    # Calculate per-group thresholds (mean - z * std) for convergence (low side)
-    stats = {"per_group": {}}
-    for g in group_names:
-        if g in groups:
-            arr = np.asarray(groups[g], dtype=float)
-            mean_g = np.nanmean(arr)
-            std_g = np.nanstd(arr, ddof=1)  # sample std to match pandas
-            x_thresh_g = mean_g - z_threshold * std_g
-            stats["per_group"][g] = {
-                "mean": float(mean_g),
-                "std": float(std_g),
-                "threshold_value": float(x_thresh_g),
-                "z_threshold": float(z_threshold),
-                "is_group_relative": True
-            }
+    # Normalize method then prepare stats
+    threshold_method = (threshold_method or "quantile").lower()
+    stats = {"per_group": {}, "threshold_method": threshold_method}
+
+    # Validate quantiles if needed
+    def _check_q(q: float):
+        if not (0 < float(q) < 1):
+            raise ValueError(f"quantile must be in (0,1), got {q}")
+    quantiles_to_draw = None
+    if threshold_method == "quantile":
+        _check_q(quantile_p)
+        # Build list of quantiles for drawing (main + optional sensitivity)
+        quantiles_to_draw = [quantile_p]
+        if additional_quantiles is not None:
+            # Deduplicate while preserving order
+            for q in additional_quantiles:
+                _check_q(q)
+                if q not in quantiles_to_draw:
+                    quantiles_to_draw.append(float(q))
+        # Per-group quantile(s)
+        for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                # Compute requested quantiles with NaN handling
+                valid = arr[~np.isnan(arr)]
+                thresholds_g = {}
+                if valid.size > 0:
+                    for q in quantiles_to_draw:
+                        try:
+                            xq = float(np.nanquantile(arr, q))
+                        except Exception:
+                            xq = float(np.quantile(valid, q))
+                        thresholds_g[f"p{int(round(q*100)):02d}"] = xq
+                else:
+                    for q in quantiles_to_draw:
+                        thresholds_g[f"p{int(round(q*100)):02d}"] = np.nan
+                # Primary threshold (for backward compatibility)
+                primary_label = f"p{int(round(quantile_p*100)):02d}"
+                primary_value = thresholds_g.get(primary_label, np.nan)
+                # Proportion below primary
+                vals = valid
+                prop_below = float(np.nanmean(vals <= primary_value)) if vals.size > 0 and not np.isnan(primary_value) else np.nan
+                stats["per_group"][g] = {
+                    "threshold_values": thresholds_g,
+                    "is_group_relative": True,
+                    "threshold_value": primary_value,
+                    "primary_quantile": primary_label,
+                    "prop_below": prop_below
+                }
+    else:
+        # z-score method (backward compatibility)
+        for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                mean_g = np.nanmean(arr)
+                std_g = np.nanstd(arr, ddof=1)  # sample std to match pandas
+                if is_standardized_score:
+                    x_thresh_g = -float(z_threshold)
+                else:
+                    x_thresh_g = float(mean_g - z_threshold * std_g)
+                vals = arr[~np.isnan(arr)]
+                prop_below = float(np.nanmean(vals <= x_thresh_g)) if vals.size > 0 and not np.isnan(x_thresh_g) else np.nan
+                stats["per_group"][g] = {
+                    "mean": float(mean_g),
+                    "std": float(std_g),
+                    "threshold_value": float(x_thresh_g),
+                    "z_threshold": float(z_threshold),
+                    "is_group_relative": True,
+                    "prop_below": prop_below
+                }
     
     # Create plot
     plt.figure(figsize=figsize)
     
     # Plot distributions
-    for group_name in group_names:
+    for idx, group_name in enumerate(group_names):
         if group_name in groups:
             scores = groups[group_name]
             color = color_map.get(group_name, "#1f77b4")
-            sns.kdeplot(scores, label=group_name, fill=True, color=color, linewidth=2)
+            arr = np.asarray(scores, dtype=float)
+            vmin = np.nanmin(arr) if np.isfinite(arr).any() else None
+            vmax = np.nanmax(arr) if np.isfinite(arr).any() else None
+            kde_kwargs = {"label": group_name, "fill": True, "color": color, "linewidth": 2}
+            if kde_bw is not None:
+                kde_kwargs["bw_adjust"] = kde_bw
+            if vmin is not None and vmax is not None and vmin < vmax:
+                kde_kwargs["clip"] = (vmin, vmax)
+            sns.kdeplot(arr, **kde_kwargs)
     
     # Add per-group threshold lines if requested (color-matched)
     if show_threshold:
-        for g in group_names:
+        for i, g in enumerate(group_names):
             if g in stats["per_group"]:
-                xg = stats["per_group"][g]["threshold_value"]
                 color = color_map.get(g, "#1f77b4")
-                plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
-                # Dynamic text positioning per group
                 ax = plt.gca()
                 y_max = ax.get_ylim()[1]
+                x_min, x_max = ax.get_xlim()
                 text_y = y_max * 0.9
-                lbl = threshold_label or f"z = -{z_threshold}"
-                plt.text(xg, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
+                x_offset = (x_max - x_min) * 0.005 * (i + 1)
+                if threshold_method == "quantile":
+                    thresholds_g = stats["per_group"][g]["threshold_values"]
+                    # Draw multiple lines if multiple quantiles
+                    for k_idx, (q_lbl, xg) in enumerate(sorted(thresholds_g.items())):
+                        if np.isnan(xg):
+                            continue
+                        # Slightly stagger text placement if multiple lines and groups
+                        y_text = text_y - k_idx * (y_max * 0.06)
+                        plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                        plt.text(xg + x_offset, y_text, f"{g}: {q_lbl}", fontsize=10, ha="left", va="top", color=color)
+                else:
+                    xg = stats["per_group"][g]["threshold_value"]
+                    lbl = threshold_label or f"z = -{z_threshold}"
+                    plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                    plt.text(xg + x_offset, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
     
     # Formatting
     if is_standardized_score:
@@ -982,6 +1065,89 @@ def plot_individual_indicators_correlation(
     }
     
     return results
+
+
+def compute_quantile_thresholds_by_group(scores, group_labels, quantiles=None):
+    """
+    Compute per-group quantile thresholds for a 1D array of scores.
+
+    Parameters
+    ----------
+    scores : array-like of shape (N,)
+        Scores (e.g., standardized rarity) aligned with labels.
+    group_labels : array-like of shape (N,)
+        Group label per observation.
+    quantiles : list[float] | None
+        Quantiles to compute (e.g., [0.10]). Defaults to [0.10].
+
+    Returns
+    -------
+    dict
+        {group: {"p10": value, ...}}
+    """
+    if quantiles is None:
+        quantiles = [0.10]
+    arr = np.asarray(scores, dtype=float)
+    labels = np.asarray(group_labels)
+    result = {}
+    for g in pd.unique(labels):
+        mask = labels == g
+        vals = arr[mask]
+        vals = vals[~np.isnan(vals)]
+        thresholds_g = {}
+        if vals.size > 0:
+            for q in quantiles:
+                thresholds_g[f"p{int(round(q*100)):02d}"] = float(np.nanquantile(vals, q))
+        else:
+            for q in quantiles:
+                thresholds_g[f"p{int(round(q*100)):02d}"] = np.nan
+        result[g] = thresholds_g
+    return result
+
+
+def compute_quantile_thresholds_by_group_year(scores, group_labels, year_labels, quantiles=None, min_group_year_size=30):
+    """
+    Compute quantile thresholds by group × year for time-drifting distributions.
+
+    Parameters
+    ----------
+    scores : array-like of shape (N,)
+        Scores aligned with labels.
+    group_labels : array-like of shape (N,)
+        Group label per observation.
+    year_labels : array-like of shape (N,)
+        Year label per observation (int/str).
+    quantiles : list[float] | None
+        Quantiles to compute (e.g., [0.10]). Defaults to [0.10].
+    min_group_year_size : int, default 30
+        Minimum sample size to compute thresholds for a group-year cell. If fewer, returns NaN.
+
+    Returns
+    -------
+    dict
+        {group: {year: {"p10": value, ...}}}
+    """
+    if quantiles is None:
+        quantiles = [0.10]
+    arr = np.asarray(scores, dtype=float)
+    g_arr = np.asarray(group_labels)
+    y_arr = np.asarray(year_labels)
+    result = {}
+    df = pd.DataFrame({"score": arr, "group": g_arr, "year": y_arr})
+    for g, gdf in df.groupby("group"):
+        result[g] = {}
+        for y, ydf in gdf.groupby("year"):
+            vals = ydf["score"].astype(float).to_numpy()
+            vals = vals[~np.isnan(vals)]
+            thresholds_gy = {}
+            if vals.size >= min_group_year_size:
+                for q in quantiles:
+                    thresholds_gy[f"p{int(round(q*100)):02d}"] = float(np.nanquantile(vals, q))
+            else:
+                for q in quantiles:
+                    thresholds_gy[f"p{int(round(q*100)):02d}"] = np.nan
+            result[g][y] = thresholds_gy
+    return result
 
 
 def compute_path_uniqueness_by_group_suffix(sequences, group_labels):
