@@ -75,6 +75,7 @@ from .suffix_tree import (
     convert_to_suffix_tree_data,
     plot_system_indicators,
     plot_system_indicators_multiple_comparison,
+    plot_suffix_rarity_distribution,
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -149,4 +150,5 @@ __all__ = [
     "convert_to_suffix_tree_data",
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
+    "plot_suffix_rarity_distribution",
 ]

@@ -14,7 +14,11 @@ from .system_level_indicators import (
     plot_system_indicators_multiple_comparison,
 )
 
-from .individual_level_indicators import IndividualConvergence
+from .individual_level_indicators import (
+    IndividualConvergence,
+    compute_path_uniqueness_by_group,
+    plot_suffix_rarity_distribution,
+)
 
 from .utils import (
     extract_sequences,
@@ -34,6 +38,8 @@ __all__ = [
 
     # Individual-level
     "IndividualConvergence",
+    "compute_path_uniqueness_by_group",
+    "plot_suffix_rarity_distribution",
 
     # Utilities
     "extract_sequences",

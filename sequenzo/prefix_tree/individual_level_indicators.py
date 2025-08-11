@@ -12,14 +12,29 @@
 """
 from collections import defaultdict, Counter
 import numpy as np
-import math
 import pandas as pd
 
 
 class IndividualDivergence:
     def __init__(self, sequences):
-        self.sequences = sequences
-        self.T = len(sequences[0])
+        # Handle case where sequences might already be an IndividualDivergence object
+        if isinstance(sequences, IndividualDivergence):
+            # Extract sequences from existing object
+            self.sequences = sequences.sequences
+        elif hasattr(sequences, 'sequences'):
+            # Handle case where input might be another object with sequences attribute
+            self.sequences = sequences.sequences
+        else:
+            # Normal case: sequences is a list of sequences
+            self.sequences = sequences
+        
+        # Validate input
+        if not self.sequences or len(self.sequences) == 0:
+            raise ValueError("sequences cannot be empty")
+        if not hasattr(self.sequences[0], '__len__') and not hasattr(self.sequences[0], '__iter__'):
+            raise ValueError("sequences must be a list of sequences (e.g., [[1,2,3], [2,3,1], ...])")
+        
+        self.T = len(self.sequences[0])
         self.prefix_freq_by_year = self._build_prefix_frequencies()
 
     def _build_prefix_frequencies(self):
@@ -139,7 +154,8 @@ class IndividualDivergence:
         column_prefix : str, default "t"
             Column name prefix when returning a DataFrame.
         zscore : bool, default False
-            If True, z-standardize the rarity scores column-wise (by year).
+            If True, z-standardize the rarity scores column-wise (by year) using 
+            sample standard deviation (ddof=1).
 
         Returns
         -------
@@ -183,7 +199,7 @@ class IndividualDivergence:
             for t in range(self.T):
                 prefix.append(seq[t])
                 freq = self.prefix_freq_by_year[t][tuple(prefix)] / N
-                score += -math.log(freq + 1e-10)  # small constant to avoid log(0)
+                score += -np.log(freq + 1e-10)  # small constant to avoid log(0)
             rarity_scores.append(score)
         return rarity_scores
 
@@ -250,6 +266,77 @@ class IndividualDivergence:
             }
         }
 
+    def compute_standardized_rarity_score(self, min_t=3, window=1):
+        """
+        Compute standardized rarity scores for divergence classification and visualization.
+        
+        This method computes standardized rarity scores used for individual-level 
+        divergence classification:
+        standardized_score_i = max_t min_{k=0..window-1} z_{i,t+k}
+        
+        Where z_{i,t} are the year-wise standardized prefix rarity scores using column-wise 
+        standardization with sample standard deviation (ddof=1, as computed by pandas).
+        
+        The standardized scores can be used with a threshold (e.g., z ≥ 1.5) to classify 
+        individuals as diverged/not diverged, and are particularly useful for visualization.
+        
+        Parameters:
+        -----------
+        min_t : int, default=3
+            Minimum year (1-indexed) after which divergence is considered valid
+        window : int, default=1
+            Number of consecutive high-z years required
+            
+        Returns:
+        --------
+        List[float]
+            Standardized rarity scores for each individual. Values ≥ z_threshold indicate divergence.
+            
+        Notes:
+        ------
+        The standardization uses sample standard deviation (ddof=1) for each year column,
+        which is consistent with pandas' default behavior for DataFrame.std().
+        This is essentially the z-score normalized version of prefix rarity scores.
+        """
+        N = len(self.sequences)
+        # Step 1: Compute rarity matrix (same as in compute_diverged)
+        rarity_matrix = []
+        
+        for seq in self.sequences:
+            prefix = []
+            score = []
+            for t in range(self.T):
+                prefix.append(seq[t])
+                freq = self.prefix_freq_by_year[t][tuple(prefix)] / N
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
+        
+        # Step 2: Column-wise standardization (by year)
+        rarity_df = pd.DataFrame(rarity_matrix)
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        
+        # Step 3: Compute standardized rarity score for each individual
+        standardized_scores = []
+        for i in range(N):
+            z_scores = rarity_z.iloc[i]
+            candidate_values = []
+            
+            # For each possible starting time t
+            for t in range(min_t - 1, self.T - window + 1):
+                # Find the minimum z-score within the window
+                window_min = np.nanmin([z_scores[t + k] for k in range(window)])
+                candidate_values.append(window_min)
+            
+            # Take the maximum across all starting times
+            if candidate_values:
+                standardized_score = np.nanmax(candidate_values)
+            else:
+                standardized_score = np.nan
+                
+            standardized_scores.append(standardized_score)
+        
+        return standardized_scores
+
     def compute_path_uniqueness(self):
         uniqueness_scores = []
         for seq in self.sequences:
@@ -269,6 +356,7 @@ def plot_prefix_rarity_distribution(
     show_threshold=True,
     z_threshold=1.5,
     threshold_label=None,
+    is_standardized_score=False,
     colors=None,
     figsize=(10, 6),
     save_as=None,
@@ -292,6 +380,10 @@ def plot_prefix_rarity_distribution(
         Z-score threshold value for the vertical line
     threshold_label : str, optional
         Custom label for threshold line. If None, uses "z = {z_threshold}"
+    is_standardized_score : bool, default=False
+        If True, treats data as standardized rarity scores (already z-scored) and draws 
+        threshold line directly at z_threshold. If False, calculates threshold 
+        as mean + z_threshold * std of the raw data.
     colors : list or dict, optional
         Colors for each group. If None, uses default palette
     figsize : tuple, default=(10, 6)
@@ -309,16 +401,27 @@ def plot_prefix_rarity_distribution(
     
     Example:
     --------
-    # Single group
+    # Single group (raw rarity scores)
     >>> plot_prefix_rarity_distribution(india_scores)
     
-    # Multi-group comparison
+    # Multi-group comparison (raw scores)
     >>> data = {"India": india_scores, "US": us_scores}
     >>> plot_prefix_rarity_distribution(
     ...     data, 
     ...     show_threshold=True,
     ...     z_threshold=1.5,
     ...     save_as="rarity_comparison"
+    ... )
+    
+    # Standardized rarity scores (correct threshold representation)
+    >>> india_std_scores = indiv_divergence_india.compute_standardized_rarity_score(min_t=3, window=1)
+    >>> us_std_scores = indiv_divergence_us.compute_standardized_rarity_score(min_t=3, window=1)
+    >>> plot_prefix_rarity_distribution(
+    ...     {"India": india_std_scores, "US": us_std_scores},
+    ...     is_standardized_score=True,
+    ...     z_threshold=1.5,
+    ...     threshold_label="z = 1.5 (divergence boundary)",
+    ...     save_as="standardized_rarity_comparison"
     ... )
     
     # Custom colors and no threshold
@@ -347,10 +450,7 @@ def plot_prefix_rarity_distribution(
     # Set up colors
     if colors is None:
         default_colors = ["#E8B88A", "#A3BFD9", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
-        if isinstance(colors, dict):
-            color_map = colors
-        else:
-            color_map = dict(zip(group_names, default_colors[:len(group_names)]))
+        color_map = dict(zip(group_names, default_colors[:len(group_names)]))
     elif isinstance(colors, dict):
         color_map = colors
     else:
@@ -359,21 +459,40 @@ def plot_prefix_rarity_distribution(
     # Calculate threshold if needed
     stats = {}
     if show_threshold:
-        # Combine all data to calculate overall mean and std
-        all_scores = []
-        for scores in groups.values():
-            all_scores.extend(scores)
-        all_scores = np.array(all_scores)
-        mean_score = np.mean(all_scores)
-        std_score = np.std(all_scores)
-        x_thresh = mean_score + z_threshold * std_score
-        
-        stats = {
-            'mean': mean_score,
-            'std': std_score,
-            'threshold_value': x_thresh,
-            'z_threshold': z_threshold
-        }
+        if is_standardized_score:
+            # For standardized scores, threshold is directly z_threshold
+            x_thresh = z_threshold
+            all_scores = []
+            for scores in groups.values():
+                all_scores.extend(scores)
+            all_scores = np.array(all_scores)
+            mean_score = np.mean(all_scores)
+            std_score = np.std(all_scores)
+            
+            stats = {
+                'mean': mean_score,
+                'std': std_score,
+                'threshold_value': x_thresh,
+                'z_threshold': z_threshold,
+                'is_standardized_score': True
+            }
+        else:
+            # For raw scores, calculate threshold as mean + z_threshold * std
+            all_scores = []
+            for scores in groups.values():
+                all_scores.extend(scores)
+            all_scores = np.array(all_scores)
+            mean_score = np.mean(all_scores)
+            std_score = np.std(all_scores)
+            x_thresh = mean_score + z_threshold * std_score
+            
+            stats = {
+                'mean': mean_score,
+                'std': std_score,
+                'threshold_value': x_thresh,
+                'z_threshold': z_threshold,
+                'is_standardized_score': False
+            }
     
     # Create plot
     plt.figure(figsize=figsize)
@@ -402,7 +521,10 @@ def plot_prefix_rarity_distribution(
                 text_y, threshold_label, color="grey", fontsize=11)
     
     # Formatting
-    plt.xlabel("Prefix Rarity Score", fontsize=13)
+    if is_standardized_score:
+        plt.xlabel("Standardized Rarity Score", fontsize=13)
+    else:
+        plt.xlabel("Prefix Rarity Score", fontsize=13)
     plt.ylabel("Density", fontsize=13)
     if len(group_names) > 1:
         plt.legend(title="Group")
@@ -661,7 +783,6 @@ def compute_path_uniqueness_by_group(sequences, group_labels):
         :return: List of path uniqueness scores (same order as input).
         """
         from collections import defaultdict
-        import math
 
         T = len(sequences[0])
         df = pd.DataFrame({

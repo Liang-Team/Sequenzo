@@ -5,27 +5,47 @@
 @Desc    : 
     This module provides methods for calculating individual-level convergence indicators 
     in sequence data analysis. It includes tools to assess convergence, identify timing, 
-    measure suffix typicality, and evaluate path uniqueness.
+    measure suffix rarity, and evaluate path uniqueness.
 
     The convergence indicators capture whether, when, and to what extent a person's trajectory 
     aligns with dominant population patterns over time.
 
     Key indicators:
-    - Suffix Typicality Score: cumulative typicality of path suffixes (convergence)
-    - Binary converged indicator with z-score thresholds
-    - First convergence year timing measure
+    - Suffix Rarity Score: cumulative rarity of path suffixes (positive, higher = rarer)
+    - Binary converged indicator: low rarity z-scores indicate convergence to typical patterns
+    - First convergence year: timing when trajectory becomes more typical (low rarity)
     - Path uniqueness for extreme structural isolation
 """
 from collections import defaultdict
 import numpy as np
-import math
 import pandas as pd
 
 
 class IndividualConvergence:
     def __init__(self, sequences):
-        self.sequences = sequences
-        self.T = len(sequences[0])
+        # Handle case where sequences might already be an IndividualConvergence object
+        if isinstance(sequences, IndividualConvergence):
+            # Extract sequences from existing object
+            self.sequences = sequences.sequences
+        elif hasattr(sequences, 'sequences'):
+            # Handle case where input might be another object with sequences attribute
+            self.sequences = sequences.sequences
+        else:
+            # Normal case: sequences is a list of sequences
+            self.sequences = sequences
+        
+        # Validate input
+        if not self.sequences or len(self.sequences) == 0:
+            raise ValueError("sequences cannot be empty")
+        if not hasattr(self.sequences[0], '__len__') and not hasattr(self.sequences[0], '__iter__'):
+            raise ValueError("sequences must be a list of sequences (e.g., [[1,2,3], [2,3,1], ...])")
+        
+        # 验证所有序列长度相同，防止不规整序列的静默错误
+        L0 = len(self.sequences[0])
+        if any(len(s) != L0 for s in self.sequences):
+            raise ValueError("All sequences must have the same length")
+        self.T = L0
+        
         self.suffix_freq_by_year = self._build_suffix_frequencies()
 
     def _build_suffix_frequencies(self):
@@ -42,62 +62,156 @@ class IndividualConvergence:
 
     # Divergence-related computations are intentionally omitted in this convergence-focused module.
 
-    def compute_converged(self, z_threshold=1.5, max_t=None, window=1):
+    def compute_converged(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
         """
-        Compute binary converged status based on suffix typicality score z-scores.
+        Compute binary converged status based on suffix rarity score z-scores.
+        
+        Convergence is defined as low rarity (more typical) sustained over time.
+        An individual converges when their rarity z-scores fall below -z_threshold
+        for consecutive years, indicating movement toward more common patterns.
 
-        :param z_threshold: Z-score threshold above which an individual is considered converged.
+        :param z_threshold: Z-score threshold below which (as -z_threshold) an individual is considered converged.
         :param max_t: Maximum year (1-indexed) before which convergence is considered valid. 
                       If None, uses T-window+1.
-        :param window: Number of consecutive high-z years required (default: 1).
+        :param window: Number of consecutive low-rarity-z years required (default: 1).
+        :param inclusive: If True, uses <= comparison; if False, uses < comparison (default: False).
+        :param group_labels: Optional list of group labels (same length as sequences) for within-group convergence calculation.
         :return: List of 0/1 flags indicating whether each individual converged.
         """
         if max_t is None:
             max_t = self.T - window + 1
 
         N = len(self.sequences)
-        typicality_matrix = []
-
+        
+        if group_labels is not None:
+            # 组内收敛：使用组内频率和样本大小
+            return self._compute_converged_by_group(z_threshold, max_t, window, inclusive, group_labels)
+        
+        # 使用全局频率计算稀有度
+        rarity_matrix = []
         for seq in self.sequences:
             score = []
             for t in range(self.T):
                 suffix = tuple(seq[t:])
                 freq = self.suffix_freq_by_year[t][suffix] / N
-                score.append(math.log(freq + 1e-10))
-            typicality_matrix.append(score)
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
 
-        typicality_df = pd.DataFrame(typicality_matrix)
-        typicality_z = typicality_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        rarity_df = pd.DataFrame(rarity_matrix)
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # 处理零方差年份：NaN 会使比较失败，显式设为无穷大以确保不满足收敛条件
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
 
         flags = []
         for i in range(N):
-            z = typicality_z.iloc[i]
+            z = rarity_z.iloc[i]
             converged = 0
             for t in range(0, max_t):  # 0-indexed, so max_t already accounts for window
-                if all(z[t + k] > z_threshold for k in range(window)):
+                # 收敛 = 低稀有（更典型）
+                if inclusive:
+                    condition = all(z[t + k] <= -z_threshold for k in range(window))
+                else:
+                    condition = all(z[t + k] < -z_threshold for k in range(window))
+                
+                if condition:
                     converged = 1
                     break
             flags.append(converged)
         return flags
+    
+    def _compute_converged_by_group(self, z_threshold, max_t, window, inclusive, group_labels):
+        """
+        计算组内收敛：使用组内频率和样本大小计算稀有度
+        """
+        from collections import defaultdict
+        
+        # 按组构建 suffix 频率表
+        group_suffix_freq = {}
+        group_sizes = {}
+        
+        # 先统计各组信息
+        group_sequences = defaultdict(list)
+        for i, (seq, group) in enumerate(zip(self.sequences, group_labels)):
+            group_sequences[group].append((i, seq))
+        
+        # 为每个组构建 suffix 频率表
+        for group, seq_list in group_sequences.items():
+            group_sizes[group] = len(seq_list)
+            freq_by_year = [defaultdict(int) for _ in range(self.T)]
+            
+            for _, seq in seq_list:
+                for t in range(self.T):
+                    suffix = tuple(seq[t:])
+                    freq_by_year[t][suffix] += 1
+            
+            group_suffix_freq[group] = freq_by_year
+        
+        # 为每个个体计算组内稀有度
+        all_flags = [0] * len(self.sequences)
+        
+        for group, seq_list in group_sequences.items():
+            group_n = group_sizes[group]
+            group_freq = group_suffix_freq[group]
+            
+            # 计算该组的稀有度矩阵
+            rarity_matrix = []
+            group_indices = []
+            
+            for orig_idx, seq in seq_list:
+                group_indices.append(orig_idx)
+                score = []
+                for t in range(self.T):
+                    suffix = tuple(seq[t:])
+                    freq = group_freq[t][suffix] / group_n
+                    score.append(-np.log(freq + 1e-10))
+                rarity_matrix.append(score)
+            
+            # 计算 z 分数
+            rarity_df = pd.DataFrame(rarity_matrix)
+            rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+            
+            # 判断收敛
+            for i, orig_idx in enumerate(group_indices):
+                z = rarity_z.iloc[i]
+                converged = 0
+                for t in range(0, max_t):
+                    if inclusive:
+                        condition = all(z[t + k] <= -z_threshold for k in range(window))
+                    else:
+                        condition = all(z[t + k] < -z_threshold for k in range(window))
+                    
+                    if condition:
+                        converged = 1
+                        break
+                
+                all_flags[orig_idx] = converged
+        
+        return all_flags
 
     # First-divergence timing is intentionally omitted in this convergence-focused module.
 
-    def compute_first_convergence_year(self, z_threshold=1.5, max_t=None, window=1):
+    def compute_first_convergence_year(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
         """
-        Compute the first convergence year for each individual based on suffix typicality score z-scores.
+        Compute the first convergence year for each individual based on suffix rarity score z-scores.
         
         Returns the earliest year when an individual's trajectory converges to the mainstream,
-        defined as having z-scores above threshold for consecutive years.
+        defined as having low rarity z-scores (below -threshold) for consecutive years,
+        indicating movement toward more typical patterns.
 
         Parameters:
         -----------
         z_threshold : float, default=1.5
-            Z-score threshold for defining convergence to mainstream
+            Z-score threshold for defining convergence (convergence when z < -z_threshold)
         max_t : int, optional
             Maximum year (1-indexed) considered valid for convergence detection.
             If None, uses T-window+1.
         window : int, default=1
-            Number of consecutive high-z years required to confirm convergence
+            Number of consecutive low-rarity-z years required to confirm convergence
+        inclusive : bool, default=False
+            If True, uses <= comparison; if False, uses < comparison
+        group_labels : list, optional
+            List of group labels (same length as sequences) for within-group convergence calculation
             
         Returns:
         --------
@@ -109,69 +223,120 @@ class IndividualConvergence:
             max_t = self.T - window + 1
 
         N = len(self.sequences)
-        typicality_matrix = []
-
+        
+        if group_labels is not None:
+            # 组内收敛：使用组内频率和样本大小
+            return self._compute_first_convergence_year_by_group(z_threshold, max_t, window, inclusive, group_labels)
+        
+        # 使用全局频率计算稀有度
+        rarity_matrix = []
         for seq in self.sequences:
             score = []
             for t in range(self.T):
                 suffix = tuple(seq[t:])
                 freq = self.suffix_freq_by_year[t][suffix] / N
-                score.append(math.log(freq + 1e-10))
-            typicality_matrix.append(score)
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
 
-        typicality_df = pd.DataFrame(typicality_matrix)
-        typicality_z = typicality_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        rarity_df = pd.DataFrame(rarity_matrix)
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # 处理零方差年份：NaN 会使比较失败，显式设为无穷大以确保不满足收敛条件
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
 
         years = []
         for i in range(N):
-            z = typicality_z.iloc[i]
+            z = rarity_z.iloc[i]
             year = None
             for t in range(0, max_t):  # 0-indexed, so max_t already accounts for window
-                if all(z[t + k] > z_threshold for k in range(window)):
+                # 收敛 = 低稀有（更典型）
+                if inclusive:
+                    condition = all(z[t + k] <= -z_threshold for k in range(window))
+                else:
+                    condition = all(z[t + k] < -z_threshold for k in range(window))
+                
+                if condition:
                     year = t + 1  # Convert to 1-indexed
                     break
             years.append(year)
         return years
-
-    # Prefix rarity per-year computation is intentionally omitted in this convergence-focused module.
-
-    # Cumulative prefix rarity score is intentionally omitted in this convergence-focused module.
-
-    def compute_suffix_typicality_score(self):
+    
+    def _compute_first_convergence_year_by_group(self, z_threshold, max_t, window, inclusive, group_labels):
         """
-        Compute cumulative suffix typicality score for each individual.
-        
-        Formula: suffix_typicality_score_i = sum_{t=1}^T log f(s_t^i)
-        where f(s_t^i) is the relative frequency of person i's suffix from year t onward.
-        
-        Higher scores indicate convergence toward typical endings, while lower (negative)
-        scores suggest continued deviation into rare outcomes.
-        
-        Returns:
-        --------
-        List[float]: Suffix typicality scores for each individual
+        计算组内第一次收敛年份：使用组内频率和样本大小计算稀有度
         """
-        typicality_scores = []
-        N = len(self.sequences)
+        from collections import defaultdict
+        
+        # 按组构建 suffix 频率表（重用 _compute_converged_by_group 的逻辑）
+        group_sequences = defaultdict(list)
+        for i, (seq, group) in enumerate(zip(self.sequences, group_labels)):
+            group_sequences[group].append((i, seq))
+        
+        # 为每个组构建 suffix 频率表
+        group_suffix_freq = {}
+        group_sizes = {}
+        for group, seq_list in group_sequences.items():
+            group_sizes[group] = len(seq_list)
+            freq_by_year = [defaultdict(int) for _ in range(self.T)]
+            
+            for _, seq in seq_list:
+                for t in range(self.T):
+                    suffix = tuple(seq[t:])
+                    freq_by_year[t][suffix] += 1
+            
+            group_suffix_freq[group] = freq_by_year
+        
+        # 为每个个体计算组内收敛年份
+        all_years = [None] * len(self.sequences)
+        
+        for group, seq_list in group_sequences.items():
+            group_n = group_sizes[group]
+            group_freq = group_suffix_freq[group]
+            
+            # 计算该组的稀有度矩阵
+            rarity_matrix = []
+            group_indices = []
+            
+            for orig_idx, seq in seq_list:
+                group_indices.append(orig_idx)
+                score = []
+                for t in range(self.T):
+                    suffix = tuple(seq[t:])
+                    freq = group_freq[t][suffix] / group_n
+                    score.append(-np.log(freq + 1e-10))
+                rarity_matrix.append(score)
+            
+            # 计算 z 分数
+            rarity_df = pd.DataFrame(rarity_matrix)
+            rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+            
+            # 寻找第一次收敛年份
+            for i, orig_idx in enumerate(group_indices):
+                z = rarity_z.iloc[i]
+                year = None
+                for t in range(0, max_t):
+                    if inclusive:
+                        condition = all(z[t + k] <= -z_threshold for k in range(window))
+                    else:
+                        condition = all(z[t + k] < -z_threshold for k in range(window))
+                    
+                    if condition:
+                        year = t + 1
+                        break
+                
+                all_years[orig_idx] = year
+        
+        return all_years
 
-        for seq in self.sequences:
-            score = 0.0
-            for t in range(self.T):
-                suffix = tuple(seq[t:])  # suffix from year t to end
-                freq = self.suffix_freq_by_year[t][suffix] / N
-                score += math.log(freq + 1e-10)  # small constant to avoid log(0)
-            typicality_scores.append(score)
-        return typicality_scores
-
-    def compute_suffix_typicality_per_year(self, as_dataframe: bool = True, column_prefix: str = "t", zscore: bool = False):
+    def compute_suffix_rarity_per_year(self, as_dataframe: bool = True, column_prefix: str = "t", zscore: bool = False):
         """
-        Compute per-year suffix typicality scores for each individual.
+        Compute per-year suffix rarity scores for each individual.
 
-        For each individual i and year t (1..T), typicality score is defined as:
-            typicality_{i,t} = log( freq(suffix_{i,t}) / N )
-        where suffix_{i,t} is the sequence of observed states from year t to end for individual i,
-        freq(suffix) counts how many individuals share that exact suffix from year t,
-        and N is the total number of individuals.
+        Definition (mirror of prefix rarity):
+            rarity_{i,t} = -log( freq(suffix_{i,t}) / N ) >= 0
+
+        Where suffix_{i,t} is the observed suffix from year t to end for person i,
+        and N is total number of individuals. Higher means rarer (less typical).
 
         Parameters
         ----------
@@ -181,40 +346,138 @@ class IndividualConvergence:
         column_prefix : str, default "t"
             Column name prefix when returning a DataFrame.
         zscore : bool, default False
-            If True, z-standardize the typicality scores column-wise (by year).
+            If True, z-standardize the rarity scores column-wise (by year).
 
         Returns
         -------
         pandas.DataFrame or np.ndarray
-            Per-year typicality scores (optionally z-scored).
+            Per-year rarity scores (optionally z-scored).
         """
         N = len(self.sequences)
-        typicality_matrix = []
+        rarity_matrix = []
 
         for seq in self.sequences:
             score_list = []
             for t in range(self.T):
-                suffix = tuple(seq[t:])  # suffix from year t to end
+                suffix = tuple(seq[t:])
                 freq = self.suffix_freq_by_year[t][suffix] / N
-                score_list.append(math.log(freq + 1e-10))
-            typicality_matrix.append(score_list)
+                score_list.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score_list)
 
-        typicality_arr = np.array(typicality_matrix, dtype=float)
+        rarity_arr = np.array(rarity_matrix, dtype=float)
 
         if zscore:
-            # Column-wise z-score; handle zero-std columns gracefully (leave as NaN)
-            col_means = np.nanmean(typicality_arr, axis=0)
-            col_stds = np.nanstd(typicality_arr, axis=0)
+            col_means = np.nanmean(rarity_arr, axis=0)
+            col_stds = np.nanstd(rarity_arr, axis=0, ddof=1)  # 与 pandas DataFrame.std() 保持一致
             with np.errstate(invalid='ignore', divide='ignore'):
-                typicality_arr = (typicality_arr - col_means) / col_stds
+                rarity_arr = (rarity_arr - col_means) / col_stds
 
         if not as_dataframe:
-            return typicality_arr
+            return rarity_arr
 
         columns = [f"{column_prefix}{t+1}" for t in range(self.T)]
-        return pd.DataFrame(typicality_arr, columns=columns)
+        return pd.DataFrame(rarity_arr, columns=columns)
 
-    def diagnose_convergence_calculation(self, z_threshold=1.5, max_t=None, window=1):
+    def compute_suffix_rarity_score(self):
+        """
+        Compute cumulative suffix rarity score for each individual:
+            rarity_score_i = sum_{t=1}^T -log( freq(suffix_{i,t}) / N )
+
+        Higher scores indicate rarer, less typical future paths from each year onward.
+        """
+        rarity_scores = []
+        N = len(self.sequences)
+
+        for seq in self.sequences:
+            score = 0.0
+            for t in range(self.T):
+                suffix = tuple(seq[t:])
+                freq = self.suffix_freq_by_year[t][suffix] / N
+                score += -np.log(freq + 1e-10)
+            rarity_scores.append(score)
+        return rarity_scores
+
+    def compute_standardized_rarity_score(self, max_t=None, window=1):
+        """
+        Compute standardized rarity scores for convergence classification and visualization.
+        
+        This method computes standardized rarity scores used for individual-level 
+        convergence classification:
+        standardized_score_i = min_t max_{k=0..window-1} z_{i,t+k}
+        
+        Where z_{i,t} are the year-wise standardized suffix rarity scores using column-wise 
+        standardization with sample standard deviation (ddof=1, as computed by pandas).
+        
+        The standardized scores can be used with a threshold (e.g., z ≤ -1.5) to classify 
+        individuals as converged/not converged, and are particularly useful for visualization.
+        
+        Note: For convergence (suffix tree), we look for LOW rarity (more typical patterns),
+        so lower z-scores indicate convergence. This is opposite to prefix tree divergence.
+        
+        Parameters:
+        -----------
+        max_t : int, optional
+            Maximum year (1-indexed) before which convergence is considered valid.
+            If None, uses T-window+1.
+        window : int, default=1
+            Number of consecutive low-z years required
+            
+        Returns:
+        --------
+        List[float]
+            Standardized rarity scores for each individual. Values ≤ -z_threshold indicate convergence.
+            
+        Notes:
+        ------
+        The standardization uses sample standard deviation (ddof=1) for each year column,
+        which is consistent with pandas' default behavior for DataFrame.std().
+        This is essentially the z-score normalized version of suffix rarity scores.
+        For convergence detection, we look for the MINIMUM z-score (most typical behavior).
+        """
+        if max_t is None:
+            max_t = self.T - window + 1
+            
+        N = len(self.sequences)
+        
+        # Step 1: Calculate rarity matrix
+        rarity_matrix = []
+        for seq in self.sequences:
+            score = []
+            for t in range(self.T):
+                suffix = tuple(seq[t:])
+                freq = self.suffix_freq_by_year[t][suffix] / N
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
+
+        # Step 2: Column-wise standardization (by year)
+        rarity_df = pd.DataFrame(rarity_matrix)
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # Handle zero-variance years
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(0)
+        
+        # Step 3: Compute standardized rarity score for each individual
+        standardized_scores = []
+        for i in range(N):
+            z_scores = rarity_z.iloc[i]
+            candidate_values = []
+            
+            # For each possible starting time t
+            for t in range(0, max_t):  # 0-indexed
+                # Find the maximum z-score within the window (for convergence, we want sustained low rarity)
+                window_max = np.nanmax([z_scores[t + k] for k in range(window)])
+                candidate_values.append(window_max)
+            
+            # Take the minimum across all starting times (most convergent period)
+            if candidate_values:
+                standardized_score = np.nanmin(candidate_values)
+            else:
+                standardized_score = np.nan
+                
+            standardized_scores.append(standardized_score)
+        
+        return standardized_scores
+
+    def diagnose_convergence_calculation(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
         """
         Diagnostic function to analyze convergence year calculation and identify 
         years with insufficient variance (std ≈ 0) that cannot trigger convergence.
@@ -226,7 +489,7 @@ class IndividualConvergence:
         --------
         dict: Diagnostic information including:
             - years_with_zero_variance: List of years where std ≈ 0
-            - typicality_std_by_year: Standard deviation of typicality scores per year
+            - rarity_std_by_year: Standard deviation of rarity scores per year
             - n_individuals_with_convergence: Count of individuals with any convergence
             - convergence_year_distribution: Value counts of convergence years
         """
@@ -234,33 +497,33 @@ class IndividualConvergence:
             max_t = self.T - window + 1
 
         N = len(self.sequences)
-        typicality_matrix = []
+        rarity_matrix = []
 
-        # Calculate typicality scores (same as in compute_convergence_year)
+        # Calculate rarity scores (same as in compute_first_convergence_year)
         for seq in self.sequences:
             score = []
             for t in range(self.T):
                 suffix = tuple(seq[t:])
                 freq = self.suffix_freq_by_year[t][suffix] / N
-                score.append(math.log(freq + 1e-10))
-            typicality_matrix.append(score)
+                score.append(-np.log(freq + 1e-10))
+            rarity_matrix.append(score)
 
-        typicality_df = pd.DataFrame(typicality_matrix)
+        rarity_df = pd.DataFrame(rarity_matrix)
         
         # Calculate standard deviations by year
-        typicality_std_by_year = typicality_df.std(axis=0)
+        rarity_std_by_year = rarity_df.std(axis=0)
         years_with_zero_variance = []
         
         # Identify years with near-zero variance (threshold can be adjusted)
-        for t, std_val in enumerate(typicality_std_by_year):
+        for t, std_val in enumerate(rarity_std_by_year):
             if pd.isna(std_val) or std_val < 1e-10:
                 years_with_zero_variance.append(t + 1)  # 1-indexed
         
         # Calculate z-scores
-        typicality_z = typicality_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
         
         # Count individuals with convergence
-        convergence_years = self.compute_first_convergence_year(z_threshold, max_t, window)
+        convergence_years = self.compute_first_convergence_year(z_threshold, max_t, window, inclusive, group_labels)
         n_individuals_with_convergence = sum(1 for year in convergence_years if year is not None)
         
         # Distribution of convergence years
@@ -268,25 +531,30 @@ class IndividualConvergence:
         
         return {
             'years_with_zero_variance': years_with_zero_variance,
-            'typicality_std_by_year': typicality_std_by_year.tolist(),
+            'rarity_std_by_year': rarity_std_by_year.tolist(),
             'n_individuals_with_convergence': n_individuals_with_convergence,
             'convergence_year_distribution': convergence_year_counts.to_dict(),
             'total_individuals': N,
             'parameters_used': {
                 'z_threshold': z_threshold,
                 'max_t': max_t, 
-                'window': window
+                'window': window,
+                'inclusive': inclusive,
+                'group_labels': group_labels is not None
             }
         }
 
     def compute_path_uniqueness(self):
+        """
+        Count, for each individual, how many years t their suffix (from t to end)
+        is unique in the population (frequency == 1). Uses suffix-based logic.
+        """
         uniqueness_scores = []
         for seq in self.sequences:
-            prefix = []
             count = 0
             for t in range(self.T):
-                prefix.append(seq[t])
-                if self.prefix_freq_by_year[t][tuple(prefix)] == 1:
+                suffix = tuple(seq[t:])
+                if self.suffix_freq_by_year[t][suffix] == 1:
                     count += 1
             uniqueness_scores.append(count)
         return uniqueness_scores
@@ -296,12 +564,13 @@ def _removed_prefix_rarity_distribution_placeholder():
     return None
 
 
-def plot_suffix_typicality_distribution(
+def plot_suffix_rarity_distribution(
     data,
     group_names=None,
     show_threshold=True,
     z_threshold=1.5,
     threshold_label=None,
+    is_standardized_score=False,
     colors=None,
     figsize=(10, 6),
     save_as=None,
@@ -309,7 +578,7 @@ def plot_suffix_typicality_distribution(
     show=True
 ):
     """
-    Plot suffix typicality score distribution(s) with optional z-score threshold line.
+    Plot suffix rarity score distribution(s) with optional z-score threshold line.
     
     Parameters:
     -----------
@@ -324,7 +593,11 @@ def plot_suffix_typicality_distribution(
     z_threshold : float, default=1.5
         Z-score threshold value for the vertical line
     threshold_label : str, optional
-        Custom label for threshold line. If None, uses "z = {z_threshold}"
+        Custom label for threshold line. If None, uses appropriate default
+    is_standardized_score : bool, default=False
+        If True, treats data as standardized rarity scores (already z-scored) and draws 
+        threshold line directly at -z_threshold. If False, calculates threshold 
+        as mean - z_threshold * std of the raw data.
     colors : list or dict, optional
         Colors for each group. If None, uses default palette
     figsize : tuple, default=(10, 6)
@@ -342,16 +615,34 @@ def plot_suffix_typicality_distribution(
     
     Example:
     --------
-    # Single group
-    >>> plot_suffix_typicality_distribution(india_scores)
+    # Single group (raw rarity scores)
+    >>> plot_suffix_rarity_distribution(india_scores)
     
-    # Multi-group comparison
+    # Multi-group comparison (raw scores)
     >>> data = {"India": india_scores, "US": us_scores}
-    >>> plot_suffix_typicality_distribution(
+    >>> plot_suffix_rarity_distribution(
     ...     data, 
     ...     show_threshold=True,
     ...     z_threshold=1.5,
-    ...     save_as="typicality_comparison"
+    ...     save_as="rarity_comparison"
+    ... )
+    
+    # Standardized rarity scores (correct threshold representation)
+    >>> india_std_scores = indiv_convergence_india.compute_standardized_rarity_score(max_t=8, window=1)
+    >>> us_std_scores = indiv_convergence_us.compute_standardized_rarity_score(max_t=8, window=1)
+    >>> plot_suffix_rarity_distribution(
+    ...     {"India": india_std_scores, "US": us_std_scores},
+    ...     is_standardized_score=True,
+    ...     z_threshold=1.5,
+    ...     threshold_label="z = -1.5 (convergence boundary)",
+    ...     save_as="standardized_rarity_comparison"
+    ... )
+    
+    # Custom colors and no threshold
+    >>> plot_suffix_rarity_distribution(
+    ...     data,
+    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"},
+    ...     show_threshold=False
     ... )
     """
     import matplotlib.pyplot as plt
@@ -385,21 +676,40 @@ def plot_suffix_typicality_distribution(
     # Calculate threshold if needed
     stats = {}
     if show_threshold:
-        # Combine all data to calculate overall mean and std
-        all_scores = []
-        for scores in groups.values():
-            all_scores.extend(scores)
-        all_scores = np.array(all_scores)
-        mean_score = np.mean(all_scores)
-        std_score = np.std(all_scores)
-        x_thresh = mean_score + z_threshold * std_score
-        
-        stats = {
-            'mean': mean_score,
-            'std': std_score,
-            'threshold_value': x_thresh,
-            'z_threshold': z_threshold
-        }
+        if is_standardized_score:
+            # For standardized scores, threshold is directly -z_threshold (convergence)
+            x_thresh = -z_threshold
+            all_scores = []
+            for scores in groups.values():
+                all_scores.extend(scores)
+            all_scores = np.array(all_scores)
+            mean_score = np.mean(all_scores)
+            std_score = np.std(all_scores, ddof=1)
+            
+            stats = {
+                'mean': mean_score,
+                'std': std_score,
+                'threshold_value': x_thresh,
+                'z_threshold': z_threshold,
+                'is_standardized_score': True
+            }
+        else:
+            # For raw scores, calculate threshold as mean - z_threshold * std (convergence)
+            all_scores = []
+            for scores in groups.values():
+                all_scores.extend(scores)
+            all_scores = np.array(all_scores)
+            mean_score = np.mean(all_scores)
+            std_score = np.std(all_scores, ddof=1)  # 与 pandas DataFrame.std() 保持一致
+            x_thresh = mean_score - z_threshold * std_score
+            
+            stats = {
+                'mean': mean_score,
+                'std': std_score,
+                'threshold_value': x_thresh,
+                'z_threshold': z_threshold,
+                'is_standardized_score': False
+            }
     
     # Create plot
     plt.figure(figsize=figsize)
@@ -422,13 +732,19 @@ def plot_suffix_typicality_distribution(
         
         # Custom or default threshold label
         if threshold_label is None:
-            threshold_label = f"z = {z_threshold}"
+            if is_standardized_score:
+                threshold_label = f"z = -{z_threshold} (convergence)"
+            else:
+                threshold_label = f"z = -{z_threshold} (convergence)"
         
         plt.text(x_thresh + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02, 
                 text_y, threshold_label, color="grey", fontsize=11)
     
     # Formatting
-    plt.xlabel("Suffix Typicality Score", fontsize=13)
+    if is_standardized_score:
+        plt.xlabel("Standardized Suffix Rarity Score", fontsize=13)
+    else:
+        plt.xlabel("Suffix Rarity Score", fontsize=13)
     plt.ylabel("Density", fontsize=13)
     if len(group_names) > 1:
         plt.legend(title="Group")
@@ -668,11 +984,20 @@ def plot_individual_indicators_correlation(
         plt.show()
     
     # Add summary statistics
+    if group_column is None:
+        sample_size = len(df_clean)
+    else:
+        sizes = {}
+        for g in df[group_column].unique():
+            g_clean = df[df[group_column]==g][indicator_columns].apply(pd.to_numeric, errors='coerce').dropna()
+            sizes[g] = len(g_clean)
+        sample_size = sizes
+    
     results['summary'] = {
         'method': correlation_method,
         'n_indicators': len(valid_cols),
         'indicators_included': valid_cols,
-        'sample_size': len(df_clean) if group_column is None else {group: len(df[df[group_column] == group].dropna()) for group in df[group_column].unique()}
+        'sample_size': sample_size
     }
     
     return results
@@ -686,7 +1011,6 @@ def compute_path_uniqueness_by_group(sequences, group_labels):
         :return: List of path uniqueness scores (same order as input).
         """
         from collections import defaultdict
-        import math
 
         T = len(sequences[0])
         df = pd.DataFrame({
