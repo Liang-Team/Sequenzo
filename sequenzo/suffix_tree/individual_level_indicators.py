@@ -402,14 +402,16 @@ class IndividualConvergence:
 
     def compute_standardized_rarity_score(self, min_t=1, max_t=None, window=1):
         """
-        Compute standardized rarity scores for convergence classification and visualization.
+        Compute standardized rarity scores for convergence classification and visualization
+        using true statistical z-scores.
         
         This method computes standardized rarity scores used for individual-level 
         convergence classification:
         standardized_score_i = min_t max_{k=0..window-1} z_{i,t+k}
         
-        Where z_{i,t} are the year-wise standardized suffix rarity scores using column-wise 
-        standardization with sample standard deviation (ddof=1, as computed by pandas).
+        Where z_{i,t} are the year-wise true z-scores of suffix rarity computed column-wise
+        across individuals with sample standard deviation (ddof=1):
+            z_{i,t} = (x_{i,t} - mean_t) / std_t
         
         The standardized scores can be used with a threshold (e.g., z ≤ -1.5) to classify 
         individuals as converged/not converged, and are particularly useful for visualization.
@@ -454,33 +456,130 @@ class IndividualConvergence:
                 score.append(-np.log(freq + 1e-10))
             rarity_matrix.append(score)
 
-        # Step 2: Column-wise standardization (by year)
-        rarity_df = pd.DataFrame(rarity_matrix)
-        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-        # Handle zero-variance years: NaN would make comparison fail, explicitly set to +inf to ensure not meeting convergence condition
-        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+        # Step 2: Column-wise true z-score standardization (by year, ddof=1)
+        rarity_arr = np.asarray(rarity_matrix, dtype=float)
+        col_means = np.nanmean(rarity_arr, axis=0)
+        col_stds = np.nanstd(rarity_arr, axis=0, ddof=1)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            rarity_z = (rarity_arr - col_means) / col_stds
+        # Keep NaN for zero-variance years to allow window skipping downstream
+        rarity_z = np.where(np.isfinite(rarity_z), rarity_z, np.nan)
         
         # Step 3: Compute standardized rarity score for each individual
         standardized_scores = []
         for i in range(N):
-            z_scores = rarity_z.iloc[i]
+            z_scores = rarity_z[i, :]
             candidate_values = []
             
             # For each possible starting time t
             for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed
-                # Find the maximum z-score within the window (for convergence, we want sustained low rarity)
-                window_max = np.nanmax([z_scores[t + k] for k in range(window)])
+                vals = [z_scores[t + k] for k in range(window)]
+                # Skip windows containing NaN (e.g., zero-variance years)
+                if not np.all(np.isfinite(vals)):
+                    continue
+                # For convergence, take maximum within window (ensure all finite)
+                window_max = float(np.max(vals))
                 candidate_values.append(window_max)
             
             # Take the minimum across all starting times (most convergent period)
             if candidate_values:
-                standardized_score = np.nanmin(candidate_values)
+                standardized_score = float(np.min(candidate_values))
             else:
                 standardized_score = np.nan
                 
             standardized_scores.append(standardized_score)
         
         return standardized_scores
+
+    def compute_converged_by_top_proportion(
+        self,
+        group_labels,
+        proportion: float = 0.10,
+        min_t: int = 1,
+        max_t: int | None = None,
+        window: int = 1,
+        min_count: int = 1,
+    ):
+        """
+        Classify convergence by selecting the top proportion of most typical (smallest) standardized scores
+        WITHIN EACH GROUP (e.g., country). This ensures identical proportion thresholds across groups,
+        independent of distribution shape or discreteness.
+
+        Steps:
+        1) Compute true-z standardized rarity aggregated score per individual using
+           `compute_standardized_rarity_score(min_t, max_t, window)`.
+        2) For each group g, sort scores ascending and select the first k = max(min_count, floor(p*n_g)) indices
+           as convergers.
+
+        Parameters
+        ----------
+        group_labels : Sequence
+            Group label per individual (e.g., country). Length must equal number of sequences.
+        proportion : float, default 0.10
+            Top p proportion to mark as converged within each group (0<p<1).
+        min_t : int, default 1
+            Minimum year considered in the aggregated score.
+        max_t : int | None, default None
+            Maximum starting year considered; if None, uses T-window+1.
+        window : int, default 1
+            Number of consecutive years in the aggregated statistic.
+        min_count : int, default 1
+            Minimum number selected per group (useful for very small groups).
+
+        Returns
+        -------
+        tuple[list[int], dict]
+            (flags, info) where flags is a 0/1 list for convergence, and info is per-group metadata:
+            {group: {"k": int, "n": int, "threshold_value": float}}
+        """
+        if not (0 < float(proportion) < 1):
+            raise ValueError(f"proportion must be in (0,1), got {proportion}")
+
+        N = len(self.sequences)
+        if len(group_labels) != N:
+            raise ValueError("Length of group_labels must match number of sequences")
+
+        # 1) Compute aggregated standardized score (lower = more typical)
+        scores = np.asarray(self.compute_standardized_rarity_score(min_t=min_t, max_t=max_t, window=window), dtype=float)
+
+        labels = np.asarray(group_labels)
+        flags = np.zeros(N, dtype=int)
+        info = {}
+
+        # Iterate groups deterministically by sorted group name for reproducibility
+        for g in sorted(pd.unique(labels)):
+            idx = np.where(labels == g)[0]
+            vals = scores[idx]
+
+            n_g = len(idx)
+            if n_g == 0:
+                info[g] = {"k": 0, "n": 0, "threshold_value": np.nan}
+                continue
+
+            # Determine k with lower bound min_count and upper bound n_g
+            k = int(np.floor(proportion * n_g))
+            if k < min_count:
+                k = min_count
+            if k > n_g:
+                k = n_g
+
+            # Treat NaN as worst (push to the end); still allow exact k selection
+            order_vals = np.where(np.isfinite(vals), vals, np.inf)
+            order = np.argsort(order_vals, kind="mergesort")  # stable for tie-breaking
+
+            if k >= 1:
+                selected_local = order[:k]
+                selected_global = idx[selected_local]
+                flags[selected_global] = 1
+                kth_val = vals[order[k - 1]]
+                kth_val = float(kth_val) if np.isfinite(kth_val) else np.nan
+            else:
+                selected_local = np.array([], dtype=int)
+                kth_val = np.nan
+
+            info[g] = {"k": int(k), "n": int(n_g), "threshold_value": kth_val}
+
+        return flags.tolist(), info
 
     def diagnose_convergence_calculation(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
         """
@@ -583,7 +682,9 @@ def plot_suffix_rarity_distribution(
     threshold_method="quantile",
     quantile_p: float = 0.10,
     additional_quantiles=None,
-    kde_bw: float | None = None
+    kde_bw: float | None = None,
+    top_proportion_p: float = 0.10,
+    topk_min_count: int = 1
 ):
     """
     Plot suffix rarity score distribution(s) with optional threshold line(s).
@@ -691,6 +792,10 @@ def plot_suffix_rarity_distribution(
     
     # Normalize method then prepare stats
     threshold_method = (threshold_method or "quantile").lower()
+    # Allow standardized scores to be used with 'zscore' or rank-based 'topk' methods safely
+    if is_standardized_score and threshold_method not in {"zscore", "z", "topk", "top_proportion", "proportion", "rank"}:
+        print("Warning: is_standardized_score=True but threshold_method is not 'zscore'/'topk'. Auto-switching to 'zscore'.")
+        threshold_method = "zscore"
     stats = {"per_group": {}, "threshold_method": threshold_method}
 
     # Validate quantiles if needed
@@ -736,9 +841,9 @@ def plot_suffix_rarity_distribution(
                     "is_group_relative": True,
                     "threshold_value": primary_value,
                     "primary_quantile": primary_label,
-                    "prop_below": prop_below
+            "prop_below": prop_below
                 }
-    else:
+    elif threshold_method in {"zscore", "z"}:
         # z-score method (backward compatibility)
         for g in group_names:
             if g in groups:
@@ -757,8 +862,48 @@ def plot_suffix_rarity_distribution(
                     "threshold_value": float(x_thresh_g),
                     "z_threshold": float(z_threshold),
                     "is_group_relative": True,
-                    "prop_below": prop_below
+                    "prop_below": prop_below,
+                    "num_below": int(np.sum(vals <= x_thresh_g)) if vals.size > 0 and not np.isnan(x_thresh_g) else 0,
+                    "n": int(vals.size)
                 }
+    elif threshold_method in {"topk", "top_proportion", "proportion", "rank"}:
+        # Rank-based proportion selection within each group: pick top p% (smallest values)
+        if not (0 < float(top_proportion_p) < 1):
+            raise ValueError(f"top_proportion_p must be in (0,1), got {top_proportion_p}")
+        for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                finite_mask = np.isfinite(arr)
+                vals = arr[finite_mask]
+                n_valid = int(vals.size)
+                if n_valid == 0:
+                    stats["per_group"][g] = {
+                        "threshold_value": np.nan,
+                        "k": 0,
+                        "n": 0,
+                        "prop_selected": np.nan,
+                        "num_leq_threshold": 0
+                    }
+                    continue
+                k = int(np.floor(top_proportion_p * n_valid))
+                if k < int(topk_min_count):
+                    k = int(topk_min_count)
+                if k > n_valid:
+                    k = n_valid
+                # Sort ascending (most typical first)
+                order = np.argsort(vals, kind="mergesort")
+                thresh_val = vals[order[k - 1]] if k >= 1 else np.nan
+                num_leq = int(np.sum(vals <= thresh_val)) if k >= 1 and np.isfinite(thresh_val) else 0
+                stats["per_group"][g] = {
+                    "threshold_value": float(thresh_val) if np.isfinite(thresh_val) else np.nan,
+                    "k": int(k),
+                    "n": int(n_valid),
+                    "prop_selected": (k / n_valid) if n_valid > 0 else np.nan,
+                    "num_leq_threshold": num_leq
+                }
+        stats["threshold_method"] = "topk"
+    else:
+        raise ValueError(f"Unknown threshold_method: {threshold_method}")
     
     # Create plot
     plt.figure(figsize=figsize)
@@ -798,11 +943,20 @@ def plot_suffix_rarity_distribution(
                         y_text = text_y - k_idx * (y_max * 0.06)
                         plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
                         plt.text(xg + x_offset, y_text, f"{g}: {q_lbl}", fontsize=10, ha="left", va="top", color=color)
-                else:
+                elif threshold_method in {"zscore", "z"}:
                     xg = stats["per_group"][g]["threshold_value"]
                     lbl = threshold_label or f"z = -{z_threshold}"
                     plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
                     plt.text(xg + x_offset, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
+                else:  # topk
+                    xg = stats["per_group"][g]["threshold_value"]
+                    k = stats["per_group"][g]["k"]
+                    n = stats["per_group"][g]["n"]
+                    p = stats["per_group"][g]["prop_selected"]
+                    lbl = threshold_label or f"top {int(round(top_proportion_p*100))}% (k={k}/{n})"
+                    if np.isfinite(xg):
+                        plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                        plt.text(xg + x_offset, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
     
     # Formatting
     if is_standardized_score:

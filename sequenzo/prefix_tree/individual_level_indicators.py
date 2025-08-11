@@ -287,7 +287,8 @@ class IndividualDivergence:
 
     def compute_standardized_rarity_score(self, min_t=3, window=1):
         """
-        Compute standardized rarity scores for divergence classification and visualization.
+        Compute standardized rarity scores for divergence classification and visualization
+        using true statistical z-scores.
         
         This method computes standardized rarity scores used for individual-level 
         divergence classification:
@@ -330,22 +331,29 @@ class IndividualDivergence:
                 score.append(-np.log(freq + 1e-10))
             rarity_matrix.append(score)
         
-        # Step 2: Column-wise standardization (by year)
-        rarity_df = pd.DataFrame(rarity_matrix)
-        rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-        # Handle zero-variance years: NaN would make comparison fail, set to -inf to ensure not meeting divergence condition
-        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(-np.inf)
+        # Step 2: Column-wise true z-score standardization (by year, ddof=1)
+        rarity_arr = np.asarray(rarity_matrix, dtype=float)
+        col_means = np.nanmean(rarity_arr, axis=0)
+        col_stds = np.nanstd(rarity_arr, axis=0, ddof=1)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            rarity_z = (rarity_arr - col_means) / col_stds
+        # Keep NaN for zero-variance years to allow window skipping downstream
+        rarity_z = np.where(np.isfinite(rarity_z), rarity_z, np.nan)
         
         # Step 3: Compute standardized rarity score for each individual
         standardized_scores = []
         for i in range(N):
-            z_scores = rarity_z.iloc[i]
+            z_scores = rarity_z[i, :]
             candidate_values = []
             
             # For each possible starting time t
             for t in range(min_t - 1, self.T - window + 1):
-                # Find the minimum z-score within the window
-                window_min = np.nanmin([z_scores[t + k] for k in range(window)])
+                vals = [z_scores[t + k] for k in range(window)]
+                # Skip windows containing NaN (e.g., zero-variance years)
+                if not np.all(np.isfinite(vals)):
+                    continue
+                # For divergence, take minimum within window (ensure all finite)
+                window_min = float(np.min(vals))
                 candidate_values.append(window_min)
             
             # Take the maximum across all starting times
