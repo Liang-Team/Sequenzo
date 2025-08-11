@@ -241,7 +241,7 @@ class IndividualDivergence:
         N = len(self.sequences)
         rarity_matrix = []
 
-        # Calculate rarity scores (same as in compute_divergence_year)
+        # Calculate rarity scores (same as in compute_first_divergence_year)
         for seq in self.sequences:
             prefix = []
             score = []
