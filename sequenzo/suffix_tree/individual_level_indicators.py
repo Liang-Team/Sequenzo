@@ -62,7 +62,7 @@ class IndividualConvergence:
 
     # Divergence-related computations are intentionally omitted in this convergence-focused module.
 
-    def compute_converged(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
+    def compute_converged(self, z_threshold=1.5, min_t=1, max_t=None, window=1, inclusive=False, group_labels=None):
         """
         Compute binary converged status based on suffix rarity score z-scores.
         
@@ -71,6 +71,7 @@ class IndividualConvergence:
         for consecutive years, indicating movement toward more common patterns.
 
         :param z_threshold: Z-score threshold below which (as -z_threshold) an individual is considered converged.
+        :param min_t: Minimum year (1-indexed) after which convergence is considered valid (default: 1).
         :param max_t: Maximum year (1-indexed) before which convergence is considered valid. 
                       If None, uses T-window+1.
         :param window: Number of consecutive low-rarity-z years required (default: 1).
@@ -85,7 +86,7 @@ class IndividualConvergence:
         
         if group_labels is not None:
             # 组内收敛：使用组内频率和样本大小
-            return self._compute_converged_by_group(z_threshold, max_t, window, inclusive, group_labels)
+            return self._compute_converged_by_group(z_threshold, min_t, max_t, window, inclusive, group_labels)
         
         # 使用全局频率计算稀有度
         rarity_matrix = []
@@ -106,7 +107,7 @@ class IndividualConvergence:
         for i in range(N):
             z = rarity_z.iloc[i]
             converged = 0
-            for t in range(0, max_t):  # 0-indexed, so max_t already accounts for window
+            for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed, max_t already accounts for window
                 # 收敛 = 低稀有（更典型）
                 if inclusive:
                     condition = all(z[t + k] <= -z_threshold for k in range(window))
@@ -119,7 +120,7 @@ class IndividualConvergence:
             flags.append(converged)
         return flags
     
-    def _compute_converged_by_group(self, z_threshold, max_t, window, inclusive, group_labels):
+    def _compute_converged_by_group(self, z_threshold, min_t, max_t, window, inclusive, group_labels):
         """
         计算组内收敛：使用组内频率和样本大小计算稀有度
         """
@@ -175,7 +176,7 @@ class IndividualConvergence:
             for i, orig_idx in enumerate(group_indices):
                 z = rarity_z.iloc[i]
                 converged = 0
-                for t in range(0, max_t):
+                for t in range(min_t - 1, max_t):
                     if inclusive:
                         condition = all(z[t + k] <= -z_threshold for k in range(window))
                     else:
@@ -191,7 +192,7 @@ class IndividualConvergence:
 
     # First-divergence timing is intentionally omitted in this convergence-focused module.
 
-    def compute_first_convergence_year(self, z_threshold=1.5, max_t=None, window=1, inclusive=False, group_labels=None):
+    def compute_first_convergence_year(self, z_threshold=1.5, min_t=1, max_t=None, window=1, inclusive=False, group_labels=None):
         """
         Compute the first convergence year for each individual based on suffix rarity score z-scores.
         
@@ -203,6 +204,8 @@ class IndividualConvergence:
         -----------
         z_threshold : float, default=1.5
             Z-score threshold for defining convergence (convergence when z < -z_threshold)
+        min_t : int, default=1
+            Minimum year (1-indexed) after which convergence is considered valid.
         max_t : int, optional
             Maximum year (1-indexed) considered valid for convergence detection.
             If None, uses T-window+1.
@@ -226,7 +229,7 @@ class IndividualConvergence:
         
         if group_labels is not None:
             # 组内收敛：使用组内频率和样本大小
-            return self._compute_first_convergence_year_by_group(z_threshold, max_t, window, inclusive, group_labels)
+            return self._compute_first_convergence_year_by_group(z_threshold, min_t, max_t, window, inclusive, group_labels)
         
         # 使用全局频率计算稀有度
         rarity_matrix = []
@@ -247,7 +250,7 @@ class IndividualConvergence:
         for i in range(N):
             z = rarity_z.iloc[i]
             year = None
-            for t in range(0, max_t):  # 0-indexed, so max_t already accounts for window
+            for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed, max_t already accounts for window
                 # 收敛 = 低稀有（更典型）
                 if inclusive:
                     condition = all(z[t + k] <= -z_threshold for k in range(window))
@@ -260,7 +263,7 @@ class IndividualConvergence:
             years.append(year)
         return years
     
-    def _compute_first_convergence_year_by_group(self, z_threshold, max_t, window, inclusive, group_labels):
+    def _compute_first_convergence_year_by_group(self, z_threshold, min_t, max_t, window, inclusive, group_labels):
         """
         计算组内第一次收敛年份：使用组内频率和样本大小计算稀有度
         """
@@ -314,7 +317,7 @@ class IndividualConvergence:
             for i, orig_idx in enumerate(group_indices):
                 z = rarity_z.iloc[i]
                 year = None
-                for t in range(0, max_t):
+                for t in range(min_t - 1, max_t):
                     if inclusive:
                         condition = all(z[t + k] <= -z_threshold for k in range(window))
                     else:
@@ -397,7 +400,7 @@ class IndividualConvergence:
             rarity_scores.append(score)
         return rarity_scores
 
-    def compute_standardized_rarity_score(self, max_t=None, window=1):
+    def compute_standardized_rarity_score(self, min_t=1, max_t=None, window=1):
         """
         Compute standardized rarity scores for convergence classification and visualization.
         
@@ -416,6 +419,8 @@ class IndividualConvergence:
         
         Parameters:
         -----------
+        min_t : int, default=1
+            Minimum year (1-indexed) after which convergence is considered valid.
         max_t : int, optional
             Maximum year (1-indexed) before which convergence is considered valid.
             If None, uses T-window+1.
@@ -452,8 +457,8 @@ class IndividualConvergence:
         # Step 2: Column-wise standardization (by year)
         rarity_df = pd.DataFrame(rarity_matrix)
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-        # Handle zero-variance years
-        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(0)
+        # Handle zero-variance years: NaN would make comparison fail, explicitly set to +inf to ensure not meeting convergence condition
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
         
         # Step 3: Compute standardized rarity score for each individual
         standardized_scores = []
@@ -462,7 +467,7 @@ class IndividualConvergence:
             candidate_values = []
             
             # For each possible starting time t
-            for t in range(0, max_t):  # 0-indexed
+            for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed
                 # Find the maximum z-score within the window (for convergence, we want sustained low rarity)
                 window_max = np.nanmax([z_scores[t + k] for k in range(window)])
                 candidate_values.append(window_max)
@@ -523,7 +528,10 @@ class IndividualConvergence:
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
         
         # Count individuals with convergence
-        convergence_years = self.compute_first_convergence_year(z_threshold, max_t, window, inclusive, group_labels)
+        convergence_years = self.compute_first_convergence_year(
+            z_threshold=z_threshold, min_t=1, max_t=max_t, window=window,
+            inclusive=inclusive, group_labels=group_labels
+        )
         n_individuals_with_convergence = sum(1 for year in convergence_years if year is not None)
         
         # Distribution of convergence years
@@ -820,7 +828,7 @@ def plot_individual_indicators_correlation(
     # Custom indicators with grouping
     >>> plot_individual_indicators_correlation(
     ...     df, 
-    ...     indicator_columns=['diverged', 'prefix_rarity_score', 'path_uniqueness'],
+    ...     indicator_columns=['converged', 'suffix_rarity_score', 'path_uniqueness'],
     ...     group_column='country',
     ...     correlation_method='spearman'
     ... )
@@ -843,7 +851,7 @@ def plot_individual_indicators_correlation(
         # Common individual-level indicator patterns (convergence-focused)
         potential_indicators = [
             'converged', 'first_convergence_year', 'convergence_year',
-            'suffix_typicality_score', 'path_uniqueness', 'typicality_score', 'uniqueness_score'
+            'suffix_rarity_score', 'path_uniqueness', 'rarity_score', 'uniqueness_score'
         ]
         indicator_columns = [col for col in df.columns if col in potential_indicators]
         
@@ -1003,9 +1011,10 @@ def plot_individual_indicators_correlation(
     return results
 
 
-def compute_path_uniqueness_by_group(sequences, group_labels):
+def compute_path_uniqueness_by_group_suffix(sequences, group_labels):
         """
-        Compute path uniqueness within each subgroup defined by group_labels.
+        Compute path uniqueness within each subgroup defined by group_labels using suffix-based approach.
+        This is consistent with the convergence module's suffix-based logic.
         :param sequences: List of sequences.
         :param group_labels: List of group keys (same length as sequences), e.g., country, gender.
         :return: List of path uniqueness scores (same order as input).
@@ -1018,27 +1027,41 @@ def compute_path_uniqueness_by_group(sequences, group_labels):
             "group": group_labels
         })
 
-        # Step 1: Precompute prefix frequency tables per group
-        group_prefix_freq = {}
+        # Step 1: Precompute suffix frequency tables per group (changed from prefix to suffix)
+        group_suffix_freq = {}
         for group, group_df in df.groupby("group"):
-            prefix_freq = [defaultdict(int) for _ in range(T)]
+            suffix_freq = [defaultdict(int) for _ in range(T)]
             for seq in group_df["sequence"]:
-                prefix = []
                 for t in range(T):
-                    prefix.append(seq[t])
-                    prefix_freq[t][tuple(prefix)] += 1
-            group_prefix_freq[group] = prefix_freq
+                    suffix = tuple(seq[t:])  # suffix from year t to end
+                    suffix_freq[t][suffix] += 1
+            group_suffix_freq[group] = suffix_freq
 
-        # Step 2: Compute path uniqueness per individual
+        # Step 2: Compute path uniqueness per individual using suffix logic
         uniqueness_scores = []
         for seq, group in zip(sequences, group_labels):
-            prefix_freq = group_prefix_freq[group]
-            prefix = []
+            suffix_freq = group_suffix_freq[group]
             count = 0
             for t in range(T):
-                prefix.append(seq[t])
-                if prefix_freq[t][tuple(prefix)] == 1:
+                suffix = tuple(seq[t:])  # suffix from year t to end
+                if suffix_freq[t][suffix] == 1:
                     count += 1
             uniqueness_scores.append(count)
 
         return uniqueness_scores
+
+
+# Provide a default version for backward compatibility
+def compute_path_uniqueness_by_group(sequences, group_labels):
+    """
+    Compute path uniqueness within each subgroup defined by group_labels.
+    
+    This is the default version using suffix-based approach (convergence logic).
+    For explicit control, use compute_path_uniqueness_by_group_suffix() or 
+    compute_path_uniqueness_by_group_prefix() from the prefix_tree module.
+    
+    :param sequences: List of sequences.
+    :param group_labels: List of group keys (same length as sequences), e.g., country, gender.
+    :return: List of path uniqueness scores (same order as input).
+    """
+    return compute_path_uniqueness_by_group_suffix(sequences, group_labels)

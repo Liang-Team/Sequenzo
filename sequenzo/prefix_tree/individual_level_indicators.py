@@ -46,13 +46,14 @@ class IndividualDivergence:
                 freq_by_year[t][tuple(prefix)] += 1
         return freq_by_year
 
-    def compute_diverged(self, z_threshold=1.5, min_t=3, window=1):
+    def compute_diverged(self, z_threshold=1.5, min_t=3, window=1, inclusive=False):
         """
         Compute binary diverged status based on rarity score z-scores.
 
         :param z_threshold: Z-score threshold above which an individual is considered diverged.
         :param min_t: Minimum year (1-indexed) after which divergence is considered valid.
         :param window: Number of consecutive high-z years required (default: 1).
+        :param inclusive: If True, uses >= comparison; if False, uses > comparison (default: False).
         :return: List of 0/1 flags indicating whether each individual diverged.
         """
         N = len(self.sequences)
@@ -69,19 +70,27 @@ class IndividualDivergence:
 
         rarity_df = pd.DataFrame(rarity_matrix)
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # Handle zero-variance years: NaN would make comparison fail, set to -inf to ensure not meeting divergence condition
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(-np.inf)
 
         flags = []
         for i in range(N):
             z = rarity_z.iloc[i]
             diverged = 0
             for t in range(min_t - 1, self.T - window + 1):
-                if all(z[t + k] > z_threshold for k in range(window)):
+                # 发散 = 高稀有（更不典型）
+                if inclusive:
+                    condition = all(z[t + k] >= z_threshold for k in range(window))
+                else:
+                    condition = all(z[t + k] > z_threshold for k in range(window))
+                
+                if condition:
                     diverged = 1
                     break
             flags.append(diverged)
         return flags
 
-    def compute_first_divergence_year(self, z_threshold=1.5, min_t=3, window=1):
+    def compute_first_divergence_year(self, z_threshold=1.5, min_t=3, window=1, inclusive=False):
         """
         Compute the first divergence year for each individual based on rarity score z-scores.
         
@@ -103,6 +112,8 @@ class IndividualDivergence:
             Minimum year (1-indexed) considered valid for divergence detection
         window : int, default=1
             Number of consecutive high-z years required to confirm divergence
+        inclusive : bool, default=False
+            If True, uses >= comparison; if False, uses > comparison
             
         Returns:
         --------
@@ -124,13 +135,21 @@ class IndividualDivergence:
 
         rarity_df = pd.DataFrame(rarity_matrix)
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # Handle zero-variance years: NaN would make comparison fail, set to -inf to ensure not meeting divergence condition
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(-np.inf)
 
         years = []
         for i in range(N):
             z = rarity_z.iloc[i]
             year = None
             for t in range(min_t - 1, self.T - window + 1):
-                if all(z[t + k] > z_threshold for k in range(window)):
+                # 发散 = 高稀有（更不典型）
+                if inclusive:
+                    condition = all(z[t + k] >= z_threshold for k in range(window))
+                else:
+                    condition = all(z[t + k] > z_threshold for k in range(window))
+                
+                if condition:
                     year = t + 1
                     break
             years.append(year)
@@ -179,7 +198,7 @@ class IndividualDivergence:
         if zscore:
             # Column-wise z-score; handle zero-std columns gracefully (leave as NaN)
             col_means = np.nanmean(rarity_arr, axis=0)
-            col_stds = np.nanstd(rarity_arr, axis=0)
+            col_stds = np.nanstd(rarity_arr, axis=0, ddof=1)  # Use sample std for consistency with pandas
             with np.errstate(invalid='ignore', divide='ignore'):
                 rarity_arr = (rarity_arr - col_means) / col_stds
 
@@ -314,6 +333,8 @@ class IndividualDivergence:
         # Step 2: Column-wise standardization (by year)
         rarity_df = pd.DataFrame(rarity_matrix)
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
+        # Handle zero-variance years: NaN would make comparison fail, set to -inf to ensure not meeting divergence condition
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(-np.inf)
         
         # Step 3: Compute standardized rarity score for each individual
         standardized_scores = []
@@ -467,7 +488,7 @@ def plot_prefix_rarity_distribution(
                 all_scores.extend(scores)
             all_scores = np.array(all_scores)
             mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores)
+            std_score = np.std(all_scores, ddof=1)  # Use sample std for consistency with pandas
             
             stats = {
                 'mean': mean_score,
@@ -483,7 +504,7 @@ def plot_prefix_rarity_distribution(
                 all_scores.extend(scores)
             all_scores = np.array(all_scores)
             mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores)
+            std_score = np.std(all_scores, ddof=1)  # Use sample std for consistency with pandas
             x_thresh = mean_score + z_threshold * std_score
             
             stats = {
@@ -765,19 +786,29 @@ def plot_individual_indicators_correlation(
         plt.show()
     
     # Add summary statistics
+    if group_column is None:
+        sample_size = len(df_clean)
+    else:
+        sizes = {}
+        for g in df[group_column].unique():
+            g_clean = df[df[group_column]==g][indicator_columns].apply(pd.to_numeric, errors='coerce').dropna()
+            sizes[g] = len(g_clean)
+        sample_size = sizes
+
     results['summary'] = {
         'method': correlation_method,
         'n_indicators': len(valid_cols),
         'indicators_included': valid_cols,
-        'sample_size': len(df_clean) if group_column is None else {group: len(df[df[group_column] == group].dropna()) for group in df[group_column].unique()}
+        'sample_size': sample_size
     }
     
     return results
 
 
-def compute_path_uniqueness_by_group(sequences, group_labels):
+def compute_path_uniqueness_by_group_prefix(sequences, group_labels):
         """
-        Compute path uniqueness within each subgroup defined by group_labels.
+        Compute path uniqueness within each subgroup defined by group_labels using prefix-based approach.
+        This is consistent with the divergence module's prefix-based logic.
         :param sequences: List of sequences.
         :param group_labels: List of group keys (same length as sequences), e.g., country, gender.
         :return: List of path uniqueness scores (same order as input).
