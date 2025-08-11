@@ -381,160 +381,299 @@ class IndividualDivergence:
 
 def plot_prefix_rarity_distribution(
     data,
+    # === Core Parameters ===
     group_names=None,
-    show_threshold=True,
-    z_threshold=1.5,
-    threshold_label=None,
-    is_standardized_score=False,  # 这里保留，但我们同样用 mean ± z·std（因"标准化分数"是组合指标，不是纯z）
     colors=None,
+    # === Threshold Settings ===
+    show_threshold=True,
+    threshold_method="top_proportion",  # Changed default to top_proportion
+    proportion_p=0.07,  # Simplified parameter name, default 7%
+    # === Plotting Options ===
     figsize=(10, 6),
+    kde_bw=None,
+    # === Export Options ===
     save_as=None,
     dpi=300,
-    show=True
+    show=True,
+    # === Parameters for Different Methods ===
+    z_threshold=1.5,
+    is_standardized_score=False,
+    quantile_p=0.90
 ):
     """
-    Plot prefix rarity score distribution(s) with group-specific z-score threshold lines.
+    Plot prefix rarity score distribution(s) with clean threshold lines.
     
-    Parameters:
-    -----------
-    data : dict or list or array-like
-        If dict: {"group1": [scores], "group2": [scores], ...} for multi-group comparison
-        If list/array: single group scores
+    Parameters
+    ----------
+    data : dict or array-like
+        Data to plot. If dict: {"group1": scores1, "group2": scores2}
+        If array-like: single group data
     group_names : list, optional
-        Custom names for groups. If None and data is dict, uses keys.
-        If None and data is list/array, uses "Group"
-    show_threshold : bool, default=True
-        Whether to show the z-score threshold lines
-    z_threshold : float, default=1.5
-        Z-score threshold value for the vertical lines
-    threshold_label : str, optional
-        Custom label for threshold lines. If None, uses "z = {z_threshold}"
-    is_standardized_score : bool, default=False
-        If True, treats data as standardized rarity scores (already z-scored) and draws 
-        threshold line directly at z_threshold. If False, calculates threshold 
-        as mean + z_threshold * std of the raw data for each group separately.
-    colors : list or dict, optional
-        Colors for each group. If None, uses default palette
-    figsize : tuple, default=(10, 6)
+        Custom group names. Auto-detected from dict keys if not provided
+    colors : dict or list, optional
+        Colors for groups. If None, uses default palette
+    
+    show_threshold : bool, default True
+        Whether to show threshold vertical lines
+    threshold_method : str, default "top_proportion"
+        Threshold method:
+        - "top_proportion": Select top proportion_p% most extreme values
+        - "quantile": Use quantile_p percentile 
+        - "zscore": Use z-score threshold (for standardized data)
+    proportion_p : float, default 0.05
+        Proportion for top_proportion method (e.g., 0.05 = top 5%)
+    
+    figsize : tuple, default (10, 6)
         Figure size (width, height)
+    kde_bw : float, optional
+        KDE bandwidth adjustment. If None, uses seaborn default
+    
     save_as : str, optional
-        Path to save the figure (without extension)
-    dpi : int, default=300
-        DPI for saving
-    show : bool, default=True
-        Whether to display the plot
+        Save path (without extension)
+    dpi : int, default 300
+        Resolution for saved figure
+    show : bool, default True
+        Whether to display plot
         
-    Returns:
-    --------
-    dict: Statistics including per-group threshold values and overall statistics
+    Returns
+    -------
+    dict
+        Statistics including threshold values per group
     
-    Example:
+    Examples
     --------
-    # Single group (raw rarity scores)
-    >>> plot_prefix_rarity_distribution(india_scores)
+    # Basic usage - top 5% threshold (default)
+    >>> plot_prefix_rarity_distribution({"India": india_scores, "US": us_scores})
     
-    # Multi-group comparison (raw scores) - each group gets its own threshold
-    >>> data = {"India": india_scores, "US": us_scores}
+    # Custom threshold proportion  
     >>> plot_prefix_rarity_distribution(
-    ...     data, 
-    ...     show_threshold=True,
-    ...     z_threshold=1.5,
+    ...     data={"India": india_scores, "US": us_scores},
+    ...     proportion_p=0.03,  # top 3%
     ...     save_as="rarity_comparison"
     ... )
     
-    # Standardized rarity scores (correct threshold representation)
-    >>> india_std_scores = indiv_divergence_india.compute_standardized_rarity_score(min_t=3, window=1)
-    >>> us_std_scores = indiv_divergence_us.compute_standardized_rarity_score(min_t=3, window=1)
+    # Quantile-based threshold
     >>> plot_prefix_rarity_distribution(
-    ...     {"India": india_std_scores, "US": us_std_scores},
-    ...     is_standardized_score=True,
-    ...     z_threshold=1.5,
-    ...     threshold_label="z = 1.5 (divergence boundary)",
-    ...     save_as="standardized_rarity_comparison"
+    ...     data={"India": india_scores, "US": us_scores},
+    ...     threshold_method="quantile",
+    ...     quantile_p=0.90,  # 90th percentile
     ... )
     
-    # Custom colors and no threshold
+    # Clean plot without thresholds
     >>> plot_prefix_rarity_distribution(
-    ...     data,
-    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"},
-    ...     show_threshold=False
+    ...     data, 
+    ...     show_threshold=False,
+    ...     colors={"India": "#E8B88A", "US": "#A3BFD9"}
     ... )
     """
     import matplotlib.pyplot as plt
     import seaborn as sns
     import numpy as np
-
-    # --- 组装数据为 dict ---
+    
+    # Process input data
     if isinstance(data, dict):
+        # Multi-group case
         groups = data
         if group_names is None:
             group_names = list(groups.keys())
     else:
+        # Single group case
         if group_names is None:
             group_names = ["Group"]
         groups = {group_names[0]: data}
-
-    # --- 配色 ---
+    
+    # Set up colors (simplified)
     if colors is None:
-        default_colors = ["#E8B88A", "#A3BFD9", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
+        default_colors = ["#A3BFD9", "#E8B88A", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
         color_map = dict(zip(group_names, default_colors[:len(group_names)]))
     elif isinstance(colors, dict):
         color_map = colors
     else:
         color_map = dict(zip(group_names, colors))
+    
+    # Normalize method and prepare stats
+    threshold_method = (threshold_method or "top_proportion").lower()
+    
+    # Handle legacy parameter mapping
+    if threshold_method in {"top_proportion", "topk", "proportion", "rank"}:
+        # Use the simplified proportion_p parameter
+        top_proportion_p = proportion_p
+        topk_min_count = 1
+    elif threshold_method == "quantile":
+        # Use quantile_p for quantile method
+        pass
+    elif threshold_method in {"zscore", "z"} and is_standardized_score:
+        # Auto-handle standardized scores
+        pass
+    
+    stats = {"per_group": {}, "threshold_method": threshold_method}
 
-    # --- 计算各组阈值（mean ± z·std）---
-    # 前缀"发散"→高分一侧：mean + z*std
-    stats = {"per_group": {}}
-    for g in group_names:
-        if g in groups:
-            arr = np.asarray(groups[g], dtype=float)
-            mean_g = np.nanmean(arr)
-            std_g  = np.nanstd(arr, ddof=1)  # ddof=1 与 pandas 一致
-            x_thresh_g = mean_g + z_threshold * std_g
-            stats["per_group"][g] = {
-                "mean": float(mean_g),
-                "std": float(std_g),
-                "threshold_value": float(x_thresh_g),
-                "z_threshold": float(z_threshold),
-                "is_group_relative": True
-            }
-
-    # --- 画图 ---
-    plt.figure(figsize=figsize)
-
-    # 分布
-    for g in group_names:
-        if g in groups:
-            sns.kdeplot(groups[g], label=g, fill=True, color=color_map.get(g, "#1f77b4"), linewidth=2)
-
-    # 阈值线（每组一条，对应各自颜色）
-    if show_threshold:
+    # Validate quantiles if needed
+    def _check_q(q: float):
+        if not (0 < float(q) < 1):
+            raise ValueError(f"quantile must be in (0,1), got {q}")
+    quantiles_to_draw = None
+    if threshold_method == "quantile":
+        _check_q(quantile_p)
+        quantiles_to_draw = [quantile_p]  # Simplified - no additional_quantiles
+        # Per-group quantile(s)
         for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                # Compute requested quantiles with NaN handling
+                valid = arr[~np.isnan(arr)]
+                thresholds_g = {}
+                if valid.size > 0:
+                    for q in quantiles_to_draw:
+                        try:
+                            xq = float(np.nanquantile(arr, q))
+                        except Exception:
+                            xq = float(np.quantile(valid, q))
+                        thresholds_g[f"p{int(round(q*100)):02d}"] = xq
+                else:
+                    for q in quantiles_to_draw:
+                        thresholds_g[f"p{int(round(q*100)):02d}"] = np.nan
+                # Primary threshold (for backward compatibility)
+                primary_label = f"p{int(round(quantile_p*100)):02d}"
+                primary_value = thresholds_g.get(primary_label, np.nan)
+                # Proportion below primary
+                vals = valid
+                prop_below = float(np.nanmean(vals <= primary_value)) if vals.size > 0 and not np.isnan(primary_value) else np.nan
+                stats["per_group"][g] = {
+                    "threshold_values": thresholds_g,
+                    "is_group_relative": True,
+                    "threshold_value": primary_value,
+                    "primary_quantile": primary_label,
+                    "prop_below": prop_below
+                }
+    elif threshold_method in {"zscore", "z"}:
+        # z-score method (backward compatibility)
+        for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                mean_g = np.nanmean(arr)
+                std_g = np.nanstd(arr, ddof=1)  # sample std to match pandas
+                if is_standardized_score:
+                    x_thresh_g = float(z_threshold)
+                else:
+                    # For prefix (divergence): high scores indicate divergence, so mean + z*std
+                    x_thresh_g = float(mean_g + z_threshold * std_g)
+                vals = arr[~np.isnan(arr)]
+                prop_above = float(np.nanmean(vals >= x_thresh_g)) if vals.size > 0 and not np.isnan(x_thresh_g) else np.nan
+                stats["per_group"][g] = {
+                    "mean": float(mean_g),
+                    "std": float(std_g),
+                    "threshold_value": float(x_thresh_g),
+                    "z_threshold": float(z_threshold),
+                    "is_group_relative": True,
+                    "prop_above": prop_above,
+                    "num_above": int(np.sum(vals >= x_thresh_g)) if vals.size > 0 and not np.isnan(x_thresh_g) else 0,
+                    "n": int(vals.size)
+                }
+    elif threshold_method in {"topk", "top_proportion", "proportion", "rank"}:
+        # Rank-based proportion selection within each group: pick top p% (highest values for prefix divergence)
+        if not (0 < float(proportion_p) < 1):
+            raise ValueError(f"proportion_p must be in (0,1), got {proportion_p}")
+        top_proportion_p = proportion_p  # Map to internal variable
+        for g in group_names:
+            if g in groups:
+                arr = np.asarray(groups[g], dtype=float)
+                finite_mask = np.isfinite(arr)
+                vals = arr[finite_mask]
+                n_valid = int(vals.size)
+                if n_valid == 0:
+                    stats["per_group"][g] = {
+                        "threshold_value": np.nan,
+                        "k": 0,
+                        "n": 0,
+                        "prop_selected": np.nan,
+                        "num_geq_threshold": 0
+                    }
+                    continue
+                k = int(np.floor(top_proportion_p * n_valid))
+                if k < int(topk_min_count):
+                    k = int(topk_min_count)
+                if k > n_valid:
+                    k = n_valid
+                # Sort descending (most divergent first for prefix)
+                order = np.argsort(vals, kind="mergesort")[::-1]
+                thresh_val = vals[order[k - 1]] if k >= 1 else np.nan
+                num_geq = int(np.sum(vals >= thresh_val)) if k >= 1 and np.isfinite(thresh_val) else 0
+                stats["per_group"][g] = {
+                    "threshold_value": float(thresh_val) if np.isfinite(thresh_val) else np.nan,
+                    "k": int(k),
+                    "n": int(n_valid),
+                    "prop_selected": (k / n_valid) if n_valid > 0 else np.nan,
+                    "num_geq_threshold": num_geq
+                }
+        stats["threshold_method"] = "topk"
+    else:
+        raise ValueError(f"Unknown threshold_method: {threshold_method}")
+    
+    # Create plot
+    plt.figure(figsize=figsize)
+    
+    # Plot distributions
+    for idx, group_name in enumerate(group_names):
+        if group_name in groups:
+            scores = groups[group_name]
+            color = color_map.get(group_name, "#1f77b4")
+            arr = np.asarray(scores, dtype=float)
+            vmin = np.nanmin(arr) if np.isfinite(arr).any() else None
+            vmax = np.nanmax(arr) if np.isfinite(arr).any() else None
+            kde_kwargs = {"label": group_name, "fill": True, "color": color, "linewidth": 2}
+            if kde_bw is not None:
+                kde_kwargs["bw_adjust"] = kde_bw
+            if vmin is not None and vmax is not None and vmin < vmax:
+                kde_kwargs["clip"] = (vmin, vmax)
+            sns.kdeplot(arr, **kde_kwargs)
+    
+    # Add per-group threshold lines if requested (color-matched)
+    if show_threshold:
+        for i, g in enumerate(group_names):
             if g in stats["per_group"]:
-                xg = stats["per_group"][g]["threshold_value"]
-                plt.axvline(xg, color=color_map.get(g, "#1f77b4"), linestyle="--", linewidth=1.6)
-                # 文本标签
+                color = color_map.get(g, "#1f77b4")
                 ax = plt.gca()
                 y_max = ax.get_ylim()[1]
+                x_min, x_max = ax.get_xlim()
                 text_y = y_max * 0.9
-                lbl = threshold_label or f"z = {z_threshold}"
-                # 稍微错开一点，避免重叠
-                plt.text(xg, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color_map.get(g, "#1f77b4"))
-
-    # 轴与样式
-    plt.xlabel("Prefix Rarity Score" if not is_standardized_score else "Standardized Rarity Score", fontsize=13)
+                x_offset = (x_max - x_min) * 0.005 * (i + 1)
+                if threshold_method == "quantile":
+                    thresholds_g = stats["per_group"][g]["threshold_values"]
+                    # Draw multiple lines if multiple quantiles
+                    for k_idx, (q_lbl, xg) in enumerate(sorted(thresholds_g.items())):
+                        if np.isnan(xg):
+                            continue
+                        # Clean threshold line without text label
+                        plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                elif threshold_method in {"zscore", "z"}:
+                    xg = stats["per_group"][g]["threshold_value"]
+                    # Clean threshold line without text label
+                    plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                else:  # top_proportion
+                    xg = stats["per_group"][g]["threshold_value"]
+                    if np.isfinite(xg):
+                        # Clean threshold line without text label
+                        plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+    
+    # Formatting
+    if is_standardized_score:
+        plt.xlabel("Standardized Prefix Rarity Score", fontsize=13)
+    else:
+        plt.xlabel("Prefix Rarity Score", fontsize=13)
     plt.ylabel("Density", fontsize=13)
     if len(group_names) > 1:
         plt.legend(title="Group")
     sns.despine()
     plt.tight_layout()
-
+    
+    # Save and show
     if save_as:
         plt.savefig(f"{save_as}.png", dpi=dpi, bbox_inches='tight')
+    
     if show:
         plt.show()
-
+    
     return stats
 
 

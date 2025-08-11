@@ -675,7 +675,7 @@ def plot_suffix_rarity_distribution(
     # === Threshold Settings ===
     show_threshold=True,
     threshold_method="top_proportion",  # Changed default to top_proportion
-    proportion_p=0.05,  # Simplified parameter name, default 5%
+    proportion_p=0.07,  # Simplified parameter name, default 7%
     # === Plotting Options ===
     figsize=(10, 6),
     kde_bw=None,
