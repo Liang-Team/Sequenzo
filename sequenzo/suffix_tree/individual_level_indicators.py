@@ -685,14 +685,15 @@ def plot_suffix_rarity_distribution(
     stats = {}
     if show_threshold:
         if is_standardized_score:
-            # For standardized scores, threshold is directly -z_threshold (convergence)
-            x_thresh = -z_threshold
+            # For standardized scores, calculate threshold based on actual distribution
+            # These "standardized" scores are composite indicators, not pure z-scores
             all_scores = []
             for scores in groups.values():
                 all_scores.extend(scores)
             all_scores = np.array(all_scores)
             mean_score = np.mean(all_scores)
             std_score = np.std(all_scores, ddof=1)
+            x_thresh = mean_score - z_threshold * std_score  # convergence = low scores
             
             stats = {
                 'mean': mean_score,

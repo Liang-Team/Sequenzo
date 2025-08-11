@@ -481,14 +481,15 @@ def plot_prefix_rarity_distribution(
     stats = {}
     if show_threshold:
         if is_standardized_score:
-            # For standardized scores, threshold is directly z_threshold
-            x_thresh = z_threshold
+            # For standardized scores, calculate threshold based on actual distribution
+            # These "standardized" scores are composite indicators, not pure z-scores
             all_scores = []
             for scores in groups.values():
                 all_scores.extend(scores)
             all_scores = np.array(all_scores)
             mean_score = np.mean(all_scores)
             std_score = np.std(all_scores, ddof=1)  # Use sample std for consistency with pandas
+            x_thresh = mean_score + z_threshold * std_score  # divergence = high scores
             
             stats = {
                 'mean': mean_score,
