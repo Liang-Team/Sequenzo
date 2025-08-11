@@ -681,43 +681,20 @@ def plot_suffix_rarity_distribution(
     else:
         color_map = dict(zip(group_names, colors))
     
-    # Calculate threshold if needed
-    stats = {}
-    if show_threshold:
-        if is_standardized_score:
-            # For standardized scores, calculate threshold based on actual distribution
-            # These "standardized" scores are composite indicators, not pure z-scores
-            all_scores = []
-            for scores in groups.values():
-                all_scores.extend(scores)
-            all_scores = np.array(all_scores)
-            mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores, ddof=1)
-            x_thresh = mean_score - z_threshold * std_score  # convergence = low scores
-            
-            stats = {
-                'mean': mean_score,
-                'std': std_score,
-                'threshold_value': x_thresh,
-                'z_threshold': z_threshold,
-                'is_standardized_score': True
-            }
-        else:
-            # For raw scores, calculate threshold as mean - z_threshold * std (convergence)
-            all_scores = []
-            for scores in groups.values():
-                all_scores.extend(scores)
-            all_scores = np.array(all_scores)
-            mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores, ddof=1)  # 与 pandas DataFrame.std() 保持一致
-            x_thresh = mean_score - z_threshold * std_score
-            
-            stats = {
-                'mean': mean_score,
-                'std': std_score,
-                'threshold_value': x_thresh,
-                'z_threshold': z_threshold,
-                'is_standardized_score': False
+    # Calculate per-group thresholds (mean - z * std) for convergence (low side)
+    stats = {"per_group": {}}
+    for g in group_names:
+        if g in groups:
+            arr = np.asarray(groups[g], dtype=float)
+            mean_g = np.nanmean(arr)
+            std_g = np.nanstd(arr, ddof=1)  # sample std to match pandas
+            x_thresh_g = mean_g - z_threshold * std_g
+            stats["per_group"][g] = {
+                "mean": float(mean_g),
+                "std": float(std_g),
+                "threshold_value": float(x_thresh_g),
+                "z_threshold": float(z_threshold),
+                "is_group_relative": True
             }
     
     # Create plot
@@ -730,24 +707,19 @@ def plot_suffix_rarity_distribution(
             color = color_map.get(group_name, "#1f77b4")
             sns.kdeplot(scores, label=group_name, fill=True, color=color, linewidth=2)
     
-    # Add threshold line if requested
+    # Add per-group threshold lines if requested (color-matched)
     if show_threshold:
-        plt.axvline(x_thresh, color="grey", linestyle="--", linewidth=1.5)
-        
-        # Dynamic text positioning
-        ax = plt.gca()
-        y_max = ax.get_ylim()[1]
-        text_y = y_max * 0.85
-        
-        # Custom or default threshold label
-        if threshold_label is None:
-            if is_standardized_score:
-                threshold_label = f"z = -{z_threshold} (convergence)"
-            else:
-                threshold_label = f"z = -{z_threshold} (convergence)"
-        
-        plt.text(x_thresh + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02, 
-                text_y, threshold_label, color="grey", fontsize=11)
+        for g in group_names:
+            if g in stats["per_group"]:
+                xg = stats["per_group"][g]["threshold_value"]
+                color = color_map.get(g, "#1f77b4")
+                plt.axvline(xg, color=color, linestyle="--", linewidth=1.6)
+                # Dynamic text positioning per group
+                ax = plt.gca()
+                y_max = ax.get_ylim()[1]
+                text_y = y_max * 0.9
+                lbl = threshold_label or f"z = -{z_threshold}"
+                plt.text(xg, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color)
     
     # Formatting
     if is_standardized_score:

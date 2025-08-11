@@ -377,7 +377,7 @@ def plot_prefix_rarity_distribution(
     show_threshold=True,
     z_threshold=1.5,
     threshold_label=None,
-    is_standardized_score=False,
+    is_standardized_score=False,  # 这里保留，但我们同样用 mean ± z·std（因"标准化分数"是组合指标，不是纯z）
     colors=None,
     figsize=(10, 6),
     save_as=None,
@@ -385,7 +385,7 @@ def plot_prefix_rarity_distribution(
     show=True
 ):
     """
-    Plot prefix rarity score distribution(s) with optional z-score threshold line.
+    Plot prefix rarity score distribution(s) with group-specific z-score threshold lines.
     
     Parameters:
     -----------
@@ -396,15 +396,15 @@ def plot_prefix_rarity_distribution(
         Custom names for groups. If None and data is dict, uses keys.
         If None and data is list/array, uses "Group"
     show_threshold : bool, default=True
-        Whether to show the z-score threshold line
+        Whether to show the z-score threshold lines
     z_threshold : float, default=1.5
-        Z-score threshold value for the vertical line
+        Z-score threshold value for the vertical lines
     threshold_label : str, optional
-        Custom label for threshold line. If None, uses "z = {z_threshold}"
+        Custom label for threshold lines. If None, uses "z = {z_threshold}"
     is_standardized_score : bool, default=False
         If True, treats data as standardized rarity scores (already z-scored) and draws 
         threshold line directly at z_threshold. If False, calculates threshold 
-        as mean + z_threshold * std of the raw data.
+        as mean + z_threshold * std of the raw data for each group separately.
     colors : list or dict, optional
         Colors for each group. If None, uses default palette
     figsize : tuple, default=(10, 6)
@@ -418,14 +418,14 @@ def plot_prefix_rarity_distribution(
         
     Returns:
     --------
-    dict: Statistics including threshold value in original scale (if show_threshold=True)
+    dict: Statistics including per-group threshold values and overall statistics
     
     Example:
     --------
     # Single group (raw rarity scores)
     >>> plot_prefix_rarity_distribution(india_scores)
     
-    # Multi-group comparison (raw scores)
+    # Multi-group comparison (raw scores) - each group gets its own threshold
     >>> data = {"India": india_scores, "US": us_scores}
     >>> plot_prefix_rarity_distribution(
     ...     data, 
@@ -455,20 +455,18 @@ def plot_prefix_rarity_distribution(
     import matplotlib.pyplot as plt
     import seaborn as sns
     import numpy as np
-    
-    # Process input data
+
+    # --- 组装数据为 dict ---
     if isinstance(data, dict):
-        # Multi-group case
         groups = data
         if group_names is None:
             group_names = list(groups.keys())
     else:
-        # Single group case
         if group_names is None:
             group_names = ["Group"]
         groups = {group_names[0]: data}
-    
-    # Set up colors
+
+    # --- 配色 ---
     if colors is None:
         default_colors = ["#E8B88A", "#A3BFD9", "#C6A5CF", "#A6C1A9", "#F4A460", "#87CEEB"]
         color_map = dict(zip(group_names, default_colors[:len(group_names)]))
@@ -476,90 +474,59 @@ def plot_prefix_rarity_distribution(
         color_map = colors
     else:
         color_map = dict(zip(group_names, colors))
-    
-    # Calculate threshold if needed
-    stats = {}
-    if show_threshold:
-        if is_standardized_score:
-            # For standardized scores, calculate threshold based on actual distribution
-            # These "standardized" scores are composite indicators, not pure z-scores
-            all_scores = []
-            for scores in groups.values():
-                all_scores.extend(scores)
-            all_scores = np.array(all_scores)
-            mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores, ddof=1)  # Use sample std for consistency with pandas
-            x_thresh = mean_score + z_threshold * std_score  # divergence = high scores
-            
-            stats = {
-                'mean': mean_score,
-                'std': std_score,
-                'threshold_value': x_thresh,
-                'z_threshold': z_threshold,
-                'is_standardized_score': True
+
+    # --- 计算各组阈值（mean ± z·std）---
+    # 前缀"发散"→高分一侧：mean + z*std
+    stats = {"per_group": {}}
+    for g in group_names:
+        if g in groups:
+            arr = np.asarray(groups[g], dtype=float)
+            mean_g = np.nanmean(arr)
+            std_g  = np.nanstd(arr, ddof=1)  # ddof=1 与 pandas 一致
+            x_thresh_g = mean_g + z_threshold * std_g
+            stats["per_group"][g] = {
+                "mean": float(mean_g),
+                "std": float(std_g),
+                "threshold_value": float(x_thresh_g),
+                "z_threshold": float(z_threshold),
+                "is_group_relative": True
             }
-        else:
-            # For raw scores, calculate threshold as mean + z_threshold * std
-            all_scores = []
-            for scores in groups.values():
-                all_scores.extend(scores)
-            all_scores = np.array(all_scores)
-            mean_score = np.mean(all_scores)
-            std_score = np.std(all_scores, ddof=1)  # Use sample std for consistency with pandas
-            x_thresh = mean_score + z_threshold * std_score
-            
-            stats = {
-                'mean': mean_score,
-                'std': std_score,
-                'threshold_value': x_thresh,
-                'z_threshold': z_threshold,
-                'is_standardized_score': False
-            }
-    
-    # Create plot
+
+    # --- 画图 ---
     plt.figure(figsize=figsize)
-    
-    # Plot distributions
-    for group_name in group_names:
-        if group_name in groups:
-            scores = groups[group_name]
-            color = color_map.get(group_name, "#1f77b4")
-            sns.kdeplot(scores, label=group_name, fill=True, color=color, linewidth=2)
-    
-    # Add threshold line if requested
+
+    # 分布
+    for g in group_names:
+        if g in groups:
+            sns.kdeplot(groups[g], label=g, fill=True, color=color_map.get(g, "#1f77b4"), linewidth=2)
+
+    # 阈值线（每组一条，对应各自颜色）
     if show_threshold:
-        plt.axvline(x_thresh, color="grey", linestyle="--", linewidth=1.5)
-        
-        # Dynamic text positioning
-        ax = plt.gca()
-        y_max = ax.get_ylim()[1]
-        text_y = y_max * 0.85
-        
-        # Custom or default threshold label
-        if threshold_label is None:
-            threshold_label = f"z = {z_threshold}"
-        
-        plt.text(x_thresh + (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02, 
-                text_y, threshold_label, color="grey", fontsize=11)
-    
-    # Formatting
-    if is_standardized_score:
-        plt.xlabel("Standardized Rarity Score", fontsize=13)
-    else:
-        plt.xlabel("Prefix Rarity Score", fontsize=13)
+        for g in group_names:
+            if g in stats["per_group"]:
+                xg = stats["per_group"][g]["threshold_value"]
+                plt.axvline(xg, color=color_map.get(g, "#1f77b4"), linestyle="--", linewidth=1.6)
+                # 文本标签
+                ax = plt.gca()
+                y_max = ax.get_ylim()[1]
+                text_y = y_max * 0.9
+                lbl = threshold_label or f"z = {z_threshold}"
+                # 稍微错开一点，避免重叠
+                plt.text(xg, text_y, f"{g}: {lbl}", fontsize=10, ha="left", va="top", color=color_map.get(g, "#1f77b4"))
+
+    # 轴与样式
+    plt.xlabel("Prefix Rarity Score" if not is_standardized_score else "Standardized Rarity Score", fontsize=13)
     plt.ylabel("Density", fontsize=13)
     if len(group_names) > 1:
         plt.legend(title="Group")
     sns.despine()
     plt.tight_layout()
-    
-    # Save and show
+
     if save_as:
         plt.savefig(f"{save_as}.png", dpi=dpi, bbox_inches='tight')
-    
     if show:
         plt.show()
-    
+
     return stats
 
 
