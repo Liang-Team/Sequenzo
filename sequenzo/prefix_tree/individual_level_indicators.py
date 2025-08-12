@@ -46,7 +46,7 @@ class IndividualDivergence:
                 freq_by_year[t][tuple(prefix)] += 1
         return freq_by_year
 
-    def compute_diverged(self, z_threshold=1.5, min_t=3, window=1, inclusive=False):
+    def compute_diverged(self, z_threshold=1.5, min_t=2, window=1, inclusive=False):
         """
         Compute binary diverged status based on rarity score z-scores.
 
@@ -90,7 +90,7 @@ class IndividualDivergence:
             flags.append(diverged)
         return flags
 
-    def compute_first_divergence_year(self, z_threshold=1.5, min_t=3, window=1, inclusive=False):
+    def compute_first_divergence_year(self, z_threshold=1.5, min_t=2, window=1, inclusive=False):
         """
         Compute the first divergence year for each individual based on rarity score z-scores.
         
@@ -108,7 +108,7 @@ class IndividualDivergence:
         -----------
         z_threshold : float, default=1.5
             Z-score threshold for defining divergence from mainstream
-        min_t : int, default=3
+        min_t : int, default=2
             Minimum year (1-indexed) considered valid for divergence detection
         window : int, default=1
             Number of consecutive high-z years required to confirm divergence
@@ -222,7 +222,7 @@ class IndividualDivergence:
             rarity_scores.append(score)
         return rarity_scores
 
-    def diagnose_divergence_calculation(self, z_threshold=1.5, min_t=3, window=1):
+    def diagnose_divergence_calculation(self, z_threshold=1.5, min_t=2, window=1):
         """
         Diagnostic function to analyze divergence year calculation and identify 
         years with insufficient variance (std ≈ 0) that cannot trigger divergence.
@@ -285,7 +285,7 @@ class IndividualDivergence:
             }
         }
 
-    def compute_standardized_rarity_score(self, min_t=3, window=1):
+    def compute_standardized_rarity_score(self, min_t=2, window=1):
         """
         Compute standardized rarity scores for divergence classification and visualization
         using true statistical z-scores.
@@ -302,7 +302,7 @@ class IndividualDivergence:
         
         Parameters:
         -----------
-        min_t : int, default=3
+        min_t : int, default=2
             Minimum year (1-indexed) after which divergence is considered valid
         window : int, default=1
             Number of consecutive high-z years required
