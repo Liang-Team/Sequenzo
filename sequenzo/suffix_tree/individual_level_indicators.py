@@ -62,28 +62,146 @@ class IndividualConvergence:
 
     # Divergence-related computations are intentionally omitted in this convergence-focused module.
 
-    def compute_converged(self, z_threshold=1.5, min_t=1, max_t=None, window=1, inclusive=False, group_labels=None):
+    def compute_converged(
+        self,
+        z_threshold=1.5,
+        min_t=1,
+        max_t=None,
+        window=1,
+        inclusive=False,
+        group_labels=None,
+        *,
+        method: str = "zscore",
+        proportion: float | None = None,
+        quantile_p: float | None = None,
+        min_count: int = 1,
+    ):
         """
-        Compute binary converged status based on suffix rarity score z-scores.
-        
-        Convergence is defined as low rarity (more typical) sustained over time.
-        An individual converges when their rarity z-scores fall below -z_threshold
-        for consecutive years, indicating movement toward more common patterns.
+        Compute binary convergence flags with multiple selection methods.
 
-        :param z_threshold: Z-score threshold below which (as -z_threshold) an individual is considered converged.
-        :param min_t: Minimum year (1-indexed) after which convergence is considered valid (default: 1).
-        :param max_t: Maximum year (1-indexed) before which convergence is considered valid. 
-                      If None, uses T-window+1.
-        :param window: Number of consecutive low-rarity-z years required (default: 1).
-        :param inclusive: If True, uses <= comparison; if False, uses < comparison (default: False).
-        :param group_labels: Optional list of group labels (same length as sequences) for within-group convergence calculation.
-        :return: List of 0/1 flags indicating whether each individual converged.
+        Definition (common intuition): lower suffix-rarity implies more typical behavior.
+        We compute per-year rarity via suffix frequencies and then detect convergence using
+        one of the following methods:
+
+        Methods
+        -------
+        - "zscore" (window-based, default):
+          Uses per-year z-scores of rarity. A person is converged if there exists a window
+          of length `window` starting between years `[min_t, max_t]` where all z-scores are
+          below `-z_threshold` (use `inclusive=True` for `<=`). Zero-variance years remain
+          NaN and any window containing NaN is skipped.
+
+        - "top_proportion" (aka "topk"/"proportion"/"rank"):
+          Uses the aggregated standardized score from `compute_standardized_rarity_score`
+          (lower = more typical). Select the most typical `proportion` within each group if
+          `group_labels` is provided, otherwise globally. `min_count` ensures at least the
+          specified number per group.
+
+        - "quantile":
+          Uses a quantile threshold (`quantile_p`) on the aggregated standardized score,
+          within each group (or globally if no `group_labels`). Individuals at or below the
+          threshold are marked converged.
+
+        Parameters
+        ----------
+        z_threshold : float, default 1.5
+            zscore method only. Converged when z < -z_threshold (or <= if inclusive=True).
+        min_t, max_t : int
+            Search interval for the starting year (1-indexed). If max_t is None, uses T - window + 1.
+        window : int, default 1
+            Number of consecutive years required in zscore method and used in standardized aggregation.
+        inclusive : bool, default False
+            zscore method only. If True, use <= comparisons.
+        group_labels : array-like or None
+            If provided, proportion/quantile selections are computed within each group.
+        method : str, default "zscore"
+            One of {"zscore", "top_proportion" (aliases: "topk","proportion","rank"), "quantile"}.
+        proportion : float or None
+            For top_proportion. Fraction (0,1) to select as converged. Defaults to 0.10 if None.
+        quantile_p : float or None
+            For quantile. Quantile in (0,1) used as threshold. Defaults to 0.10 if None.
+        min_count : int, default 1
+            For top_proportion. Lower bound for number selected per group.
+
+        Returns
+        -------
+        list[int]
+            0/1 indicator for each individual.
         """
         if max_t is None:
             max_t = self.T - window + 1
 
         N = len(self.sequences)
-        
+        method_norm = (method or "zscore").lower()
+
+        # Branch: rank/quantile style selections using aggregated standardized scores
+        if method_norm in {"top_proportion", "topk", "proportion", "rank"}:
+            p = proportion if proportion is not None else 0.10
+            scores = np.asarray(
+                self.compute_standardized_rarity_score(min_t=min_t, max_t=max_t, window=window), dtype=float
+            )
+            if group_labels is None:
+                vals = scores
+                finite_mask = np.isfinite(vals)
+                n_valid = int(np.sum(finite_mask))
+                if n_valid == 0:
+                    return [0] * N
+                k = int(np.floor(p * n_valid))
+                if k < int(min_count):
+                    k = int(min_count)
+                if k > n_valid:
+                    k = n_valid
+                order = np.argsort(np.where(np.isfinite(vals), vals, np.inf), kind="mergesort")
+                flags = np.zeros(N, dtype=int)
+                if k >= 1:
+                    selected = order[:k]
+                    flags[selected] = 1
+                return flags.tolist()
+            else:
+                flags, _ = self.compute_converged_by_top_proportion(
+                    group_labels=group_labels,
+                    proportion=float(p),
+                    min_t=min_t,
+                    max_t=max_t,
+                    window=window,
+                    min_count=min_count,
+                )
+                return flags
+
+        if method_norm == "quantile":
+            q = quantile_p if quantile_p is not None else 0.10
+            scores = np.asarray(
+                self.compute_standardized_rarity_score(min_t=min_t, max_t=max_t, window=window), dtype=float
+            )
+            flags = np.zeros(N, dtype=int)
+            if group_labels is None:
+                # Global quantile
+                valid = scores[np.isfinite(scores)]
+                if valid.size == 0:
+                    return flags.tolist()
+                try:
+                    xq = float(np.nanquantile(scores, q))
+                except Exception:
+                    xq = float(np.quantile(valid, q))
+                flags[np.where(scores <= xq)[0]] = 1
+                return flags.tolist()
+            else:
+                labels = np.asarray(group_labels)
+                for g in pd.unique(labels):
+                    idx = np.where(labels == g)[0]
+                    vals = scores[idx]
+                    valid = vals[np.isfinite(vals)]
+                    if valid.size == 0:
+                        continue
+                    try:
+                        xq = float(np.nanquantile(vals, q))
+                    except Exception:
+                        xq = float(np.quantile(valid, q))
+                    local = np.where(vals <= xq)[0]
+                    flags[idx[local]] = 1
+                return flags.tolist()
+
+        # Default branch: z-score window logic (supports group or global frequencies)
         if group_labels is not None:
             # 组内收敛：使用组内频率和样本大小
             return self._compute_converged_by_group(z_threshold, min_t, max_t, window, inclusive, group_labels)
@@ -99,21 +217,24 @@ class IndividualConvergence:
             rarity_matrix.append(score)
 
         rarity_df = pd.DataFrame(rarity_matrix)
+        # 按列 z 标准化；保留 NaN（零方差年份），后续窗口检测时跳过含 NaN 的窗口
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-        # 处理零方差年份：NaN 会使比较失败，显式设为无穷大以确保不满足收敛条件
-        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan)
 
         flags = []
         for i in range(N):
             z = rarity_z.iloc[i]
             converged = 0
             for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed, max_t already accounts for window
+                # 跳过包含 NaN 的窗口（如零方差年份）
+                vals = [z.iloc[t + k] for k in range(window)]
+                if not np.all(np.isfinite(vals)):
+                    continue
                 # 收敛 = 低稀有（更典型）
                 if inclusive:
-                    condition = all(z[t + k] <= -z_threshold for k in range(window))
+                    condition = all(v <= -z_threshold for v in vals)
                 else:
-                    condition = all(z[t + k] < -z_threshold for k in range(window))
-                
+                    condition = all(v < -z_threshold for v in vals)
                 if condition:
                     converged = 1
                     break
@@ -170,18 +291,20 @@ class IndividualConvergence:
             # 计算 z 分数
             rarity_df = pd.DataFrame(rarity_matrix)
             rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan)
             
             # 判断收敛
             for i, orig_idx in enumerate(group_indices):
                 z = rarity_z.iloc[i]
                 converged = 0
                 for t in range(min_t - 1, max_t):
+                    vals = [z.iloc[t + k] for k in range(window)]
+                    if not np.all(np.isfinite(vals)):
+                        continue
                     if inclusive:
-                        condition = all(z[t + k] <= -z_threshold for k in range(window))
+                        condition = all(v <= -z_threshold for v in vals)
                     else:
-                        condition = all(z[t + k] < -z_threshold for k in range(window))
-                    
+                        condition = all(v < -z_threshold for v in vals)
                     if condition:
                         converged = 1
                         break
@@ -192,42 +315,207 @@ class IndividualConvergence:
 
     # First-divergence timing is intentionally omitted in this convergence-focused module.
 
-    def compute_first_convergence_year(self, z_threshold=1.5, min_t=1, max_t=None, window=1, inclusive=False, group_labels=None):
+    def compute_first_convergence_year(
+        self,
+        z_threshold=1.5,
+        min_t=1,
+        max_t=None,
+        window=1,
+        inclusive=False,
+        group_labels=None,
+        *,
+        method: str = "zscore",
+        proportion: float | None = None,
+        quantile_p: float | None = None,
+        min_count: int = 1,
+    ):
         """
-        Compute the first convergence year for each individual based on suffix rarity score z-scores.
-        
-        Returns the earliest year when an individual's trajectory converges to the mainstream,
-        defined as having low rarity z-scores (below -threshold) for consecutive years,
-        indicating movement toward more typical patterns.
+        Compute the first convergence year per individual with multiple selection methods.
 
-        Parameters:
-        -----------
-        z_threshold : float, default=1.5
-            Z-score threshold for defining convergence (convergence when z < -z_threshold)
-        min_t : int, default=1
-            Minimum year (1-indexed) after which convergence is considered valid.
-        max_t : int, optional
-            Maximum year (1-indexed) considered valid for convergence detection.
-            If None, uses T-window+1.
-        window : int, default=1
-            Number of consecutive low-rarity-z years required to confirm convergence
-        inclusive : bool, default=False
-            If True, uses <= comparison; if False, uses < comparison
-        group_labels : list, optional
-            List of group labels (same length as sequences) for within-group convergence calculation
-            
-        Returns:
-        --------
-        List[Optional[int]]
-            List of first convergence years (1-indexed) for each individual.
-            None indicates no convergence detected for that individual.
+        Methods
+        -------
+        - "zscore" (default):
+          Find the earliest starting year t in [min_t, max_t] such that all z-scores in the
+          length-`window` block are below `-z_threshold` (or <= if inclusive=True). Zero-variance
+          years are NaN; windows containing NaN are skipped.
+
+        - "top_proportion" (aka "topk"/"proportion"/"rank"):
+          Use aggregated standardized scores to pick the most typical `proportion` within each group
+          (or globally). For the selected individuals, return the earliest t where the per-window
+          max z-score is <= the selection threshold; others return None. `min_count` is respected.
+
+        - "quantile":
+          Use per-group (or global) quantile threshold `quantile_p` on aggregated standardized scores;
+          individuals at or below the threshold return the earliest qualifying year; others return None.
+
+        Parameters
+        ----------
+        z_threshold, min_t, max_t, window, inclusive, group_labels
+            Same definitions as in `compute_converged` for the zscore method.
+        method : str, default "zscore"
+            One of {"zscore", "top_proportion" (aliases: "topk","proportion","rank"), "quantile"}.
+        proportion : float or None
+            For top_proportion. Fraction (0,1) to select as converged. Defaults to 0.10 if None.
+        quantile_p : float or None
+            For quantile. Quantile in (0,1) used as threshold. Defaults to 0.10 if None.
+        min_count : int, default 1
+            For top_proportion. Lower bound for number selected per group.
+
+        Returns
+        -------
+        list[Optional[int]]
+            First convergence years (1-indexed). None indicates no convergence.
         """
         if max_t is None:
             max_t = self.T - window + 1
 
         N = len(self.sequences)
+        method_norm = (method or "zscore").lower()
+
+        # Helper: standardized z matrix and per-t window maxima per individual
+        def _compute_window_max_list():
+            # Build rarity matrix and columnwise z (global standardization)
+            rarity_matrix = []
+            for seq in self.sequences:
+                score = []
+                for t in range(self.T):
+                    suffix = tuple(seq[t:])
+                    freq = self.suffix_freq_by_year[t][suffix] / N
+                    score.append(-np.log(freq + 1e-10))
+                rarity_matrix.append(score)
+            rarity_arr = np.asarray(rarity_matrix, dtype=float)
+            col_means = np.nanmean(rarity_arr, axis=0)
+            col_stds = np.nanstd(rarity_arr, axis=0, ddof=1)
+            with np.errstate(invalid='ignore', divide='ignore'):
+                rarity_z = (rarity_arr - col_means) / col_stds
+            rarity_z = np.where(np.isfinite(rarity_z), rarity_z, np.nan)
+            # Compute per-individual window maxima sequence over t
+            window_maxes = []  # list of list per i
+            for i in range(N):
+                z_scores = rarity_z[i, :]
+                vals_per_t = []
+                for t0 in range(min_t - 1, max_t):
+                    vals = [z_scores[t0 + k] for k in range(window)]
+                    if not np.all(np.isfinite(vals)):
+                        vals_per_t.append(np.nan)
+                    else:
+                        vals_per_t.append(float(np.max(vals)))
+                window_maxes.append(vals_per_t)
+            return np.asarray(window_maxes, dtype=float)
+
+        # Branches for rank/quantile-style thresholds
+        if method_norm in {"top_proportion", "topk", "proportion", "rank", "quantile"}:
+            # Compute aggregated scores for thresholding
+            agg_scores = np.asarray(
+                self.compute_standardized_rarity_score(min_t=min_t, max_t=max_t, window=window), dtype=float
+            )
+            per_t_window_max = _compute_window_max_list()
+
+            if method_norm in {"top_proportion", "topk", "proportion", "rank"}:
+                p = proportion if proportion is not None else 0.10
+                if group_labels is None:
+                    vals = agg_scores
+                    finite_mask = np.isfinite(vals)
+                    n_valid = int(np.sum(finite_mask))
+                    if n_valid == 0:
+                        return [None] * N
+                    k = int(np.floor(p * n_valid))
+                    if k < int(min_count):
+                        k = int(min_count)
+                    if k > n_valid:
+                        k = n_valid
+                    order = np.argsort(np.where(np.isfinite(vals), vals, np.inf), kind="mergesort")
+                    selected_idx = set(order[:k].tolist()) if k >= 1 else set()
+                    years = []
+                    for i in range(N):
+                        if i not in selected_idx:
+                            years.append(None)
+                            continue
+                        wm = per_t_window_max[i]
+                        # threshold value is kth value
+                        thresh_val = vals[order[k - 1]] if k >= 1 else np.nan
+                        if not np.isfinite(thresh_val):
+                            years.append(None)
+                            continue
+                        # earliest t where window_max <= threshold
+                        yr = None
+                        for t_idx, wv in enumerate(wm):
+                            if np.isfinite(wv) and wv <= float(thresh_val):
+                                yr = t_idx + 1  # 1-indexed
+                                break
+                        years.append(yr)
+                    return years
+                else:
+                    labels = np.asarray(group_labels)
+                    years = [None] * N
+                    for g in pd.unique(labels):
+                        idx = np.where(labels == g)[0]
+                        vals = agg_scores[idx]
+                        finite_mask = np.isfinite(vals)
+                        n_valid = int(np.sum(finite_mask))
+                        if n_valid == 0:
+                            continue
+                        k = int(np.floor(p * n_valid))
+                        if k < int(min_count):
+                            k = int(min_count)
+                        if k > n_valid:
+                            k = n_valid
+                        order_local = np.argsort(np.where(np.isfinite(vals), vals, np.inf), kind="mergesort")
+                        selected_local = set(order_local[:k].tolist()) if k >= 1 else set()
+                        thresh_val = vals[order_local[k - 1]] if k >= 1 else np.nan
+                        for j_local, i_global in enumerate(idx):
+                            if j_local not in selected_local or not np.isfinite(thresh_val):
+                                continue
+                            wm = per_t_window_max[i_global]
+                            for t_idx, wv in enumerate(wm):
+                                if np.isfinite(wv) and wv <= float(thresh_val):
+                                    years[i_global] = t_idx + 1
+                                    break
+                    return years
+
+            # quantile branch
+            q = quantile_p if quantile_p is not None else 0.10
+            years = [None] * N
+            if group_labels is None:
+                valid = agg_scores[np.isfinite(agg_scores)]
+                if valid.size == 0:
+                    return years
+                try:
+                    xq = float(np.nanquantile(agg_scores, q))
+                except Exception:
+                    xq = float(np.quantile(valid, q))
+                for i in range(N):
+                    if not np.isfinite(agg_scores[i]) or agg_scores[i] > xq:
+                        continue
+                    wm = per_t_window_max[i]
+                    for t_idx, wv in enumerate(wm):
+                        if np.isfinite(wv) and wv <= xq:
+                            years[i] = t_idx + 1
+                            break
+                return years
+            else:
+                labels = np.asarray(group_labels)
+                for g in pd.unique(labels):
+                    idx = np.where(labels == g)[0]
+                    vals = agg_scores[idx]
+                    valid = vals[np.isfinite(vals)]
+                    if valid.size == 0:
+                        continue
+                    try:
+                        xq = float(np.nanquantile(vals, q))
+                    except Exception:
+                        xq = float(np.quantile(valid, q))
+                    for j_local, i_global in enumerate(idx):
+                        if not np.isfinite(vals[j_local]) or vals[j_local] > xq:
+                            continue
+                        wm = per_t_window_max[i_global]
+                        for t_idx, wv in enumerate(wm):
+                            if np.isfinite(wv) and wv <= xq:
+                                years[i_global] = t_idx + 1
+                                break
+                return years
         
-        if group_labels is not None:
+        if group_labels is not None and method_norm == "zscore":
             # 组内收敛：使用组内频率和样本大小
             return self._compute_first_convergence_year_by_group(z_threshold, min_t, max_t, window, inclusive, group_labels)
         
@@ -243,20 +531,22 @@ class IndividualConvergence:
 
         rarity_df = pd.DataFrame(rarity_matrix)
         rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-        # 处理零方差年份：NaN 会使比较失败，显式设为无穷大以确保不满足收敛条件
-        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+        # 保留 NaN 以便跳过含零方差年份的窗口
+        rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan)
 
         years = []
         for i in range(N):
             z = rarity_z.iloc[i]
             year = None
             for t in range(min_t - 1, max_t):  # min_t-1 for 0-indexed, max_t already accounts for window
+                vals = [z.iloc[t + k] for k in range(window)]
+                if not np.all(np.isfinite(vals)):
+                    continue
                 # 收敛 = 低稀有（更典型）
                 if inclusive:
-                    condition = all(z[t + k] <= -z_threshold for k in range(window))
+                    condition = all(v <= -z_threshold for v in vals)
                 else:
-                    condition = all(z[t + k] < -z_threshold for k in range(window))
-                
+                    condition = all(v < -z_threshold for v in vals)
                 if condition:
                     year = t + 1  # Convert to 1-indexed
                     break
@@ -311,18 +601,20 @@ class IndividualConvergence:
             # 计算 z 分数
             rarity_df = pd.DataFrame(rarity_matrix)
             rarity_z = rarity_df.apply(lambda x: (x - x.mean()) / x.std(), axis=0)
-            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan).fillna(np.inf)
+            rarity_z = rarity_z.replace([np.inf, -np.inf], np.nan)
             
             # 寻找第一次收敛年份
             for i, orig_idx in enumerate(group_indices):
                 z = rarity_z.iloc[i]
                 year = None
                 for t in range(min_t - 1, max_t):
+                    vals = [z.iloc[t + k] for k in range(window)]
+                    if not np.all(np.isfinite(vals)):
+                        continue
                     if inclusive:
-                        condition = all(z[t + k] <= -z_threshold for k in range(window))
+                        condition = all(v <= -z_threshold for v in vals)
                     else:
-                        condition = all(z[t + k] < -z_threshold for k in range(window))
-                    
+                        condition = all(v < -z_threshold for v in vals)
                     if condition:
                         year = t + 1
                         break
