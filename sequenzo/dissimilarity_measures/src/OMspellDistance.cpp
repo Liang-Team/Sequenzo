@@ -177,12 +177,17 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-#pragma omp for schedule(static)
+            #pragma omp for schedule(static)
             for (int i = 0; i < nseq; i++) {
                 for (int j = i; j < nseq; j++) {
-                    double dist = compute_distance(i, j);
-                    buffer(i, j) = dist;
-                    buffer(j, i) = dist;
+                    buffer(i, j) = compute_distance(i, j);
+                }
+            }
+
+            #pragma omp for schedule(static)
+            for (int i = 0; i < nseq; ++i) {
+                for (int j = 0; j < i; ++j) {  // 遍历下三角的每一行
+                    buffer(i, j) = buffer(j, i);
                 }
             }
 
@@ -198,7 +203,7 @@ public:
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
             double cmpres = 0;
-#pragma omp for schedule(static)
+            #pragma omp for schedule(static)
             for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                 for (int is = 0; is < nseq; is ++) {
                     if(is == rseq){

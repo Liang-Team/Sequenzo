@@ -88,6 +88,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # print(c_code)  # 是否为 None
     # print(dir(c_code))  # 检查它的属性
 
+    start_time = time.time()
+
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -255,6 +257,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in ["HAM", "DHD"]:
         if seqs_dlens.shape[0] > 1:
             raise ValueError(f"[x] {method} is not defined for sequences of different length.")
+
+    end_time = time.time()
+    print("检查传入参数合法性的耗时：", end_time - start_time)
+    start_time = time.time()
 
     # ==============
     # Configure Norm
@@ -495,6 +501,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # C++ already guarantees that invalid values will not be accessed
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
 
+    end_time = time.time()
+    print("预处理参数的耗时：", end_time - start_time)
+    start_time = time.time()
+
     if refseq_type != "none":
         if len(refseq_id) == 1:
             refseq_id = [refseq_id, refseq_id]
@@ -583,14 +593,21 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-        if full_matrix:
-            _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
-            _dist2matrix = _matrix.padding_matrix()
+    end_time = time.time()
+    print("计算距离矩阵的耗时：", end_time - start_time)
+    start_time = time.time()
 
-            dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+    if full_matrix:
+        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+        _dist2matrix = _matrix.padding_matrix()
 
-        else:
-            dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
+        dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+
+    else:
+        dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
+
+    end_time = time.time()
+    print("填充距离矩阵的耗时：", end_time - start_time)
 
     print("[>] Computed Successfully.")
     return dist_matrix

@@ -17,8 +17,16 @@ from sequenzo.clustering.KMedoids import KMedoids
 # CSV 文件路径列表
 csv_files = [
     # 'country_co2_emissions_missing.csv',
+    # 'sampled_500_data.csv',
     # 'sampled_1000_data.csv',
-    'sampled_5000_data.csv',
+    # 'sampled_1500_data.csv',
+    'sampled_2000_data.csv',
+    # 'sampled_2500_data.csv',
+    # 'sampled_3000_data.csv',
+    # 'sampled_3500_data.csv',
+    # 'sampled_4000_data.csv',
+    # 'sampled_4500_data.csv',
+    # 'sampled_5000_data.csv',
     # 'sampled_10000_data.csv',
     # 'sampled_15000_data.csv',
     # 'sampled_20000_data.csv',
@@ -27,9 +35,9 @@ csv_files = [
     # 'sampled_35000_data.csv',
     # 'sampled_38900_data.csv',
     # 'sampled_40000_data.csv',
-    # 'sampled_45000_data.csv',
+    #  'sampled_45000_data.csv',
     # 'sampled_50000_data.csv',
-    # 'sampled_55000_data.csv',
+    #'sampled_55000_data.csv',
     # 'sampled_60000_data.csv',
 ]
 

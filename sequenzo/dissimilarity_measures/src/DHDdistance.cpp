@@ -92,9 +92,14 @@ public:
                 #pragma omp for schedule(static)
                 for (int i = 0; i < nseq; i++) {
                     for (int j = i; j < nseq; j++) {
-                        double dist = compute_distance(i, j);
-                        buffer(i, j) = dist;
-                        buffer(j, i) = dist;
+                        buffer(i, j) = compute_distance(i, j);
+                    }
+                }
+
+                #pragma omp for schedule(static)
+                for (int i = 0; i < nseq; ++i) {
+                    for (int j = 0; j < i; ++j) {  // 遍历下三角的每一行
+                        buffer(i, j) = buffer(j, i);
                     }
                 }
             }
