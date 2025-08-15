@@ -11,6 +11,7 @@
     and can be used for both overall and subgroup analyses.
 """
 from collections import defaultdict, Counter
+from typing import Optional
 import numpy as np
 import pandas as pd
 
@@ -55,8 +56,8 @@ class IndividualDivergence:
         group_labels=None,
         *,
         method: str = "zscore",
-        proportion: float | None = None,
-        quantile_p: float | None = None,
+        proportion: Optional[float] = None,
+        quantile_p: Optional[float] = None,
         min_count: int = 1,
     ):
         """
@@ -108,7 +109,7 @@ class IndividualDivergence:
 
         Returns
         -------
-        list[int]
+        List[int]
             0/1 indicator for each individual.
         """
         N = len(self.sequences)
@@ -240,8 +241,8 @@ class IndividualDivergence:
         group_labels=None,
         *,
         method: str = "zscore",
-        proportion: float | None = None,
-        quantile_p: float | None = None,
+        proportion: Optional[float] = None,
+        quantile_p: Optional[float] = None,
         min_count: int = 1,
     ):
         """
@@ -278,7 +279,7 @@ class IndividualDivergence:
 
         Returns
         -------
-        list[Optional[int]]
+        List[Optional[int]]
             First divergence years (1-indexed). None indicates no divergence.
         """
         N = len(self.sequences)

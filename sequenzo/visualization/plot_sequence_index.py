@@ -19,15 +19,31 @@ from sequenzo.visualization.utils import (
 )
 
 
+def smart_sort_groups(groups):
+    """
+    Smart sorting: prioritize numeric prefix, fallback to string sorting
+    
+    :param groups: List of group names
+    :return: Sorted list of group names
+    """
+    import re
+    
+    def sort_key(item):
+        match = re.match(r'^(\d+)', str(item))
+        return (int(match.group(1)), str(item)) if match else (float('inf'), str(item))
+    
+    return sorted(groups, key=sort_key)
+
+
 def sort_sequences_by_structure(seqdata, method="first_marriage", target_state=3, mask=None):
     """
-    根据结构信息对 SequenceData 中的序列排序。
+    Sort sequences in SequenceData based on structural information.
 
     :param seqdata: SequenceData object
-    :param method: str, 排序方式
-    :param target_state: int, first_marriage 时的目标状态
-    :param mask: np.array(bool), 若提供则只对该子集排序
-    :return: np.array 排序索引（相对于原始顺序）
+    :param method: str, sorting method
+    :param target_state: int, target state for first_marriage method
+    :param mask: np.array(bool), if provided, sort only this subset
+    :return: np.array sorting indices (relative to original order)
     """
     values = seqdata.values.copy()
     time_points = np.arange(values.shape[1])
@@ -66,7 +82,9 @@ def plot_sequence_index(seqdata: SequenceData,
                         dpi=200,
                         layout='column',
                         nrows: int = None,
-                        ncols: int = None
+                        ncols: int = None,
+                        group_order=None,
+                        sort_groups='auto'
                         ):
     """
     Creates sequence index plots, optionally grouped by categories.
@@ -81,6 +99,8 @@ def plot_sequence_index(seqdata: SequenceData,
     :param save_as: File path to save the plot (if None, plot will be shown)
     :param dpi: DPI for saved image
     :param layout: Layout style - 'column' (default, 3xn), 'grid' (nxn)
+    :param group_order: List, manually specify group order (overrides sort_groups)
+    :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
     """
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
@@ -89,8 +109,22 @@ def plot_sequence_index(seqdata: SequenceData,
     # Ensure ID columns match (convert if needed)
     id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
 
-    # Get unique groups and sort them
-    groups = sorted(id_group_df[categories].unique())
+    # Get unique groups and sort them based on user preference
+    if group_order:
+        # Use manually specified order, filter out non-existing groups
+        groups = [g for g in group_order if g in id_group_df[categories].unique()]
+        missing_groups = [g for g in id_group_df[categories].unique() if g not in group_order]
+        if missing_groups:
+            print(f"[Warning] Groups not in group_order will be excluded: {missing_groups}")
+    elif sort_groups == 'numeric' or sort_groups == 'auto':
+        groups = smart_sort_groups(id_group_df[categories].unique())
+    elif sort_groups == 'alpha':
+        groups = sorted(id_group_df[categories].unique())
+    elif sort_groups == 'none':
+        groups = list(id_group_df[categories].unique())
+    else:
+        raise ValueError(f"Invalid sort_groups value: {sort_groups}. Use 'auto', 'numeric', 'alpha', or 'none'.")
+    
     num_groups = len(groups)
 
     # Calculate figure size and layout based on number of groups and specified layout

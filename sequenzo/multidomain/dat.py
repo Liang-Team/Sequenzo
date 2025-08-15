@@ -4,6 +4,7 @@
 @Time    : 15/04/2025 17:28
 @Desc    : DAT (Distance Additive Trick) strategy with customizable dissimilarity parameters per domain.
 """
+from typing import List, Dict
 import pandas as pd
 import numpy as np
 from sequenzo.define_sequence_data import SequenceData
@@ -12,7 +13,7 @@ from sequenzo.dissimilarity_measures import get_distance_matrix
 
 def compute_dat_distance_matrix(
     sequence_objects: list,
-    method_params: list[dict] = None
+    method_params: List[Dict] = None
 ) -> np.ndarray:
     """
     Compute Distance Additive Trick (DAT) distance matrix.

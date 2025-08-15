@@ -5,12 +5,13 @@
 @Desc    :
     IDCD strategy for multidomain sequence analysis in Python, with custom time, states, and labels.
 """
+from typing import List, Dict
 import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 
 
-def _generate_combined_sequence_from_csv(csv_paths: list[str],
-                                         time_cols: list[str],
+def _generate_combined_sequence_from_csv(csv_paths: List[str],
+                                         time_cols: List[str],
                                          id_col: str = "id") -> pd.DataFrame:
     """
     Load multiple CSVs, extract time sequences, and combine into a multidomain sequence.
@@ -72,11 +73,11 @@ def _generate_combined_sequence_from_csv(csv_paths: list[str],
 
 
 def create_idcd_sequence_from_csvs(
-    csv_paths: list[str],
-    time_cols: list[str],
+    csv_paths: List[str],
+    time_cols: List[str],
     time_type: str = "year",
     id_col: str = "id",
-    domain_state_labels: list[dict] = None
+    domain_state_labels: List[Dict] = None
 ) -> SequenceData:
     """
     Create IDCD-style SequenceData from multiple CSVs.

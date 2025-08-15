@@ -17,6 +17,7 @@
     - Path uniqueness for extreme structural isolation
 """
 from collections import defaultdict
+from typing import Optional, List
 import numpy as np
 import pandas as pd
 
@@ -72,8 +73,8 @@ class IndividualConvergence:
         group_labels=None,
         *,
         method: str = "zscore",
-        proportion: float | None = None,
-        quantile_p: float | None = None,
+        proportion: Optional[float] = None,
+        quantile_p: Optional[float] = None,
         min_count: int = 1,
     ):
         """
@@ -125,7 +126,7 @@ class IndividualConvergence:
 
         Returns
         -------
-        list[int]
+        List[int]
             0/1 indicator for each individual.
         """
         if max_t is None:
@@ -325,8 +326,8 @@ class IndividualConvergence:
         group_labels=None,
         *,
         method: str = "zscore",
-        proportion: float | None = None,
-        quantile_p: float | None = None,
+        proportion: Optional[float] = None,
+        quantile_p: Optional[float] = None,
         min_count: int = 1,
     ):
         """
@@ -363,7 +364,7 @@ class IndividualConvergence:
 
         Returns
         -------
-        list[Optional[int]]
+        List[Optional[int]]
             First convergence years (1-indexed). None indicates no convergence.
         """
         if max_t is None:
@@ -788,7 +789,7 @@ class IndividualConvergence:
         group_labels,
         proportion: float = 0.10,
         min_t: int = 1,
-        max_t: int | None = None,
+        max_t: Optional[int] = None,
         window: int = 1,
         min_count: int = 1,
     ):
@@ -811,7 +812,7 @@ class IndividualConvergence:
             Top p proportion to mark as converged within each group (0<p<1).
         min_t : int, default 1
             Minimum year considered in the aggregated score.
-        max_t : int | None, default None
+        max_t : Optional[int], default None
             Maximum starting year considered; if None, uses T-window+1.
         window : int, default 1
             Number of consecutive years in the aggregated statistic.
@@ -820,7 +821,7 @@ class IndividualConvergence:
 
         Returns
         -------
-        tuple[list[int], dict]
+        tuple[List[int], dict]
             (flags, info) where flags is a 0/1 list for convergence, and info is per-group metadata:
             {group: {"k": int, "n": int, "threshold_value": float}}
         """
@@ -1508,7 +1509,7 @@ def compute_quantile_thresholds_by_group(scores, group_labels, quantiles=None):
         Scores (e.g., standardized rarity) aligned with labels.
     group_labels : array-like of shape (N,)
         Group label per observation.
-    quantiles : list[float] | None
+    quantiles : Optional[List[float]]
         Quantiles to compute (e.g., [0.10]). Defaults to [0.10].
 
     Returns
@@ -1548,7 +1549,7 @@ def compute_quantile_thresholds_by_group_year(scores, group_labels, year_labels,
         Group label per observation.
     year_labels : array-like of shape (N,)
         Year label per observation (int/str).
-    quantiles : list[float] | None
+    quantiles : Optional[List[float]]
         Quantiles to compute (e.g., [0.10]). Defaults to [0.10].
     min_group_year_size : int, default 30
         Minimum sample size to compute thresholds for a group-year cell. If fewer, returns NaN.

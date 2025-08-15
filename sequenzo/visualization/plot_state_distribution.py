@@ -19,6 +19,22 @@ from sequenzo.visualization.utils import (
 )
 
 
+def smart_sort_groups(groups):
+    """
+    Smart sorting: prioritize numeric prefix, fallback to string sorting
+    
+    :param groups: List of group names
+    :return: Sorted list of group names
+    """
+    import re
+    
+    def sort_key(item):
+        match = re.match(r'^(\d+)', str(item))
+        return (int(match.group(1)), str(item)) if match else (float('inf'), str(item))
+    
+    return sorted(groups, key=sort_key)
+
+
 def plot_state_distribution(seqdata: SequenceData,
                             id_group_df=None,
                             categories=None,
@@ -33,7 +49,9 @@ def plot_state_distribution(seqdata: SequenceData,
                             ncols: int = None,
                             stacked=True,
                             show=True,
-                            include_legend=True) -> None:
+                            include_legend=True,
+                            group_order=None,
+                            sort_groups='auto') -> None:
     """
     Creates state distribution plots for different groups, showing how state
     prevalence changes over time within each group.
@@ -49,6 +67,8 @@ def plot_state_distribution(seqdata: SequenceData,
     :param dpi: (int) Resolution of the saved plot
     :param layout: (str) Layout style - 'column' (default, 3xn), 'grid' (nxn)
     :param stacked: (bool) Whether to create stacked area plots (True) or line plots (False)
+    :param group_order: List, manually specify group order (overrides sort_groups)
+    :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
 
     :return: None
     """
@@ -64,8 +84,22 @@ def plot_state_distribution(seqdata: SequenceData,
     # Ensure ID columns match (convert if needed)
     id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
 
-    # Get unique groups and sort them
-    groups = sorted(id_group_df[categories].unique())
+    # Get unique groups and sort them based on user preference
+    if group_order:
+        # Use manually specified order, filter out non-existing groups
+        groups = [g for g in group_order if g in id_group_df[categories].unique()]
+        missing_groups = [g for g in id_group_df[categories].unique() if g not in group_order]
+        if missing_groups:
+            print(f"[Warning] Groups not in group_order will be excluded: {missing_groups}")
+    elif sort_groups == 'numeric' or sort_groups == 'auto':
+        groups = smart_sort_groups(id_group_df[categories].unique())
+    elif sort_groups == 'alpha':
+        groups = sorted(id_group_df[categories].unique())
+    elif sort_groups == 'none':
+        groups = list(id_group_df[categories].unique())
+    else:
+        raise ValueError(f"Invalid sort_groups value: {sort_groups}. Use 'auto', 'numeric', 'alpha', or 'none'.")
+    
     num_groups = len(groups)
 
     # Calculate figure size and layout based on number of groups and specified layout
@@ -128,9 +162,9 @@ def plot_state_distribution(seqdata: SequenceData,
         ax = axes[i]
 
         # Get colors for each state
-        # seqdata.states 是整数编码（如 1, 2, ...）
-        # seqdata.state_mapping[state] 把整数映射为 label（如 'Married', 'Single'）
-        # seqdata.color_map[...] 用 label 取颜色
+        # seqdata.states are integer encodings (e.g., 1, 2, ...)
+        # seqdata.state_mapping[state] maps integers to labels (e.g., 'Married', 'Single')
+        # seqdata.color_map[...] gets color by label
         base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
 
         # Plot the data
@@ -223,11 +257,11 @@ def plot_state_distribution(seqdata: SequenceData,
     plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
     plt.imshow(combined_img)
     plt.axis('off')
-    if show or save_as:  # 显示或保存都需要触发
+    if show or save_as:  # Show if displaying or saving is needed
         plt.show()
     plt.close()
 
-    # 不再返回 fig，避免它被环境自动渲染重复
+    # No longer return fig to avoid duplicate rendering by environment
     return None
     # return fig
 
@@ -356,7 +390,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     save_and_show_results(save_as, dpi=dpi, show=show)
 
     # return fig
-    # 不再返回 fig，避免它被环境自动渲染重复
+    # No longer return fig to avoid duplicate rendering by environment
     return None
 
 

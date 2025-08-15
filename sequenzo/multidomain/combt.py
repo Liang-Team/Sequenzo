@@ -6,6 +6,7 @@
            Split into reusable components to give users control over distance calculation, clustering, and label merging.
 """
 from collections import Counter
+from typing import List
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -23,7 +24,7 @@ from sequenzo.clustering.hierarchical_clustering import Cluster, ClusterQuality
 from sequenzo.visualization.utils.utils import save_and_show_results
 
 
-def _compute_domain_distances(sequence_objects, method_params) -> list[np.ndarray]:
+def _compute_domain_distances(sequence_objects, method_params) -> List[np.ndarray]:
     """
     Compute distance matrices for each domain using specified methods.
 
@@ -49,7 +50,7 @@ def _compute_domain_distances(sequence_objects, method_params) -> list[np.ndarra
     return distances
 
 
-def _assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarray, sep: str = "+") -> pd.Series:
+def _assemble_combined_typology(cluster_labels: List[np.ndarray], ids: np.ndarray, sep: str = "+") -> pd.Series:
     """
     Assemble the combined typology from individual domain cluster labels.
 
@@ -68,9 +69,9 @@ def _assemble_combined_typology(cluster_labels: list[np.ndarray], ids: np.ndarra
 
 
 def _get_combt_membership_table(ids: np.ndarray,
-                                cluster_labels: list[np.ndarray],
+                                cluster_labels: List[np.ndarray],
                                 combined_typology: pd.Series,
-                                domain_names: list[str] = None) -> pd.DataFrame:
+                                domain_names: List[str] = None) -> pd.DataFrame:
     """
     Create a membership table that shows the domain cluster and combined typology for each ID.
 
