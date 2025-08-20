@@ -398,18 +398,54 @@ if __name__ == '__main__':
     from sequenzo import *  # Social sequence analysis
     import pandas as pd  # Import necesarry packages
 
-    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
-    # df = pd.read_csv('/home/xinyi_test/data/detailed_data/sampled_1000_data.csv')
+    # TODO : clara 返回的隶属矩阵要转置一下，因为plot_sequence_index里的参数id_group_df：cluster id 是行，id 是列
 
-    time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # ===============================
+    #             Sohee
+    # ===============================
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
+    # time_list = list(df.columns)[1:133]
+    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
 
+    # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
+
+    # ===============================
+    #             kass
+    # ===============================
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/kass/wide_civil_final_df.csv')
+    # time_list = list(df.columns)[1:]
+    # states = ['Extensive Warfare', 'Limited Violence', 'No Violence', 'Pervasive Warfare', 'Prolonged Warfare',
+    #           'Serious Violence', 'Serious Warfare', 'Sporadic Violence', 'Technological Warfare', 'Total Warfare']
+    # sequence_data = SequenceData(df, time=time_list, time_type="year", states=states, id_col="COUNTRY")
+
+    # ===============================
+    #             CO2
+    # ===============================
+    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+
+    # ===============================
+    #            detailed
+    # ===============================
+    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    time = list(df.columns)[4:]
+    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+                                 time_type="age", time=time, id_col="worker_id", states=states)
+
+    # ===============================
+    #             broad
+    # ===============================
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
     # time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
-
-    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
-    # sequence_data = SequenceData(df, time=time, time_type="age", id_col="worker_id", states=states)
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
 
     result = clara(sequence_data,
                    R=2,

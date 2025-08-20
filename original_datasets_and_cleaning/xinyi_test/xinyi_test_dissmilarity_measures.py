@@ -20,7 +20,7 @@ csv_files = [
     # 'sampled_500_data.csv',
     # 'sampled_1000_data.csv',
     # 'sampled_1500_data.csv',
-    'sampled_2000_data.csv',
+    # 'sampled_2000_data.csv',
     # 'sampled_2500_data.csv',
     # 'sampled_3000_data.csv',
     # 'sampled_3500_data.csv',
@@ -35,9 +35,9 @@ csv_files = [
     # 'sampled_35000_data.csv',
     # 'sampled_38900_data.csv',
     # 'sampled_40000_data.csv',
-    #  'sampled_45000_data.csv',
+     'sampled_45000_data.csv',
     # 'sampled_50000_data.csv',
-    #'sampled_55000_data.csv',
+    # 'sampled_55000_data.csv',
     # 'sampled_60000_data.csv',
 ]
 

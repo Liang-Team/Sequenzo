@@ -88,8 +88,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # print(c_code)  # 是否为 None
     # print(dir(c_code))  # 检查它的属性
 
-    start_time = time.time()
-
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -257,10 +255,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in ["HAM", "DHD"]:
         if seqs_dlens.shape[0] > 1:
             raise ValueError(f"[x] {method} is not defined for sequences of different length.")
-
-    end_time = time.time()
-    print("检查传入参数合法性的耗时：", end_time - start_time)
-    start_time = time.time()
 
     # ==============
     # Configure Norm
@@ -501,10 +495,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # C++ already guarantees that invalid values will not be accessed
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
 
-    end_time = time.time()
-    print("预处理参数的耗时：", end_time - start_time)
-    start_time = time.time()
-
     if refseq_type != "none":
         if len(refseq_id) == 1:
             refseq_id = [refseq_id, refseq_id]
@@ -593,21 +583,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-    end_time = time.time()
-    print("计算距离矩阵的耗时：", end_time - start_time)
-    start_time = time.time()
-
-    if full_matrix:
+    if full_matrix and refseq == None:
         _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
         _dist2matrix = _matrix.padding_matrix()
 
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
+    elif full_matrix == False and refseq != None:
+        print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None.")
+
     else:
         dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
-
-    end_time = time.time()
-    print("填充距离矩阵的耗时：", end_time - start_time)
 
     print("[>] Computed Successfully.")
     return dist_matrix
@@ -652,25 +638,22 @@ if __name__ == '__main__':
     # ===============================
     #             CO2
     # ===============================
-    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 
     # ===============================
     #            detailed
     # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    # time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-    #                              time_type="age", time=time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
-
-    # om.to_csv("", index=False)
-
+    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    time = list(df.columns)[4:]
+    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+                                 time_type="age", time=time, id_col="worker_id", states=states)
+    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     # ===============================
     #             broad

@@ -41,9 +41,10 @@ public:
            }
 
            // 串行对称复制，避免多线程写冲突
+           #pragma omp parallel for schedule(static)
            for (int i = 0; i < nseq; ++i) {
-               for (int j = 0; j < i; ++j) {
-                   buffer(i, j) = buffer(j, i);
+               for (int j = i + 1; j < nseq; ++j) {
+                   buffer(j, i) = buffer(i, j);
                }
            }
 
