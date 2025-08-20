@@ -5,6 +5,7 @@
 @Desc    : 
 """
 from .hierarchical_clustering import Cluster, ClusterResults, ClusterQuality
+from .KMedoids import KMedoids
 
 
 def _import_c_code():
