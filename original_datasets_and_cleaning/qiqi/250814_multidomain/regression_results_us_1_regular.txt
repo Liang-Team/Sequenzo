@@ -1,0 +1,36 @@
+\begin{table}[!htbp] \centering
+\begin{tabular}{@{\extracolsep{5pt}}lcc}
+\\[-1.8ex]\hline
+\hline \\[-1.8ex]
+\\[-1.8ex] & (1) & (2) \\
+\hline \\[-1.8ex]
+ C(gender_female)[T.True] & 0.225$^{***}$ & -0.510$^{***}$ \\
+& (0.061) & (0.061) \\
+ C(highest_educational_degree, Treatment(reference='Bachelor'))[T.Master] & -0.357$^{***}$ & 0.498$^{***}$ \\
+& (0.065) & (0.070) \\
+ C(highest_educational_degree, Treatment(reference='Bachelor'))[T.PhD] & -1.292$^{***}$ & 0.808$^{**}$ \\
+& (0.368) & (0.322) \\
+ C(internationalization, Treatment(reference='Local'))[T.International] & -0.251$^{**}$ & 0.652$^{***}$ \\
+& (0.117) & (0.137) \\
+ C(internationalization, Treatment(reference='Local'))[T.Multinational] & -0.301$^{***}$ & 0.609$^{***}$ \\
+& (0.056) & (0.059) \\
+ C(simplified_company_size, Treatment(reference='Micro (0-10 employees)'))[T.Large (500+ employees)] & 0.093$^{}$ & -0.280$^{*}$ \\
+& (0.152) & (0.161) \\
+ C(simplified_company_size, Treatment(reference='Micro (0-10 employees)'))[T.Medium (51-500 employees)] & 0.197$^{}$ & -0.089$^{}$ \\
+& (0.156) & (0.167) \\
+ C(simplified_company_size, Treatment(reference='Micro (0-10 employees)'))[T.Small (11-50 employees)] & -0.118$^{}$ & 0.494$^{**}$ \\
+& (0.178) & (0.198) \\
+ C(whether_bachelor_university_prestigious, Treatment(reference=False))[T.True] & -0.307$^{***}$ & 0.462$^{***}$ \\
+& (0.059) & (0.062) \\
+ Intercept & -1.327$^{***}$ & 1.957$^{***}$ \\
+& (0.160) & (0.168) \\
+ work_years & 0.006$^{*}$ & -0.037$^{***}$ \\
+& (0.003) & (0.003) \\
+\hline \\[-1.8ex]
+ Observations & 10055 & 10055 \\
+ Pseudo $R^2$ & 0.014 & 0.053 \\
+\hline
+\hline \\[-1.8ex]
+\textit{Note:} & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\
+\end{tabular}
+\end{table}
