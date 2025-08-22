@@ -65,11 +65,11 @@ public:
     py::array_t<int> runclusterloop() {
         auto ptr_diss = diss.unchecked<2>();
         auto ptr_weights = weights.unchecked<1>();
-        auto ptr_centroids = centroids.mutable_unchecked<1>();
-        auto ptr_clusterid = clusterid.mutable_unchecked<1>();
+        auto ptr_centroids = centroids.mutable_data();
+        auto ptr_clusterid = clusterid.mutable_data();
 
         for (int i = 0; i < nelement; i++) {
-            ptr_clusterid(i) = -1;
+            ptr_clusterid[i] = -1;
         }
 
         double dzsky = 1;
@@ -81,7 +81,7 @@ public:
                 dysma[i] = maxdist;
                 dysmb[i] = maxdist;
                 for (int k = 0; k < nclusters; k++) {
-                    int i_cluster = ptr_centroids(k);
+                    int i_cluster = ptr_centroids[k];
                     double dist = ptr_diss(i, i_cluster);
 
                     if (dysma[i] > dist) {
@@ -109,7 +109,7 @@ public:
 
             // 遍历每个聚类中心 i，寻找替换中心 h 的可能性
             for (int k = 0; k < nclusters; k++) {
-                int i = ptr_centroids(k);
+                int i = ptr_centroids[k];
                 double removeCost = 0;
 
                 // 计算移除该 medoid 的成本
@@ -162,8 +162,8 @@ public:
             // 更新 medoids
             if (dzsky < WEIGHTED_CLUST_TOL) {
                 for (int k = 0; k < nclusters; k++) {
-                    if (ptr_centroids(k) == nbest) {
-                        ptr_centroids(k) = hbest;
+                    if (ptr_centroids[k] == nbest) {
+                        ptr_centroids[k] = hbest;
                     }
                 }
                 total += dzsky;
@@ -171,9 +171,14 @@ public:
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
         // 更新最终聚类分配
-        #pragma omp parallel for schedule(static)
+        int init = ptr_centroids[0];
+        #pragma omp parallel for
         for (int j = 0; j < nelement; j++) {
-            ptr_clusterid(j) = ptr_centroids[tclusterid[j]];
+            if (tclusterid[j] != -1){
+                ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
+            } else{
+                ptr_clusterid[j] = init;
+            }
         }
 
         return clusterid;

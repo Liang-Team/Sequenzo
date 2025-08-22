@@ -583,7 +583,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-    if full_matrix and refseq == None:
+    if full_matrix == True and refseq == None:
         _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
         _dist2matrix = _matrix.padding_matrix()
 
@@ -592,7 +592,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     elif full_matrix == False and refseq != None:
         print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None.")
 
-    else:
+    elif full_matrix == False and refseq == None:
         dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
 
     print("[>] Computed Successfully.")
