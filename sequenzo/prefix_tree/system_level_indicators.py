@@ -198,9 +198,9 @@ def plot_system_indicators(
     js_z = zscore(array(js_divergence)) if js_divergence else None
 
     color_defaults = {
-        "Prefix Count": "#1f77b4",
-        "Branching Factor": "#ff7f0e",
-        "JS Divergence": "#2ca02c",
+        "Prefix Count": "#6BB6FF",    # Soft sky blue (like Monet's water lilies)
+        "Branching Factor": "#FFB347", # Warm peach/coral (like sunset reflections)
+        "JS Divergence": "#F4A6CD",   # Soft rose pink (divergence = different paths)
     }
     colors = {**color_defaults, **(custom_colors or {})}
 
@@ -274,12 +274,12 @@ def plot_system_indicators_multiple_comparison(
     -----------
     groups_data : Dict[str, Dict[str, List[float]]]
         Dictionary with group names as keys and data dictionaries as values.
-        Each data dict should contain 'prefix_counts', 'branching_factors', and 'js_scores'.
+        Each data dict should contain 'prefix_counts', 'branching_factors', and 'js_divergence'.
         Example: {
             "Group1": {
                 "prefix_counts": [10, 15, 20, ...],
                 "branching_factors": [1.2, 1.5, 1.8, ...], 
-                "js_scores": [0.1, 0.2, 0.15, ...]
+                "js_divergence": [0.1, 0.2, 0.15, ...]
             },
             "Group2": {...}
         }
@@ -313,12 +313,12 @@ def plot_system_indicators_multiple_comparison(
     ...     "India": {
     ...         "prefix_counts": india_prefix_counts,
     ...         "branching_factors": india_branching_factors,
-    ...         "js_scores": india_js_scores
+    ...         "js_divergence": india_js_divergence
     ...     },
     ...     "US": {
     ...         "prefix_counts": us_prefix_counts,
     ...         "branching_factors": us_branching_factors,
-    ...         "js_scores": us_js_scores
+    ...         "js_divergence": us_js_divergence
     ...     }
     ... }
     >>> plot_system_indicators_multiple_comparison(
@@ -363,11 +363,11 @@ def plot_system_indicators_multiple_comparison(
     if len(x_values) != T:
         raise ValueError("Length of x_values must match data length")
     
-    # Color settings
+    # Color settings - Monet-inspired watercolor palette for divergence analysis
     color_defaults = {
-        "Prefix Count": "#1f77b4",
-        "Branching Factor": "#ff7f0e",
-        "JS Divergence": "#2ca02c",
+        "Prefix Count": "#6BB6FF",    # Soft sky blue (like Monet's water lilies)
+        "Branching Factor": "#FFB347", # Warm peach/coral (like sunset reflections)
+        "JS Divergence": "#F4A6CD",   # Soft rose pink (divergence = different paths)
     }
     colors = {**color_defaults, **(custom_colors or {})}
     
@@ -389,14 +389,14 @@ def plot_system_indicators_multiple_comparison(
         ax = axes[i]
         
         # Validate data completeness
-        required_keys = ['prefix_counts', 'branching_factors', 'js_scores']
+        required_keys = ['prefix_counts', 'branching_factors', 'js_divergence']
         for key in required_keys:
             if key not in data:
                 raise ValueError(f"Missing '{key}' in data for group '{group_key}'")
         
         # Normalize data (z-score)
         bf_z = zscore(array(data['branching_factors']))
-        js_z = zscore(array(data['js_scores']))
+        js_z = zscore(array(data['js_divergence']))
         
         # Left y-axis: raw prefix counts
         ax.set_ylabel("Prefix Count", color=colors["Prefix Count"])

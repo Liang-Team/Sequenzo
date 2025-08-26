@@ -198,9 +198,9 @@ def plot_system_indicators(
     js_z = zscore(array(js_convergence)) if js_convergence else None
 
     color_defaults = {
-        "Suffix Count": "#1f77b4",
-        "Merging Factor": "#ff7f0e",
-        "JS Convergence": "#2ca02c",
+        "Suffix Count": "#6BB6FF",    # Soft sky blue (like Monet's water lilies)
+        "Merging Factor": "#FFB347",  # Warm peach/coral (like sunset reflections)
+        "JS Convergence": "#98D8C8",  # Soft mint green (convergence = coming together)
     }
     colors = {**color_defaults, **(custom_colors or {})}
 
@@ -365,9 +365,9 @@ def plot_system_indicators_multiple_comparison(
     
     # Color settings
     color_defaults = {
-        "Suffix Count": "#1f77b4",
-        "Merging Factor": "#ff7f0e",
-        "JS Convergence": "#2ca02c",
+        "Suffix Count": "#6BB6FF",    # Soft sky blue (like Monet's water lilies)
+        "Merging Factor": "#FFB347",  # Warm peach/coral (like sunset reflections)
+        "JS Convergence": "#98D8C8",  # Soft mint green (convergence = coming together)
     }
     colors = {**color_defaults, **(custom_colors or {})}
     
