@@ -470,7 +470,7 @@ class IndividualConvergence:
                             wm = per_t_window_max[i_global]
                             for t_idx, wv in enumerate(wm):
                                 if np.isfinite(wv) and wv <= float(thresh_val):
-                                    years[i_global] = t_idx + 1
+                                    years[i_global] = int(t_idx + 1)
                                     break
                     return years
 
@@ -491,7 +491,7 @@ class IndividualConvergence:
                     wm = per_t_window_max[i]
                     for t_idx, wv in enumerate(wm):
                         if np.isfinite(wv) and wv <= xq:
-                            years[i] = t_idx + 1
+                            years[i] = int(t_idx + 1)
                             break
                 return years
             else:
@@ -549,7 +549,7 @@ class IndividualConvergence:
                 else:
                     condition = all(v < -z_threshold for v in vals)
                 if condition:
-                    year = t + 1  # Convert to 1-indexed
+                    year = int(t + 1)  # Convert to 1-indexed integer
                     break
             years.append(year)
         return years
@@ -617,7 +617,7 @@ class IndividualConvergence:
                     else:
                         condition = all(v < -z_threshold for v in vals)
                     if condition:
-                        year = t + 1
+                        year = int(t + 1)
                         break
                 
                 all_years[orig_idx] = year

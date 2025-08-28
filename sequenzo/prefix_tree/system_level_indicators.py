@@ -138,6 +138,7 @@ def plot_system_indicators(
     custom_colors: Optional[Dict[str, str]] = None,
     show: bool = True,
     plot_distributions: bool = False,
+    style: Optional[str] = None
 ) -> None:
     """
     Plot a single group's system-level indicators using the same visual style as
@@ -173,6 +174,9 @@ def plot_system_indicators(
         Whether to display the figure
     - plot_distributions: bool
         If True, additionally show raw distributions (histograms) of indicators
+    - style: Optional[str]
+        Matplotlib/seaborn style to apply. Common options: 'whitegrid', 'darkgrid', 
+        'white', 'dark', 'ticks'. If None, uses default style. Default: None
 
     Example:
     >>> plot_system_indicators(
@@ -207,6 +211,16 @@ def plot_system_indicators(
     # --- Main line plot with dual axes ---
     if figsize is None:
         figsize = (12, 6)
+    
+    # Apply style if specified
+    if style is not None:
+        # Check if it's a seaborn style
+        seaborn_styles = ['whitegrid', 'darkgrid', 'white', 'dark', 'ticks']
+        if style in seaborn_styles:
+            sns.set_style(style)
+        else:
+            plt.style.use(style)
+    
     fig, ax1 = plt.subplots(figsize=figsize)
     ax1.set_xlabel(x_label)
     ax1.set_ylabel("Prefix Count", color=colors["Prefix Count"])
@@ -265,7 +279,8 @@ def plot_system_indicators_multiple_comparison(
     figsize: Optional[tuple] = None,
     dpi: int = 300,
     custom_colors: Optional[Dict[str, str]] = None,
-    show: bool = True
+    show: bool = True,
+    style: Optional[str] = None
 ) -> None:
     """
     Plot system-level indicators comparison across multiple groups using dual y-axis design.
@@ -306,6 +321,9 @@ def plot_system_indicators_multiple_comparison(
         Custom colors for indicators. Default uses standard colors.
     show : bool
         Whether to show the plot. Default: True
+    style : Optional[str]
+        Style to apply. Seaborn styles ('whitegrid', 'darkgrid', 'white', 'dark', 'ticks') 
+        or matplotlib styles. If None, uses default style. Default: None
         
     Example:
     --------
@@ -375,6 +393,15 @@ def plot_system_indicators_multiple_comparison(
     n_groups = len(groups_data)
     if figsize is None:
         figsize = (12, 4 * n_groups + 2)  # Dynamic height based on number of groups
+    
+    # Apply style if specified
+    if style is not None:
+        # Check if it's a seaborn style
+        seaborn_styles = ['whitegrid', 'darkgrid', 'white', 'dark', 'ticks']
+        if style in seaborn_styles:
+            sns.set_style(style)
+        else:
+            plt.style.use(style)
     
     # Create subplots
     fig, axes = plt.subplots(n_groups, 1, figsize=figsize)

@@ -385,7 +385,7 @@ class IndividualDivergence:
                             wm = per_t_window_max[i_global]
                             for t_idx, wv in enumerate(wm):
                                 if np.isfinite(wv) and wv >= float(thresh_val):
-                                    years[i_global] = t_idx + min_t
+                                    years[i_global] = int(t_idx + min_t)
                                     break
                     return years
 
@@ -406,7 +406,7 @@ class IndividualDivergence:
                     wm = per_t_window_max[i]
                     for t_idx, wv in enumerate(wm):
                         if np.isfinite(wv) and wv >= xq:
-                            years[i] = t_idx + min_t
+                            years[i] = int(t_idx + min_t)
                             break
                 return years
             else:
@@ -462,7 +462,7 @@ class IndividualDivergence:
                 else:
                     condition = all(v > z_threshold for v in vals)
                 if condition:
-                    year = t + 1  # Convert to 1-indexed
+                    year = int(t + 1)  # Convert to 1-indexed integer
                     break
             years.append(year)
         return years
@@ -698,7 +698,7 @@ def plot_prefix_rarity_distribution(
     colors=None,
     # === Threshold Settings ===
     show_threshold=True,
-    threshold_method="top_proportion",  # Changed default to top_proportion
+    threshold_method="zscore",  # Changed default to top_proportion
     proportion_p=0.07,  # Simplified parameter name, default 7%
     # === Plotting Options ===
     figsize=(10, 6),
