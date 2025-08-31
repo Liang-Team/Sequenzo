@@ -41,23 +41,30 @@ public:
         int rows = buf_info[0];
         int cols = buf_info[1];
 
-        double max_val = -std::numeric_limits<double>::infinity();
-
-        #pragma omp parallel
-        {
-            double thread_max = -std::numeric_limits<double>::infinity();
-            #pragma omp for nowait
-            for (int i = 0; i < rows; ++i) {
-                for (int j = 0; j < cols; ++j) {
-                    thread_max = std::max(thread_max, ptr(i, j));
-                }
-            }
-
-            #pragma omp critical
-            {
-                max_val = std::max(max_val, thread_max);
+        double max_val = -1;
+        for (int i = 0; i < rows ; ++i){
+            for (int j = i; j < cols; ++j){
+                max_val = std::max(max_val, ptr(i, j));
             }
         }
+
+//        double max_val = -std::numeric_limits<double>::infinity();
+//
+//        #pragma omp parallel
+//        {
+//            double thread_max = -std::numeric_limits<double>::infinity();
+//            #pragma omp for nowait
+//            for (int i = 0; i < rows; ++i) {
+//                for (int j = 0; j < cols; ++j) {
+//                    thread_max = std::max(thread_max, ptr(i, j));
+//                }
+//            }
+//
+//            #pragma omp critical
+//            {
+//                max_val = std::max(max_val, thread_max);
+//            }
+//        }
 
         return max_val;
     }
@@ -68,9 +75,9 @@ public:
         auto ptr_centroids = centroids.mutable_data();
         auto ptr_clusterid = clusterid.mutable_data();
 
-        for (int i = 0; i < nelement; i++) {
-            ptr_clusterid[i] = -1;
-        }
+//        for (int i = 0; i < nelement; i++) {
+            ptr_clusterid = keep;
+//        }
 
         double dzsky = 1;
         int hbest = -1, nbest = -1;
@@ -95,13 +102,17 @@ public:
                 }
             }
 
+            py::print("=== 1 ===");
+
             if (total < 0) {
                 total = 0;
-                #pragma omp parallel for reduction(+:total) schedule(static)
+//                #pragma omp parallel for reduction(+:total) schedule(static)
                 for (int i = 0; i < nelement; i++) {
                     total += ptr_weights(i) * dysma[i];
                 }
             }
+
+            py::print("=== 2 ===");
 
             dzsky = 1;
             hbest = -1;
@@ -112,8 +123,10 @@ public:
                 int i = ptr_centroids[k];
                 double removeCost = 0;
 
+                py::print("=== 3 ===");
+
                 // 计算移除该 medoid 的成本
-                #pragma omp parallel for reduction(+:removeCost) schedule(static)
+//                #pragma omp parallel for reduction(+:removeCost) schedule(static)
                 for (int j = 0; j < nelement; j++) {
                     if (tclusterid[j] == k) {
                         removeCost += ptr_weights(j) * (dysmb[j] - dysma[j]);
@@ -123,56 +136,49 @@ public:
                     }
                 }
 
+                py::print("=== 4 ===");
+
                 // 查找最优的新 medoid h
-                #pragma omp parallel
-                {
-                    double local_dzsky = 1;
-                    int local_hbest = -1, local_nbest = -1;
-
-                    #pragma omp for schedule(static)
-                    for (int h = 0; h < nelement; h++) {
-                        if (ptr_diss(h, i) > 0) {
-                            double addGain = removeCost;
-                            for (int j = 0; j < nelement; j++) {
-                                if (ptr_diss(h, j) < fvect[j]) {
-                                    addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
-                                }
-                            }
-
-                            if (local_dzsky > addGain) {
-                                local_dzsky = addGain;
-                                local_hbest = h;
-                                local_nbest = i;
+                for (int h = 0; h < nelement; h++) {
+                    if (ptr_diss(h, i) > 0) {
+                        double addGain = removeCost;
+                        py::print("=== 5 ===");
+                        for (int j = 0; j < nelement; j++) {
+                            if (ptr_diss(h, j) < fvect[j]) {
+                                addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
                             }
                         }
-                    }
+                        py::print("addGain = ", addGain);
+                        py::print("=== 6 ===");
 
-                    // 合并线程局部结果
-                    #pragma omp critical
-                    {
-                        if (dzsky > local_dzsky) {
-                            dzsky = local_dzsky;
-                            hbest = local_hbest;
-                            nbest = local_nbest;
+                        if (dzsky > addGain) {
+                            dzsky = addGain;
+                            hbest = h;
+                            nbest = i;
                         }
                     }
                 }
             }
 
             // 更新 medoids
+            py::print("dzsky = ", dzsky);
             if (dzsky < WEIGHTED_CLUST_TOL) {
+                py::print("=== 7 ===");
                 for (int k = 0; k < nclusters; k++) {
                     if (ptr_centroids[k] == nbest) {
                         ptr_centroids[k] = hbest;
                     }
                 }
+                py::print("=== 8 ===");
                 total += dzsky;
             }
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
+        py::print("=== 9 ===");
+
         // 更新最终聚类分配
         int init = ptr_centroids[0];
-        #pragma omp parallel for
+//        #pragma omp parallel for
         for (int j = 0; j < nelement; j++) {
             if (tclusterid[j] != -1){
                 ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
@@ -180,6 +186,7 @@ public:
                 ptr_clusterid[j] = init;
             }
         }
+        py::print("=== 10 ===");
 
         return clusterid;
     }

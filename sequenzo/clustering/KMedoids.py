@@ -48,7 +48,9 @@ def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce'
         if _validate_linkage_matrix(initialclust):
             # initialclust = fcluster(initialclust, k, criterion='maxclust')  # 1-based 索引
             initialclust = cut_tree(initialclust, n_clusters=k).flatten() + 1  # 1-based 索引
-
+        # TODO : 现在已经得到一个组了，为什么不用这个组当作 PAMonce/PAM 算法的初始化？反而利用这个组去选中心点？
+        #  初始化中心点的必要性为什么大于组？初始化中心点无论好不好，最后经过不断迭代肯定能选出较好的
+        # TODO : 就算想要从子样本扩展到全数据，入口参数的这个组也是可以的呀？
         if len(initialclust) == nelements:
             initialclust = disscentertrim(diss=diss, group=initialclust, medoids_index="first", weights=weights)
 

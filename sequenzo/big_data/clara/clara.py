@@ -149,7 +149,10 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         for k in kvals:
             # Weighted PAM clustering on subsample
+            # TODO : hc 已经是选好的中心点了，为什么初始化 clusterid 的时候要用 -1 呢？
+            #  因为没有必要啊，直接用原来的不好吗？尤其在没有进入 if 分支的情况下，这样处理也能避免 -1 的数据访问越界。所以为什么要初始化为-1呢？
             clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
+            print("=== 11 ===")
             medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
             medoids = medoids.to_numpy().flatten()
 
@@ -223,8 +226,16 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     # output example :
     #         results[0] = all iter1's = [{k=2's}, {k=3's}, ... , {k=10's}]
     #         results[1] = all iter2's = [{k=2's}, {k=3's}, ... , {k=10's}]
-    results = Parallel(n_jobs=-1)(
-        delayed(calc_pam_iter)(circle=i, agseqdata=agseqdata, sample_size=sample_size, kvals=kvals, ac=ac) for i in range(R))
+    # results = Parallel(n_jobs=-1)(
+    #     delayed(calc_pam_iter)(circle=i, agseqdata=agseqdata, sample_size=sample_size, kvals=kvals, ac=ac) for i in range(R))
+    results = []
+    for i in range(R):
+        res = calc_pam_iter(circle=i,
+                            agseqdata=agseqdata,
+                            sample_size=sample_size,
+                            kvals=kvals,
+                            ac=ac)
+        results.append(res)
 
     print("[>] Aggregating iterations for each k values...")
 
@@ -434,27 +445,27 @@ if __name__ == '__main__':
     # ===============================
     #            detailed
     # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    # time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    time = list(df.columns)[4:]
+    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+                                 time_type="age", time=time, id_col="worker_id", states=states)
 
     # ===============================
     #             broad
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
-    time = list(df.columns)[4:]
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
+    # time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
 
     result = clara(sequence_data,
                    R=2,
-                   sample_size=3000,
+                   sample_size=500,
                    kvals=range(2, 6),
                    criteria=['distance'],
-                   dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1, "expcost": 1},
+                   dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},
                    parallel=True,
                    stability=True)
 
