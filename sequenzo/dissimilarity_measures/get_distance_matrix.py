@@ -490,7 +490,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     norm_num = norms[1:].index(norm)
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
-    lengths = seqlength(seqdata.seqdata)
+    lengths = seqlength(dseqs_num)
 
     # C++ already guarantees that invalid values will not be accessed
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
@@ -537,10 +537,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-        _dist_matrix = dist_matrix.reshape((nunique1, nunique2))
-
-
-        dist_matrix = _dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2]
+        dist_matrix = dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2[None, :]]
 
         dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
@@ -638,22 +635,24 @@ if __name__ == '__main__':
     # ===============================
     #             CO2
     # ===============================
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    time = list(df.columns)[1:]
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # refseq = [list(range(sequence_data.seqdata.shape[0])), [1, 25, 50, 75, 100, 125, 150, 175]]
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 
     # ===============================
     #            detailed
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    time = list(df.columns)[4:]
-    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
-    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    # time = list(df.columns)[4:]
+    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+    #                              time_type="age", time=time, id_col="worker_id", states=states)
+    # refseq = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [142, 85]]
+    # om = get_distance_matrix(sequence_data, method="OM", sm="CONSTANT", indel=1, refseq=refseq)
 
     # ===============================
     #             broad

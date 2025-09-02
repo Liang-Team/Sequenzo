@@ -152,7 +152,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             # TODO : hc 已经是选好的中心点了，为什么初始化 clusterid 的时候要用 -1 呢？
             #  因为没有必要啊，直接用原来的不好吗？尤其在没有进入 if 分支的情况下，这样处理也能避免 -1 的数据访问越界。所以为什么要初始化为-1呢？
             clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
-            print("=== 11 ===")
             medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
             medoids = medoids.to_numpy().flatten()
 
@@ -162,7 +161,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             # Compute Distances Between All Sequence to the Medoids
             # =====================================================
             refseq = [list(range(0, len(agseqdata))), medoids.tolist()]
-
             with open(os.devnull, 'w') as fnull:
                 with redirect_stdout(fnull):
                     states = np.arange(1, len(seqdata.states) + 1).tolist()
@@ -173,7 +171,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                     dist_args['seqdata'] = agseqdata
                     dist_args['refseq'] = refseq
                     diss2 = get_distance_matrix(opts=dist_args)
-
+                    del dist_args['refseq']
                     agseqdata = agseqdata.seqdata   # Restore scene
 
             # Compute two minimal distances are used for silhouette width
@@ -181,7 +179,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             diss2 = diss2.to_numpy()
             alphabeta = np.array([np.sort(row)[:2] for row in diss2])
             sil = (alphabeta[:, 1] - alphabeta[:, 0]) / np.maximum(alphabeta[:, 1], alphabeta[:, 0])
-
 
             # Allocate to clusters
             memb = np.argmin(diss2, axis=1)     # Each data point is assigned to its nearest cluster
@@ -191,7 +188,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             warnings.filterwarnings('ignore', category=RuntimeWarning)  # The ÷0 case is ignored
             db = davies_bouldin_internal(diss=diss2, clustering=memb, medoids=medoids, weights=ac['aggWeights'])['db']
             warnings.resetwarnings()
-
             pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
             ams = np.sum(sil * ac['probs'])
 
@@ -226,16 +222,16 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     # output example :
     #         results[0] = all iter1's = [{k=2's}, {k=3's}, ... , {k=10's}]
     #         results[1] = all iter2's = [{k=2's}, {k=3's}, ... , {k=10's}]
-    # results = Parallel(n_jobs=-1)(
-    #     delayed(calc_pam_iter)(circle=i, agseqdata=agseqdata, sample_size=sample_size, kvals=kvals, ac=ac) for i in range(R))
-    results = []
-    for i in range(R):
-        res = calc_pam_iter(circle=i,
-                            agseqdata=agseqdata,
-                            sample_size=sample_size,
-                            kvals=kvals,
-                            ac=ac)
-        results.append(res)
+    results = Parallel(n_jobs=-1)(
+        delayed(calc_pam_iter)(circle=i, agseqdata=agseqdata, sample_size=sample_size, kvals=kvals, ac=ac) for i in range(R))
+    # results = []
+    # for i in range(R):
+    #     res = calc_pam_iter(circle=i,
+    #                         agseqdata=agseqdata,
+    #                         sample_size=sample_size,
+    #                         kvals=kvals,
+    #                         ac=ac)
+    #     results.append(res)
 
     print("[>] Aggregating iterations for each k values...")
 
@@ -462,7 +458,7 @@ if __name__ == '__main__':
 
     result = clara(sequence_data,
                    R=2,
-                   sample_size=500,
+                   sample_size=3000,
                    kvals=range(2, 6),
                    criteria=['distance'],
                    dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},

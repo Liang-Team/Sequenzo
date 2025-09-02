@@ -2,6 +2,8 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
+#include <sstream>
+#include <algorithm>
 #define WEIGHTED_CLUST_TOL -1e-10
 
 namespace py = pybind11;
@@ -34,6 +36,23 @@ public:
         }
     }
 
+    // 小工具：把 vector 打成一行文本
+//    static void debug_print_vec(const char* name,
+//                                const std::vector<int>& v,
+//                                std::size_t maxn = 50) {
+//        std::ostringstream oss;
+//        oss << name << " (n=" << v.size() << ") [";
+//        std::size_t n = std::min<std::size_t>(v.size(), maxn);
+//        for (std::size_t i = 0; i < n; ++i) {
+//            if (i) oss << ", ";
+//            oss << v[i];
+//        }
+//        if (v.size() > n) oss << ", ...";
+//        oss << "]\n";
+//        // 用 cerr 更容易立刻看到，并避免与 Python 输出缓冲混在一起
+//        std::cerr << oss.str() << std::flush;
+//    }
+
     double find_max_value(py::array_t<double> diss) {
         auto buf_info = diss.shape();
         auto ptr = diss.unchecked<2>();
@@ -41,30 +60,23 @@ public:
         int rows = buf_info[0];
         int cols = buf_info[1];
 
-        double max_val = -1;
-        for (int i = 0; i < rows ; ++i){
-            for (int j = i; j < cols; ++j){
-                max_val = std::max(max_val, ptr(i, j));
+        double max_val = -std::numeric_limits<double>::infinity();
+
+        #pragma omp parallel
+        {
+            double thread_max = -std::numeric_limits<double>::infinity();
+            #pragma omp for nowait
+            for (int i = 0; i < rows; ++i) {
+                for (int j = 0; j < cols; ++j) {
+                    thread_max = std::max(thread_max, ptr(i, j));
+                }
+            }
+
+            #pragma omp critical
+            {
+                max_val = std::max(max_val, thread_max);
             }
         }
-
-//        double max_val = -std::numeric_limits<double>::infinity();
-//
-//        #pragma omp parallel
-//        {
-//            double thread_max = -std::numeric_limits<double>::infinity();
-//            #pragma omp for nowait
-//            for (int i = 0; i < rows; ++i) {
-//                for (int j = 0; j < cols; ++j) {
-//                    thread_max = std::max(thread_max, ptr(i, j));
-//                }
-//            }
-//
-//            #pragma omp critical
-//            {
-//                max_val = std::max(max_val, thread_max);
-//            }
-//        }
 
         return max_val;
     }
@@ -75,15 +87,16 @@ public:
         auto ptr_centroids = centroids.mutable_data();
         auto ptr_clusterid = clusterid.mutable_data();
 
-//        for (int i = 0; i < nelement; i++) {
-            ptr_clusterid = keep;
-//        }
+        for (int i = 0; i < nelement; i++) {
+            ptr_clusterid[i] = -1;
+        }
 
         double dzsky = 1;
         int hbest = -1, nbest = -1;
         double total = -1;
 
         do {
+            // TODO: 写一些注释
             for (int i = 0; i < nelement; i++) {
                 dysma[i] = maxdist;
                 dysmb[i] = maxdist;
@@ -91,28 +104,24 @@ public:
                     int i_cluster = ptr_centroids[k];
                     double dist = ptr_diss(i, i_cluster);
 
-                    if (dysma[i] > dist) {
+                    if (dysma[i] >= dist) {  // TODO ： 解释与原代码不一样的地方
                         dysmb[i] = dysma[i];
                         dysma[i] = dist;
 
-                        tclusterid[i] = k;
+                        tclusterid[i] = k;  // TODO ： 解释一下跳转逻辑
                     } else if (dysmb[i] > dist) {
                         dysmb[i] = dist;
                     }
                 }
             }
 
-            py::print("=== 1 ===");
-
             if (total < 0) {
                 total = 0;
-//                #pragma omp parallel for reduction(+:total) schedule(static)
+                #pragma omp parallel for reduction(+:total) schedule(static)
                 for (int i = 0; i < nelement; i++) {
                     total += ptr_weights(i) * dysma[i];
                 }
             }
-
-            py::print("=== 2 ===");
 
             dzsky = 1;
             hbest = -1;
@@ -123,10 +132,8 @@ public:
                 int i = ptr_centroids[k];
                 double removeCost = 0;
 
-                py::print("=== 3 ===");
-
                 // 计算移除该 medoid 的成本
-//                #pragma omp parallel for reduction(+:removeCost) schedule(static)
+                #pragma omp parallel for reduction(+:removeCost) schedule(static)
                 for (int j = 0; j < nelement; j++) {
                     if (tclusterid[j] == k) {
                         removeCost += ptr_weights(j) * (dysmb[j] - dysma[j]);
@@ -136,57 +143,71 @@ public:
                     }
                 }
 
-                py::print("=== 4 ===");
-
                 // 查找最优的新 medoid h
-                for (int h = 0; h < nelement; h++) {
-                    if (ptr_diss(h, i) > 0) {
-                        double addGain = removeCost;
-                        py::print("=== 5 ===");
-                        for (int j = 0; j < nelement; j++) {
-                            if (ptr_diss(h, j) < fvect[j]) {
-                                addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
+                #pragma omp parallel
+                {
+                    double local_dzsky = 1;
+                    int local_hbest = -1, local_nbest = -1;
+
+                    #pragma omp for schedule(static)
+                    for (int h = 0; h < nelement; h++) {
+                        if (ptr_diss(h, i) > 0) {
+                            double addGain = removeCost;
+                            for (int j = 0; j < nelement; j++) {
+                                if (ptr_diss(h, j) < fvect[j]) {
+                                    addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
+                                }
+                            }
+
+                            if (local_dzsky > addGain) {
+                                local_dzsky = addGain;
+                                local_hbest = h;
+                                local_nbest = i;
                             }
                         }
-                        py::print("addGain = ", addGain);
-                        py::print("=== 6 ===");
+                    }
 
-                        if (dzsky > addGain) {
-                            dzsky = addGain;
-                            hbest = h;
-                            nbest = i;
+                    // 合并线程局部结果
+                    #pragma omp critical
+                    {
+                        if (dzsky > local_dzsky) {
+                            dzsky = local_dzsky;
+                            hbest = local_hbest;
+                            nbest = local_nbest;
                         }
                     }
                 }
             }
 
             // 更新 medoids
-            py::print("dzsky = ", dzsky);
             if (dzsky < WEIGHTED_CLUST_TOL) {
-                py::print("=== 7 ===");
                 for (int k = 0; k < nclusters; k++) {
                     if (ptr_centroids[k] == nbest) {
                         ptr_centroids[k] = hbest;
                     }
                 }
-                py::print("=== 8 ===");
                 total += dzsky;
             }
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
-        py::print("=== 9 ===");
+        // ---- 安全打印（无 pybind11，线程/进程均可）----
+//        {
+//            // 复制指针区的数据，形成可打印的 vector
+//            std::vector<int> centroids_vec(ptr_centroids, ptr_centroids + nclusters);
+//
+//            // 注意：如果你用了 OpenMP，可选地只让一个线程打印，避免多线程交叉输出
+//            // #pragma omp single
+//            debug_print_vec("tclusterid", tclusterid);
+//            debug_print_vec("ptr_centroids", centroids_vec);
+//        }
 
         // 更新最终聚类分配
-        int init = ptr_centroids[0];
-//        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for (int j = 0; j < nelement; j++) {
-            if (tclusterid[j] != -1){
-                ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
-            } else{
-                ptr_clusterid[j] = init;
-            }
+            ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
         }
-        py::print("=== 10 ===");
+
+        py::print("Computed successfully!");
 
         return clusterid;
     }
