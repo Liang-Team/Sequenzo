@@ -132,6 +132,7 @@ def plot_system_indicators(
     x_values: Optional[List] = None,
     x_label: str = "Time (t)",
     legend_loc: str = 'lower right',
+    legend_fontsize: int = 10,
     save_as: Optional[str] = None,
     figsize: Optional[tuple] = None,
     dpi: int = 300,
@@ -162,6 +163,8 @@ def plot_system_indicators(
         Label for x-axis. Default: "Time (t)"
     - legend_loc: str
         Legend location, e.g., 'upper left', 'upper right', 'lower right', 'best', etc. Default: 'lower right'
+    - legend_fontsize: int
+        Font size for legend text. Default: 10
     - save_as: Optional[str]
         If provided, save the figure to this path (png). DPI controlled by `dpi`
     - figsize: Optional[tuple]
@@ -235,7 +238,7 @@ def plot_system_indicators(
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc, fontsize=legend_fontsize)
 
     ax1.set_title("System-Level Trajectory Indicators: Raw vs. Normalized")
     fig.tight_layout()
@@ -275,6 +278,7 @@ def plot_system_indicators_multiple_comparison(
     x_values: Optional[List] = None,
     x_label: str = "Time (t)",
     legend_loc: str = 'lower right',
+    legend_fontsize: int = 10,
     save_as: Optional[str] = None,
     figsize: Optional[tuple] = None,
     dpi: int = 300,
@@ -311,6 +315,8 @@ def plot_system_indicators_multiple_comparison(
     legend_loc : str
         Legend location. Options: 'upper left', 'upper right', 'lower left', 
         'lower right', 'center', 'best', etc. Default: 'lower right'
+    legend_fontsize : int
+        Font size for legend text. Default: 10
     save_as : Optional[str]
         File path to save the plot (without extension)
     figsize : Optional[tuple]
@@ -442,7 +448,7 @@ def plot_system_indicators_multiple_comparison(
         # Legend
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax_twin.get_legend_handles_labels()
-        ax_twin.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc)
+        ax_twin.legend(lines1 + lines2, labels1 + labels2, loc=legend_loc, fontsize=legend_fontsize)
         
         # Title and labels
         if subplot_titles is not None:

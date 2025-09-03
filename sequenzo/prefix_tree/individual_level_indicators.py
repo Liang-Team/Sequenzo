@@ -975,7 +975,7 @@ def plot_prefix_rarity_distribution(
         plt.xlabel("Prefix Rarity Score", fontsize=13)
     plt.ylabel("Density", fontsize=13)
     if len(group_names) > 1:
-        plt.legend(title="Group")
+        plt.legend(title="Country")
     sns.despine()
     plt.tight_layout()
     
