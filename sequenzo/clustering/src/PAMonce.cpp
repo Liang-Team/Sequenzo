@@ -96,7 +96,7 @@ public:
         double total = -1;
 
         do {
-            // TODO: 写一些注释
+            // 为每个点寻找距离它最近和次近的中心点
             for (int i = 0; i < nelement; i++) {
                 dysma[i] = maxdist;
                 dysmb[i] = maxdist;
@@ -104,11 +104,13 @@ public:
                     int i_cluster = ptr_centroids[k];
                     double dist = ptr_diss(i, i_cluster);
 
-                    if (dysma[i] >= dist) {  // TODO ： 解释与原代码不一样的地方
+                    if (dysma[i] >= dist) {
+                        // 原码是‘>’，现改为‘>=’。
+                        // 因为如果当前点 i 与所有 medoids 的距离都是 maxdist，那么将无法进入这个分支
                         dysmb[i] = dysma[i];
                         dysma[i] = dist;
 
-                        tclusterid[i] = k;  // TODO ： 解释一下跳转逻辑
+                        tclusterid[i] = k;  // tclusterid 是中间变量，如果没有进入这个分支，那么将采用初始值-1
                     } else if (dysmb[i] > dist) {
                         dysmb[i] = dist;
                     }

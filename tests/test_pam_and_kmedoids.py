@@ -7,7 +7,7 @@
 import numpy as np
 
 from sequenzo import *
-from sequenzo.clustering import PAM, KMedoids
+from sequenzo.clustering import KMedoids
 
 df = load_dataset('country_co2_emissions')
 
@@ -28,15 +28,17 @@ om = get_distance_matrix(seqdata=sequence_data,
 weight = np.ones(sequence_data.seqdata.shape[0], dtype=int)
 
 print(" - test PAM ...")
-pam = PAM(nelements=sequence_data.seqdata.shape[0],
-          diss=om,
-          centroids=[1, 2, 3, 4, 5],
-          npass=5,
-          )
+pam = KMedoids(method="PAM",
+              nelements=sequence_data.seqdata.shape[0],
+              diss=om,
+              centroids=[1, 2, 3, 4, 5],
+              npass=5,
+              )
 clustering = pam.runclusterloop()
 
 print(" - test KMedoids ...")
-kmedoids = KMedoids(nelements=sequence_data.seqdata.shape[0],
+kmedoids = KMedoids(method="KMedoids",
+                    nelements=sequence_data.seqdata.shape[0],
                     diss=om,
                     centroids=[1, 2, 3, 4, 5],
                     npass=5,
