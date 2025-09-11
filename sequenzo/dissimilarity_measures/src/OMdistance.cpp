@@ -71,7 +71,24 @@ public:
         }
     }
 
-    double compute_distance(int is, int js) {
+    // 对齐分配函数
+    #ifdef _WIN32
+    inline double* aligned_alloc_double(size_t size, size_t align=64) {
+        return reinterpret_cast<double*>(_aligned_malloc(size * sizeof(double), align));
+    }
+    inline void aligned_free_double(double* ptr) {
+        _aligned_free(ptr);
+    }
+    #else
+    inline double* aligned_alloc_double(size_t size, size_t align=64) {
+        void* ptr = nullptr;
+        if(posix_memalign(&ptr, align, size*sizeof(double)) != 0) throw std::bad_alloc();
+        return reinterpret_cast<double*>(ptr);
+    }
+    inline void aligned_free_double(double* ptr) { free(ptr); }
+    #endif
+
+    double compute_distance(int is, int js, double* prev, double* curr) {
         try {
             auto ptr_len = seqlength.unchecked<1>();
             double maxpossiblecost;
@@ -83,31 +100,32 @@ public:
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_sm = sm.unchecked<2>();
 
-//            Skipping common prefix
             int i = 1;
             int j = 1;
+
+            double ml = 0;
+            double nl = 0;
+
+//            Skipping common prefix
             while (i < mSuf && j < nSuf &&
                    ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-                i++;
-                j++;
-                prefix++;
+                i++; j++; prefix++;
             }
+
 //            Skipping common suffix
             while (mSuf > i && nSuf > j
                    && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
-                mSuf--;
-                nSuf--;
+                mSuf--; nSuf--;
             }
-
-            std::vector<double> prev(fmatsize, 0.0);
-            std::vector<double> curr(fmatsize, 0.0);
 
             m = mSuf - prefix;
             n = nSuf - prefix;
-            for(int i = 0; i < m; i ++)
+
+            #pragma omp simd
+            for(i = 0; i < m; i ++)
                 prev[i]  = i * indel;
 
-            for(int i = prefix+1; i < mSuf; i ++){
+            for(i = prefix+1; i < mSuf; i ++){
                 curr[0] = indel * (i - prefix);
 
                 for(int j = prefix+1; j < nSuf; j ++){
@@ -132,8 +150,8 @@ public:
 
             maxpossiblecost = abs(n-m) * indel + maxscost * std::min(m, n);
 
-            double ml = double(m) * indel;
-            double nl = double(n) * indel;
+            ml = double(m) * indel;
+            nl = double(n) * indel;
 
             return normalize_distance(prev[nSuf-1-prefix], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
@@ -145,18 +163,26 @@ public:
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
+            double* prev = aligned_alloc_double(fmatsize);
+            double* curr = aligned_alloc_double(fmatsize);
+
             #pragma omp parallel
             {
-                #pragma omp for schedule(static)
+                #pragma omp for schedule(guided)
                 for (int i = 0; i < nseq; i++) {
                     for (int j = i; j < nseq; j++) {
-                        double dist = compute_distance(i, j);
-
-                        buffer(i, j) = dist;
-                        buffer(j, i) = dist;
+                        buffer(i, j) = compute_distance(i, j, prev, curr);
                     }
                 }
             }
+
+            aligned_free_double(prev);
+            aligned_free_double(curr);
+
+            #pragma omp parallel for schedule(static)
+            for(int i = 0; i < nseq; i++)
+                for(int j = i+1; j < nseq; j++)
+                    buffer(j, i) = buffer(i, j);
 
             return dist_matrix;
         } catch (const std::exception& e) {
@@ -168,22 +194,25 @@ public:
     py::array_t<double> compute_refseq_distances() {
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
+            double* prev = aligned_alloc_double(fmatsize);
+            double* curr = aligned_alloc_double(fmatsize);
+
             double cmpres = 0;
-//            #pragma omp parallel
-//            {
+            #pragma omp parallel
+            {
                 #pragma omp for schedule(static)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                     for (int is = 0; is < nseq; is ++) {
                         if(is == rseq){
                             cmpres = 0;
                         }else{
-                            cmpres = compute_distance(is, rseq);
+                            cmpres = compute_distance(is, rseq, prev, curr);
                         }
 
                         buffer(is, rseq-rseq1) = cmpres;
                     }
                 }
-//            }
+            }
 
             return refdist_matrix;
         } catch (const std::exception& e) {
