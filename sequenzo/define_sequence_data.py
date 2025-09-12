@@ -81,9 +81,6 @@ class SequenceData:
         id_col: str = None,
         weights: np.ndarray = None,
         start: int = 1,
-        missing_handling: dict = None,
-        void: str = "%",
-        nr: str = "*",
         custom_colors: list = None
     ):
         """
@@ -130,10 +127,6 @@ class SequenceData:
         self.ids = np.array(self.data[self.id_col].values) if self.id_col else data.index
         self.weights = weights
         self.start = start
-        # TODO 这个没有用，要看看是否需要去除
-        self.missing_handling = missing_handling or {"left": np.nan, "right": "DEL", "gaps": np.nan}
-        self.void = void
-        self.nr = nr
         self.custom_colors = custom_colors
 
         # Validate parameters
