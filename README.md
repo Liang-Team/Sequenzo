@@ -26,21 +26,25 @@ Whether you are working with **people, places, or policies**, Sequenzo helps unc
 
 Sequenzo outperforms traditional R-based tools in social sequence analysis, delivering faster processing and superior efficiency, especially for large-scale datasets. **No big data? No problem. You don’t need big data to benefit as Sequenzo is designed to enhance sequence analysis at any scale, making complex methods accessible to everyone.**
 
+> 🚀 **Explore the official documentation at [sequenzo.yuqi-liang.tech](https://sequenzo.yuqi-liang.tech/en/)**  
+> with tutorials, practical examples, and API references to help you get started quickly.  
+>  
+> 📖 Available in **English and Chinese**, our docs are written to be approachable, practical, and easy to follow.
+
 ## Target Users
 
 Sequenzo is designed for:
 
-- 🧑‍🎓 Quantitative researchers in sociology, demography, political science, economics, management, etc.
-- 📊 Data scientists, data analysts, and business analysts working on trajectory/time-series clustering
-- 🧑‍🏫 Educators teaching courses involving social sequence data
-- 🔁 Users familiar with R packages such as `TraMineR` who want a Python-native alternative
-
+- Quantitative researchers in sociology, demography, political science, economics, management, etc.
+- Data scientists, data analysts, and business analysts working on trajectory/time-series clustering
+- Educators teaching courses involving social sequence data
+- Users familiar with R packages such as `TraMineR` who want a Python-native alternative
 
 ## Why Choose Sequenzo?
 
 🚀 **High Performance**
 
-Leverages Python’s computational power to achieve 10× faster processing than traditional R-based tools like TraMineR.
+Leverages Python’s computational power to achieve 8× faster processing than traditional R-based tools like TraMineR.
 
 🎯 **Easy-to-Use API**
 
