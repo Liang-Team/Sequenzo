@@ -60,20 +60,39 @@ public:
             // 使用 SIMD 批量处理
             const int simd_width = xsimd::batch<double>::size;
             int i = 0;
-            
+
             for(; i + simd_width <= minimum; i += simd_width) {
+                alignas(32) int seq_is[simd_width];
+                alignas(32) int seq_js[simd_width];
                 alignas(32) double tmp[simd_width];
+
+                // 加载序列
                 for(int j = 0; j < simd_width; j++) {
-                    tmp[j] = ptr_sm(i + j, ptr_seq(is, i + j), ptr_seq(js, i + j));
+                    seq_is[j] = ptr_seq(is, i + j);
+                    seq_js[j] = ptr_seq(js, i + j);
+                }
+                xsimd::batch<int> batch_seq_is = xsimd::load_unaligned(seq_is);
+                xsimd::batch<int> batch_seq_js = xsimd::load_unaligned(seq_js);
+
+                // 比较是否相等
+                auto equal_mask = (batch_seq_is == batch_seq_js);
+                for(int j = 0; j < simd_width; j++) {
+                    tmp[j] = equal_mask.get(j) ? 0.0 : ptr_sm(i + j, seq_is[j], seq_js[j]);
                 }
 
                 xsimd::batch<double> costs = xsimd::load_unaligned(tmp);
                 cost += xsimd::reduce_add(costs);
             }
-            
-            // 处理剩余部分
-            for(; i < minimum; i++) {
-                cost += ptr_sm(i, ptr_seq(is, i), ptr_seq(js, i));
+
+            // 处理尾部：用 SIMD 填充无效数据
+            for(; i < minimum; i += simd_width) {
+                alignas(32) double tmp[simd_width];
+                int bound = std::min(simd_width, minimum - i);
+                for(int j = 0; j < simd_width; j++) {
+                    tmp[j] = (j < bound) ? ptr_sm(i + j, ptr_seq(is, i + j), ptr_seq(js, i + j)) : 0.0;
+                }
+                xsimd::batch<double> costs = xsimd::load_unaligned(tmp);
+                cost += xsimd::reduce_add(costs);
             }
 
             return normalize_distance(cost, maxdist, maxdist, maxdist, norm);
@@ -89,18 +108,18 @@ public:
 
             #pragma omp parallel
             {
-                #pragma omp for schedule(static)
+                #pragma omp for schedule(guided)
                 for (int i = 0; i < nseq; i++) {
                     for (int j = i; j < nseq; j++) {
                         buffer(i, j) = compute_distance(i, j);
                     }
                 }
+            }
 
-                #pragma omp for schedule(static)
-                for (int i = 0; i < nseq; ++i) {
-                    for (int j = 0; j < i; ++j) {  // 遍历下三角的每一行
-                        buffer(i, j) = buffer(j, i);
-                    }
+            #pragma omp for schedule(static)
+            for (int i = 0; i < nseq; ++i) {
+                for (int j = i + 1; j < nseq; ++j) {
+                    buffer(j, i) = buffer(i, j);
                 }
             }
 
@@ -115,19 +134,16 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
-            double cmpres = 0;
             #pragma omp parallel
             {
-                #pragma omp for schedule(static)
+                #pragma omp for schedule(guided)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                     for (int is = 0; is < nseq; is ++) {
                         if(is == rseq){
-                            cmpres = 0;
+                            buffer(is, rseq-rseq1) = 0;
                         }else{
-                            cmpres = compute_distance(is, rseq);
+                            buffer(is, rseq-rseq1) = compute_distance(is, rseq);
                         }
-
-                        buffer(is, rseq-rseq1) = cmpres;
                     }
                 }
             }

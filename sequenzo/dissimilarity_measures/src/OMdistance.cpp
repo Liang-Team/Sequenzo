@@ -88,101 +88,144 @@ public:
     inline void aligned_free_double(double* ptr) { free(ptr); }
     #endif
 
+
     double compute_distance(int is, int js, double* prev, double* curr) {
         try {
             auto ptr_len = seqlength.unchecked<1>();
-            double maxpossiblecost;
-            int m = ptr_len(is);
-            int n = ptr_len(js);
-            int mSuf = m+1, nSuf = n+1;
+            int m_full = ptr_len(is);
+            int n_full = ptr_len(js);
+            int mSuf = m_full + 1, nSuf = n_full + 1;
             int prefix = 0;
 
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_sm = sm.unchecked<2>();
 
-            int i = 1;
-            int j = 1;
-
-            double ml = 0;
-            double nl = 0;
-
-//            Skipping common prefix
-            while (i < mSuf && j < nSuf &&
-                   ptr_seq(is, i-1) == ptr_seq(js, j-1)){
-                i++; j++; prefix++;
+            // Skipping common prefix
+            int ii = 1, jj = 1;
+            while (ii < mSuf && jj < nSuf && ptr_seq(is, ii-1) == ptr_seq(js, jj-1)) {
+                ii++; jj++; prefix++;
             }
-
-//            Skipping common suffix
-            while (mSuf > i && nSuf > j
-                   && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
+            // Skipping common suffix
+            while (mSuf > ii && nSuf > jj && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
                 mSuf--; nSuf--;
             }
 
-            m = mSuf - prefix;
-            n = nSuf - prefix;
+            int m = mSuf - prefix;
+            int n = nSuf - prefix;
 
+            // trivial cases
+            if (m == 0 && n == 0)
+                return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
+            if (m == 0) {
+                double cost = double(n) * indel;
+                double maxpossiblecost = std::abs(n - m) * indel + maxscost * std::min(m, n);
+                return normalize_distance(cost, maxpossiblecost, 0.0, double(n) * indel, norm);
+            }
+            if (n == 0) {
+                double cost = double(m) * indel;
+                double maxpossiblecost = std::abs(n - m) * indel + maxscost * std::min(m, n);
+                return normalize_distance(cost, maxpossiblecost, double(m) * indel, 0.0, norm);
+            }
+
+            using batch_t = xsimd::batch<double>;
+            constexpr std::size_t B = batch_t::size;
+
+            // Initialize prev
             #pragma omp simd
-            for(i = 0; i < m; i ++)
-                prev[i]  = i * indel;
+            for (int x = 0; x < n; ++x) prev[x] = double(x) * indel;
 
-            for(i = prefix+1; i < mSuf; i ++){
-                curr[0] = indel * (i - prefix);
+            // For each row
+            for (int i = prefix + 1; i < mSuf; ++i) {
+                curr[0] = indel * double(i - prefix);
+                int ai = ptr_seq(is, i - 1);
 
-                for(int j = prefix+1; j < nSuf; j ++){
-                    // Use SIMD batch processing to compute min and other operations
-                    xsimd::batch<double> min_batch, j_indel_batch, sub_batch;
+                int j = prefix + 1;
+                for (; j + (int)B <= nSuf; j += (int)B) {
+                    // load prev[j .. j+B-1], prev[j-1 .. j+B-2]
+                    const double* prev_ptr   = prev + (j - prefix);
+                    const double* prevm1_ptr = prev + (j - 1 - prefix);
 
-                    // Calculate the three values and perform min operation
-                    min_batch = xsimd::batch<double>(prev[j-prefix] + indel);
-                    j_indel_batch = xsimd::batch<double>(curr[j-1-prefix] + indel);
-                    sub_batch = xsimd::batch<double>((ptr_seq(is, i-1) == ptr_seq(js, j-1)) ?
-                                                     prev[j-1-prefix] :
-                                                     (prev[j-1-prefix] + ptr_sm(ptr_seq(is, i-1), ptr_seq(js, j-1))));
+                    batch_t prevj   = batch_t::load_unaligned(prev_ptr);
+                    batch_t prevjm1 = batch_t::load_unaligned(prevm1_ptr);
 
-                    // Store the result
-                    xsimd::batch<double> result = xsimd::min(min_batch, j_indel_batch);
-                    result = xsimd::min(result, sub_batch);
-                    curr[j-prefix] = result.get(0);
+                    // substitution costs
+                    alignas(64) double subs[B];
+                    for (std::size_t b = 0; b < B; ++b) {
+                        int jj_idx = j + int(b);
+                        int bj = ptr_seq(js, jj_idx - 1);
+                        subs[b] = (ai == bj) ? 0.0 : ptr_sm(ai, bj);
+                    }
+                    batch_t sub_batch = batch_t::load_unaligned(subs);
+
+                    // Vectorize independent candidates: del and sub
+                    batch_t cand_del = prevj + batch_t(indel);
+                    batch_t cand_sub = prevjm1 + sub_batch;
+                    batch_t vert = xsimd::min(cand_del, cand_sub);
+
+                    // Sequential propagation for insert dependencies (low overhead)
+                    double running_ins = curr[j - prefix - 1] + indel;  // Start from previous position
+                    for (std::size_t b = 0; b < B; ++b) {
+                        double v = vert.get(b);  // Extract scalar from vector
+                        double c = std::min(v, running_ins);
+                        curr[j + int(b) - prefix] = c;
+                        running_ins = c + indel;  // Propagate for next lane
+                    }
+                }
+
+                // tail scalar
+                for (; j < nSuf; ++j) {
+                    int bj = ptr_seq(js, j-1);
+                    double subcost = (ai == bj) ? 0.0 : ptr_sm(ai, bj);
+                    double delcost = prev[j - prefix] + indel;
+                    double inscost = curr[j - 1 - prefix] + indel;
+                    double subval  = prev[j - 1 - prefix] + subcost;
+                    curr[j - prefix] = std::min({ delcost, inscost, subval });
                 }
 
                 std::swap(prev, curr);
             }
 
-            maxpossiblecost = abs(n-m) * indel + maxscost * std::min(m, n);
+            double final_cost = prev[nSuf - 1 - prefix];
+            double maxpossiblecost = std::abs(n - m) * indel + maxscost * std::min(m, n);
+            double ml = double(m) * indel;
+            double nl = double(n) * indel;
+            return normalize_distance(final_cost, maxpossiblecost, ml, nl, norm);
 
-            ml = double(m) * indel;
-            nl = double(n) * indel;
-
-            return normalize_distance(prev[nSuf-1-prefix], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
-            py::print("Error in compute_distance: ", e.what());
+            py::print("Error in SIMD-batch compute_distance: ", e.what());
             throw;
         }
     }
 
+
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
-            double* prev = aligned_alloc_double(fmatsize);
-            double* curr = aligned_alloc_double(fmatsize);
 
             #pragma omp parallel
             {
-                #pragma omp for schedule(guided)
+                // 每线程独立分配 prev/curr
+                double* prev = aligned_alloc_double(fmatsize);
+                double* curr = aligned_alloc_double(fmatsize);
+
+                #pragma omp for schedule(static)
                 for (int i = 0; i < nseq; i++) {
                     for (int j = i; j < nseq; j++) {
                         buffer(i, j) = compute_distance(i, j, prev, curr);
                     }
                 }
+
+                aligned_free_double(prev);
+                aligned_free_double(curr);
             }
 
-            aligned_free_double(prev);
-            aligned_free_double(curr);
-
+            // 对称填充
             #pragma omp parallel for schedule(static)
-            for(int i = 0; i < nseq; i++)
-                for(int j = i+1; j < nseq; j++)
+            for(int i = 0; i < nseq; i++) {
+                for(int j = i+1; j < nseq; j++) {
                     buffer(j, i) = buffer(i, j);
+                }
+            }
 
             return dist_matrix;
         } catch (const std::exception& e) {
@@ -194,22 +237,21 @@ public:
     py::array_t<double> compute_refseq_distances() {
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
-            double* prev = aligned_alloc_double(fmatsize);
-            double* curr = aligned_alloc_double(fmatsize);
 
-            double cmpres = 0;
             #pragma omp parallel
             {
+                double* prev = aligned_alloc_double(2 * seqlen + 1);
+                double* curr = aligned_alloc_double(2 * seqlen + 1);
+
                 #pragma omp for schedule(static)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {
                     for (int is = 0; is < nseq; is ++) {
-                        if(is == rseq){
-                            cmpres = 0;
-                        }else{
+                        double cmpres = 0;
+                        if(is != rseq){
                             cmpres = compute_distance(is, rseq, prev, curr);
                         }
 
-                        buffer(is, rseq-rseq1) = cmpres;
+                        buffer(is, rseq - rseq1) = cmpres;
                     }
                 }
             }

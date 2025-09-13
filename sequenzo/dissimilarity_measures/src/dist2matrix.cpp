@@ -40,7 +40,6 @@ public:
                }
            }
 
-           // 串行对称复制，避免多线程写冲突
            #pragma omp parallel for schedule(static)
            for (int i = 0; i < nseq; ++i) {
                for (int j = i + 1; j < nseq; ++j) {

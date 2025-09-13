@@ -73,17 +73,20 @@ public:
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for collapse(2) schedule(dynamic)
-            for (int i = 0; i < nseq; i++) {
-                for (int j = i; j < nseq; j++) {
-                    buffer(i, j) = compute_distance(i, j);
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(static)
+                for (int i = 0; i < nseq; i++) {
+                    for (int j = i; j < nseq; j++) {
+                        buffer(i, j) = compute_distance(i, j);
+                    }
                 }
             }
 
             #pragma omp for schedule(static)
             for (int i = 0; i < nseq; ++i) {
-                for (int j = 0; j < i; ++j) {  // 遍历下三角的每一行
-                    buffer(i, j) = buffer(j, i);
+                for (int j = i + 1; j < nseq; ++j) {
+                    buffer(j, i) = buffer(i, j);
                 }
             }
 
@@ -98,17 +101,17 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
-            double cmpres = 0;
-#pragma omp parallel for collapse(2) schedule(dynamic)
-            for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                for (int is = 0; is < nseq; is ++) {
-                    if(is == rseq){
-                        cmpres = 0;
-                    }else{
-                        cmpres = compute_distance(is, rseq);
+            #pragma omp parallel
+            {
+                #pragma omp for schedule(guided)
+                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
+                    for (int is = 0; is < nseq; is ++) {
+                        if(is == rseq){
+                            buffer(is, rseq-rseq1) = 0;
+                        }else{
+                            buffer(is, rseq-rseq1) = compute_distance(is, rseq);
+                        }
                     }
-
-                    buffer(is, rseq-rseq1) = cmpres;
                 }
             }
 

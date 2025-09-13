@@ -59,6 +59,7 @@ import gc
 import time
 import warnings
 
+from scipy.spatial.distance import pdist, squareform
 import numpy as np
 import pandas as pd
 
@@ -580,17 +581,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-    if full_matrix == True and refseq == None:
-        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
-        _dist2matrix = _matrix.padding_matrix()
+    _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+    _dist2matrix = _matrix.padding_matrix()
 
+    if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
 
     elif full_matrix == False and refseq != None:
-        print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None.")
+        print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None. This is same as TraMineR.")
 
     elif full_matrix == False and refseq == None:
-        dist_matrix = pd.DataFrame(dist_matrix, index=half_matrix_id, columns=half_matrix_id)
+        dist_matrix = squareform(_dist2matrix)
 
     print("[>] Computed Successfully.")
     return dist_matrix
@@ -641,7 +642,7 @@ if __name__ == '__main__':
     _time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
-    # refseq = [list(range(sequence_data.seqdata.shape[0])), [1, 25, 50, 75, 100, 125, 150, 175]]
+    refseq = [list(range(sequence_data.seqdata.shape[0])), [1, 25, 50, 75, 100, 125, 150, 175]]
     om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 
@@ -654,12 +655,12 @@ if __name__ == '__main__':
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
     #                              time_type="age", time=_time, id_col="worker_id", states=states)
     # # refseq = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [142, 85]]
-    # om = get_distance_matrix(sequence_data, method="OM", sm="CONSTANT", indel=1)
+    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
     # ===============================
     #             broad
     # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/seqdef/sampled_data_1000.csv")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
     # _time = list(df.columns)[4:]
     # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
@@ -672,3 +673,4 @@ if __name__ == '__main__':
     print("================")
     end_time = time.time()
     print(f"[>] Total time: {end_time - start_time:.2f} seconds")
+    print(om)

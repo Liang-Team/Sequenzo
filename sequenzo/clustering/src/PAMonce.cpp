@@ -209,8 +209,6 @@ public:
             ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
         }
 
-        py::print("Computed successfully!");
-
         return clusterid;
     }
 

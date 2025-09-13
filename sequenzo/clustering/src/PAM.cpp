@@ -129,8 +129,6 @@ public:
                 for (int i = 0; i < nelements; i++) {
                     total += ptr_weights[i] * dysma[i];
                 }
-
-                py::print("Total:", total);
             }
 
             dzsky = 1; // Initialize dzsky to 1 for the change cost comparison
@@ -199,7 +197,7 @@ public:
 
             ipass++; // Increment pass count
             if (ipass >= npass) {
-                py::print("PAM loop over pass number ", ipass);
+                py::print("  - PAM loop over pass number ", ipass);
                 break; // Break if max passes reached
             }
         } while (dzsky < 0); // Repeat until no improvement

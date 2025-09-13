@@ -94,6 +94,8 @@ def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce'
 
     memb_matrix = memb.runclusterloop()
 
+    print("[>] Computed successfully.")
+
     return memb_matrix
 
 def _validate_linkage_matrix(initialclust):
