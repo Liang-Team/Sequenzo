@@ -101,7 +101,14 @@ class Cluster:
         # Convert square matrix to condensed form
         self.condensed_matrix = squareform(self.full_matrix)
 
-        linkage_matrix= linkage(self.condensed_matrix, method=self.clustering_method)
+        try:
+            linkage_matrix = linkage(self.condensed_matrix, method=self.clustering_method)
+        except Exception as e:
+            raise RuntimeError(
+                "Failed to compute linkage. Check that the distance matrix is square, "
+                "symmetric, finite, non-negative, and has a zero diagonal. "
+                f"Original error: {e}"
+            )
         return linkage_matrix
 
     def plot_dendrogram(self,
@@ -350,9 +357,9 @@ class ClusterQuality:
                 if max_val > min_val:
                     self.scores[metric] = (values - min_val) / (max_val - min_val)
 
-    def get_metrics_table(self):
+    def get_cqi_table(self):
         """
-        Generate a summary table of clustering quality metrics with concise column names.
+        Generate a summary table of clustering quality indicators with concise column names.
 
         :return: Pandas DataFrame summarizing the optimal number of clusters (N groups),
                  the corresponding metric values (stat), and normalized values (z-score and min-max normalization).
@@ -396,7 +403,7 @@ class ClusterQuality:
 
         return pd.DataFrame(summary)
 
-    def plot_combined_scores(self,
+    def plot_cqi_scores(self,
                              metrics_list=None,
                              norm="zscore",
                              palette="husl",
@@ -412,7 +419,7 @@ class ClusterQuality:
                              show=True
                              ):
         """
-        Plot combined scores for clustering quality metrics with customizable parameters.
+        Plot combined scores for clustering quality indicators with customizable parameters.
 
         This function displays normalized metric values for easier comparison while preserving
         the original statistical properties in the legend.
