@@ -24,23 +24,28 @@ om = get_distance_matrix(seqdata=sequence_data,
                          method='OMspell',
                          sm="TRATE",
                          indel="auto")
-
-weight = np.ones(sequence_data.seqdata.shape[0], dtype=int)
+print("Distance matrix:\n", om)
 
 print(" - test PAM ...")
 pam = KMedoids(method="PAM",
-              nelements=sequence_data.seqdata.shape[0],
-              diss=om,
-              centroids=[1, 2, 3, 4, 5],
+              k=5,
+              initialclust=[1, 2, 3, 4, 5],
               npass=5,
-              )
-clustering = pam.runclusterloop()
+              diss=om)
+print('clustering result:\n', pam)
 
 print(" - test KMedoids ...")
 kmedoids = KMedoids(method="KMedoids",
-                    nelements=sequence_data.seqdata.shape[0],
-                    diss=om,
-                    centroids=[1, 2, 3, 4, 5],
+                    k=5,
+                    initialclust=[1, 2, 3, 4, 5],
                     npass=5,
-                    )
-clustering = kmedoids.runclusterloop()
+                    diss=om)
+print('clustering result:\n', kmedoids)
+
+print(" - test PAMoce ...")
+pamonce = KMedoids(method="PAMonce",
+                    k=5,
+                    initialclust=[1, 2, 3, 4, 5],
+                    npass=5,
+                    diss=om)
+print('clustering result:\n', pamonce)

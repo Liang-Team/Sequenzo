@@ -113,7 +113,7 @@ public:
             int m = mSuf - prefix;
             int n = nSuf - prefix;
 
-            // trivial cases
+            // 预处理
             if (m == 0 && n == 0)
                 return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
             if (m == 0) {
@@ -130,11 +130,9 @@ public:
             using batch_t = xsimd::batch<double>;
             constexpr std::size_t B = batch_t::size;
 
-            // Initialize prev
             #pragma omp simd
             for (int x = 0; x < n; ++x) prev[x] = double(x) * indel;
 
-            // For each row
             for (int i = prefix + 1; i < mSuf; ++i) {
                 curr[0] = indel * double(i - prefix);
                 int ai = ptr_seq(is, i - 1);
@@ -163,16 +161,16 @@ public:
                     batch_t vert = xsimd::min(cand_del, cand_sub);
 
                     // Sequential propagation for insert dependencies (low overhead)
-                    double running_ins = curr[j - prefix - 1] + indel;  // Start from previous position
+                    double running_ins = curr[j - prefix - 1] + indel;
                     for (std::size_t b = 0; b < B; ++b) {
-                        double v = vert.get(b);  // Extract scalar from vector
+                        double v = vert.get(b);
                         double c = std::min(v, running_ins);
                         curr[j + int(b) - prefix] = c;
-                        running_ins = c + indel;  // Propagate for next lane
+                        running_ins = c + indel;
                     }
                 }
 
-                // tail scalar
+                // 补足尾部
                 for (; j < nSuf; ++j) {
                     int bj = ptr_seq(js, j-1);
                     double subcost = (ai == bj) ? 0.0 : ptr_sm(ai, bj);

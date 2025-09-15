@@ -365,8 +365,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
 
     else:
-        dseqs_num, half_matrix_id = np.unique(seqdata_num, axis=0, return_index=True)
-        half_matrix_id = seqdata.ids[half_matrix_id]
+        dseqs_num = np.unique(seqdata_num, axis=0)
 
     # Check that dseqs_num does not exceed the max allowed number
     if check_max_size:
@@ -444,7 +443,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Get DSS
         seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
-        half_matrix_id = seqdata.ids[dseqs_oidxs]
 
         if method == "OMspell":
             _seqlength = seqlength(dseqs_num)
@@ -581,8 +579,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
-    _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
-    _dist2matrix = _matrix.padding_matrix()
+        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+        _dist2matrix = _matrix.padding_matrix()
 
     if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
@@ -643,7 +641,7 @@ if __name__ == '__main__':
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
     refseq = [list(range(sequence_data.seqdata.shape[0])), [1, 25, 50, 75, 100, 125, 150, 175]]
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto", refseq=refseq)
 
 
     # ===============================
