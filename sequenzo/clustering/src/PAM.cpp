@@ -197,7 +197,6 @@ public:
 
             ipass++; // Increment pass count
             if (ipass >= npass) {
-                py::print("  - PAM loop over pass number ", ipass);
                 break; // Break if max passes reached
             }
         } while (dzsky < 0); // Repeat until no improvement
