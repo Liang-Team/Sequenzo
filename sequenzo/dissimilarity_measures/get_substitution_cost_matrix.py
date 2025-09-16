@@ -10,6 +10,7 @@ import numpy as np
 
 from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.dissimilarity_measures.utils.seqstatd import seqstatd
 from .get_distance_matrix import with_missing_warned
 
 def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, time_varying=False,
@@ -25,7 +26,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
     if not isinstance(seqdata, SequenceData):
         raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
 
-    metlist = ["CONSTANT", "TRATE"]
+    metlist = ["CONSTANT", "TRATE", "INDELS", "INDELSLOG"]
     if method not in metlist:
         raise ValueError(f" [!] method must be one of: {', '.join(metlist)}.")
 
@@ -136,7 +137,56 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
 
             return_result['indel'] = indel
 
-    print("[>] Indel cost generated.\n")
+    # ================================
+    # Process "INDELS" and "INDELSLOG"
+    # ================================
+    if method in ["INDELS", "INDELSLOG"]:
+        if time_varying:
+            indels = seqstatd(seqdata)['Frequencies']
+        else:
+            ww = seqdata.weights
+            if ww is None:
+                ww = np.ones(seqdata.seqdata.shape[0])
+
+            flat_seq = seqdata.values.flatten(order='F')
+            weights_rep = np.repeat(ww, seqdata.seqdata.shape[1])
+            df = pd.DataFrame({'state': flat_seq, 'weight': weights_rep})
+            weighted_counts = df.groupby('state')['weight'].sum()
+
+            weighted_prob = weighted_counts / weighted_counts.sum()
+            states_num = range(1, len(seqdata.states) + 1)
+            indels = np.array([weighted_prob.get(s, 0) for s in states_num])
+
+        indels[np.isnan(indels)] = 1
+        if method == "INDELSLOG":
+            indels = np.log(2 / (1 + indels))
+        else:
+            indels = 1 / indels
+            indels[np.isinf(indels)] = np.finfo(float).max
+
+        return_result['indel'] = np.insert(indels, 0, 0)    # cause C++ is 1-indexed
+
+        if time_varying:
+            time = seqdata.seqdata.shape[1]
+
+            print(
+                f"  - Creating {alphsize}x{alphsize}x{time} time varying substitution-cost matrix using {cval} as constant value.")
+            costs = np.full((time, alphsize, alphsize), 0.0)
+
+            for t in range(time):
+                for i in range(1, alphsize):
+                    for j in range(1, alphsize):
+                        if i != j:
+                            val = indels.iloc[i - 1, t] + indels.iloc[j - 1, t]
+                            costs[t, i, j] = np.clip(val, -np.finfo(np.float64).max, np.finfo(np.float64).max)
+
+        else:
+            costs = np.full((alphsize, alphsize), 0.0)
+            for i in range(1, alphsize):
+                for j in range(1, alphsize):
+                    if i != j:
+                        costs[i, j] = indels[i - 1] + indels[j - 1]
+            costs[np.isinf(costs)] = np.finfo(float).max
 
     # =================================
     # Process the Cost of Missing Value
@@ -169,6 +219,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
 # Define seqsubm as an alias for backward compatibility
 def seqsubm(*args, **kwargs):
     return get_substitution_cost_matrix(*args, **kwargs)['sm']
+
 
 if __name__ == "__main__":
     df = pd.read_csv('D:/country_co2_emissions_missing.csv')

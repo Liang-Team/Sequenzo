@@ -85,10 +85,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     gc.collect()                           # garbage collection
 
-    # print("========= get_distance_matrix =======")
-    # print(c_code)  # 是否为 None
-    # print(dir(c_code))  # 检查它的属性
-
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -217,7 +213,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     #   "none" :
     #   "matrix" : "OM", "OMloc", "OMslen", "OMspell", "OMstran", "HAM", "DHD" or "TWED".
     #   "method" : "TRATE", "CONSTANT", "INDELS", "INDELSLOG"
-    sm_methods = ["TRATE", "CONSTANT"]
+    sm_methods = ["TRATE", "CONSTANT", "INDELS", "INDELSLOG"]
 
     if sm is not None:
         if isinstance(sm, np.ndarray) and (sm.ndim == 2 or sm.ndim == 3):
@@ -225,8 +221,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         elif isinstance(sm, np.ndarray) and sm.ndim == 1:
             sm_type = "array"
         elif isinstance(sm, str):
+            sm = sm.upper()
             if sm not in sm_methods:
                 raise ValueError(f"[!] Invalid 'sm' value, must be one of {sm_methods}.")
+            if method == "OM" and sm == "INDELSLOG" or sm == "INDELS":
+                raise ValueError(f"[!] 'sm = \"{sm}\"' is not relevant for OM now, consider TRATE or CONSTANT instead.")
             sm_type = "method"
         else:
             raise ValueError("[!] 'sm' must be of a valid type (matrix, array, method).")
@@ -281,8 +280,21 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # OM, OMspell, HAM, DHD
     if method in om_methods + ["HAM", "DHD"]:
         if sm_type == "matrix":
-            # TODO : checkcost()
-            a = 1
+            if method in [om_methods, "TWED"]:
+                # TODO : checkcost()
+                pass
+            elif method == "HAM":
+                # TODO : checkcost()
+                pass
+            else:
+                raise ValueError(f"[x] No known 'sm' check for {method}.")
+
+        elif sm_type == "array":
+            if method == "DHD":
+                # TODO : checkcost()
+                pass
+            else:
+                raise ValueError(f"[x] 'sm' as an array is not relevant for {method}.")
 
         elif sm_type == "method":
             tv = False
@@ -313,7 +325,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
             if indel_type == "auto":
                 indel = sm['indel']
-                indel_type = "vector" if indel > 1 else "number"
+                indel_type = "vector" if getElementsNumber(indel) > 1 else "number"
+
+                print(f"[>] generated an indel of type {indel_type}\n")
 
             sm = sm['sm']
 
@@ -328,7 +342,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                   miss_cost=1)
                 if indel_type == "auto":
                     indel = sm['indel']
-                    indel_type = "vector" if indel > 1 else "number"
+                    indel_type = "vector" if getElementsNumber(indel) > 1 else "number"
 
                 sm = sm['sm']
 
@@ -341,7 +355,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
                 if indel_type == "auto":
                     indel = sm['indel']
-                    indel_type = "vector" if indel > 1 else "number"
+                    indel_type = "vector" if getElementsNumber(indel) > 1 else "number"
 
                 sm = sm['sm']
 
@@ -417,11 +431,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # ==============================
     # Compute Method-Specific Values
     # ==============================
-    if method in ["OMspell"] and indel_type == "number":
-        indellist = np.repeat(indel, nstates + 1)
-        indel = np.max(indellist)
+    if method in ["OMspell"]:
+        if indel_type == "number":
+            indellist = np.repeat(indel, nstates + 1)
+            indel_type = "vector"
+        elif indel_type == "vector":
+            indellist = indel
 
-        indel_type = "vector"
+        indel = np.max(indellist)
 
     # OMspell
     # Redefined dseqs.num
@@ -517,7 +534,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          refseq_id,
                                          expcost,
                                          dseqs_dur,
-                                         indellist,
+                                         indellist.astype(np.float64),
                                          _seqlength)
             dist_matrix = om.compute_refseq_distances()
 
@@ -600,6 +617,14 @@ def adaptSmForHAM(sm, nstates, ncols):
     costs = np.tile(sm, (ncols, 1, 1))
     return costs
 
+def getElementsNumber(x):
+    if isinstance(x, pd.DataFrame):
+        return x.shape[1]
+    elif isinstance(x, (np.ndarray, list, tuple)):
+        return x.size if isinstance(x, np.ndarray) else len(x)
+    else:
+        return 1
+
 
 if __name__ == '__main__':
     from sequenzo import *
@@ -636,24 +661,23 @@ if __name__ == '__main__':
     # ===============================
     #             CO2
     # ===============================
-    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    _time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
-    refseq = [list(range(sequence_data.seqdata.shape[0])), [1, 25, 50, 75, 100, 125, 150, 175]]
-    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto", refseq=refseq)
+    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # _time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
+    # om = get_distance_matrix(sequence_data, method="DHD", sm="INDELS", indel="auto")
 
 
     # ===============================
     #            detailed
     # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    # _time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-    #                              time_type="age", time=_time, id_col="worker_id", states=states)
-    # # refseq = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [142, 85]]
-    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    _time = list(df.columns)[4:]
+    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+                                 time_type="age", time=_time, id_col="worker_id", states=states)
+    # refseq = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [142, 85]]
+    om = get_distance_matrix(sequence_data, method="HAM", sm="TRATE", indel="auto")
 
     # ===============================
     #             broad
