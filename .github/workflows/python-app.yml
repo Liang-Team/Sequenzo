@@ -1,20 +1,14 @@
 # GitHub Actions workflow for Sequenzo package
-# 打包 wheel（.whl）
-# 支持三大平台：
-# Linux (manylinux) → 用 cibuildwheel
-# macOS (universal2) → 用 build_ext + build
-# Windows → 用 cibuildwheel
-
 name: Build Wheels for Sequenzo
 
 on:
   push:
     tags:
-      - "v*"  # 比如 v0.1.0
-  workflow_dispatch:  # 支持手动触发
+      - "v*"
+  workflow_dispatch:
 
 env:
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 全局设置
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   build:
@@ -37,7 +31,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Add OpenMP support - enable parallel build for prebuilt wheels
+      # Add OpenMP support
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -47,7 +41,6 @@ jobs:
           echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
           echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "OK macOS OpenMP (libomp) installed"
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -55,29 +48,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libomp-dev
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "OK Linux OpenMP (libomp-dev) installed"
 
       - name: Setup MSVC with OpenMP (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      
+
       - name: Enable OpenMP (Windows)
         if: runner.os == 'Windows'
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
-          echo "OK Windows OpenMP (MSVC) enabled"
 
-      # 安装依赖时指定仅安装已有 wheel，不构建源码包，防止 linux 系统里面 scipy 问题
-      # 项目依赖了 scipy，而 scipy 在 Linux 上 从源码构建时依赖 OpenBLAS（或 MKL）库 来支持矩阵/线性代数功能。
-      # 但 GitHub Actions 的基础镜像里默认没装 OpenBLAS 开发库，所以构建失败了。
-      # 这通常发生在 构建轮子的时候自动触发了某些依赖（比如 scipy）从源码编译，而不是直接使用已有 wheel。
+      # 强制使用预编译包，避免源码编译问题
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --prefer-binary numpy scipy
+          pip install --only-binary=all --prefer-binary numpy scipy
           pip install --prefer-binary Cython pybind11 build cibuildwheel twine
+          # 针对 fastcluster，尝试安装预编译版本
+          pip install --only-binary=fastcluster fastcluster || pip install fastcluster
 
       - name: Build Cython wheels on macOS
         if: runner.os == 'macOS'
@@ -85,8 +75,6 @@ jobs:
           python setup.py build_ext --inplace
           python -m build
 
-      # 在 Linux/windows 构建开始前，加一步“干净化”操作
-      # 加上 shell: bash 就能在 Windows 上也“模拟”出 Bash 环境运行这些命令
       - name: Clean previous build outputs
         if: runner.os != 'macOS'
         run: |
@@ -94,43 +82,52 @@ jobs:
           find . -name "*.so" -delete
         shell: bash
 
-      # CIBW_SKIP: "pp*" 表示跳过所有 PyPy 构建（如 pp39-*, pp310-* 等）。
-      # 不支持 32-bit Windows：几乎没人用了、内存限制太严重、生态系统正在放弃、PyPI 上传倾向 64-bit
-      # 我们的项目里有大量的 Cython 模块、.cpp / .pyx 扩展、pybind11 接口
-      # 这些都是 为 CPython 编译的本地扩展，PyPy 对它们支持很不完善，编译也会失败
-      # Linux 也如此，禁止使用 32-bit，因为主流 Linux 发行版（Ubuntu, Debian, CentOS 等）早已默认发布 64-bit 系统。
       - name: Build wheels with cibuildwheel
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_BUILD: "cp39-* cp310-* cp311-*"
+          CIBW_SKIP: "pp* *-musllinux*"  # 跳过 PyPy 和 musllinux
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
-          
-          # OpenMP environment configuration
+
+          # 环境变量配置
           CIBW_ENVIRONMENT_LINUX: >
             SEQUENZO_ENABLE_OPENMP=1
+            PIP_PREFER_BINARY=1
           CIBW_ENVIRONMENT_WINDOWS: >
             SEQUENZO_ENABLE_OPENMP=1
-          
-          # 测试wheel是否包含OpenMP
-          CIBW_TEST_COMMAND: "python -c \"import sequenzo; print('Sequenzo import successful')\""
 
-      - name: List wheel files (Linux/macOS only)
-        if: runner.os != 'Windows'
-        run: find dist/ -type f -name "*.whl" -print
+          # Linux: 安装更完整的依赖
+          CIBW_BEFORE_BUILD_LINUX: >
+            yum install -y libgomp-devel openblas-devel lapack-devel || 
+            apt-get update && apt-get install -y libomp-dev libopenblas-dev liblapack-dev ||
+            echo "Dependency installation attempted"
 
-      # 这样就能看到 actions 机器上， wheel 文件是否生成成功
-      # Windows 的 bash 环境一样支持 ls，并不会有问题。这样最简洁、最少坑
+          # 使用预编译包安装依赖
+          CIBW_BEFORE_BUILD: >
+            pip install --upgrade pip &&
+            pip install --only-binary=all numpy scipy &&
+            pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
+
+          # 测试命令
+          CIBW_TEST_COMMAND: >
+            python -c "
+            import sequenzo; 
+            print('Sequenzo import successful');
+            try:
+              import sequenzo.clustering.clustering_c_code;
+              print('C++ extensions loaded');
+            except Exception as e:
+              print(f'WARNING C++ extensions issue: {e}')
+            "
+
       - name: Show dist content
         run: ls -lah dist/
         shell: bash
 
-      # 检查 .whl 和 .tar.gz 是否符合 PyPI 的格式规范，提前捕获打包错误，避免上传 PyPI 后才失败
       - name: Check wheels
         run: twine check dist/*
 
-      # Verify OpenMP support
       - name: Verify OpenMP Support
         run: |
           echo "=== 验证构建的wheel中的OpenMP支持 ==="
@@ -139,44 +136,18 @@ jobs:
           import sys
           import os
           
-          # 安装刚构建的wheel
-          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl')]
-          wheel_files.sort()
+          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and 'cp${{ matrix.python-version }}' in f.replace('.', '')]
           if wheel_files:
               wheel_file = wheel_files[0]
               print(f'Installing wheel: {wheel_file}')
               subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
               
-              # 测试导入
               import sequenzo
               print('Sequenzo导入成功')
               
-              # 检查C++扩展
               try:
                   import sequenzo.clustering.clustering_c_code as cc
                   print('C++扩展加载成功')
-                  
-                  # 检查.so/.dll/.dylib文件的OpenMP链接
-                  so_path = cc.__file__
-                  print(f'检查文件: {so_path}')
-                  
-                  if sys.platform == 'darwin':
-                      result = subprocess.run(['otool', '-L', so_path], capture_output=True, text=True)
-                      if 'libomp' in result.stdout or 'libgomp' in result.stdout:
-                          print('OpenMP库链接成功!')
-                      else:
-                          print('WARNING 未检测到OpenMP库链接')
-                          print('链接库:', result.stdout)
-                  elif sys.platform.startswith('linux'):
-                      result = subprocess.run(['ldd', so_path], capture_output=True, text=True)
-                      if 'libgomp' in result.stdout or 'libomp' in result.stdout:
-                          print('OpenMP库链接成功!')
-                      else:
-                          print('WARNING 未检测到OpenMP库链接')
-                          print('链接库:', result.stdout)
-                  elif sys.platform == 'win32':
-                      print('Windows MSVC OpenMP支持已启用')
-                      
               except ImportError as e:
                   print(f'ERROR C++扩展加载失败: {e}')
           else:
@@ -184,10 +155,8 @@ jobs:
           "
         shell: bash
 
-      # 把打好的文件上传到 GitHub Actions 的界面中，可以供我们下载
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
-

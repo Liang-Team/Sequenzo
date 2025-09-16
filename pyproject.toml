@@ -8,7 +8,8 @@ requires = [
     "setuptools-scm[toml]>=7.0.0",
     "docutils>=0.17",
     "tqdm>=4.62.3,<5.0.0",
-    "missingno >=0.5.2,<0.6.0"
+    "missingno >=0.5.2,<0.6.0",
+    "fastcluster>=1.2.6,<1.3.0"
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
