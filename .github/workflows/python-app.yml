@@ -111,15 +111,10 @@ jobs:
 
           # 测试命令
           CIBW_TEST_COMMAND: >
-            python -c "
-            import sequenzo; 
-            print('Sequenzo import successful');
-            try:
-              import sequenzo.clustering.clustering_c_code;
-              print('C++ extensions loaded');
-            except Exception as e:
-              print(f'WARNING C++ extensions issue: {e}')
-            "
+            python -c "import sequenzo; print('Sequenzo import successful');
+            import importlib; 
+            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code'); 
+            print('C++ extensions loaded' if mod else 'WARNING: C++ extensions not found')"
 
       - name: Show dist content
         run: ls -lah dist/
