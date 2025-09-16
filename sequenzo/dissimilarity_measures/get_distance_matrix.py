@@ -224,7 +224,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             sm = sm.upper()
             if sm not in sm_methods:
                 raise ValueError(f"[!] Invalid 'sm' value, must be one of {sm_methods}.")
-            if method == "OM" and sm == "INDELSLOG" or sm == "INDELS":
+            if method == "OM" and (sm == "INDELSLOG" or sm == "INDELS"):
                 raise ValueError(f"[!] 'sm = \"{sm}\"' is not relevant for OM now, consider TRATE or CONSTANT instead.")
             sm_type = "method"
         else:

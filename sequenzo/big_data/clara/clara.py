@@ -461,7 +461,7 @@ if __name__ == '__main__':
                    sample_size=3000,
                    kvals=range(2, 6),
                    criteria=['distance'],
-                   dist_args={"method": "OM", "sm": "TRATE", "indel": 1},
+                   dist_args={"method": "OMspell", "sm": "INDELS", "indel": 1},
                    parallel=True,
                    stability=True)
 
