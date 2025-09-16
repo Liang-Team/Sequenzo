@@ -39,7 +39,7 @@ from .dissimilarity_measures.get_substitution_cost_matrix import get_substitutio
 from .dissimilarity_measures.utils.get_LCP_length_for_2_seq import get_LCP_length_for_2_seq
 
 from .clustering import Cluster, ClusterResults, ClusterQuality
-from .clustering import KMedoids
+from .clustering.KMedoids import KMedoids
 from .big_data.clara.clara import clara
 from .big_data.clara.visualization import plot_scores_from_dataframe
 

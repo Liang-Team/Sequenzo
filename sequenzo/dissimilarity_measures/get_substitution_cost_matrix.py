@@ -164,7 +164,10 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
             indels = 1 / indels
             indels[np.isinf(indels)] = np.finfo(float).max
 
-        return_result['indel'] = np.insert(indels, 0, 0)    # cause C++ is 1-indexed
+        if time_varying:
+            return_result['indel'] = indels
+        else:
+            return_result['indel'] = np.insert(indels, 0, 0)    # cause C++ is 1-indexed
 
         if time_varying:
             time = seqdata.seqdata.shape[1]

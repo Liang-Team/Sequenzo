@@ -4,3 +4,9 @@
 @Time    : 2025/2/28 00:30
 @Desc    : 
 """
+
+from .clara.clara import clara
+
+__all__ = [
+    'clara'
+]
