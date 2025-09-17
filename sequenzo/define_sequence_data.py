@@ -483,6 +483,69 @@ class SequenceData:
 
         return table
 
+    def uniqueness_stats(self, top_k: int = 10, as_labels: bool = False):
+        """
+        Compute uniqueness statistics of the sequences.
+
+        Returns:
+            dict with keys:
+                - n_sequences: total number of sequences
+                - n_unique: number of unique sequences
+                - uniqueness_rate: n_unique / n_sequences
+                - counts: pd.Series (index=pattern_id, values=frequency), sorted desc
+                - examples: pd.DataFrame (pattern_id, freq, example) with up to top_k rows
+        Parameters:
+            top_k: show top-k most frequent patterns in 'examples'
+            as_labels: if True, show example sequences with state labels; else with numeric codes.
+        """
+        import numpy as np
+        import pandas as pd
+
+        A = self.to_numeric()                       # shape (n, m), int32
+        n, m = A.shape
+
+        # Use a byte-level view to let np.unique work row-wise efficiently
+        A_contig = np.ascontiguousarray(A)
+        row_view = A_contig.view(np.dtype((np.void, A_contig.dtype.itemsize * m))).ravel()
+
+        # unique patterns and their assignment per row
+        uniq, inverse, counts = np.unique(row_view, return_inverse=True, return_counts=True)
+
+        n_unique = uniq.size
+        uniqueness_rate = float(n_unique) / float(n) if n > 0 else np.nan
+
+        # Build a frequency table by "pattern_id"
+        freq = pd.Series(counts, index=pd.Index(range(n_unique), name="pattern_id")).sort_values(ascending=False)
+
+        # Prepare readable examples for the top-k most frequent patterns
+        top_ids = freq.head(top_k).index.tolist()
+        # pick the first row of each pattern as example
+        # map pattern_id -> first row index
+        first_row_idx = {}
+        for i, pid in enumerate(inverse):
+            if pid in top_ids and pid not in first_row_idx:
+                first_row_idx[pid] = i
+                if len(first_row_idx) == len(top_ids):
+                    break
+
+        ex_rows = []
+        for pid in top_ids:
+            r = A[first_row_idx[pid]]
+            if as_labels:
+                # turn numeric codes 1..K into labels
+                r = [self.state_to_label[self.inverse_state_mapping[int(x)]] for x in r]
+            else:
+                r = r.tolist()
+            ex_rows.append({"pattern_id": int(pid), "freq": int(freq.loc[pid]), "example": r})
+
+        examples = pd.DataFrame(ex_rows)
+
+        return {
+            "n_sequences": int(n),
+            "n_unique": int(n_unique),
+            "uniqueness_rate": uniqueness_rate,
+        }
+
 
 
 
