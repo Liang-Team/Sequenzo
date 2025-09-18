@@ -100,12 +100,19 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: >
             SEQUENZO_ENABLE_OPENMP=1
             PIP_PREFER_BINARY=1
+            DISTUTILS_USE_SDK=1
 
           # Linux: 安装更完整的依赖
           CIBW_BEFORE_BUILD_LINUX: >
             yum install -y libgomp-devel openblas-devel lapack-devel || 
             apt-get update && apt-get install -y libomp-dev libopenblas-dev liblapack-dev ||
             echo "Dependency installation attempted"
+
+          # Windows特殊配置：使用更简单的依赖安装
+          CIBW_BEFORE_BUILD_WINDOWS: >
+            pip install --upgrade pip &&
+            pip install --only-binary=all "numpy<2.0" "scipy<1.14" &&
+            echo "Windows fastcluster skipped for compatibility"
 
           # 使用预编译包安装依赖
           CIBW_BEFORE_BUILD: >

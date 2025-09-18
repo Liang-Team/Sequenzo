@@ -136,12 +136,20 @@ def has_openmp_support():
             f.write(test_code)
 
         if sys.platform == 'win32':
-            # Windows: 尝试MSVC编译器
+            # Windows: 尝试MSVC编译器，如果失败则假设支持OpenMP
             binary_path = os.path.join(temp_dir, 'test_openmp.exe')
-            result = subprocess.run(
-                ['cl', '/openmp', source_path, '/Fe:' + binary_path],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
+            try:
+                result = subprocess.run(
+                    ['cl', '/openmp', source_path, '/Fe:' + binary_path],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                # If cl is not available or times out, assume OpenMP is supported
+                # This happens in some CI environments
+                print("[SETUP] Could not test OpenMP with cl compiler, assuming supported")
+                has_openmp_support._result = True
+                has_openmp_support._checked = True
+                return True
         else:
             # macOS/Linux: 使用clang++/g++
             binary_path = os.path.join(temp_dir, 'test_openmp')
@@ -173,7 +181,7 @@ def has_openmp_support():
 
 def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
-        base_cflags = ['/W4', '/bigobj']
+        base_cflags = ['/W1', '/bigobj']  # Reduced warning level for faster compilation
         base_cppflags = ['/std:c++17'] + base_cflags
         
         # Windows OpenMP support
@@ -200,7 +208,8 @@ def get_compile_args_for_file(filename):
             openmp_flag = []
 
     if sys.platform == 'win32':
-        compile_args = ["/O2", "/arch:AVX2"]
+        # More conservative Windows flags for better compatibility
+        compile_args = ["/O2"]
     else:
         compile_args = ["-O3", "-march=native", "-ffast-math"]
 

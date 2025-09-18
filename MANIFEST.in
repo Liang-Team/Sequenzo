@@ -31,10 +31,20 @@ include LICENSE
 include pyproject.toml
 include requirements-*.txt
 
-# Exclude unwanted files
+# Exclude unwanted files that slow down Windows builds
 global-exclude *.pyc
 global-exclude *.pyo
 global-exclude *.so
 global-exclude __pycache__
 global-exclude .DS_Store
 global-exclude *.egg-info
+# Exclude test/benchmark files from external libraries to speed up Windows builds
+prune sequenzo/dissimilarity_measures/src/eigen/bench
+prune sequenzo/dissimilarity_measures/src/eigen/test
+prune sequenzo/dissimilarity_measures/src/eigen/demos
+prune sequenzo/dissimilarity_measures/src/eigen/doc
+prune sequenzo/dissimilarity_measures/src/eigen/unsupported/test
+prune sequenzo/dissimilarity_measures/src/xsimd/test
+prune sequenzo/dissimilarity_measures/src/xsimd/benchmark
+prune sequenzo/dissimilarity_measures/src/xsimd/examples
+prune sequenzo/dissimilarity_measures/src/xsimd/docs
