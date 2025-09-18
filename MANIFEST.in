@@ -1,0 +1,40 @@
+# Include all Python files
+recursive-include sequenzo *.py
+recursive-include sequenzo *.pyx
+recursive-include sequenzo *.pxd
+
+# Include all C++ source files for extensions
+recursive-include sequenzo/dissimilarity_measures/src *.cpp
+recursive-include sequenzo/dissimilarity_measures/src *.h
+recursive-include sequenzo/dissimilarity_measures/src *.hpp
+recursive-include sequenzo/clustering/src *.cpp
+recursive-include sequenzo/clustering/src *.h
+recursive-include sequenzo/clustering/src *.hpp
+
+# Include all C source files
+recursive-include sequenzo/dissimilarity_measures/utils *.c
+recursive-include sequenzo/clustering/utils *.c
+recursive-include sequenzo/big_data/clara/utils *.c
+
+# Include all header files and external libraries
+recursive-include sequenzo/dissimilarity_measures/src/xsimd/include *.hpp
+recursive-include sequenzo/dissimilarity_measures/src/xsimd/include *.h
+recursive-include sequenzo/dissimilarity_measures/src/eigen *.h
+recursive-include sequenzo/dissimilarity_measures/src/eigen *.hpp
+
+# Include data files
+recursive-include sequenzo/datasets *.csv
+
+# Include documentation and configuration
+include README.md
+include LICENSE
+include pyproject.toml
+include requirements-*.txt
+
+# Exclude unwanted files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.so
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.egg-info
