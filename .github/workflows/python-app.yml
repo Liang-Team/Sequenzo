@@ -110,13 +110,11 @@ jobs:
 
           # Windows特殊配置：使用更简单的依赖安装
           CIBW_BEFORE_BUILD_WINDOWS: >
-            pip install --upgrade pip &&
             pip install --only-binary=all "numpy<2.0" "scipy<1.14" &&
             echo "Windows fastcluster skipped for compatibility"
 
           # 使用预编译包安装依赖
           CIBW_BEFORE_BUILD: >
-            pip install --upgrade pip &&
             pip install --only-binary=all "numpy<2.0" "scipy<1.14" &&
             pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
 
