@@ -66,6 +66,9 @@ include-package-data = true
   "src/xsimd/include/**/*.hpp",
   "src/xsimd/include/**/*.h"
 ]
+"sequenzo.dissimilarity_measures.src" = [
+  "*.h"
+]
 
 
 [tool.setuptools.packages.find]
