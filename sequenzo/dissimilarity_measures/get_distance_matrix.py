@@ -63,13 +63,15 @@ from scipy.spatial.distance import pdist, squareform
 import numpy as np
 import pandas as pd
 
+from memory_profiler import profile
+import tracemalloc
+
 from sequenzo.define_sequence_data import SequenceData
 
 with_missing_warned = False
 
 
 # @profile
-# @numba.jit(nopython=True, parallel=True)
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None, **kwargs):
 
@@ -631,6 +633,8 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
+    # tracemalloc.start()
+
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
     # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
 
@@ -661,11 +665,11 @@ if __name__ == '__main__':
     # ===============================
     #             CO2
     # ===============================
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # _time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
-    # om = get_distance_matrix(sequence_data, method="OMspell", sm="INDELSLOG", indel="auto")
+    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    _time = list(df.columns)[1:]
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
+    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 
     # ===============================
@@ -682,15 +686,20 @@ if __name__ == '__main__':
     # ===============================
     #             broad
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
-    _time = list(df.columns)[4:]
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-                                 time_type="age", time=_time, id_col="worker_id", states=states)
-    om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
+    # _time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time_type="age", time=_time, id_col="worker_id", states=states)
+    # om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
 
     # refseq = [[0, 1, 2], [99, 100]]
     # print(om)
+
+    # snapshot = tracemalloc.take_snapshot()
+    # top_stats = snapshot.statistics('lineno')
+    # for stat in top_stats[:10]:
+    #     print(stat)
 
     print("================")
     end_time = time.time()

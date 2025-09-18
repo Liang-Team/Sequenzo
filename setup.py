@@ -186,7 +186,7 @@ def get_compile_args_for_file(filename):
         
         # Windows OpenMP support
         if has_openmp_support():
-            openmp_flag = ['/openmp']
+            openmp_flag = ['/openmp:experimental']
             print("[SETUP] Windows OpenMP flags: /openmp")
         else:
             openmp_flag = []
