@@ -62,14 +62,13 @@ jobs:
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
 
-      # 强制使用预编译包，避免源码编译问题
+      # Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --only-binary=all --prefer-binary "numpy<2.0" "scipy<1.14"
+          pip install --prefer-binary "numpy<2.0" "scipy<1.14" memory_profiler
           pip install --prefer-binary Cython pybind11 build "cibuildwheel==2.23.3" twine
-          # 针对 fastcluster，尝试安装预编译版本
-          pip install --only-binary=fastcluster fastcluster || pip install fastcluster
+          pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
 
       - name: Build Cython wheels on macOS
         if: runner.os == 'macOS'
@@ -88,38 +87,30 @@ jobs:
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_SKIP: "*-musllinux*"  # 跳过 musllinux
+          CIBW_SKIP: "*-musllinux*"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_BUILD_VERBOSITY: "3"
+          CIBW_BUILD_VERBOSITY: "1"
 
-          # 环境变量配置
-          CIBW_ENVIRONMENT_LINUX: >
-            SEQUENZO_ENABLE_OPENMP=1
-            PIP_PREFER_BINARY=1
-          CIBW_ENVIRONMENT_WINDOWS: >
-            SEQUENZO_ENABLE_OPENMP=1
-            PIP_PREFER_BINARY=1
-            DISTUTILS_USE_SDK=1
+          # Environment variables
+          CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
+          CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
 
-          # Linux: 安装更完整的依赖
+          # Linux: install system dependencies
           CIBW_BEFORE_BUILD_LINUX: >
-            yum install -y libgomp-devel openblas-devel lapack-devel || 
-            apt-get update && apt-get install -y libomp-dev libopenblas-dev liblapack-dev ||
-            echo "Dependency installation attempted"
+            yum install -y libgomp-devel || 
+            apt-get update && apt-get install -y libomp-dev ||
+            echo "System dependencies installation attempted"
 
-          # 更新 Windows 特殊配置
+          # Windows: simplified dependency installation
           CIBW_BEFORE_BUILD_WINDOWS: >
-            pip install --upgrade pip setuptools wheel &&
-            pip install "numpy<2.0" "scipy<1.14" memory_profiler &&
-            echo "Windows dependencies installed"
+            pip install memory_profiler numpy scipy
 
-          # 移除全局的 --only-binary 限制，让它按需选择
+          # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
-            pip install "numpy<2.0" "scipy<1.14" memory_profiler &&
-            pip install fastcluster || echo "fastcluster installation attempted"
+            pip install memory_profiler
 
-          # 测试命令
+          # Test command
           CIBW_TEST_COMMAND: >
             python -c "import sequenzo; print('Sequenzo import successful');
             import importlib; 
@@ -135,7 +126,7 @@ jobs:
 
       - name: Verify OpenMP Support
         run: |
-          echo "=== 验证构建的wheel中的OpenMP支持 ==="
+          echo "=== Verifying built wheels ==="
           python -c "
           import subprocess
           import sys
@@ -148,15 +139,15 @@ jobs:
               subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
               
               import sequenzo
-              print('Sequenzo导入成功')
+              print('Sequenzo import successful')
               
               try:
                   import sequenzo.clustering.clustering_c_code as cc
-                  print('C++扩展加载成功')
+                  print('C++ extensions loaded successfully')
               except ImportError as e:
-                  print(f'ERROR C++扩展加载失败: {e}')
+                  print(f'WARNING: C++ extensions loading failed: {e}')
           else:
-              print('ERROR 未找到对应的wheel文件')
+              print('ERROR: No matching wheel files found')
           "
         shell: bash
 
