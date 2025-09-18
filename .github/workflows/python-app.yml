@@ -102,12 +102,15 @@ jobs:
             apt-get update && apt-get install -y libomp-dev ||
             echo "System dependencies installation attempted"
 
-          # Windows: simplified dependency installation
+          # Windows: use only precompiled packages
           CIBW_BEFORE_BUILD_WINDOWS: >
-            pip install memory_profiler numpy scipy
+            pip install --only-binary=all memory_profiler numpy scipy ||
+            pip install memory_profiler --only-binary=all numpy ||
+            pip install memory_profiler
 
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
+            pip install --prefer-binary memory_profiler numpy scipy ||
             pip install memory_profiler
 
           # Test command
