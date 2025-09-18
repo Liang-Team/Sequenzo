@@ -123,14 +123,11 @@ For Chinese users, additional tutorials are available on [Yuqi's video tutorials
 
 💬 **Have a question or found a bug?**
 
-Please submit an issue on [GitHub Issues](https://github.com/Liang-Team/Sequenzo/issues). 
+Please submit an issue on [GitHub Issues](https://github.com/Liang-Team/Sequenzo/issues) by following [this instruction](https://sequenzo.yuqi-liang.tech/en/faq/bug_reports_and_feature_requests).
 
-For an effective bug report, please include the following:
-* A reproducible code example that clearly demonstrates the issue.
-* The output you’re seeing, such as an error message or an image of the plot.
-* A brief explanation of why you believe this is a bug.
-
-Providing these details will help us diagnose and resolve the issue more efficiently. We are always happy to help and will address it as soon as possible.
+* We will respond as quickly as possible.
+* For requests that are not too large, we aim to fix or implement the feature **within one week** from our response time.
+* Timeline may vary depending on how many requests we receive.
 
 🌟 **Enjoying Sequenzo?**
 
