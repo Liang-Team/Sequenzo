@@ -63,15 +63,10 @@ from scipy.spatial.distance import pdist, squareform
 import numpy as np
 import pandas as pd
 
-from memory_profiler import profile
-import tracemalloc
-
 from sequenzo.define_sequence_data import SequenceData
 
 with_missing_warned = False
 
-
-# @profile
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,
                         tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None, **kwargs):
 

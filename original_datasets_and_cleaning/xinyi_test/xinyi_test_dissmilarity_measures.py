@@ -37,7 +37,7 @@ csv_files = [
     # 'sampled_40000_data.csv',
     #  'sampled_45000_data.csv',
     # 'sampled_50000_data.csv',
-    'sampled_55000_data.csv',
+    # 'sampled_55000_data.csv',
     # 'sampled_60000_data.csv',
 ]
 
@@ -51,7 +51,7 @@ U_files = [
     # 'synthetic_detailed_U25_N40000.csv',
     # 'synthetic_detailed_U25_N45000.csv',
     # 'synthetic_detailed_U25_N50000.csv',
-    # 'synthetic_detailed_U50_N500.csv',
+    'synthetic_detailed_U50_N500.csv',
     # 'synthetic_detailed_U50_N1000.csv',
     # 'synthetic_detailed_U50_N1500.csv',
     # 'synthetic_detailed_U50_N2000.csv',
@@ -78,9 +78,9 @@ U_files = [
 
 # data_dir = '/home/xinyi_test/data/detailed_data'
 # data_dir = 'D:/college/research/QiQi/sequenzo/files/detialed_transposed.csv'
-data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\broad_data'
+# data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\broad_data'
 # data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\detailed_data'
-# data_dir = 'D:/college/research/QiQi/sequenzo/data_and_output/orignal data/not_real_detailed_data'
+data_dir = 'D:/college/research/QiQi/sequenzo/data_and_output/orignal data/not_real_detailed_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []
@@ -96,20 +96,20 @@ for filename in csv_files:
     # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']]
     #
-    # _time = list(df.columns)[2:]
-    # states = ["Data", "Data science", "Hardware", "Research", "Software", "Support & test", "Systems & infrastructure"]
-    # df = df[['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
+    _time = list(df.columns)[2:]
+    states = ["Data", "Data science", "Hardware", "Research", "Software", "Support & test", "Systems & infrastructure"]
+    df = df[['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
 
-    _time = list(df.columns)[4:]
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']]
-    df = df.drop_duplicates(subset=['worker_id'])
+    # _time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # df = df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']]
+    # df = df.drop_duplicates(subset=['worker_id'])
 
     # _time = list(df.columns)[1:]
     # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 
-    data = SequenceData(df, time=_time, time_type="age", id_col="worker_id", states=states)
-    # data = SequenceData(df, time=_time, time_type="age", id_col="id", states=states)
+    # data = SequenceData(df, time=_time, time_type="age", id_col="worker_id", states=states)
+    data = SequenceData(df, time=_time, time_type="age", id_col="id", states=states)
     # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
 
     # refseq = [[0, 1, 2], [99, 100]]
