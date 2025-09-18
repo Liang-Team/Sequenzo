@@ -62,11 +62,13 @@ jobs:
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
 
-      # Install dependencies
+      # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --prefer-binary "numpy<2.0" "scipy<1.14" memory_profiler
+          pip install --only-binary=all "numpy<2.0" || pip install "numpy<2.0"
+          pip install --only-binary=all "scipy<1.14" || echo "scipy will be installed in cibuildwheel"
+          pip install memory_profiler
           pip install --prefer-binary Cython pybind11 build "cibuildwheel==2.23.3" twine
           pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
 
@@ -87,7 +89,7 @@ jobs:
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_SKIP: "*-musllinux*"
+          CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_BUILD_VERBOSITY: "1"
@@ -102,16 +104,13 @@ jobs:
             apt-get update && apt-get install -y libomp-dev ||
             echo "System dependencies installation attempted"
 
-          # Windows: use only precompiled packages
+          # Windows: skip all extra dependencies, let setup.py handle them
           CIBW_BEFORE_BUILD_WINDOWS: >
-            pip install --only-binary=all memory_profiler numpy scipy ||
-            pip install memory_profiler --only-binary=all numpy ||
-            pip install memory_profiler
+            echo "Using setup.py dependencies only"
 
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
-            pip install --prefer-binary memory_profiler numpy scipy ||
-            pip install memory_profiler
+            echo "Using setup.py dependencies only"
 
           # Test command
           CIBW_TEST_COMMAND: >
