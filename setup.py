@@ -282,9 +282,11 @@ def configure_cpp_extension():
     try:
         link_args = get_link_args()
         
+        # Compile only the binding translation unit to avoid duplicate symbols.
+        # The binding TU `module.cpp` includes the other implementation .cpp files.
         diss_ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
-            sources=glob('sequenzo/dissimilarity_measures/src/*.cpp'),
+            sources=['sequenzo/dissimilarity_measures/src/module.cpp'],
             include_dirs=get_dissimilarity_measures_include_dirs(),
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,
@@ -293,9 +295,10 @@ def configure_cpp_extension():
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
+        # Same for clustering: compile only the binding TU.
         clustering_ext_module = Pybind11Extension(
             'sequenzo.clustering.clustering_c_code',
-            sources=glob('sequenzo/clustering/src/*.cpp'),
+            sources=['sequenzo/clustering/src/module.cpp'],
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,

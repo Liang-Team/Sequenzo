@@ -11,7 +11,8 @@ from .KMedoids import KMedoids
 def _import_c_code():
     """Lazily import the c_code module to avoid circular dependencies during installation"""
     try:
-        from sequenzo.clustering.src import clustering_c_code
+        # Import built pybind11 extension placed under this package
+        from sequenzo.clustering import clustering_c_code
         return clustering_c_code
     except ImportError:
         # If the C extension cannot be imported, return None
