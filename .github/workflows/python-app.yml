@@ -108,15 +108,16 @@ jobs:
             apt-get update && apt-get install -y libomp-dev libopenblas-dev liblapack-dev ||
             echo "Dependency installation attempted"
 
-          # Windows特殊配置：使用更简单的依赖安装
+          # 更新 Windows 特殊配置
           CIBW_BEFORE_BUILD_WINDOWS: >
-            pip install --only-binary=all "numpy<2.0" "scipy<1.14" &&
-            echo "Windows fastcluster skipped for compatibility"
+            pip install --upgrade pip setuptools wheel &&
+            pip install "numpy<2.0" "scipy<1.14" memory_profiler &&
+            echo "Windows dependencies installed"
 
-          # 使用预编译包安装依赖
+          # 移除全局的 --only-binary 限制，让它按需选择
           CIBW_BEFORE_BUILD: >
-            pip install --only-binary=all "numpy<2.0" "scipy<1.14" &&
-            pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
+            pip install "numpy<2.0" "scipy<1.14" memory_profiler &&
+            pip install fastcluster || echo "fastcluster installation attempted"
 
           # 测试命令
           CIBW_TEST_COMMAND: >
