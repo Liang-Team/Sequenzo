@@ -7,6 +7,8 @@
 #endif
 #include <random>
 #include <cfloat>
+#include <climits>
+#include <cmath>
 
 using namespace std;
 namespace py = pybind11;

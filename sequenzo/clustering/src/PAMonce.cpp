@@ -5,6 +5,8 @@
 #include <sstream>
 #include <algorithm>
 #define WEIGHTED_CLUST_TOL -1e-10
+#include <cfloat>
+#include <cmath>
 
 namespace py = pybind11;
 

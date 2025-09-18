@@ -5,6 +5,9 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include <cfloat>
+#include <climits>
+#include <cmath>
 #define WEIGHTED_CLUST_TOL -1e-10
 using namespace std;
 namespace py = pybind11;

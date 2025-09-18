@@ -5,6 +5,8 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+#include <cfloat>
+#include <cmath>
 
 namespace py = pybind11;
 
