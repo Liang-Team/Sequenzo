@@ -56,16 +56,31 @@ def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False,
     current, nxt, w_pair = current[valid], nxt[valid], w_pair[valid]
 
     # Compute weighted transition counts
-    trans = np.zeros((num_states, num_states), dtype=float)
+    # Create mapping from state codes to matrix indices
+    state_codes = sorted(set(current) | set(nxt))
+    code_to_idx = {code: idx for idx, code in enumerate(state_codes)}
+    
+    # Use only the actual number of unique states for matrix size
+    actual_num_states = len(state_codes)
+    trans = np.zeros((actual_num_states, actual_num_states), dtype=float)
+    
     for c, n2, ww in zip(current, nxt, w_pair):
-        trans[int(c), int(n2)] += ww
+        trans[code_to_idx[int(c)], code_to_idx[int(n2)]] += ww
 
     # Compute transition rates
     row_sums = trans.sum(axis=1, keepdims=True)
     row_sums = np.where(row_sums == 0, 1.0, row_sums)
     transition_rates = trans / row_sums
 
-    return transition_rates
+    # Create a properly sized matrix with correct mapping to original states
+    final_matrix = np.zeros((num_states, num_states), dtype=float)
+    
+    # Map back to the original state positions
+    for i, from_code in enumerate(state_codes):
+        for j, to_code in enumerate(state_codes):
+            final_matrix[from_code-1, to_code-1] = transition_rates[i, j]
+
+    return final_matrix
 
 
 def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray) -> None:
