@@ -126,6 +126,7 @@ class SequenceData:
         self.id_col = id_col
         self.ids = np.array(self.data[self.id_col].values) if self.id_col else data.index
         self.weights = weights
+        self._weights_provided = weights is not None  # Track if weights were originally provided
         self.start = start
         self.custom_colors = custom_colors
 
@@ -413,6 +414,14 @@ class SequenceData:
 
         print(f"[>] States: {self.states}")
         print(f"[>] Labels: {self.labels}")
+        
+        # Display weights information if weights were originally provided
+        if self._weights_provided:
+            weight_mean = np.mean(self.weights)
+            weight_std = np.std(self.weights)
+            print(f"[>] Weights: Provided (weight mean={weight_mean:.3f}, std={weight_std:.3f})")
+        else:
+            print(f"[>] Weights: Not provided")
 
     def get_legend(self):
         """Returns the legend handles and labels for visualization."""
