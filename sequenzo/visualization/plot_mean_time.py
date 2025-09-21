@@ -57,31 +57,30 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
     df_long['w'] = W_long
     # Keep state_idx as numerical for consistent grouping
     
-    # Calculate weighted time for each state using numerical indices
-    wtime = df_long.groupby('state_idx')['w'].sum()
-    totw = float(w.sum())
-
-    # Calculate proportions using numerical state indices
-    proportions = {s: float(wtime.get(s, 0.0)) / (totw if totw > 0 else 1.0)
-                   for s in states}
-    
-    # Scale to time units (number of periods)
-    T = seqdata.values.shape[1]  # Number of time periods
-    mean_times = {s: T * proportions[s] for s in states}
-
-    # Calculate effective sample size and standard errors in time units
-    Neff = (w.sum() ** 2) / (np.sum(w ** 2)) if np.sum(w ** 2) > 0 else 1.0
-    
-    # Calculate standard errors with proper bounds checking to avoid sqrt warnings
-    se = {}
+    # Calculate mean time spent in each state per sequence
+    # For each sequence, count time spent in each state, then take weighted average
+    seq_state_times = {}
     for s in states:
-        if Neff > 1:
-            # Ensure proportions are within valid bounds [0, 1]
-            p = max(0.0, min(1.0, proportions[s]))
-            variance_term = p * (1 - p) / Neff
-            # Ensure variance term is non-negative due to floating point precision
-            variance_term = max(0.0, variance_term)
-            se[s] = T * np.sqrt(variance_term)
+        # Count occurrences of state s in each sequence
+        state_counts = (seq_df == s).sum(axis=1)  # Sum across time for each sequence
+        # Calculate weighted mean across sequences
+        seq_state_times[s] = np.average(state_counts, weights=w) if len(state_counts) > 0 else 0.0
+    
+    mean_times = seq_state_times
+
+    # Calculate standard errors for mean time
+    se = {}
+    n_sequences = len(seq_df)
+    
+    for s in states:
+        if n_sequences > 1:
+            # Count occurrences of state s in each sequence
+            state_counts = (seq_df == s).sum(axis=1)
+            # Calculate weighted standard error
+            weighted_mean = seq_state_times[s]
+            weighted_var = np.average((state_counts - weighted_mean) ** 2, weights=w)
+            # Standard error of the weighted mean
+            se[s] = np.sqrt(weighted_var / n_sequences) if weighted_var >= 0 else 0.0
         else:
             se[s] = 0.0
 
@@ -101,7 +100,7 @@ def plot_mean_time(seqdata: SequenceData,
                    weights="auto",
                    show_error_bar: bool = True,
                    title=None,
-                   x_label="Mean Time (Periods)",
+                   x_label="Mean Time (Years)",
                    y_label="State",
                    fontsize: int = 12,
                    save_as: Optional[str] = None,

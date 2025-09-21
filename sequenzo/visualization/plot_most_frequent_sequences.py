@@ -114,11 +114,28 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
     # **Annotate 0% at the bottom of the Y-axis**
     ax.annotate("0%", xy=(-0.5, 0), xycoords="data", fontsize=fontsize, color="black", ha="left", va="center")
 
-    # **Remove top, right, and left borders, keep only the x-axis and y-axis**
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_visible(False)  # Do not keep the left border
-    ax.spines["bottom"].set_visible(False)  # Do not keep the bottom border
+    # **Clean up axis aesthetics like plot_state_distribution**
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(True)  # Keep the left border like state_distribution
+    ax.spines['bottom'].set_visible(True)  # Show bottom border to connect with left
+    
+    # Style the left spine to match plot_state_distribution
+    ax.spines['left'].set_color('gray')
+    ax.spines['left'].set_linewidth(0.7)
+    ax.spines['bottom'].set_color('gray')
+    ax.spines['bottom'].set_linewidth(0.7)
+    
+    # Style the tick parameters
+    ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
+    
+    # Extend the left spine slightly beyond the plot area
+    ax.spines['left'].set_bounds(0, sum_freq_top_10)
+    ax.spines['left'].set_position(('outward', 5))  # Move spine 5 points to the left
+    
+    # Align bottom spine with the left spine position
+    ax.spines['bottom'].set_position(('outward', 5))  # Move bottom spine to align with left
 
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
