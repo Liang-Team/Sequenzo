@@ -28,6 +28,7 @@ def plot_modal_state(seqdata: SequenceData,
                      fig_width: int = 12,
                      fig_height: Optional[int] = None,
                      show_counts: bool = True,
+                     fontsize: int = 12,
                      save_as: Optional[str] = None,
                      dpi: int = 200) -> None:
     """
@@ -181,13 +182,13 @@ def plot_modal_state(seqdata: SequenceData,
 
         # Set group title with count if requested
         if show_counts:
-            if weights is not None:
+            if weights is not None and not np.allclose(weights, 1.0):
                 sum_w = float(w.sum())
-                ax.set_title(f"{group} (n={group_count}, Σw={sum_w:.1f})", fontsize=12, pad=15)
+                ax.set_title(f"{group} (n={group_count}, Σw={sum_w:.1f})", fontsize=fontsize, pad=15)
             else:
-                ax.set_title(f"{group} (n={group_count})", fontsize=12, pad=15)
+                ax.set_title(f"{group} (n={group_count})", fontsize=fontsize, pad=15)
         else:
-            ax.set_title(group, fontsize=12, pad=15)
+            ax.set_title(group, fontsize=fontsize, pad=15)
 
         # Set y-axis limits and ticks
         ax.set_ylim(0, 1.0)
@@ -204,11 +205,11 @@ def plot_modal_state(seqdata: SequenceData,
 
         # Add y-label only for the middle subplot
         if i == n_groups // 2:
-            ax.set_ylabel(ylabel, fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=fontsize)
 
     # Set up X-axis (time) labels on the bottom subplot
     set_up_time_labels_for_x_axis(seqdata, axes[-1])
-    axes[-1].set_xlabel(xlabel, fontsize=12, labelpad=10)
+    axes[-1].set_xlabel(xlabel, fontsize=fontsize, labelpad=10)
 
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(main_fig, dpi=dpi)
@@ -220,7 +221,7 @@ def plot_modal_state(seqdata: SequenceData,
         labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(fig_width, 1),
-        fontsize=10,
+        fontsize=fontsize-2,
         dpi=dpi
     )
 

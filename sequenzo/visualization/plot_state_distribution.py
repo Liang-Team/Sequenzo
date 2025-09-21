@@ -52,6 +52,7 @@ def plot_state_distribution(seqdata: SequenceData,
                             show=True,
                             include_legend=True,
                             group_order=None,
+                            fontsize=12,
                             sort_groups='auto') -> None:
     """
     Creates state distribution plots for different groups, showing how state
@@ -80,7 +81,7 @@ def plot_state_distribution(seqdata: SequenceData,
             seqdata=seqdata, weights=weights, figsize=figsize,
             title=title, xlabel=xlabel, ylabel=ylabel,
             save_as=save_as, dpi=dpi, stacked=stacked,
-            show=show, include_legend=include_legend
+            show=show, include_legend=include_legend, fontsize=fontsize
         )
 
     # Process weights
@@ -208,12 +209,14 @@ def plot_state_distribution(seqdata: SequenceData,
             ax.grid(True, linestyle='-', alpha=0.2)
 
         # Set group title with weighted sample size
-        if weights is not None:
+        # Check if we have effective weights (not all 1.0) and they were provided by user
+        original_weights = getattr(seqdata, "weights", None)
+        if original_weights is not None and not np.allclose(original_weights, 1.0):
             sum_w = float(w.sum())
             group_title = f"{group} (n = {len(group_seq_df)}, Σw = {sum_w:.1f})"
         else:
             group_title = f"{group} (n = {len(group_seq_df)})"
-        ax.text(0.95, 1.02, group_title, transform=ax.transAxes, fontsize=12, ha='right', va='bottom', color='black')
+        ax.text(0.95, 1.02, group_title, transform=ax.transAxes, fontsize=fontsize, ha='right', va='bottom', color='black')
 
         # Set y-axis limits from 0 to 100%
         ax.set_ylim(0, 100)
@@ -233,10 +236,10 @@ def plot_state_distribution(seqdata: SequenceData,
 
         # Add axis labels
         if i % ncols == 0:
-            ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+            ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
         # if i >= num_groups - ncols:
-        ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
 
     # Hide unused subplots
     for j in range(i + 1, len(axes)):
@@ -244,7 +247,7 @@ def plot_state_distribution(seqdata: SequenceData,
 
     # Add a common title if provided
     if title:
-        fig.suptitle(title, fontsize=14, y=1.02)
+        fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning
     fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
@@ -259,7 +262,7 @@ def plot_state_distribution(seqdata: SequenceData,
         labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(figsize[0] * ncols, 1),
-        fontsize=10,
+        fontsize=fontsize-2,
         dpi=dpi
     )
 
@@ -298,7 +301,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
                                     save_as=None,
                                     dpi=200,
                                     show=False,
-                                    include_legend=True) -> None:
+                                    include_legend=True,
+                                    fontsize=12) -> None:
     """
     Creates a state distribution plot showing how the prevalence of states changes over time,
     with enhanced color vibrancy.
@@ -400,11 +404,11 @@ def _plot_state_distribution_single(seqdata: SequenceData,
         ax.grid(True, linestyle='-', alpha=0.2)
 
     # Set axis labels and title
-    ax.set_xlabel(xlabel, fontsize=12, labelpad=10)
-    ax.set_ylabel(ylabel, fontsize=12, labelpad=10)
+    ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10)
+    ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10)
 
     if title:
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        ax.set_title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
 
     # Set x-axis labels based on time points
     set_up_time_labels_for_x_axis(seqdata, ax)
@@ -421,7 +425,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     # Add legend
     if include_legend:
         legend = ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5),
-                           frameon=False, fontsize=10)
+                           frameon=False, fontsize=fontsize-2)
 
     # Adjust layout to make room for the legend
     plt.tight_layout()

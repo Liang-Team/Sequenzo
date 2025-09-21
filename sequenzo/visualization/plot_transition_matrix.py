@@ -112,6 +112,7 @@ def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray)
 def plot_transition_matrix(seqdata: SequenceData,
                            weights="auto",
                            title: Optional[str] = None,
+                           fontsize: int = 12,
                            save_as: Optional[str] = None,
                            dpi: int = 200) -> None:
     """
@@ -157,10 +158,10 @@ def plot_transition_matrix(seqdata: SequenceData,
 
     # Adjust format
     if title:
-        plt.title(title, fontsize=14, fontweight='bold', pad=20)
+        plt.title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
     # plt.title("State Transition Rate Matrix", fontsize=14, fontweight='bold', pad=20)
-    plt.xlabel("State at t + 1", fontsize=12, labelpad=10)
-    plt.ylabel("State at t", fontsize=12, labelpad=10)
+    plt.xlabel("State at t + 1", fontsize=fontsize, labelpad=10)
+    plt.ylabel("State at t", fontsize=fontsize, labelpad=10)
 
     # Adjust label rotation and alignment
     plt.xticks(rotation=45, ha="right")

@@ -38,6 +38,7 @@ def plot_relative_frequency(seqdata: SequenceData,
                             num_groups: int = 12,
                             weights="auto",
                             grouping_method="first",
+                            fontsize=fontsize,
                             save_as=None,
                             dpi=200):
     """
@@ -96,11 +97,11 @@ def plot_relative_frequency(seqdata: SequenceData,
     # Add weight information to title if weights are used
     if weights is not None and not np.allclose(weights, 1.0):
         total_w = float(np.sum(weights))
-        ax.set_title(f"Group Medoids (n={len(seqdata.values)}, Σw={total_w:.1f})", fontsize=14)
+        ax.set_title(f"Group Medoids (n={len(seqdata.values)}, Σw={total_w:.1f})", fontsize=fontsize+2)
     else:
-        ax.set_title(f"Group Medoids (n={len(seqdata.values)})", fontsize=14)
-    ax.set_xlabel("Time", fontsize=12)
-    ax.set_ylabel("Frequency Group", fontsize=12)
+        ax.set_title(f"Group Medoids (n={len(seqdata.values)})", fontsize=fontsize+2)
+    ax.set_xlabel("Time", fontsize=fontsize)
+    ax.set_ylabel("Frequency Group", fontsize=fontsize)
 
     # X-axis labels
     # TODO 权宜之计，不然 index plot 里面没有，但是这里有但是在 quickstart 和 multidomain main_tutorial 里面
@@ -112,11 +113,11 @@ def plot_relative_frequency(seqdata: SequenceData,
     visible_labels = [seqdata.cleaned_time[i] for i in visible_positions]
 
     ax.set_xticks(visible_positions)
-    ax.set_xticklabels(visible_labels, fontsize=10, rotation=0, ha='right', color='gray')
+    ax.set_xticklabels(visible_labels, fontsize=fontsize-2, rotation=0, ha='right', color='gray')
 
     # Y-axis labels
     ax.set_yticks(range(0, num_groups, max(1, num_groups // 10)))
-    ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=10, color='gray')
+    ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=fontsize-2, color='gray')
 
     # **Remove unwanted black outlines**
     ax.spines["top"].set_visible(False)
@@ -141,7 +142,7 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # Y-axis labels
     box_ax.set_yticks(range(0, num_groups, max(1, num_groups // 10)))
-    box_ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=10, color='black')
+    box_ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=fontsize-2, color='black')
 
     # Keep only the bottom x-axis visible
     box_ax.spines["top"].set_visible(False)
@@ -150,9 +151,9 @@ def plot_relative_frequency(seqdata: SequenceData,
     box_ax.spines["bottom"].set_visible(True)
 
     # Set titles and labels
-    box_ax.set_title("Dissimilarities to Medoid", fontsize=14)
-    box_ax.set_xlabel("Dissimilarity", fontsize=12)
-    box_ax.set_ylabel("Group", fontsize=12)
+    box_ax.set_title("Dissimilarities to Medoid", fontsize=fontsize+2)
+    box_ax.set_xlabel("Dissimilarity", fontsize=fontsize)
+    box_ax.set_ylabel("Group", fontsize=fontsize)
 
     # Adjust layout
     # TODO 出现问题的地方 - 状态多了就有问题(quickstart) ，状态比较少就没问题 Tutorial/multidomain/main_tutorial
@@ -212,7 +213,7 @@ def plot_relative_frequency(seqdata: SequenceData,
         handles=legend_patches,
         loc='lower center',
         ncol=ncol,
-        fontsize=12,
+        fontsize=fontsize,
         frameon=False,
         bbox_to_anchor=(0.5, 0.05 + 0.015 * (nrow - 1))  # 动态向上移动避免遮挡文本
     )
@@ -222,7 +223,7 @@ def plot_relative_frequency(seqdata: SequenceData,
         0.5, 0.02,  # Adjust position, place below the legend
         stats_text,
         ha="center",
-        fontsize=12,
+        fontsize=fontsize,
         color="black"
     )
 

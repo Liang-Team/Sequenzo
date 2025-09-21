@@ -91,6 +91,7 @@ def plot_mean_time(seqdata: SequenceData,
                    title=None,
                    x_label="Mean Time (Periods)",
                    y_label="State",
+                   fontsize: int = 12,
                    save_as: Optional[str] = None,
                    dpi: int = 200) -> None:
     """
@@ -132,7 +133,7 @@ def plot_mean_time(seqdata: SequenceData,
 
     # Set y-axis ticks and labels
     ax.set_yticks(range(len(mean_time_df)))
-    ax.set_yticklabels(mean_time_df['State'], fontsize=10)
+    ax.set_yticklabels(mean_time_df['State'], fontsize=fontsize-2)
 
     # Add error bars if needed
     if show_error_bar:
@@ -149,9 +150,9 @@ def plot_mean_time(seqdata: SequenceData,
 
     # Set plot properties
     if title:
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
-    ax.set_xlabel(x_label, fontsize=12)
-    ax.set_ylabel(y_label, fontsize=12, labelpad=15)
+        ax.set_title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
+    ax.set_xlabel(x_label, fontsize=fontsize)
+    ax.set_ylabel(y_label, fontsize=fontsize, labelpad=15)
 
     # Clean white background with light grid
     ax.set_facecolor('white')
@@ -172,7 +173,7 @@ def plot_mean_time(seqdata: SequenceData,
     too_many_small = np.sum(mean_time_df['MeanTime'] < relative_threshold * max_val) >= 1
     if too_many_small:
         norm_note = f"Note: Some bars may appear as zero, but actually have small non-zero values."
-        plt.figtext(0.5, -0.02, norm_note, ha='center', fontsize=10, style='italic')
+        plt.figtext(0.5, -0.02, norm_note, ha='center', fontsize=fontsize-2, style='italic')
 
     # Adjust layout(2/2)
     plt.tight_layout()

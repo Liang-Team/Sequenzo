@@ -20,13 +20,15 @@ from sequenzo.visualization.utils import (
 )
 
 
-def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights="auto", save_as=None, dpi=200):
+def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights="auto", title=None, fontsize=12, save_as=None, dpi=200):
     """
     Generate a sequence frequency plot, similar to R's seqfplot.
 
     :param seqdata: (SequenceData) A SequenceData object containing sequences.
     :param top_n: (int) Number of most frequent sequences to display.
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
+    :param title: (str, optional) Title for the plot. If None, no title will be displayed.
+    :param fontsize: (int) Base font size for text elements
     :param save_as: (str, optional) Path to save the plot.
     :param dpi: (int) Resolution of the saved plot.
     """
@@ -78,13 +80,16 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
             left += width  # Move to the next time slice
 
     # **Formatting**
-    ax.set_xlabel("Time", fontsize=12)
-    if weights is not None and not np.allclose(weights, 1.0):
+    ax.set_xlabel("Time", fontsize=fontsize)
+    # Check if we have effective weights (not all 1.0) and they were provided by user
+    original_weights = getattr(seqdata, "weights", None)
+    if original_weights is not None and not np.allclose(original_weights, 1.0):
         # Show both count and weighted total if weights are used
-        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}, Σw={:.1f}".format(len(sequences), totw), fontsize=12)
+        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}, Σw={:.1f}".format(len(sequences), totw), fontsize=fontsize)
     else:
-        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}".format(len(sequences)), fontsize=12)
-    ax.set_title(f"Top {top_n} Most Frequent Sequences", fontsize=14, pad=20)  # Add some padding between title and plot
+        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}".format(len(sequences)), fontsize=fontsize)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize+2, pad=20)  # Add some padding between title and plot
 
     # **Optimize X-axis ticks: align to the center of each bar**
     set_up_time_labels_for_x_axis(seqdata, ax)
@@ -96,7 +101,7 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
     # Set Y-axis ticks: 0%, top1 frequency, top10 cumulative frequency
     y_ticks = [0, max_freq, sum_freq_top_10]
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels([f"{ytick:.1f}%" for ytick in y_ticks], fontsize=10)
+    ax.set_yticklabels([f"{ytick:.1f}%" for ytick in y_ticks], fontsize=fontsize-2)
 
     # **Set Y-axis range to ensure the highest tick is the top10 cumulative frequency**
     # Force Y-axis range to be from 0 to sum_freq_top_10
@@ -104,10 +109,10 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
 
     # **Annotate the frequency percentage on the left side of the highest frequency sequence**
     ax.annotate(f"{max_freq:.1f}%", xy=(-0.5, y_positions.iloc[0]),
-                xycoords="data", fontsize=12, color="black", ha="left", va="center")
+                xycoords="data", fontsize=fontsize, color="black", ha="left", va="center")
 
     # **Annotate 0% at the bottom of the Y-axis**
-    ax.annotate("0%", xy=(-0.5, 0), xycoords="data", fontsize=12, color="black", ha="left", va="center")
+    ax.annotate("0%", xy=(-0.5, 0), xycoords="data", fontsize=fontsize, color="black", ha="left", va="center")
 
     # **Remove top, right, and left borders, keep only the x-axis and y-axis**
     ax.spines["top"].set_visible(False)

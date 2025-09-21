@@ -86,7 +86,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         nrows: int = None,
                         ncols: int = None,
                         group_order=None,
-                        sort_groups='auto'
+                        sort_groups='auto',
+                        fontsize=12
                         ):
     """
     Creates sequence index plots, optionally grouped by categories.
@@ -106,10 +107,11 @@ def plot_sequence_index(seqdata: SequenceData,
     :param layout: Layout style - 'column' (default, 3xn), 'grid' (nxn)
     :param group_order: List, manually specify group order (overrides sort_groups)
     :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
+    :param fontsize: Base font size for text elements (titles use fontsize+2, ticks use fontsize-2)
     """
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
-        return _sequence_index_plot_single(seqdata, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi)
+        return _sequence_index_plot_single(seqdata, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi, fontsize)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -207,7 +209,7 @@ def plot_sequence_index(seqdata: SequenceData,
         ytick_spacing = max(1, num_sequences // 10)
 
         ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
-        ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=10, color='black')
+        ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=fontsize-2, color='black')
 
         # Customize axis style
         ax.spines['top'].set_visible(False)
@@ -220,19 +222,21 @@ def plot_sequence_index(seqdata: SequenceData,
         ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
 
         # Add group title with weight information
-        if group_weights is not None:
+        # Check if we have effective weights (not all 1.0) and they were provided by user
+        original_weights = getattr(seqdata, "weights", None)
+        if original_weights is not None and not np.allclose(original_weights, 1.0) and group_weights is not None:
             sum_w = float(group_weights.sum())
             group_title = f"{group} (n = {num_sequences}, Σw = {sum_w:.1f})"
         else:
             group_title = f"{group} (n = {num_sequences})"
-        ax.set_title(group_title, fontsize=12, loc='right')
+        ax.set_title(group_title, fontsize=fontsize, loc='right')
 
         # Add axis labels
         if i % ncols == 0:
-            ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+            ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
         # if i >= num_groups - ncols:
-        ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
 
     # Hide unused subplots
     for j in range(i + 1, len(axes)):
@@ -240,7 +244,7 @@ def plot_sequence_index(seqdata: SequenceData,
 
     # Add a common title if provided
     if title:
-        fig.suptitle(title, fontsize=14, y=1.02)
+        fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning
     fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
@@ -255,7 +259,7 @@ def plot_sequence_index(seqdata: SequenceData,
         labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(figsize[0] * ncols, 1),
-        fontsize=10,
+        fontsize=fontsize-2,
         dpi=dpi
     )
 
@@ -287,7 +291,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 xlabel="Time",
                                 ylabel="Sequences",
                                 save_as=None,
-                                dpi=200):
+                                dpi=200,
+                                fontsize=12):
     """
     Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
@@ -353,15 +358,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ytick_spacing = max(1, num_sequences // 10)
 
     ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
-    ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=10, color='black')
+    ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=fontsize-2, color='black')
 
-    # Enhance y-axis aesthetics
-    ax.set_yticks(range(0, len(sorted_data), max(1, len(sorted_data) // 10)))
-    ax.set_yticklabels(
-        range(1, len(sorted_data) + 1, max(1, len(sorted_data) // 10)),
-        fontsize=10,
-        color='black'
-    )
 
     # Customize axis line styles and ticks
     ax.spines['top'].set_visible(False)
@@ -374,23 +372,23 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
 
     # Add labels and title
-    ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
+    ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
 
-    ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+    ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
     
     # Set title with weight information if available
-    if title:
+    if title is not None:
         display_title = title
-    else:
-        display_title = "Sequence Index Plot"
-    
-    if weights is not None:
-        sum_w = float(weights.sum())
-        display_title += f" (n = {num_sequences}, Σw = {sum_w:.1f})"
-    else:
-        display_title += f" (n = {num_sequences})"
-    
-    ax.set_title(display_title, fontsize=14, color='black')
+        
+        # Check if we have effective weights (not all 1.0) and they were provided by user
+        original_weights = getattr(seqdata, "weights", None)
+        if original_weights is not None and not np.allclose(original_weights, 1.0) and weights is not None:
+            sum_w = float(weights.sum())
+            display_title += f" (n = {num_sequences}, Σw = {sum_w:.1f})"
+        else:
+            display_title += f" (n = {num_sequences})"
+        
+        ax.set_title(display_title, fontsize=fontsize+2, color='black')
 
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')

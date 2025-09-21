@@ -21,6 +21,7 @@ def plot_single_medoid(seqdata: SequenceData,
                        weights="auto",
                        show_legend: bool = True,
                        title: Optional[str] = None,
+                       fontsize: int = 12,
                        save_as: Optional[str] = None) -> None:
     """
     Plots a single medoid sequence with colors corresponding to sequence states.
@@ -65,7 +66,7 @@ def plot_single_medoid(seqdata: SequenceData,
 
     # Configure X-axis
     ax.set_xticks(np.arange(n_timepoints) + 0.5)
-    ax.set_xticklabels(seqdata.cleaned_time, fontsize=10, ha='center')
+    ax.set_xticklabels(seqdata.cleaned_time, fontsize=fontsize-2, ha='center')
     ax.tick_params(axis='x', which='major', pad=0, length=0, width=0)
 
     # Configure Y-axis
