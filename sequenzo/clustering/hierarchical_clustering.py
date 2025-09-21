@@ -18,10 +18,33 @@
     2. ClusterQuality Class: Evaluates the quality of clustering for different numbers of clusters using various metrics.
     3. ClusterResults Class: Analyzes and visualizes the clustering results (e.g., membership tables and cluster distributions).
 
+    WEIGHTED CLUSTERING SUPPORT:
+    All classes now support weighted data analysis:
+    - Cluster: Hierarchical linkage is computed on the given distance matrix (unweighted). Optional weights are applied to evaluation and summaries
+    - ClusterQuality: Computes weighted versions of quality metrics (ASWw, HG, R2, HC)
+    - ClusterResults: Provides weighted cluster distribution statistics and visualizations
+
+    Weighted metrics account for sequence importance when calculating clustering quality,
+    making the analysis more representative when sequences have different sampling weights
+    or population sizes.
+
+    ROBUSTNESS AND VALIDATION FEATURES:
+    - Ward Method Validation: Automatic detection of non-Euclidean distance matrices
+    - One-time Warning System: Alerts users when Ward is used with potentially incompatible distances
+    - Robust Matrix Cleanup: Handles NaN/Inf values using 95th percentile replacement
+    - Distance Matrix Validation: Ensures zero diagonal and non-negativity
+    - Symmetry Handling: Automatically symmetrizes matrices when required by clustering algorithms
+    - Method Recommendations: Suggests 'average', 'complete', or 'single' for sequence distances
+
+    For sequence distances (OM, LCS, etc.), Ward linkage may produce suboptimal results.
+    Consider using alternative methods like 'average' (UPGMA) for better theoretical validity.
+
     Note that the CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
+import warnings
+from matplotlib.ticker import MaxNLocator
 
 import pandas as pd
 import numpy as np
@@ -36,19 +59,185 @@ from .utils.point_biserial import point_biserial
 # Corrected imports: Use relative imports *within* the package.
 from ..visualization.utils import save_and_show_results
 
+# Global flag to ensure Ward warning is only shown once per session
+_WARD_WARNING_SHOWN = False
+
+
+def _check_euclidean_compatibility(matrix, method):
+    """
+    Check if a distance matrix is likely compatible with Euclidean-based methods like Ward.
+    
+    This performs heuristic checks rather than exact validation since perfect validation
+    would be computationally expensive for large matrices.
+    
+    Parameters:
+    -----------
+    matrix : np.ndarray
+        Distance matrix to check
+    method : str
+        Clustering method name
+        
+    Returns:
+    --------
+    bool
+        True if matrix appears Euclidean-compatible, False otherwise
+    """
+    if method.lower() != "ward":
+        return True  # Other methods don't require Euclidean distances
+    
+    # Basic checks for Euclidean properties
+    n = matrix.shape[0]
+    
+    # Check 1: Triangle inequality violations (sample a subset for large matrices)
+    sample_size = min(50, n)  # Sample up to 50 points for efficiency
+    if n > sample_size:
+        indices = np.random.choice(n, sample_size, replace=False)
+        sample_matrix = matrix[np.ix_(indices, indices)]
+    else:
+        sample_matrix = matrix
+        indices = np.arange(n)
+    
+    sample_n = sample_matrix.shape[0]
+    violations = 0
+    total_checks = 0
+    
+    # Check triangle inequality: d(i,k) <= d(i,j) + d(j,k)
+    for i in range(sample_n):
+        for j in range(i + 1, sample_n):
+            for k in range(j + 1, sample_n):
+                dij = sample_matrix[i, j]
+                dik = sample_matrix[i, k]
+                djk = sample_matrix[j, k]
+                
+                # Check all three triangle inequalities
+                if (dik > dij + djk + 1e-10 or 
+                    dij > dik + djk + 1e-10 or 
+                    djk > dij + dik + 1e-10):
+                    violations += 1
+                total_checks += 1
+    
+    if total_checks > 0:
+        violation_rate = violations / total_checks
+        if violation_rate > 0.1:  # More than 10% violations suggests non-Euclidean
+            return False
+    
+    # Check 2: Negative eigenvalues in distance matrix (indicates non-Euclidean)
+    # Use double centering to convert distances to inner products
+    try:
+        # For efficiency, only check this for smaller matrices
+        if sample_n <= 100:
+            H = np.eye(sample_n) - np.ones((sample_n, sample_n)) / sample_n
+            B = -0.5 * H @ (sample_matrix ** 2) @ H
+            eigenvals = np.linalg.eigvals(B)
+            
+            # Check if there are significant negative eigenvalues
+            negative_eigenvals = eigenvals[eigenvals < -1e-10]
+            if len(negative_eigenvals) > 0:
+                neg_energy = -np.sum(negative_eigenvals)
+                total_energy = np.sum(np.abs(eigenvals))
+                if neg_energy / total_energy > 0.1:  # > 10% negative energy
+                    return False
+    except np.linalg.LinAlgError:
+        # If eigenvalue computation fails, assume potentially problematic
+        pass
+    
+    return True
+
+
+def _warn_ward_usage_once(matrix, method):
+    """
+    Issue a one-time warning about using Ward with potentially non-Euclidean distances.
+    """
+    global _WARD_WARNING_SHOWN
+    
+    if not _WARD_WARNING_SHOWN and method.lower() == "ward":
+        if not _check_euclidean_compatibility(matrix, method):
+            warnings.warn(
+                "\n⚠️  Ward linkage method detected with potentially non-Euclidean distance matrix!\n"
+                "   Ward clustering assumes Euclidean distances for theoretical validity.\n"
+                "   For sequence distances (OM, LCS, etc.), consider using:\n"
+                "   - method='average' (UPGMA)\n"
+                "   - method='complete' (complete linkage)\n"
+                "   - method='single' (single linkage)\n"
+                "   \n"
+                "   Note: 'centroid' and 'median' methods may also produce inversions\n"
+                "   (non-monotonic dendrograms) with non-Euclidean distances.\n"
+                "   \n"
+                "   This warning is shown only once per session.",
+                UserWarning,
+                stacklevel=3
+            )
+        _WARD_WARNING_SHOWN = True
+
+
+def _clean_distance_matrix(matrix):
+    """
+    Clean and validate a distance matrix for hierarchical clustering.
+    
+    This function:
+    1. Handles NaN/Inf values using robust percentile-based replacement
+    2. Sets diagonal to zero
+    3. Ensures non-negativity
+    
+    Note: Symmetry is NOT enforced at this stage since distance matrices may legitimately 
+    be asymmetric (e.g., directed sequence distances, time-dependent measures, etc.).
+    However, symmetrization will be performed later in linkage computation when required 
+    by clustering algorithms.
+    
+    Parameters:
+    -----------
+    matrix : np.ndarray
+        Input distance matrix
+        
+    Returns:
+    --------
+    np.ndarray
+        Cleaned distance matrix
+    """
+    matrix = matrix.copy()  # Don't modify the original
+    
+    # Step 1: Handle NaN/Inf values with percentile-based replacement
+    if np.any(np.isnan(matrix)) or np.any(np.isinf(matrix)):
+        print("[!] Warning: Distance matrix contains NaN or Inf values.")
+        
+        # Get finite values for percentile calculation
+        finite_vals = matrix[np.isfinite(matrix)]
+        
+        if len(finite_vals) > 0:
+            # Use 95th percentile as replacement value (more conservative than max)
+            replacement_val = np.percentile(finite_vals, 95)
+            print(f"    Replacing with 95th percentile value: {replacement_val:.6f}")
+        else:
+            # If no finite values, use 1.0 as default
+            replacement_val = 1.0
+            print(f"    No finite values found, using default: {replacement_val}")
+        
+        matrix[~np.isfinite(matrix)] = replacement_val
+    
+    # Step 2: Force diagonal to be exactly zero (self-distance should be zero)
+    np.fill_diagonal(matrix, 0.0)
+    
+    # Step 3: Ensure non-negativity (distance matrices should be non-negative)
+    if np.any(matrix < 0):
+        print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
+        matrix = np.maximum(matrix, 0.0)
+    
+    return matrix
+
 
 class Cluster:
     def __init__(self,
                  matrix,
                  entity_ids,
-                 clustering_method="ward"):
+                 clustering_method="ward",
+                 weights=None):
         """
         A class to handle hierarchical clustering operations using fastcluster for improved performance.
 
         :param matrix: Precomputed distance matrix (full square form).
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
         :param clustering_method: Clustering algorithm to use (default: "ward").
-        :param n_jobs: Number of parallel jobs to use (-1 for all available cores).
+        :param weights: Optional array of weights for each entity (default: None for equal weights).
         """
         # Ensure entity_ids is a numpy array for consistent processing
         self.entity_ids = np.array(entity_ids)
@@ -60,6 +249,19 @@ class Cluster:
         # Optional: Check uniqueness of entity_ids
         if len(np.unique(self.entity_ids)) != len(self.entity_ids):
             raise ValueError("entity_ids must contain unique values.")
+
+        # Initialize and validate weights
+        if weights is not None:
+            self.weights = np.array(weights, dtype=np.float64)
+            if len(self.weights) != len(matrix):
+                raise ValueError("Length of weights must match the size of the matrix.")
+            if np.any(self.weights < 0):
+                raise ValueError("All weights must be non-negative.")
+            if np.sum(self.weights) == 0:
+                raise ValueError("Sum of weights must be greater than zero.")
+        else:
+            # Default to equal weights (all ones)
+            self.weights = np.ones(len(matrix), dtype=np.float64)
 
         # Convert matrix to numpy array if it's a DataFrame
         if isinstance(matrix, pd.DataFrame):
@@ -87,15 +289,19 @@ class Cluster:
         """
         Compute the linkage matrix using fastcluster for improved performance.
         """
-        # Check for NaNs and Infs
-        if np.any(np.isnan(self.full_matrix)) or np.any(np.isinf(self.full_matrix)):
-            print("[!] Warning: Distance matrix contains NaN or Inf values. Replacing with maximum finite value...")
-            max_valid = np.nanmax(self.full_matrix[np.isfinite(self.full_matrix)])
-            self.full_matrix[~np.isfinite(self.full_matrix)] = max_valid
+        # Clean and validate the distance matrix using robust methods
+        self.full_matrix = _clean_distance_matrix(self.full_matrix)
+        
+        # Check Ward compatibility and issue one-time warning if needed
+        _warn_ward_usage_once(self.full_matrix, self.clustering_method)
 
-        # Ensure the matrix is symmetric
+        # Check symmetry before converting to condensed form
+        # squareform() requires symmetric matrices
         if not np.allclose(self.full_matrix, self.full_matrix.T, rtol=1e-5, atol=1e-8):
-            print("[!] Warning: Distance matrix is not symmetric. Symmetrizing...")
+            print("[!] Warning: Distance matrix is not symmetric.")
+            print("    Hierarchical clustering algorithms require symmetric distance matrices.")
+            print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
+            print("    If this is not appropriate for your data, please provide a symmetric matrix.")
             self.full_matrix = (self.full_matrix + self.full_matrix.T) / 2
 
         # Convert square matrix to condensed form
@@ -105,8 +311,9 @@ class Cluster:
             linkage_matrix = linkage(self.condensed_matrix, method=self.clustering_method)
         except Exception as e:
             raise RuntimeError(
-                "Failed to compute linkage. Check that the distance matrix is square, "
-                "symmetric, finite, non-negative, and has a zero diagonal. "
+                f"Failed to compute linkage with method '{self.clustering_method}'. "
+                "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
+                "For sequence distances, consider using 'average', 'complete', or 'single' instead of 'ward'. "
                 f"Original error: {e}"
             )
         return linkage_matrix
@@ -168,7 +375,7 @@ class Cluster:
 
 
 class ClusterQuality:
-    def __init__(self, matrix_or_cluster, max_clusters=20, clustering_method=None):
+    def __init__(self, matrix_or_cluster, max_clusters=20, clustering_method=None, weights=None):
         """
         Initialize the ClusterQuality class for precomputed distance matrices or a Cluster instance.
 
@@ -182,12 +389,15 @@ class ClusterQuality:
                                    or an instance of the Cluster class.
         :param max_clusters: Maximum number of clusters to evaluate (default: 20).
         :param clustering_method: Clustering algorithm to use. If None, inherit from Cluster instance.
+        :param weights: Optional array of weights for each entity. If None and using Cluster instance,
+                       weights will be extracted from the Cluster object.
         """
         if isinstance(matrix_or_cluster, Cluster):
-            # Extract matrix and clustering method from the Cluster instance
+            # Extract matrix, clustering method, and weights from the Cluster instance
             self.matrix = matrix_or_cluster.full_matrix
             self.clustering_method = matrix_or_cluster.clustering_method
             self.linkage_matrix = matrix_or_cluster.linkage_matrix
+            self.weights = matrix_or_cluster.weights
 
         elif isinstance(matrix_or_cluster, (np.ndarray, pd.DataFrame)):
             # Handle direct matrix input
@@ -196,6 +406,17 @@ class ClusterQuality:
                 matrix_or_cluster = matrix_or_cluster.values
             self.matrix = matrix_or_cluster
             self.clustering_method = clustering_method or "ward"
+            
+            # Initialize weights for direct matrix input
+            if weights is not None:
+                self.weights = np.array(weights, dtype=np.float64)
+                if len(self.weights) != len(self.matrix):
+                    raise ValueError("Length of weights must match the size of the matrix.")
+            else:
+                self.weights = np.ones(len(self.matrix), dtype=np.float64)
+            
+            # Compute linkage matrix for direct input (needed for clustering operations)
+            self.linkage_matrix = self._compute_linkage_for_direct_input()
 
         else:
             raise ValueError(
@@ -215,6 +436,39 @@ class ClusterQuality:
             "R2": [],
             "HC": [],
         }
+
+    def _compute_linkage_for_direct_input(self):
+        """
+        Compute linkage matrix for direct matrix input (similar to Cluster class logic).
+        """
+        # Clean and validate the distance matrix using robust methods
+        self.matrix = _clean_distance_matrix(self.matrix)
+        
+        # Check Ward compatibility and issue one-time warning if needed
+        _warn_ward_usage_once(self.matrix, self.clustering_method)
+
+        # Check symmetry before converting to condensed form
+        # squareform() requires symmetric matrices
+        if not np.allclose(self.matrix, self.matrix.T, rtol=1e-5, atol=1e-8):
+            print("[!] Warning: Distance matrix is not symmetric.")
+            print("    Hierarchical clustering algorithms require symmetric distance matrices.")
+            print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
+            print("    If this is not appropriate for your data, please provide a symmetric matrix.")
+            self.matrix = (self.matrix + self.matrix.T) / 2
+
+        # Convert square matrix to condensed form for linkage computation
+        condensed_matrix = squareform(self.matrix)
+
+        try:
+            linkage_matrix = linkage(condensed_matrix, method=self.clustering_method)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to compute linkage with method '{self.clustering_method}'. "
+                "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
+                "For sequence distances, consider using 'average', 'complete', or 'single' instead of 'ward'. "
+                f"Original error: {e}"
+            )
+        return linkage_matrix
 
     def compute_cluster_quality_scores(self):
         """
@@ -242,30 +496,36 @@ class ClusterQuality:
 
     def _compute_weighted_silhouette(self, labels) -> float:
         """
-        Compute Weighted Silhouette Score (ASWw).
+        Compute Weighted Silhouette Score (ASWw) using sequence weights.
+        
+        This method computes a weighted average of silhouette scores where each sample's
+        silhouette score is weighted by its corresponding sequence weight.
         """
         sil_samples = silhouette_samples(self.matrix, labels, metric="precomputed")
-        cluster_sizes = np.bincount(labels)[1:]
-        total_points = len(labels)
-        weights = cluster_sizes / total_points
-        mean_silhouette_per_cluster = []
-
-        for cluster_id in range(1, len(cluster_sizes) + 1):
-            sil_vals = sil_samples[labels == cluster_id]
-            if len(sil_vals) > 0:
-                mean_silhouette_per_cluster.append(np.mean(sil_vals))
-            else:
-                mean_silhouette_per_cluster.append(0.0)
-
-        return np.sum(weights * np.array(mean_silhouette_per_cluster))
+        
+        # Use sequence weights instead of cluster size weights
+        weighted_silhouette = np.sum(sil_samples * self.weights) / np.sum(self.weights)
+        
+        return weighted_silhouette
 
     def _compute_homogeneity(self, labels) -> float:
         """
-        Compute Homogeneity (HG).
+        Compute Weighted Homogeneity (HG) using sequence weights.
+        
+        Weighted homogeneity measures the concentration of weights within clusters.
+        Higher values indicate more homogeneous cluster weight distributions.
         """
-        cluster_sizes = np.bincount(labels)[1:]
-        total_points = len(labels)
-        return np.sum((cluster_sizes / total_points) ** 2)
+        unique_clusters = np.unique(labels)
+        total_weight = np.sum(self.weights)
+        weighted_homogeneity = 0.0
+        
+        for cluster in unique_clusters:
+            # Sum of weights for entities in this cluster
+            cluster_weight = np.sum(self.weights[labels == cluster])
+            cluster_proportion = cluster_weight / total_weight
+            weighted_homogeneity += cluster_proportion ** 2
+            
+        return weighted_homogeneity
 
     def _compute_point_biserial(self, labels) -> float:
         """
@@ -279,9 +539,13 @@ class ClusterQuality:
 
     def _compute_calinski_harabasz(self, labels) -> float:
         """
-        Pseudo Calinski-Harabasz score using distance matrix.
-        Approximates between-cluster and within-cluster dispersion
-        based only on distances.
+        Pseudo Calinski-Harabasz score using distance matrix (distance-based, unweighted).
+        
+        This is a pseudo-CH that approximates between-cluster and within-cluster dispersion
+        based only on distances, without using the original feature space.
+        
+        Note: This is NOT the classic CH index and is unweighted. For weighted analysis,
+        use HC (Hierarchical Criterion) instead.
 
         Returns a value similar in spirit to traditional CH index.
         """
@@ -322,21 +586,70 @@ class ClusterQuality:
 
     def _compute_r2(self, labels) -> float:
         """
-        Compute R-squared (R2).
+        Distance-based weighted R^2 (pairwise weights on the upper triangle).
         """
-        n_samples = len(labels)
-        within_cluster_sum_of_squares = sum(
-            [np.sum((self.matrix[labels == cluster] - np.mean(self.matrix[labels == cluster])) ** 2)
-             for cluster in np.unique(labels)]
-        )
-        total_sum_of_squares = np.sum((self.matrix - np.mean(self.matrix)) ** 2)
-        return 1 - within_cluster_sum_of_squares / total_sum_of_squares
+        D = self.matrix.copy()
+        np.fill_diagonal(D, 0.0)
+
+        # pairwise weights
+        W = np.outer(self.weights, self.weights)
+
+        # use only upper triangle to avoid double counting
+        mask = np.triu(np.ones_like(D, dtype=bool), k=1)
+
+        w_total = W[mask].sum()
+        if w_total == 0:
+            return np.nan
+
+        mu = (W[mask] * D[mask]).sum() / w_total
+        total_ss = (W[mask] * (D[mask] - mu) ** 2).sum()
+
+        within_ss = 0.0
+        for c in np.unique(labels):
+            idx = np.where(labels == c)[0]
+            if idx.size < 2:
+                continue
+            Dc = D[np.ix_(idx, idx)]
+            Wc = W[np.ix_(idx, idx)]
+            msk = np.triu(np.ones_like(Dc, dtype=bool), k=1)
+            wc_total = Wc[msk].sum()
+            if wc_total == 0:
+                continue
+            muc = (Wc[msk] * Dc[msk]).sum() / wc_total
+            within_ss += (Wc[msk] * (Dc[msk] - muc) ** 2).sum()
+
+        return np.nan if total_ss == 0 else 1.0 - within_ss / total_ss
 
     def _compute_hierarchical_criterion(self, labels) -> float:
         """
-        Compute Hierarchical Criterion (HC).
+        Compute Weighted Hierarchical Criterion (HC) using sequence weights.
+        
+        This measures the variance of weighted cluster means.
         """
-        return np.var([np.mean(self.matrix[labels == cluster]) for cluster in np.unique(labels)])
+        unique_clusters = np.unique(labels)
+        cluster_means = []
+        
+        for cluster in unique_clusters:
+            cluster_mask = labels == cluster
+            cluster_indices = np.where(cluster_mask)[0]
+            cluster_weights = self.weights[cluster_mask]
+            
+            if len(cluster_indices) > 0:
+                # Compute weighted mean for this cluster
+                weighted_sum = 0.0
+                weight_sum = 0.0
+                for i in cluster_indices:
+                    weighted_sum += np.sum(self.weights[i] * self.matrix[i, cluster_indices])
+                    weight_sum += self.weights[i] * len(cluster_indices)
+                
+                if weight_sum > 0:
+                    cluster_means.append(weighted_sum / weight_sum)
+                else:
+                    cluster_means.append(0.0)
+            else:
+                cluster_means.append(0.0)
+        
+        return np.var(cluster_means) if len(cluster_means) > 1 else 0.0
 
     def _normalize_scores(self, method="zscore") -> None:
         """
@@ -390,16 +703,22 @@ class ClusterQuality:
 
         # Get maximum value and its position from original scores
         for metric, values in original_scores.items():
-            values = np.array(values)
-            optimal_k = np.nanargmax(values) + 2  # Add 2 because k starts at 2
-            max_value = values[optimal_k - 2]  # Get the original maximum value
+            vals = np.array(values)
+            if np.all(np.isnan(vals)):
+                optimal_k, max_value, z_val, mm_val = np.nan, np.nan, np.nan, np.nan
+            else:
+                pos = np.nanargmax(vals)
+                optimal_k = pos + 2
+                max_value = vals[pos]
+                z_val = zscore_normalized[metric][pos]
+                mm_val = minmax_normalized[metric][pos]
 
             # Add data to the summary table
             summary["Metric"].append(metric)
             summary["Opt. Clusters"].append(optimal_k)
             summary["Opt. Value"].append(max_value)
-            summary["Z-Score Norm."].append(zscore_normalized[metric][optimal_k - 2])
-            summary["Min-Max Norm."].append(minmax_normalized[metric][optimal_k - 2])
+            summary["Z-Score Norm."].append(z_val)
+            summary["Min-Max Norm."].append(mm_val)
 
         return pd.DataFrame(summary)
 
@@ -496,7 +815,7 @@ class ClusterQuality:
         # Configure ticks and legend
         plt.xticks(ticks=range(2, self.max_clusters + 1), fontsize=10)
         plt.yticks(fontsize=10)
-        plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.legend(title="Metrics (Raw Mean / Std Dev)", fontsize=10, title_fontsize=12)
 
         # Add a note about normalization
@@ -529,6 +848,7 @@ class ClusterResults:
 
         self.linkage_matrix = cluster.linkage_matrix
         self.entity_ids = cluster.entity_ids  # Retrieve entity IDs from Cluster class
+        self.weights = cluster.weights  # Retrieve weights from Cluster class
 
     def get_cluster_memberships(self, num_clusters) -> pd.DataFrame:
         """
@@ -549,14 +869,16 @@ class ClusterResults:
         cluster_labels = fcluster(self.linkage_matrix, t=num_clusters, criterion="maxclust")
         return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster": cluster_labels})
 
-    def get_cluster_distribution(self, num_clusters) -> pd.DataFrame:
+    def get_cluster_distribution(self, num_clusters, weighted=False) -> pd.DataFrame:
         """
-        Generate a distribution summary of clusters showing counts and percentages.
+        Generate a distribution summary of clusters showing counts, percentages, and optionally weighted statistics.
 
         This function calculates how many entities belong to each cluster and what
-        percentage of the total they represent.
+        percentage of the total they represent. When weighted=True, it also provides
+        weight-based statistics.
 
         :param num_clusters: The number of clusters to create.
+        :param weighted: If True, include weighted statistics in the distribution.
         :return: DataFrame with cluster distribution information.
         """
         # Get cluster memberships
@@ -569,22 +891,45 @@ class ClusterResults:
         total_entities = len(memberships_df)
         cluster_percentages = (cluster_counts / total_entities * 100).round(2)
 
-        # Create distribution dataframe
+        # Create basic distribution dataframe
         distribution = pd.DataFrame({
             'Cluster': cluster_counts.index,
             'Count': cluster_counts.values,
             'Percentage': cluster_percentages.values
         }).sort_values('Cluster')
 
+        # Add weighted statistics if requested
+        if weighted:
+            cluster_weights = []
+            weighted_percentages = []
+            total_weight = np.sum(self.weights)
+            
+            for cluster_id in distribution['Cluster']:
+                # Find entities in this cluster
+                cluster_mask = memberships_df['Cluster'] == cluster_id
+                cluster_entity_indices = memberships_df.index[cluster_mask]
+                
+                # Sum weights for entities in this cluster
+                cluster_weight = np.sum(self.weights[cluster_entity_indices])
+                cluster_weights.append(cluster_weight)
+                
+                # Calculate weighted percentage
+                weighted_pct = (cluster_weight / total_weight * 100) if total_weight > 0 else 0.0
+                weighted_percentages.append(round(weighted_pct, 2))
+            
+            distribution['Weight_Sum'] = cluster_weights
+            distribution['Weight_Percentage'] = weighted_percentages
+
         return distribution
 
     def plot_cluster_distribution(self, num_clusters, save_as=None, title=None,
-                                  style="whitegrid", dpi=200, figsize=(10, 6)):
+                                  style="whitegrid", dpi=200, figsize=(10, 6), weighted=False):
         """
         Plot the distribution of entities across clusters as a bar chart.
 
         This visualization shows how many entities belong to each cluster, providing
         insight into the balance and size distribution of the clustering result.
+        When weighted=True, displays weight-based percentages.
 
         :param num_clusters: The number of clusters to create.
         :param save_as: File path to save the plot. If None, the plot will be shown.
@@ -592,45 +937,62 @@ class ClusterResults:
         :param style: Seaborn style for the plot.
         :param dpi: DPI for saved image.
         :param figsize: Figure size in inches.
+        :param weighted: If True, display weighted percentages instead of entity count percentages.
         """
-        # Get cluster distribution data
-        distribution = self.get_cluster_distribution(num_clusters)
+        # Get cluster distribution data (include weights if needed)
+        distribution = self.get_cluster_distribution(num_clusters, weighted=weighted)
 
         # Set up plot
         sns.set(style=style)
         plt.figure(figsize=figsize)
 
+        # Choose what to plot based on weighted parameter
+        if weighted and 'Weight_Sum' in distribution.columns:
+            y_column = 'Weight_Sum'
+            percentage_column = 'Weight_Percentage'
+            ylabel = "Total Weight"
+            note_text = "Y-axis shows weight sums; percentages above bars indicate weight-based relative frequency."
+        else:
+            y_column = 'Count'
+            percentage_column = 'Percentage'
+            ylabel = "Number of Entities"
+            note_text = "Y-axis shows entity counts; percentages above bars indicate their relative frequency."
+
         # Create bar plot with a more poetic, fresh color palette
         # 'muted', 'pastel', and 'husl' are good options for fresher colors
-        ax = sns.barplot(x='Cluster', y='Count', data=distribution, palette='pastel')
+        ax = sns.barplot(x='Cluster', y=y_column, data=distribution, palette='pastel')
 
         # Set the Y-axis range to prevent text overflow
-        ax.set_ylim(0, distribution['Count'].max() * 1.2)
+        ax.set_ylim(0, distribution[y_column].max() * 1.2)
 
-        # Ensure Y-axis uses integer ticks
-        plt.gca().yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        # Ensure Y-axis uses appropriate ticks
+        if not weighted:
+            plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
 
         # Add percentage labels on top of bars
         for p, (_, row) in zip(ax.patches, distribution.iterrows()):
             height = p.get_height()
-            percentage = row['Percentage']
-            ax.text(p.get_x() + p.get_width() / 2., height + 0.5,
+            percentage = row[percentage_column]
+            ax.text(p.get_x() + p.get_width() / 2., height + max(height * 0.02, 0.5),
                     f'{percentage:.1f}%', ha="center", fontsize=9)
 
         # Set a simple label for entity count at the top
         if title is None:
-            title = f"N = {len(self.entity_ids)}"
+            if weighted:
+                title = f"N = {len(self.entity_ids)}, Total Weight = {np.sum(self.weights):.1f}"
+            else:
+                title = f"N = {len(self.entity_ids)}"
 
         # Use a lighter, non-bold title style
         plt.title(title, fontsize=12, fontweight="normal", loc='right')
 
         plt.xlabel("Cluster ID", fontsize=12)
-        plt.ylabel("Number of Entities", fontsize=12)
+        plt.ylabel(ylabel, fontsize=12)
         plt.xticks(fontsize=10)
         plt.yticks(fontsize=10)
 
         # Ensure integer ticks for cluster IDs
-        plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
 
         # Add grid for better readability but make it lighter
         plt.grid(axis='y', linestyle='--', alpha=0.4)
@@ -641,12 +1003,10 @@ class ClusterResults:
         # Adjust layout to make room for the note
         plt.subplots_adjust(bottom=0.13)
 
-        # Add a note about normalization
-        norm_note = f"Note: Y-axis shows entity counts; percentages above bars indicate their relative frequency."
-        plt.figtext(0.5, 0.01, norm_note, ha='center', fontsize=10, style='italic')
+        # Add a note about what is being displayed
+        plt.figtext(0.5, 0.01, note_text, ha='center', fontsize=10, style='italic')
 
         # Save and show the plot
-        from sequenzo.visualization.utils import save_and_show_results
         save_and_show_results(save_as, dpi)
 
 

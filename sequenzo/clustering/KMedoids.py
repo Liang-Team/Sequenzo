@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : 李欣怡 Xinyi Li
 @File    : KMedoids.py
 @Time    : 2025/2/8 11:53
 @Desc    : 
