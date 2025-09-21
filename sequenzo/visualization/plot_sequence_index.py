@@ -207,12 +207,13 @@ def plot_sequence_index(seqdata: SequenceData,
         # Set up time labels
         set_up_time_labels_for_x_axis(seqdata, ax)
 
-        # Enhance y-axis aesthetics
+        # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
         num_sequences = sorted_data.shape[0]
-        ytick_spacing = max(1, num_sequences // 10)
-
-        ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
-        ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=fontsize-2, color='black')
+        num_ticks = min(11, num_sequences)
+        ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
+        ytick_positions = np.unique(ytick_positions)
+        ax.set_yticks(ytick_positions)
+        ax.set_yticklabels((ytick_positions + 1).astype(int), fontsize=fontsize-2, color='black')
 
         # Customize axis style
         ax.spines['top'].set_visible(False)
@@ -357,12 +358,13 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     # x label
     set_up_time_labels_for_x_axis(seqdata, ax)
 
-    # Enhance y-axis aesthetics
+    # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
     num_sequences = sorted_data.shape[0]
-    ytick_spacing = max(1, num_sequences // 10)
-
-    ax.set_yticks(np.arange(0, num_sequences, step=ytick_spacing))
-    ax.set_yticklabels(np.arange(1, num_sequences + 1, step=ytick_spacing), fontsize=fontsize-2, color='black')
+    num_ticks = min(11, num_sequences)
+    ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
+    ytick_positions = np.unique(ytick_positions)
+    ax.set_yticks(ytick_positions)
+    ax.set_yticklabels((ytick_positions + 1).astype(int), fontsize=fontsize-2, color='black')
 
 
     # Customize axis line styles and ticks
