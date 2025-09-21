@@ -153,8 +153,9 @@ def plot_modal_state(seqdata: SequenceData,
             
             # Calculate weighted counts for each state
             weighted_sum = {}
-            for s in seqdata.states:  # s is the integer encoding
-                weighted_sum[s] = float(w[states_idx == s].sum())
+            # Use numerical state indices (1, 2, 3, ...) instead of state labels
+            for s_num in range(1, len(seqdata.states) + 1):  # s_num is the integer encoding
+                weighted_sum[s_num] = float(w[states_idx == s_num].sum())
             
             totw = float(w.sum())
             

@@ -38,7 +38,7 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
     # Get data and preprocess
     seq_df = seqdata.to_dataframe()
     inv = {v: k for k, v in seqdata.state_mapping.items()}
-    states = seqdata.states
+    states = list(range(1, len(seqdata.states) + 1))  # Use numerical state indices
     n = len(seq_df)
 
     # Get weights
@@ -55,13 +55,13 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
     # Replicate weights for each time point
     W_long = pd.DataFrame(W, columns=seq_df.columns).melt(value_name='w')['w'].to_numpy()
     df_long['w'] = W_long
-    df_long['state'] = df_long['state_idx'].map(inv)
-
-    # Calculate weighted time for each state
-    wtime = df_long.groupby('state')['w'].sum()
+    # Keep state_idx as numerical for consistent grouping
+    
+    # Calculate weighted time for each state using numerical indices
+    wtime = df_long.groupby('state_idx')['w'].sum()
     totw = float(w.sum())
 
-    # Calculate proportions first  
+    # Calculate proportions using numerical state indices
     proportions = {s: float(wtime.get(s, 0.0)) / (totw if totw > 0 else 1.0)
                    for s in states}
     

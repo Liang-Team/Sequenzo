@@ -308,21 +308,58 @@ class SequenceData:
             self.seqdata.index = self.ids
 
     def _assign_colors(self, reverse_colors=True):
-        """Assigns a color palette using user-defined or default Spectral palette."""
+        """Assigns a color palette using user-defined or default Spectral palette.
+        
+        If missing values are present, automatically assigns a fixed gray color (#cfcccc)
+        to missing values and uses the existing color scheme for non-missing states.
+        """
         num_states = len(self.states)
-
-        if self.custom_colors:
-            if len(self.custom_colors) != num_states:
-                raise ValueError("Length of custom_colors must match number of states.")
-            color_list = self.custom_colors
-        else:
-            if num_states <= 20:
-                color_list = sns.color_palette("Spectral", num_states)
+        
+        # Check if missing values are present
+        has_missing = self.ismissing
+        missing_gray_color = (0.811765, 0.8, 0.8)  # Fixed gray color for missing values (#cfcccc)
+        
+        if has_missing:
+            # Count non-missing states for color palette generation
+            non_missing_states = num_states - 1
+            
+            if self.custom_colors:
+                # If user provided custom colors, check if they account for missing values
+                if len(self.custom_colors) == num_states:
+                    # User provided colors for all states including missing - use as is
+                    color_list = self.custom_colors
+                elif len(self.custom_colors) == non_missing_states:
+                    # User provided colors only for non-missing states - add gray for missing
+                    color_list = self.custom_colors + [missing_gray_color]
+                else:
+                    raise ValueError(f"Length of custom_colors ({len(self.custom_colors)}) must match "
+                                   f"either total states ({num_states}) or non-missing states ({non_missing_states}).")
             else:
-                color_list = sns.color_palette("cubehelix", num_states)
+                # Generate colors for non-missing states and add gray for missing
+                if non_missing_states <= 20:
+                    non_missing_color_list = sns.color_palette("Spectral", non_missing_states)
+                else:
+                    non_missing_color_list = sns.color_palette("cubehelix", non_missing_states)
 
-            if reverse_colors:
-                color_list = list(reversed(color_list))
+                if reverse_colors:
+                    non_missing_color_list = list(reversed(non_missing_color_list))
+                
+                # Add fixed gray color for missing values at the end
+                color_list = list(non_missing_color_list) + [missing_gray_color]
+        else:
+            # No missing values - use original logic
+            if self.custom_colors:
+                if len(self.custom_colors) != num_states:
+                    raise ValueError("Length of custom_colors must match number of states.")
+                color_list = self.custom_colors
+            else:
+                if num_states <= 20:
+                    color_list = sns.color_palette("Spectral", num_states)
+                else:
+                    color_list = sns.color_palette("cubehelix", num_states)
+
+                if reverse_colors:
+                    color_list = list(reversed(color_list))
 
         # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
         # 这样所有 color map key 是 1, 2, 3...，就可以和 imshow(vmin=1, vmax=N) 对齐

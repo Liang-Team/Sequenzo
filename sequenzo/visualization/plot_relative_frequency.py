@@ -38,7 +38,7 @@ def plot_relative_frequency(seqdata: SequenceData,
                             num_groups: int = 12,
                             weights="auto",
                             grouping_method="first",
-                            fontsize=fontsize,
+                            fontsize=12,
                             save_as=None,
                             dpi=200):
     """
