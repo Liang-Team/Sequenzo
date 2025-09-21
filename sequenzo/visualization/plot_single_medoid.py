@@ -17,6 +17,8 @@ from sequenzo.visualization.utils import (
 
 
 def plot_single_medoid(seqdata: SequenceData,
+                       distance_matrix: np.ndarray,
+                       weights="auto",
                        show_legend: bool = True,
                        title: Optional[str] = None,
                        save_as: Optional[str] = None) -> None:
@@ -24,12 +26,23 @@ def plot_single_medoid(seqdata: SequenceData,
     Plots a single medoid sequence with colors corresponding to sequence states.
 
     :param seqdata: SequenceData object containing the sequence dataset.
+    :param distance_matrix: Pairwise distance matrix for computing medoids.
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param show_legend: Boolean flag to display legend (default: True).
     :param title: Optional title for the plot.
     :param save_as: Optional filename to save the plot.
     :return: None
     """
-    _, medoid_indices = compute_medoids_from_distance_matrix(distance_matrix, seqdata, top_k=1)
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
+    _, medoid_indices = compute_medoids_from_distance_matrix(distance_matrix, seqdata, weights=weights, top_k=1)
     medoid_coverages = _compute_individual_medoid_coverage(distance_matrix, medoid_indices)
 
     medoid_index = medoid_indices[0]
@@ -76,19 +89,35 @@ def plot_single_medoid(seqdata: SequenceData,
     save_and_show_results(save_as, dpi=200)
 
 
-def compute_medoids_from_distance_matrix(distance_matrix: np.ndarray, seqdata: SequenceData, top_k: Optional[int] = None) -> tuple:
+def compute_medoids_from_distance_matrix(distance_matrix: np.ndarray, seqdata: SequenceData, weights="auto", top_k: Optional[int] = None) -> tuple:
     """
     Computes the medoid(s) based on total distance minimization.
 
     :param distance_matrix: Pairwise distance matrix.
     :param seqdata: SequenceData object containing sequences.
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param top_k: Number of top representative sequences to return.
     :return: Tuple containing the medoid sequences and their indices.
     """
     if not isinstance(seqdata, SequenceData):
         raise TypeError("❌ seqdata must be a SequenceData object.")
 
-    total_distances = distance_matrix.sum(axis=1)
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
+    if weights is None:
+        # For each candidate medoid m: sum_i D(i, m)
+        total_distances = distance_matrix.sum(axis=0)
+    else:
+        # For each m: sum_i w_i * D(i, m)
+        total_distances = distance_matrix.T @ weights
+    
     min_distance = np.min(total_distances)
     medoid_indices = np.where(total_distances == min_distance)[0]
 

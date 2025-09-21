@@ -19,49 +19,50 @@ from sequenzo.visualization.utils import (
 )
 
 
-def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False) -> np.ndarray:
+def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False, weights="auto") -> np.ndarray:
     """
     Compute transition rate matrix using vectorized operations for optimal performance.
 
     :param seqdata: SequenceData object containing sequence information and states
     :param with_missing: Flag to include missing values in computation
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :return: numpy.ndarray containing the transition rate matrix
     """
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     num_states = len(seqdata.states)
-    seqdata_df = seqdata.to_dataframe()
+    A = seqdata.to_dataframe().to_numpy()
+    n, T = A.shape
 
-    # Convert to numpy array for faster operations
-    seq_array = seqdata_df.to_numpy()
+    if weights is None:
+        w = np.ones(n)
+    else:
+        w = np.asarray(weights, dtype=float)
 
-    # Create arrays for current and next states
-    current_states = seq_array[:, :-1].flatten()
-    next_states = seq_array[:, 1:].flatten()
-
-    # Create mask for valid transitions
-    valid_mask = np.logical_and(
-        np.logical_and(current_states >= 0, current_states < num_states),
-        np.logical_and(next_states >= 0, next_states < num_states)
-    )
+    # Flatten arrays while synchronizing weights for each transition
+    current = A[:, :-1].flatten()
+    nxt = A[:, 1:].flatten()
+    w_pair = np.repeat(w, T-1)  # Each sequence weight replicated (T-1) times
 
     # Filter valid transitions
-    current_states = current_states[valid_mask]
-    next_states = next_states[valid_mask]
+    valid = (current >= 0) & (current < num_states) & (nxt >= 0) & (nxt < num_states)
+    current, nxt, w_pair = current[valid], nxt[valid], w_pair[valid]
 
-    # Initialize transition matrix
-    trans = np.zeros((num_states, num_states))
-
-    # Compute transitions using histogram2d
-    if len(current_states) > 0:
-        trans, _, _ = np.histogram2d(
-            current_states,
-            next_states,
-            bins=(num_states, num_states),
-            range=[[0, num_states], [0, num_states]]
-        )
+    # Compute weighted transition counts
+    trans = np.zeros((num_states, num_states), dtype=float)
+    for c, n2, ww in zip(current, nxt, w_pair):
+        trans[int(c), int(n2)] += ww
 
     # Compute transition rates
     row_sums = trans.sum(axis=1, keepdims=True)
-    row_sums = np.where(row_sums == 0, 1, row_sums)  # Avoid division by zero
+    row_sums = np.where(row_sums == 0, 1.0, row_sums)
     transition_rates = trans / row_sums
 
     return transition_rates
@@ -109,6 +110,7 @@ def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray)
 
 
 def plot_transition_matrix(seqdata: SequenceData,
+                           weights="auto",
                            title: Optional[str] = None,
                            save_as: Optional[str] = None,
                            dpi: int = 200) -> None:
@@ -116,12 +118,13 @@ def plot_transition_matrix(seqdata: SequenceData,
     Plot state transition rate matrix as a heatmap.
 
     :param seqdata: SequenceData object containing sequence information
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param title: optional title for the plot
     :param save_as: optional file path to save the plot
     :param dpi: resolution of the saved plot
     """
-    # Compute transition matrix
-    transition_matrix = compute_transition_matrix(seqdata)
+    # Compute transition matrix with weights
+    transition_matrix = compute_transition_matrix(seqdata, weights=weights)
     transition_matrix = np.array(transition_matrix)
 
     # Create upper triangle mask (show diagonal)

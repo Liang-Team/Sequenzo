@@ -74,6 +74,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
                         categories=None,
                         sort_by=None,
+                        sort_by_weight=False,
+                        weights="auto",
                         figsize=(10, 6),
                         title=None,
                         xlabel="Time",
@@ -92,6 +94,9 @@ def plot_sequence_index(seqdata: SequenceData,
     :param seqdata: SequenceData object containing sequence information
     :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
     :param categories: Column name in id_group_df that contains grouping information
+    :param sort_by: Sorting method for sequences within groups
+    :param sort_by_weight: If True, sort sequences by weight (descending), overrides other sorting
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: Size of each subplot figure
     :param title: Title for the plot (if None, default titles will be used)
     :param xlabel: Label for the x-axis
@@ -104,8 +109,17 @@ def plot_sequence_index(seqdata: SequenceData,
     """
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
-        return _sequence_index_plot_single(seqdata, figsize, title, xlabel, ylabel, save_as, dpi)
+        return _sequence_index_plot_single(seqdata, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi)
 
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Ensure ID columns match (convert if needed)
     id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
 
@@ -151,12 +165,23 @@ def plot_sequence_index(seqdata: SequenceData,
 
         # Extract sequences for this group
         group_sequences = seqdata.values[mask]
+        
+        # Get weights for this group
+        if weights is not None:
+            group_weights = weights[mask]
+        else:
+            group_weights = None
 
-        # Sort sequences for better visualization
+        # Handle NaN values for better visualization
         if np.isnan(group_sequences).any():
-            group_sequences = np.where(np.isnan(group_sequences), -1, group_sequences)
+            # Map NaN to a dedicated state code with proper masking
+            group_sequences = group_sequences.astype(float)
+            group_sequences[np.isnan(group_sequences)] = np.nan
 
-        if sort_by is not None:
+        if sort_by_weight and group_weights is not None:
+            # Sort by weight (descending), then by structure as secondary
+            sorted_indices = np.argsort(-group_weights)
+        elif sort_by is not None:
             sorted_indices = sort_sequences_by_structure(seqdata=seqdata, method=sort_by, mask=mask)
         else:
             sorted_indices = np.lexsort(group_sequences.T[::-1])
@@ -165,7 +190,10 @@ def plot_sequence_index(seqdata: SequenceData,
 
         # Plot on the corresponding axis
         ax = axes[i]
-        im = ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(),
+        # Use masked array for better NaN handling
+        data = sorted_data.astype(float)
+        data[data < 1] = np.nan
+        im = ax.imshow(np.ma.masked_invalid(data), aspect='auto', cmap=seqdata.get_colormap(),
                        interpolation='nearest', vmin=1, vmax=len(seqdata.states))
 
         # Remove grid lines
@@ -191,8 +219,12 @@ def plot_sequence_index(seqdata: SequenceData,
         ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
         ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
 
-        # Add group title
-        group_title = f"{group} (n = {num_sequences})"
+        # Add group title with weight information
+        if group_weights is not None:
+            sum_w = float(group_weights.sum())
+            group_title = f"{group} (n = {num_sequences}, Σw = {sum_w:.1f})"
+        else:
+            group_title = f"{group} (n = {num_sequences})"
         ax.set_title(group_title, fontsize=12, loc='right')
 
         # Add axis labels
@@ -248,6 +280,8 @@ def plot_sequence_index(seqdata: SequenceData,
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
+                                sort_by_weight=False,
+                                weights="auto",
                                 figsize=(10, 6),
                                 title=None,
                                 xlabel="Time",
@@ -257,32 +291,52 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     """
     Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
-    :param data: (np.array or pd.DataFrame) 2D array where rows are sequences and columns are time points.
-    :param num_colors: (int): Number of colors in the Spectral palette.
-    :param reverse_colors: (bool): Whether to reverse the color scheme.
+    :param seqdata: SequenceData object containing sequence information
+    :param sort_by_weight: If True, sort sequences by weight (descending)
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: (tuple): Size of the figure.
+    :param title: (str): Title for the plot.
     :param xlabel: (str): Label for the x-axis.
     :param ylabel: (str): Label for the y-axis.
-    :param title: (str): Title for the plot.
+    :param save_as: File path to save the plot
+    :param dpi: DPI for saved image
 
     :return None.
     """
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Get sequence values as NumPy array
     sequence_values = seqdata.values.copy()
 
-    # Ensure no NaN values interfere with sorting
+    # Handle NaN values for better visualization
     if np.isnan(sequence_values).any():
-        sequence_values = np.where(np.isnan(sequence_values), -1, sequence_values)
+        # Keep NaN as float for proper masking
+        sequence_values = sequence_values.astype(float)
 
-    # Sort sequences lexicographically for better visualization
-    sorted_indices = np.lexsort(sequence_values.T[::-1])
+    # Sort sequences for better visualization
+    if sort_by_weight and weights is not None:
+        # Sort by weight (descending)
+        sorted_indices = np.argsort(-weights)
+    else:
+        # Sort sequences lexicographically for better visualization
+        sorted_indices = np.lexsort(sequence_values.T[::-1])
+    
     sorted_data = sequence_values[sorted_indices]
 
-    # Create the plot using imshow
+    # Create the plot using imshow with proper NaN handling
     fig, ax = plt.subplots(figsize=figsize)
-    # ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(), interpolation='nearest')
-    ax.imshow(sorted_data, aspect='auto', cmap=seqdata.get_colormap(), interpolation='nearest', vmin=1,
-              vmax=len(seqdata.states))
+    # Use masked array for better NaN handling
+    data = sorted_data.astype(float)
+    data[data < 1] = np.nan
+    ax.imshow(np.ma.masked_invalid(data), aspect='auto', cmap=seqdata.get_colormap(), 
+              interpolation='nearest', vmin=1, vmax=len(seqdata.states))
 
     # Disable background grid and all axis guide lines
     ax.grid(False)
@@ -323,8 +377,20 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.set_xlabel(xlabel, fontsize=12, labelpad=10, color='black')
 
     ax.set_ylabel(ylabel, fontsize=12, labelpad=10, color='black')
+    
+    # Set title with weight information if available
     if title:
-        ax.set_title(title, fontsize=14, color='black')
+        display_title = title
+    else:
+        display_title = "Sequence Index Plot"
+    
+    if weights is not None:
+        sum_w = float(weights.sum())
+        display_title += f" (n = {num_sequences}, Σw = {sum_w:.1f})"
+    else:
+        display_title += f" (n = {num_sequences})"
+    
+    ax.set_title(display_title, fontsize=14, color='black')
 
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')

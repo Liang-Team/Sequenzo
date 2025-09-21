@@ -36,6 +36,8 @@ def _get_standard_scaler():
 def plot_relative_frequency(seqdata: SequenceData,
                             distance_matrix: np.ndarray,
                             num_groups: int = 12,
+                            weights="auto",
+                            grouping_method="first",
                             save_as=None,
                             dpi=200):
     """
@@ -44,14 +46,32 @@ def plot_relative_frequency(seqdata: SequenceData,
     :param seqdata: (SequenceData) The SequenceData object.
     :param distance_matrix: (np.ndarray) A 2D pairwise distance matrix.
     :param num_groups: (int) Number of frequency groups.
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
+    :param grouping_method: (str) Grouping method: "first" (equal size) or "prop" (weighted grouping)
     :param save_as: (str, optional) File path to save the plot.
     :param dpi: (int) Resolution of the saved plot.
     """
     if isinstance(distance_matrix, pd.DataFrame):
         distance_matrix = distance_matrix.to_numpy()
 
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+
+    # Auto-switch to weighted grouping if weights are provided
+    if weights is not None and grouping_method == "first":
+        grouping_method = "prop"
+
     # Compute medoids and dissimilarities
-    rep_sequences, dissimilarities, group_labels = _compute_seqrf(seqdata, distance_matrix, num_groups)
+    rep_sequences, dissimilarities, group_labels = _compute_seqrf(
+        seqdata, distance_matrix, num_groups, 
+        weights=weights, grouping_method=grouping_method
+    )
 
     # **Auto-adjust figure ratio**: dynamically scale aspect ratio
     num_seq = len(rep_sequences)
@@ -73,7 +93,12 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     ax.set_xlim(0, seqdata.values.shape[1])
     ax.set_ylim(0, len(rep_sequences))
-    ax.set_title("Group Medoids", fontsize=14)
+    # Add weight information to title if weights are used
+    if weights is not None and not np.allclose(weights, 1.0):
+        total_w = float(np.sum(weights))
+        ax.set_title(f"Group Medoids (n={len(seqdata.values)}, Σw={total_w:.1f})", fontsize=14)
+    else:
+        ax.set_title(f"Group Medoids (n={len(seqdata.values)})", fontsize=14)
     ax.set_xlabel("Time", fontsize=12)
     ax.set_ylabel("Frequency Group", fontsize=12)
 
@@ -339,9 +364,10 @@ def _compute_group_medoid(distance_matrix: np.ndarray, group_indices: np.ndarray
     if weights is None:
         weights = np.ones(len(group_indices))  # Default to equal weights
 
-    # **Fix: Compute the weighted sum of distances**
-    total_distances = np.sum(group_distances * weights[:, np.newaxis], axis=1)
-
+    # **Fix: Compute the weighted sum of distances for each candidate medoid**
+    # For each candidate medoid m: sum_i w_i * D(i, m)
+    total_distances = group_distances.T @ weights
+    
     # **Fix: Select the medoid with the minimum weighted distance**
     return group_indices[np.argmin(total_distances)]
 

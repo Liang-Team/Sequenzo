@@ -17,39 +17,67 @@ from sequenzo.visualization.utils import (
 )
 
 
-def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
+def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
     """
     Compute mean total time spent in each state across all sequences.
     Optimized version using pandas operations.
 
     :param seqdata: SequenceData object containing sequence information
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :return: DataFrame with mean time spent and standard error for each state
     """
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Get data and preprocess
     seq_df = seqdata.to_dataframe()
-    state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
+    inv = {v: k for k, v in seqdata.state_mapping.items()}
     states = seqdata.states
-    n_sequences = len(seq_df)
+    n = len(seq_df)
 
-    # Convert data to long format for easier aggregation
+    # Get weights
+    if weights is None:
+        w = np.ones(n)
+    else:
+        w = np.asarray(weights, dtype=float)
+
+    # Broadcast weights to each time point
+    W = np.repeat(w[:, None], seq_df.shape[1], axis=1)
+
+    # Convert to long format with weights
     df_long = seq_df.melt(value_name='state_idx')
-    df_long['state'] = df_long['state_idx'].map(state_mapping)
+    # Replicate weights for each time point
+    W_long = pd.DataFrame(W, columns=seq_df.columns).melt(value_name='w')['w'].to_numpy()
+    df_long['w'] = W_long
+    df_long['state'] = df_long['state_idx'].map(inv)
 
-    # Calculate total counts and mean time for each state
-    state_counts = df_long['state'].value_counts(dropna=False)
-    mean_times = state_counts / n_sequences
+    # Calculate weighted time for each state
+    wtime = df_long.groupby('state')['w'].sum()
+    totw = float(w.sum())
 
-    # Use groupby to calculate state occurrences per sequence in one go
-    state_counts_per_seq = df_long.groupby(['state'])['variable'].value_counts().unstack(fill_value=0)
+    # Calculate proportions first  
+    proportions = {s: float(wtime.get(s, 0.0)) / (totw if totw > 0 else 1.0)
+                   for s in states}
+    
+    # Scale to time units (number of periods)
+    T = seqdata.values.shape[1]  # Number of time periods
+    mean_times = {s: T * proportions[s] for s in states}
 
-    # Calculate standard errors
-    std_errors = state_counts_per_seq.std(ddof=1) / np.sqrt(n_sequences)
+    # Calculate effective sample size and standard errors in time units
+    Neff = (w.sum() ** 2) / (np.sum(w ** 2)) if np.sum(w ** 2) > 0 else 1.0
+    se = {s: (T * np.sqrt(proportions[s]*(1-proportions[s])/Neff) if Neff > 1 else 0.0) for s in states}
 
     # Create result DataFrame
     mean_time_df = pd.DataFrame({
-        'State': seqdata.labels,
-        'MeanTime': [mean_times.get(state, 0) for state in states],
-        'StandardError': [std_errors.get(state, 0) for state in states]
+        'State': [inv[s] for s in states],
+        'MeanTime': [mean_times[s] for s in states],
+        'StandardError': [se[s] for s in states]
     })
 
     mean_time_df.sort_values(by='MeanTime', ascending=True, inplace=True)
@@ -58,9 +86,10 @@ def _compute_mean_time(seqdata: SequenceData) -> pd.DataFrame:
 
 
 def plot_mean_time(seqdata: SequenceData,
+                   weights="auto",
                    show_error_bar: bool = True,
                    title=None,
-                   x_label="Mean Time (Years)",
+                   x_label="Mean Time (Periods)",
                    y_label="State",
                    save_as: Optional[str] = None,
                    dpi: int = 200) -> None:
@@ -68,6 +97,7 @@ def plot_mean_time(seqdata: SequenceData,
     Plot Mean Time Plot for sequence data with clean white background.
 
     :param seqdata: SequenceData object containing sequence information
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param show_error_bar: Boolean flag to show or hide error bars
     :param title: Optional title for the plot
     :param x_label: Label for the x-axis
@@ -79,7 +109,7 @@ def plot_mean_time(seqdata: SequenceData,
     plt.style.use('default')
 
     # Compute all required data at once
-    mean_time_df = _compute_mean_time(seqdata)
+    mean_time_df = _compute_mean_time(seqdata, weights)
 
     # Create figure and preallocate memory
     fig = plt.figure(figsize=(12, 7))

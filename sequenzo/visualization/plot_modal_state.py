@@ -22,6 +22,7 @@ from PIL import Image
 def plot_modal_state(seqdata: SequenceData,
                      group_by: Optional[Union[str, pd.Series, np.ndarray]] = None,
                      group_labels: Optional[List[str]] = None,
+                     weights="auto",
                      xlabel: str = "Time",
                      ylabel: str = "Rel. Freq.",
                      fig_width: int = 12,
@@ -36,6 +37,7 @@ def plot_modal_state(seqdata: SequenceData,
     :param seqdata: SequenceData object containing sequence information
     :param group_by: Column name or array with grouping variable
     :param group_labels: Optional custom labels for groups
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param xlabel: Label for the x-axis
     :param ylabel: Label for the y-axis
     :param fig_width: Width of the figure
@@ -46,12 +48,27 @@ def plot_modal_state(seqdata: SequenceData,
 
     :return: None
     """
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Get sequence data as a DataFrame
     seq_df = seqdata.to_dataframe()
 
     # Ensure seq_df has the same index as the original data
     # This is crucial to align the grouping variable with sequence data
     seq_df.index = seqdata.data.index
+    
+    # Get weights for all sequences
+    if weights is None:
+        w_all = np.ones(len(seq_df))
+    else:
+        w_all = np.asarray(weights)
 
     # Create state mapping from numerical values back to state names
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
@@ -122,30 +139,34 @@ def plot_modal_state(seqdata: SequenceData,
         if group_count == 0:
             continue
 
-        # Subset data for this group
+        # Subset data for this group and get corresponding weights
         group_data = seq_df[group_indices]
+        w = w_all[group_indices.to_numpy()]
 
         # Calculate modal states and their frequencies for each time point
         modal_states = []
         modal_freqs = []
 
         for col in group_data.columns:
-            # Map numeric state indices to state names
-            mapped_states = group_data[col].map(inv_state_mapping)
-
-            # Count occurrences and calculate relative frequencies
-            state_counts = mapped_states.value_counts(normalize=True)
-
-            if len(state_counts) > 0:
-                # Get the most frequent state and its frequency
-                modal_state = state_counts.index[0]
-                modal_freq = state_counts.iloc[0]  # Frequency of the modal state
-
-                modal_states.append(modal_state)
-                modal_freqs.append(modal_freq)
+            states_idx = group_data[col].to_numpy()
+            
+            # Calculate weighted counts for each state
+            weighted_sum = {}
+            for s in seqdata.states:  # s is the integer encoding
+                weighted_sum[s] = float(w[states_idx == s].sum())
+            
+            totw = float(w.sum())
+            
+            if totw > 0:
+                # Find the state with maximum weighted count
+                modal_s = max(weighted_sum, key=weighted_sum.get)
+                modal_state = inv_state_mapping[modal_s]
+                modal_freq = weighted_sum[modal_s] / totw
             else:
-                modal_states.append(None)
-                modal_freqs.append(0)
+                modal_state, modal_freq = None, 0.0
+            
+            modal_states.append(modal_state)
+            modal_freqs.append(modal_freq)
 
         # Equal width for all bars
         x = np.arange(n_time_points)
@@ -154,13 +175,17 @@ def plot_modal_state(seqdata: SequenceData,
         # Create bars with consistent width
         for j, (state, freq) in enumerate(zip(modal_states, modal_freqs)):
             if state is not None:
-                state = seqdata.state_to_label[state]
+                # state is already a label from inv_state_mapping
                 ax.bar(x[j], freq, width=bar_width, color=colors[state],
                        edgecolor='white', linewidth=0.5)
 
         # Set group title with count if requested
         if show_counts:
-            ax.set_title(f"{group} (n={group_count})", fontsize=12, pad=15)
+            if weights is not None:
+                sum_w = float(w.sum())
+                ax.set_title(f"{group} (n={group_count}, Σw={sum_w:.1f})", fontsize=12, pad=15)
+            else:
+                ax.set_title(f"{group} (n={group_count})", fontsize=12, pad=15)
         else:
             ax.set_title(group, fontsize=12, pad=15)
 

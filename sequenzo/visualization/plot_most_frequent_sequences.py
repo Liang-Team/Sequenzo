@@ -8,10 +8,10 @@
     This script plots the 10 most frequent sequences,
     similar to `seqfplot` in R's TraMineR package.
 """
-from collections import Counter
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
@@ -20,28 +20,43 @@ from sequenzo.visualization.utils import (
 )
 
 
-def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as=None, dpi=200):
+def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights="auto", save_as=None, dpi=200):
     """
     Generate a sequence frequency plot, similar to R's seqfplot.
 
     :param seqdata: (SequenceData) A SequenceData object containing sequences.
     :param top_n: (int) Number of most frequent sequences to display.
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param save_as: (str, optional) Path to save the plot.
     :param dpi: (int) Resolution of the saved plot.
     """
     sequences = seqdata.values.tolist()
+    
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
+    if weights is None:
+        weights = np.ones(len(sequences))
 
-    # Count sequence occurrences
-    sequence_counts = Counter(tuple(seq) for seq in sequences)
-    most_common = sequence_counts.most_common(top_n)
+    # Weighted counting of sequences
+    agg = {}
+    for seq, w in zip(sequences, weights):
+        key = tuple(seq)
+        agg[key] = agg.get(key, 0.0) + float(w)
 
-    # Convert to DataFrame for visualization
-    df = pd.DataFrame(most_common, columns=['sequence', 'count'])
-    total_sequences = len(sequences)  # Total number of sequences in the dataset
-    df['freq'] = df['count'] / total_sequences * 100  # Convert to percentage based on the entire dataset
+    # Select Top-N by weighted frequency
+    items = sorted(agg.items(), key=lambda kv: kv[1], reverse=True)[:top_n]
+    df = pd.DataFrame(items, columns=['sequence', 'wcount'])
+    totw = float(np.sum(weights))
+    df['freq'] = df['wcount'] / (totw if totw > 0 else 1.0) * 100.0
 
     # **Ensure colors match seqdef**
-    state_colors = seqdata.color_map  # Directly get the color mapping from seqdef
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}  # Reverse mapping from numeric values to state names
 
     # **Plot settings**
@@ -53,10 +68,8 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
     for i, (seq, freq) in enumerate(zip(df['sequence'], df['freq'])):
         left = 0  # Starting x position
         for t, state_idx in enumerate(seq):
-            state_colors = seqdata.color_map_by_label
-            state_label = inv_state_mapping.get(state_idx, "Unknown")  # Get the actual state name
-            state_label = seqdata.state_to_label[state_label]
-            color = state_colors.get(state_label, "gray")  # Get the corresponding color
+            label = inv_state_mapping.get(state_idx, "Unknown")  # Get the actual state name
+            color = seqdata.color_map_by_label.get(label, "gray")  # Get the corresponding color
 
             width = 1  # Width of each time slice
             ax.barh(y=y_positions[i], width=width * 1.01, left=left - 0.005,
@@ -66,7 +79,11 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, save_as
 
     # **Formatting**
     ax.set_xlabel("Time", fontsize=12)
-    ax.set_ylabel("Cumulative Frequency (%)\nN={:,}".format(total_sequences), fontsize=12)
+    if weights is not None and not np.allclose(weights, 1.0):
+        # Show both count and weighted total if weights are used
+        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}, Σw={:.1f}".format(len(sequences), totw), fontsize=12)
+    else:
+        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}".format(len(sequences)), fontsize=12)
     ax.set_title(f"Top {top_n} Most Frequent Sequences", fontsize=14, pad=20)  # Add some padding between title and plot
 
     # **Optimize X-axis ticks: align to the center of each bar**

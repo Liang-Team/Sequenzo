@@ -38,6 +38,7 @@ def smart_sort_groups(groups):
 def plot_state_distribution(seqdata: SequenceData,
                             id_group_df=None,
                             categories=None,
+                            weights="auto",
                             figsize=(12, 7),
                             title=None,
                             xlabel="Time",
@@ -59,6 +60,7 @@ def plot_state_distribution(seqdata: SequenceData,
     :param seqdata: (SequenceData) A SequenceData object containing sequences
     :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
     :param categories: Column name in id_group_df that contains grouping information
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: (tuple) Size of the figure
     :param title: (str) Optional title for the plot
     :param xlabel: (str) Label for the x-axis
@@ -75,12 +77,21 @@ def plot_state_distribution(seqdata: SequenceData,
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
         return _plot_state_distribution_single(
-            seqdata=seqdata, figsize=figsize,
+            seqdata=seqdata, weights=weights, figsize=figsize,
             title=title, xlabel=xlabel, ylabel=ylabel,
             save_as=save_as, dpi=dpi, stacked=stacked,
             show=show, include_legend=include_legend
         )
 
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Ensure ID columns match (convert if needed)
     id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
 
@@ -129,23 +140,30 @@ def plot_state_distribution(seqdata: SequenceData,
 
         # Get sequences for this group
         group_seq_df = seqdata.to_dataframe().loc[mask]
+        
+        # Get weights for this group
+        if weights is None:
+            w = np.ones(len(group_seq_df))
+        else:
+            w = np.asarray(weights)[mask]
 
-        # Calculate state distributions at each time point
+        # Broadcast weights to each time point
+        W = np.repeat(w[:, None], group_seq_df.shape[1], axis=1)
+
+        # Calculate weighted state distributions at each time point
         distributions = []
-        for col in group_seq_df.columns:
-            # Count occurrences of each state at this time point
-            state_counts = group_seq_df[col].value_counts().sort_index()
-
-            # Convert to percentages
-            total = len(group_seq_df)
-            state_percentages = (state_counts / total) * 100
-
-            # Create a dictionary with states as keys and percentages as values
-            dist = {inv_state_mapping.get(i, 'Missing'): state_percentages.get(i, 0)
-                    for i in range(1, len(seqdata.states) + 1)}
+        for t, col in enumerate(group_seq_df.columns):
+            col_vals = group_seq_df[col].to_numpy()
+            
+            # Calculate weighted counts for each state
+            sums = {s: float(W[col_vals == s, t].sum()) for s in range(1, len(seqdata.states)+1)}
+            totw = float(W[:, t].sum())
+            
+            # Convert to weighted percentages
+            dist = {inv_state_mapping.get(s, 'Missing'): 100.0 * (sums[s] / totw if totw > 0 else 0.0) 
+                    for s in range(1, len(seqdata.states) + 1)}
 
             # Add time point and distribution to the list
-            # distributions.append(dict(time=col, **dist))
             distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
         # Ensure percentages sum to exactly 100% to avoid gaps
@@ -165,7 +183,7 @@ def plot_state_distribution(seqdata: SequenceData,
         # seqdata.states are integer encodings (e.g., 1, 2, ...)
         # seqdata.state_mapping[state] maps integers to labels (e.g., 'Married', 'Single')
         # seqdata.color_map[...] gets color by label
-        base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
+        base_colors = [seqdata.color_map_by_label[state] for state in seqdata.states]
 
         # Plot the data
         if stacked:
@@ -189,8 +207,12 @@ def plot_state_distribution(seqdata: SequenceData,
             # Add grid lines
             ax.grid(True, linestyle='-', alpha=0.2)
 
-        # Set group title
-        group_title = f"{group} (n = {len(group_seq_df)})"
+        # Set group title with weighted sample size
+        if weights is not None:
+            sum_w = float(w.sum())
+            group_title = f"{group} (n = {len(group_seq_df)}, Σw = {sum_w:.1f})"
+        else:
+            group_title = f"{group} (n = {len(group_seq_df)})"
         ax.text(0.95, 1.02, group_title, transform=ax.transAxes, fontsize=12, ha='right', va='bottom', color='black')
 
         # Set y-axis limits from 0 to 100%
@@ -231,7 +253,7 @@ def plot_state_distribution(seqdata: SequenceData,
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
     # Create standalone legend
-    colors = dict(zip(seqdata.labels, [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]))
+    colors = dict(zip(seqdata.labels, [seqdata.color_map_by_label[state] for state in seqdata.states]))
     legend_buffer = create_standalone_legend(
         colors=colors,
         labels=seqdata.labels,
@@ -267,6 +289,7 @@ def plot_state_distribution(seqdata: SequenceData,
 
 
 def _plot_state_distribution_single(seqdata: SequenceData,
+                                    weights="auto",
                                     figsize=(12, 7),
                                     title=None,
                                     xlabel="Time",
@@ -281,6 +304,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     with enhanced color vibrancy.
 
     :param seqdata: (SequenceData) A SequenceData object containing sequences
+    :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: (tuple) Size of the figure
     :param title: (str) Optional title for the plot
     :param xlabel: (str) Label for the x-axis
@@ -291,29 +315,44 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     :return: None
     """
+    # Process weights
+    if isinstance(weights, str) and weights == "auto":
+        weights = getattr(seqdata, "weights", None)
+    
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weights) != len(seqdata.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    
     # Get sequence data as a DataFrame
     seq_df = seqdata.to_dataframe()
+    
+    # Get weights
+    if weights is None:
+        w = np.ones(len(seq_df))
+    else:
+        w = np.asarray(weights)
+
+    # Broadcast weights to each time point
+    W = np.repeat(w[:, None], seq_df.shape[1], axis=1)
 
     # Create a state mapping from numerical values back to state names
     inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}
 
-    # Calculate state distributions at each time point
+    # Calculate weighted state distributions at each time point
     distributions = []
-    for col in seq_df.columns:
-        # Count occurrences of each state at this time point
-        state_counts = seq_df[col].value_counts().sort_index()
-
-        # Convert to percentages
-        total = len(seq_df)
-        state_percentages = (state_counts / total) * 100
-
-        # Create a dictionary with states as keys and percentages as values
-        # Ensure all states are included (with 0% if not present)
-        dist = {inv_state_mapping.get(i, 'Missing'): state_percentages.get(i, 0)
-                for i in range(1, len(seqdata.states) + 1)}
+    for t, col in enumerate(seq_df.columns):
+        col_vals = seq_df[col].to_numpy()
+        
+        # Calculate weighted counts for each state
+        sums = {s: float(W[col_vals == s, t].sum()) for s in range(1, len(seqdata.states)+1)}
+        totw = float(W[:, t].sum())
+        
+        # Convert to weighted percentages
+        dist = {inv_state_mapping.get(s, 'Missing'): 100.0 * (sums[s] / totw if totw > 0 else 0.0) 
+                for s in range(1, len(seqdata.states) + 1)}
 
         # Add time point and distribution to the list
-        # distributions.append(dict(time=col, **dist))
         distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
     # Ensure percentages sum to exactly 100% to avoid gaps
