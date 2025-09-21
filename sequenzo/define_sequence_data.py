@@ -28,7 +28,7 @@
     print(df.columns)
 
     # If your data already has an ID column (e.g., 'Entity ID'), you can directly use it:
-    seq = SequenceData(df, id_col='Entity ID', time=..., states=..., time_type='year')
+    seq = SequenceData(df, id_col='Entity ID', time=..., states=...)
 
     # ----------------------------------------------------------------------
     # STEP 2: If your data has NO ID column, use the helper function below
@@ -42,7 +42,7 @@
     df.to_csv('your_dataset_with_ids.csv', index=False)
 
     # Then you can use it like this:
-    seq = SequenceData(df, id_col='Entity ID', time=..., states=..., time_type='year')
+    seq = SequenceData(df, id_col='Entity ID', time=..., states=...)
 
 """
 # Only applicable to Python 3.7+, add this line to defer type annotation evaluation
@@ -74,7 +74,6 @@ class SequenceData:
     def __init__(
         self,
         data: pd.DataFrame,
-        time_type: str,
         time: list,
         states: list,
         labels: list = None,
@@ -88,7 +87,6 @@ class SequenceData:
 
         :param data: DataFrame containing sequence data.
         :param time: List of columns containing time labels.
-        :param time_type: Type of time labels (e.g., "year", "age").
         :param states: List of unique states (categories).
         :param alphabet: Optional predefined state space.
         :param labels: Labels for states (optional, for visualization).
@@ -100,20 +98,11 @@ class SequenceData:
         :param nr: Symbol for missing values (default: "*").
         :param custom_colors: Custom color palette for visualization.
         """
-        # Ensure time_type is either "year" or "age"
-        if time_type not in ["year", "age"]:
-            raise ValueError("time_type must be either 'year' or 'age'")
-
         # Import pandas here instead of the top of the file
         import pandas as pd
 
         self.data = data.copy()
         self.time = time
-
-        if time_type == "year":
-            self.time_type = "year"
-        elif time_type == "age":
-            self.time_type = "age"
 
         # Remove all non-numeric characters from the year labels, e.g., "Year2020" -> "2020", or "C1" -> "1"
         # self.cleaned_time = [re.sub(r'\D', '', str(year)) for year in time]
@@ -419,7 +408,7 @@ class SequenceData:
         if self._weights_provided:
             weight_mean = np.mean(self.weights)
             weight_std = np.std(self.weights)
-            print(f"[>] Weights: Provided (weight mean={weight_mean:.3f}, std={weight_std:.3f})")
+            print(f"[>] Weights: Provided (total weight={sum(self.weights):.3f}, mean={weight_mean:.3f}, std={weight_std:.3f})")
         else:
             print(f"[>] Weights: Not provided")
 

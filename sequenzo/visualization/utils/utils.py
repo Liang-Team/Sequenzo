@@ -241,3 +241,65 @@ def determine_layout(num_items: int,
 
     return nrows, ncols
 
+
+def show_plot_title(ax: Axes,
+                    title: Optional[str],
+                    show: bool = True,
+                    fontsize: Optional[int] = None,
+                    pad: Optional[int] = None,
+                    loc: Optional[str] = None,
+                    color: Optional[str] = None,
+                    fontweight: Optional[str] = None) -> None:
+    """
+    Conditionally set a matplotlib axis title.
+
+    Parameters:
+        ax: Target axis
+        title: Title text; if None or empty, nothing will be set
+        show: If False, do nothing
+        fontsize, pad, loc, color, fontweight: forwarded to ax.set_title if provided
+    """
+    if not show or not title:
+        return
+    kwargs = {}
+    if fontsize is not None:
+        kwargs["fontsize"] = fontsize
+    if pad is not None:
+        kwargs["pad"] = pad
+    if loc is not None:
+        kwargs["loc"] = loc
+    if color is not None:
+        kwargs["color"] = color
+    if fontweight is not None:
+        kwargs["fontweight"] = fontweight
+    ax.set_title(title, **kwargs)
+
+
+def show_group_title(ax: Axes,
+                     text: Optional[str],
+                     show: bool = True,
+                     fontsize: Optional[int] = None,
+                     x: float = 0.95,
+                     y: float = 1.02,
+                     ha: str = 'right',
+                     va: str = 'bottom',
+                     color: str = 'black') -> None:
+    """
+    Conditionally place a group title as axis-anchored text.
+
+    Parameters:
+        ax: Target axis
+        text: Text content; if None/empty, nothing will be placed
+        show: If False, do nothing
+        fontsize: Font size
+        x, y: Coordinates in axis fraction coordinates
+        ha, va: Horizontal/vertical alignment
+        color: Text color
+    """
+    if not show or not text:
+        return
+    kwargs = {"transform": ax.transAxes, "ha": ha, "va": va, "color": color}
+    if fontsize is not None:
+        kwargs["fontsize"] = fontsize
+    ax.text(x, y, text, **kwargs)
+

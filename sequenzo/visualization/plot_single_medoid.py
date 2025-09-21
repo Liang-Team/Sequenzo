@@ -12,7 +12,8 @@ from typing import List, Optional
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    save_and_show_results
+    save_and_show_results,
+    show_plot_title
 )
 
 
@@ -79,7 +80,7 @@ def plot_single_medoid(seqdata: SequenceData,
         ax.legend(handles, labels, title="States", bbox_to_anchor=(1.05, 1), loc='upper left')
 
     # Set plot title
-    ax.set_title(title if title else f"Medoid Sequence (ID: {medoid_index}, Coverage: {coverage * 100:.2f}%)")
+    show_plot_title(ax, title if title else f"Medoid Sequence (ID: {medoid_index}, Coverage: {coverage * 100:.2f}%)", show=True)
 
     # Remove all spines
     for spine in ax.spines.values():

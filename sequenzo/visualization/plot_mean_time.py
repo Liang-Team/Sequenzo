@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    save_and_show_results
+    save_and_show_results,
+    show_plot_title
 )
 
 
@@ -100,7 +101,7 @@ def plot_mean_time(seqdata: SequenceData,
                    weights="auto",
                    show_error_bar: bool = True,
                    title=None,
-                   x_label="Mean Time (Years)",
+                   x_label="Mean Time",
                    y_label="State",
                    fontsize: int = 12,
                    save_as: Optional[str] = None,
@@ -161,7 +162,7 @@ def plot_mean_time(seqdata: SequenceData,
 
     # Set plot properties
     if title:
-        ax.set_title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
+        show_plot_title(ax, title, show=True, fontsize=fontsize+2, fontweight='bold', pad=20)
     ax.set_xlabel(x_label, fontsize=fontsize)
     ax.set_ylabel(y_label, fontsize=fontsize, labelpad=15)
 

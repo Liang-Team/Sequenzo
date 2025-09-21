@@ -8,14 +8,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sequenzo import SequenceData
+# Use relative import to avoid circular import when top-level package imports visualization
+from ..define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
     save_figure_to_buffer,
     create_standalone_legend,
     combine_plot_with_legend,
     save_and_show_results,
-    determine_layout
+    determine_layout,
+    show_plot_title
 )
 
 
@@ -87,7 +89,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         ncols: int = None,
                         group_order=None,
                         sort_groups='auto',
-                        fontsize=12
+                        fontsize=12,
+                        show_group_titles: bool = True
                         ):
     """
     Creates sequence index plots, optionally grouped by categories.
@@ -226,10 +229,11 @@ def plot_sequence_index(seqdata: SequenceData,
         original_weights = getattr(seqdata, "weights", None)
         if original_weights is not None and not np.allclose(original_weights, 1.0) and group_weights is not None:
             sum_w = float(group_weights.sum())
-            group_title = f"{group} (n = {num_sequences}, Σw = {sum_w:.1f})"
+            group_title = f"{group} (n = {num_sequences}, total weight = {sum_w:.1f})"
         else:
             group_title = f"{group} (n = {num_sequences})"
-        ax.set_title(group_title, fontsize=fontsize, loc='right')
+        if show_group_titles:
+            show_plot_title(ax, group_title, show=True, fontsize=fontsize, loc='right')
 
         # Add axis labels
         if i % ncols == 0:
@@ -243,8 +247,8 @@ def plot_sequence_index(seqdata: SequenceData,
         axes[j].set_visible(False)
 
     # Add a common title if provided
-    if title:
-        fig.suptitle(title, fontsize=fontsize+2, y=1.02)
+        if title:
+            fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning
     fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
@@ -373,7 +377,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
-
+    ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
     
     # Set title with weight information if available
@@ -384,7 +388,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         original_weights = getattr(seqdata, "weights", None)
         if original_weights is not None and not np.allclose(original_weights, 1.0) and weights is not None:
             sum_w = float(weights.sum())
-            display_title += f" (n = {num_sequences}, Σw = {sum_w:.1f})"
+            display_title += f" (n = {num_sequences}, total weight = {sum_w:.1f})"
         else:
             display_title += f" (n = {num_sequences})"
         

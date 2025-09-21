@@ -18,7 +18,8 @@ import seaborn as sns
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     save_and_show_results,
-    set_up_time_labels_for_x_axis
+    set_up_time_labels_for_x_axis,
+    show_plot_title
 )
 
 
@@ -40,7 +41,8 @@ def plot_relative_frequency(seqdata: SequenceData,
                             grouping_method="first",
                             fontsize=12,
                             save_as=None,
-                            dpi=200):
+                            dpi=200,
+                            show_title: bool = True):
     """
     Generate a sequence relative frequency (seqrf) plot.
 
@@ -95,11 +97,13 @@ def plot_relative_frequency(seqdata: SequenceData,
     ax.set_xlim(0, seqdata.values.shape[1])
     ax.set_ylim(0, len(rep_sequences))
     # Add weight information to title if weights are used
-    if weights is not None and not np.allclose(weights, 1.0):
-        total_w = float(np.sum(weights))
-        ax.set_title(f"Group Medoids (n={len(seqdata.values)}, Σw={total_w:.1f})", fontsize=fontsize+2)
-    else:
-        ax.set_title(f"Group Medoids (n={len(seqdata.values)})", fontsize=fontsize+2)
+    if show_title:
+        if weights is not None and not np.allclose(weights, 1.0):
+            total_w = float(np.sum(weights))
+            title_text = f"Group Medoids (n={len(seqdata.values)}, total weight={total_w:.1f})"
+        else:
+            title_text = f"Group Medoids (n={len(seqdata.values)})"
+        show_plot_title(ax, title_text, show=True, fontsize=fontsize+2)
     ax.set_xlabel("Time", fontsize=fontsize)
     ax.set_ylabel("Frequency Group", fontsize=fontsize)
 

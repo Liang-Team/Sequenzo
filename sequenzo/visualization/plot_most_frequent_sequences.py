@@ -16,11 +16,12 @@ import numpy as np
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
-    save_and_show_results
+    save_and_show_results,
+    show_plot_title
 )
 
 
-def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights="auto", title=None, fontsize=12, save_as=None, dpi=200):
+def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights="auto", title=None, fontsize=12, save_as=None, dpi=200, show_title: bool = True):
     """
     Generate a sequence frequency plot, similar to R's seqfplot.
 
@@ -59,7 +60,8 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
     df['freq'] = df['wcount'] / (totw if totw > 0 else 1.0) * 100.0
 
     # **Ensure colors match seqdef**
-    inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}  # Reverse mapping from numeric values to state names
+    # Use numeric color map directly to avoid label/state-name mismatches
+    inv_state_mapping = {v: k for k, v in seqdata.state_mapping.items()}  # Reverse mapping kept if needed elsewhere
 
     # **Plot settings**
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -70,8 +72,8 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
     for i, (seq, freq) in enumerate(zip(df['sequence'], df['freq'])):
         left = 0  # Starting x position
         for t, state_idx in enumerate(seq):
-            label = inv_state_mapping.get(state_idx, "Unknown")  # Get the actual state name
-            color = seqdata.color_map_by_label.get(label, "gray")  # Get the corresponding color
+            # Use numeric-coded color map; if unknown, fall back to gray
+            color = seqdata.color_map.get(int(state_idx), "gray")
 
             width = 1  # Width of each time slice
             ax.barh(y=y_positions[i], width=width * 1.01, left=left - 0.005,
@@ -85,11 +87,11 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
     original_weights = getattr(seqdata, "weights", None)
     if original_weights is not None and not np.allclose(original_weights, 1.0):
         # Show both count and weighted total if weights are used
-        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}, Σw={:.1f}".format(len(sequences), totw), fontsize=fontsize)
+        ax.set_ylabel("Cumulative Frequency (%)\nN={:,}, total weight={:.1f}".format(len(sequences), totw), fontsize=fontsize)
     else:
         ax.set_ylabel("Cumulative Frequency (%)\nN={:,}".format(len(sequences)), fontsize=fontsize)
-    if title is not None:
-        ax.set_title(title, fontsize=fontsize+2, pad=20)  # Add some padding between title and plot
+    if show_title and title is not None:
+        show_plot_title(ax, title, show=True, fontsize=fontsize+2, pad=20)
 
     # **Optimize X-axis ticks: align to the center of each bar**
     set_up_time_labels_for_x_axis(seqdata, ax)

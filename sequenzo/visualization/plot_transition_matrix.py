@@ -15,7 +15,8 @@ import seaborn as sns
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    save_and_show_results
+    save_and_show_results,
+    show_plot_title
 )
 
 
@@ -173,7 +174,7 @@ def plot_transition_matrix(seqdata: SequenceData,
 
     # Adjust format
     if title:
-        plt.title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
+        show_plot_title(plt.gca(), title, show=True, fontsize=fontsize+2, fontweight='bold', pad=20)
     # plt.title("State Transition Rate Matrix", fontsize=14, fontweight='bold', pad=20)
     plt.xlabel("State at t + 1", fontsize=fontsize, labelpad=10)
     plt.ylabel("State at t", fontsize=fontsize, labelpad=10)

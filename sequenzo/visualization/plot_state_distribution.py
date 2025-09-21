@@ -15,7 +15,9 @@ from sequenzo.visualization.utils import (
     create_standalone_legend,
     combine_plot_with_legend,
     save_and_show_results,
-    determine_layout
+    determine_layout,
+    show_plot_title,
+    show_group_title
 )
 
 
@@ -53,7 +55,8 @@ def plot_state_distribution(seqdata: SequenceData,
                             include_legend=True,
                             group_order=None,
                             fontsize=12,
-                            sort_groups='auto') -> None:
+                            sort_groups='auto',
+                            show_group_titles: bool = True) -> None:
     """
     Creates state distribution plots for different groups, showing how state
     prevalence changes over time within each group.
@@ -213,10 +216,11 @@ def plot_state_distribution(seqdata: SequenceData,
         original_weights = getattr(seqdata, "weights", None)
         if original_weights is not None and not np.allclose(original_weights, 1.0):
             sum_w = float(w.sum())
-            group_title = f"{group} (n = {len(group_seq_df)}, Σw = {sum_w:.1f})"
+            group_title = f"{group} (n = {len(group_seq_df)}, total weight = {sum_w:.1f})"
         else:
             group_title = f"{group} (n = {len(group_seq_df)})"
-        ax.text(0.95, 1.02, group_title, transform=ax.transAxes, fontsize=fontsize, ha='right', va='bottom', color='black')
+        if show_group_titles:
+            show_group_title(ax, group_title, show=True, fontsize=fontsize)
 
         # Set y-axis limits from 0 to 100%
         ax.set_ylim(0, 100)

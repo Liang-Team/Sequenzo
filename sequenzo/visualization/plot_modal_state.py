@@ -14,7 +14,8 @@ from sequenzo.visualization.utils import (
     create_standalone_legend,
     save_figure_to_buffer,
     combine_plot_with_legend,
-    save_and_show_results
+    save_and_show_results,
+    show_plot_title
 )
 from PIL import Image
 
@@ -28,6 +29,7 @@ def plot_modal_state(seqdata: SequenceData,
                      fig_width: int = 12,
                      fig_height: Optional[int] = None,
                      show_counts: bool = True,
+                     show_group_titles: bool = True,
                      fontsize: int = 12,
                      save_as: Optional[str] = None,
                      dpi: int = 200) -> None:
@@ -182,14 +184,16 @@ def plot_modal_state(seqdata: SequenceData,
                        edgecolor='white', linewidth=0.5)
 
         # Set group title with count if requested
-        if show_counts:
-            if weights is not None and not np.allclose(weights, 1.0):
-                sum_w = float(w.sum())
-                ax.set_title(f"{group} (n={group_count}, Σw={sum_w:.1f})", fontsize=fontsize, pad=15)
+        if show_group_titles:
+            if show_counts:
+                if weights is not None and not np.allclose(weights, 1.0):
+                    sum_w = float(w.sum())
+                    title_text = f"{group} (n={group_count}, total weight={sum_w:.1f})"
+                else:
+                    title_text = f"{group} (n={group_count})"
             else:
-                ax.set_title(f"{group} (n={group_count})", fontsize=fontsize, pad=15)
-        else:
-            ax.set_title(group, fontsize=fontsize, pad=15)
+                title_text = group
+            show_plot_title(ax, title_text, show=True, fontsize=fontsize, pad=15)
 
         # Set y-axis limits and ticks
         ax.set_ylim(0, 1.0)
