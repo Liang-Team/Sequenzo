@@ -183,6 +183,9 @@ def save_and_show_results(save_as=None, dpi=200, show=True):
             save_as += '.png'
         plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
 
+    # Get the current figure before closing it
+    current_fig = plt.gcf()
+    
     # Show if explicitly requested or if saving (for visual confirmation)
     if show or save_as:
         plt.show()
@@ -190,8 +193,8 @@ def save_and_show_results(save_as=None, dpi=200, show=True):
     # Prevent memory leak by closing after show/save
     plt.close()
 
-    # Return the current figure
-    return plt.gcf()
+    # Return the figure that was current before closing
+    return current_fig
 
 
 

@@ -71,7 +71,19 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
 
     # Calculate effective sample size and standard errors in time units
     Neff = (w.sum() ** 2) / (np.sum(w ** 2)) if np.sum(w ** 2) > 0 else 1.0
-    se = {s: (T * np.sqrt(proportions[s]*(1-proportions[s])/Neff) if Neff > 1 else 0.0) for s in states}
+    
+    # Calculate standard errors with proper bounds checking to avoid sqrt warnings
+    se = {}
+    for s in states:
+        if Neff > 1:
+            # Ensure proportions are within valid bounds [0, 1]
+            p = max(0.0, min(1.0, proportions[s]))
+            variance_term = p * (1 - p) / Neff
+            # Ensure variance term is non-negative due to floating point precision
+            variance_term = max(0.0, variance_term)
+            se[s] = T * np.sqrt(variance_term)
+        else:
+            se[s] = 0.0
 
     # Create result DataFrame
     mean_time_df = pd.DataFrame({
