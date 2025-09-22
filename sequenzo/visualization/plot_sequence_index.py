@@ -172,6 +172,7 @@ def plot_sequence_index(seqdata: SequenceData,
                         sort_by_weight=False,
                         weights="auto",
                         figsize=(10, 6),
+                        plot_style="standard",
                         title=None,
                         xlabel="Time",
                         ylabel="Sequences",
@@ -200,7 +201,13 @@ def plot_sequence_index(seqdata: SequenceData,
         - 'distance_to_most_frequent': Sort by distance to most frequent sequence
     :param sort_by_weight: If True, sort sequences by weight (descending), overrides sort_by
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
-    :param figsize: Size of each subplot figure
+    :param figsize: Size of each subplot figure (only used when plot_style="custom")
+    :param plot_style: Plot aspect style:
+        - 'standard': Standard proportions (10, 6) - balanced view
+        - 'compact': Compact/vertical proportions (8, 8) - more vertical like R plots
+        - 'wide': Wide proportions (12, 4) - emphasizes time progression  
+        - 'narrow': Narrow/tall proportions (6, 10) - very vertical
+        - 'custom': Use the provided figsize parameter
     :param title: Title for the plot (if None, default titles will be used)
     :param xlabel: Label for the x-axis
     :param ylabel: Label for the y-axis
@@ -215,9 +222,24 @@ def plot_sequence_index(seqdata: SequenceData,
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
     """
+    # Determine figure size based on plot style
+    style_sizes = {
+        'standard': (10, 6),   # Balanced view
+        'compact': (8, 8),     # More square, like R plots  
+        'wide': (12, 4),       # Wide, emphasizes time
+        'narrow': (6, 10),     # Very vertical
+        'custom': figsize      # User-provided
+    }
+    
+    if plot_style not in style_sizes:
+        raise ValueError(f"Invalid plot_style '{plot_style}'. "
+                        f"Supported styles: {list(style_sizes.keys())}")
+    
+    actual_figsize = style_sizes[plot_style]
+    
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi, fontsize)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -255,7 +277,7 @@ def plot_sequence_index(seqdata: SequenceData,
     fig, axes = plt.subplots(
         nrows=nrows,
         ncols=ncols,
-        figsize=(figsize[0] * ncols, figsize[1] * nrows),
+        figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
         gridspec_kw={'wspace': 0.2, 'hspace': 0.3}
     )
     axes = axes.flatten()
@@ -410,7 +432,7 @@ def plot_sequence_index(seqdata: SequenceData,
         colors=colors,
         labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
-        figsize=(figsize[0] * ncols, 1),
+        figsize=(actual_figsize[0] * ncols, 1),
         fontsize=fontsize-2,
         dpi=dpi
     )
@@ -428,7 +450,7 @@ def plot_sequence_index(seqdata: SequenceData,
     )
 
     # Display combined image
-    plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
+    plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows + 1))
     plt.imshow(combined_img)
     plt.axis('off')
     plt.show()
@@ -440,6 +462,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 sort_by_weight=False,
                                 weights="auto",
                                 figsize=(10, 6),
+                                plot_style="standard",
                                 title=None,
                                 xlabel="Time",
                                 ylabel="Sequences",
@@ -452,7 +475,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     :param sort_by: Sorting method ('unsorted', 'lexicographic', 'mds', 'distance_to_most_frequent')
     :param sort_by_weight: If True, sort sequences by weight (descending), overrides sort_by
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
-    :param figsize: (tuple): Size of the figure.
+    :param figsize: (tuple): Size of the figure (only used when plot_style="custom").
+    :param plot_style: Plot aspect style ('standard', 'compact', 'wide', 'narrow', 'custom')
     :param title: (str): Title for the plot.
     :param xlabel: (str): Label for the x-axis.
     :param ylabel: (str): Label for the y-axis.
@@ -461,6 +485,21 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     :return None.
     """
+    # Determine figure size based on plot style
+    style_sizes = {
+        'standard': (10, 6),   # Balanced view
+        'compact': (8, 8),     # More square, like R plots  
+        'wide': (12, 4),       # Wide, emphasizes time
+        'narrow': (6, 10),     # Very vertical
+        'custom': figsize      # User-provided
+    }
+    
+    if plot_style not in style_sizes:
+        raise ValueError(f"Invalid plot_style '{plot_style}'. "
+                        f"Supported styles: {list(style_sizes.keys())}")
+    
+    actual_figsize = style_sizes[plot_style]
+    
     # Process weights
     if isinstance(weights, str) and weights == "auto":
         weights = getattr(seqdata, "weights", None)
@@ -516,7 +555,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     sorted_data = sequence_values[sorted_indices]
 
     # Create the plot using imshow with proper NaN handling
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=actual_figsize)
     # Use masked array for better NaN handling
     data = sorted_data.astype(float)
     data[data < 1] = np.nan
