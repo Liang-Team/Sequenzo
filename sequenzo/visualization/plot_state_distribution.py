@@ -30,8 +30,11 @@ def smart_sort_groups(groups):
     """
     import re
     
+    # Compile regex once for better performance
+    numeric_pattern = re.compile(r'^(\d+)')
+    
     def sort_key(item):
-        match = re.match(r'^(\d+)', str(item))
+        match = numeric_pattern.match(str(item))
         return (int(match.group(1)), str(item)) if match else (float('inf'), str(item))
     
     return sorted(groups, key=sort_key)
@@ -42,6 +45,7 @@ def plot_state_distribution(seqdata: SequenceData,
                             categories=None,
                             weights="auto",
                             figsize=(12, 7),
+                            plot_style="standard",
                             title=None,
                             xlabel="Time",
                             ylabel="State Distribution (%)",
@@ -65,7 +69,13 @@ def plot_state_distribution(seqdata: SequenceData,
     :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
     :param categories: Column name in id_group_df that contains grouping information
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
-    :param figsize: (tuple) Size of the figure
+    :param figsize: (tuple) Size of the figure (only used when plot_style="custom")
+    :param plot_style: Plot aspect style:
+        - 'standard': Standard proportions (12, 7) - balanced view
+        - 'compact': Compact/vertical proportions (10, 8) - more vertical like R plots
+        - 'wide': Wide proportions (14, 5) - emphasizes time progression  
+        - 'narrow': Narrow/tall proportions (9, 11) - moderately vertical
+        - 'custom': Use the provided figsize parameter
     :param title: (str) Optional title for the plot
     :param xlabel: (str) Label for the x-axis
     :param ylabel: (str) Label for the y-axis
@@ -78,11 +88,39 @@ def plot_state_distribution(seqdata: SequenceData,
 
     :return: None
     """
+    # Determine figure size based on plot style
+    style_sizes = {
+        'standard': (12, 7),   # Balanced view
+        'compact': (10, 8),    # More square, like R plots  
+        'wide': (14, 5),       # Wide, emphasizes time
+        'narrow': (9, 11),     # Moderately vertical
+        'custom': figsize      # User-provided
+    }
+    
+    if plot_style not in style_sizes:
+        raise ValueError(f"Invalid plot_style '{plot_style}'. "
+                        f"Supported styles: {list(style_sizes.keys())}")
+    
+    # Special validation for custom plot style
+    if plot_style == 'custom' and figsize == (12, 7):
+        raise ValueError(
+            "When using plot_style='custom', you must explicitly provide a figsize parameter "
+            "that differs from the default (12, 7). "
+            "Suggested custom sizes:\n"
+            "  - For wide plots: figsize=(16, 6)\n"
+            "  - For tall plots: figsize=(8, 12)\n"
+            "  - For square plots: figsize=(10, 10)\n"
+            "  - For small plots: figsize=(8, 5)\n"
+            "Example: plot_state_distribution(data, plot_style='custom', figsize=(14, 9))"
+        )
+    
+    actual_figsize = style_sizes[plot_style]
+    
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
         return _plot_state_distribution_single(
-            seqdata=seqdata, weights=weights, figsize=figsize,
-            title=title, xlabel=xlabel, ylabel=ylabel,
+            seqdata=seqdata, weights=weights, figsize=actual_figsize,
+            plot_style=plot_style, title=title, xlabel=xlabel, ylabel=ylabel,
             save_as=save_as, dpi=dpi, stacked=stacked,
             show=show, include_legend=include_legend, fontsize=fontsize
         )
@@ -123,7 +161,7 @@ def plot_state_distribution(seqdata: SequenceData,
     fig, axes = plt.subplots(
         nrows=nrows,
         ncols=ncols,
-        figsize=(figsize[0] * ncols, figsize[1] * nrows),
+        figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
         gridspec_kw={'wspace': 0.2, 'hspace': 0.3}
     )
     axes = axes.flatten()
@@ -259,36 +297,52 @@ def plot_state_distribution(seqdata: SequenceData,
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
-    # Create standalone legend
-    colors = dict(zip(seqdata.labels, [seqdata.color_map_by_label[state] for state in seqdata.states]))
-    legend_buffer = create_standalone_legend(
-        colors=colors,
-        labels=seqdata.labels,
-        ncol=min(5, len(seqdata.states)),
-        figsize=(figsize[0] * ncols, 1),
-        fontsize=fontsize-2,
-        dpi=dpi
-    )
+    if include_legend:
+        # Create standalone legend
+        colors = dict(zip(seqdata.labels, [seqdata.color_map_by_label[state] for state in seqdata.states]))
+        legend_buffer = create_standalone_legend(
+            colors=colors,
+            labels=seqdata.labels,
+            ncol=min(5, len(seqdata.states)),
+            figsize=(actual_figsize[0] * ncols, 1),
+            fontsize=fontsize-2,
+            dpi=dpi
+        )
 
-    # Combine plot with legend
-    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-        save_as = save_as + '.png'
+        # Combine plot with legend
+        if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+            save_as = save_as + '.png'
 
-    combined_img = combine_plot_with_legend(
-        main_buffer,
-        legend_buffer,
-        output_path=save_as,
-        dpi=dpi,
-        padding=20
-    )
+        combined_img = combine_plot_with_legend(
+            main_buffer,
+            legend_buffer,
+            output_path=save_as,
+            dpi=dpi,
+            padding=20
+        )
 
-    # Display combined image
-    plt.figure(figsize=(figsize[0] * ncols, figsize[1] * nrows + 1))
-    plt.imshow(combined_img)
-    plt.axis('off')
-    if show or save_as:  # Show if displaying or saving is needed
-        plt.show()
-    plt.close()
+        # Display combined image
+        plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows + 1))
+        plt.imshow(combined_img)
+        plt.axis('off')
+        if show or save_as:  # Show if displaying or saving is needed
+            plt.show()
+        plt.close()
+    else:
+        # Display plot without legend
+        if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+            save_as = save_as + '.png'
+        
+        # Save or show the main plot directly
+        plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows))
+        plt.imshow(main_buffer)
+        plt.axis('off')
+        
+        if save_as:
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+        if show:
+            plt.show()
+        plt.close()
 
     # No longer return fig to avoid duplicate rendering by environment
     return None
@@ -298,6 +352,7 @@ def plot_state_distribution(seqdata: SequenceData,
 def _plot_state_distribution_single(seqdata: SequenceData,
                                     weights="auto",
                                     figsize=(12, 7),
+                                    plot_style="standard",
                                     title=None,
                                     xlabel="Time",
                                     ylabel="State Distribution (%)",
@@ -313,7 +368,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     :param seqdata: (SequenceData) A SequenceData object containing sequences
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
-    :param figsize: (tuple) Size of the figure
+    :param figsize: (tuple) Size of the figure (only used when plot_style="custom")
+    :param plot_style: Plot aspect style ('standard', 'compact', 'wide', 'narrow', 'custom')
     :param title: (str) Optional title for the plot
     :param xlabel: (str) Label for the x-axis
     :param ylabel: (str) Label for the y-axis
@@ -323,6 +379,34 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     :return: None
     """
+    # Determine figure size based on plot style
+    style_sizes = {
+        'standard': (12, 7),   # Balanced view
+        'compact': (10, 8),    # More square, like R plots  
+        'wide': (14, 5),       # Wide, emphasizes time
+        'narrow': (9, 11),     # Moderately vertical
+        'custom': figsize      # User-provided
+    }
+    
+    if plot_style not in style_sizes:
+        raise ValueError(f"Invalid plot_style '{plot_style}'. "
+                        f"Supported styles: {list(style_sizes.keys())}")
+    
+    # Special validation for custom plot style
+    if plot_style == 'custom' and figsize == (12, 7):
+        raise ValueError(
+            "When using plot_style='custom', you must explicitly provide a figsize parameter "
+            "that differs from the default (12, 7). "
+            "Suggested custom sizes:\n"
+            "  - For wide plots: figsize=(16, 6)\n"
+            "  - For tall plots: figsize=(8, 12)\n"
+            "  - For square plots: figsize=(10, 10)\n"
+            "  - For small plots: figsize=(8, 5)\n"
+            "Example: plot_state_distribution(data, plot_style='custom', figsize=(14, 9))"
+        )
+    
+    actual_figsize = style_sizes[plot_style]
+    
     # Process weights
     if isinstance(weights, str) and weights == "auto":
         weights = getattr(seqdata, "weights", None)
@@ -380,7 +464,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     # Create the plot
     plt.style.use('default')  # Start with default style for clean slate
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=actual_figsize)
 
     # Get colors for each state and enhance vibrancy
     base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]

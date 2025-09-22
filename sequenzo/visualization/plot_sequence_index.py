@@ -184,7 +184,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         group_order=None,
                         sort_groups='auto',
                         fontsize=12,
-                        show_group_titles: bool = True
+                        show_group_titles: bool = True,
+                        include_legend: bool = True
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -206,7 +207,7 @@ def plot_sequence_index(seqdata: SequenceData,
         - 'standard': Standard proportions (10, 6) - balanced view
         - 'compact': Compact/vertical proportions (8, 8) - more vertical like R plots
         - 'wide': Wide proportions (12, 4) - emphasizes time progression  
-        - 'narrow': Narrow/tall proportions (6, 10) - very vertical
+        - 'narrow': Narrow/tall proportions (8, 10) - moderately vertical
         - 'custom': Use the provided figsize parameter
     :param title: Title for the plot (if None, default titles will be used)
     :param xlabel: Label for the x-axis
@@ -218,6 +219,7 @@ def plot_sequence_index(seqdata: SequenceData,
     :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
     :param fontsize: Base font size for text elements (titles use fontsize+2, ticks use fontsize-2)
     :param show_group_titles: Whether to show group titles
+    :param include_legend: Whether to include legend in the plot (True by default)
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -227,7 +229,7 @@ def plot_sequence_index(seqdata: SequenceData,
         'standard': (10, 6),   # Balanced view
         'compact': (8, 8),     # More square, like R plots  
         'wide': (12, 4),       # Wide, emphasizes time
-        'narrow': (6, 10),     # Very vertical
+        'narrow': (8, 10),     # Moderately vertical
         'custom': figsize      # User-provided
     }
     
@@ -235,11 +237,24 @@ def plot_sequence_index(seqdata: SequenceData,
         raise ValueError(f"Invalid plot_style '{plot_style}'. "
                         f"Supported styles: {list(style_sizes.keys())}")
     
+    # Special validation for custom plot style
+    if plot_style == 'custom' and figsize == (10, 6):
+        raise ValueError(
+            "When using plot_style='custom', you must explicitly provide a figsize parameter "
+            "that differs from the default (10, 6). "
+            "Suggested custom sizes:\n"
+            "  - For wide plots: figsize=(15, 5)\n"
+            "  - For tall plots: figsize=(7, 12)\n"
+            "  - For square plots: figsize=(9, 9)\n"
+            "  - For small plots: figsize=(6, 4)\n"
+            "Example: plot_sequence_index(data, plot_style='custom', figsize=(12, 8))"
+        )
+    
     actual_figsize = style_sizes[plot_style]
     
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -378,7 +393,11 @@ def plot_sequence_index(seqdata: SequenceData,
 
         # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
         num_sequences = sorted_data.shape[0]
-        num_ticks = min(11, num_sequences)
+        # Adjust tick count for narrow plot styles to ensure visibility
+        if plot_style == "narrow":
+            num_ticks = min(8, num_sequences)  # Fewer ticks for narrow plots
+        else:
+            num_ticks = min(11, num_sequences)
         ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
         ytick_positions = np.unique(ytick_positions)
         ax.set_yticks(ytick_positions)
@@ -391,8 +410,19 @@ def plot_sequence_index(seqdata: SequenceData,
         ax.spines['bottom'].set_color('gray')
         ax.spines['left'].set_linewidth(0.7)
         ax.spines['bottom'].set_linewidth(0.7)
-        ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
-        ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+        
+        # Move spines slightly away from the plot area for better aesthetics
+        ax.spines['left'].set_position(('outward', 5))
+        ax.spines['bottom'].set_position(('outward', 5))
+        
+        # Ensure ticks are always visible regardless of plot style
+        ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major')
+        ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
+        
+        # Force tick visibility for narrow plot styles
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.set_ticks_position('left')
+        ax.tick_params(axis='both', which='major', direction='out')
 
         # Add group title with weight information
         # Check if we have effective weights (not all 1.0) and they were provided by user
@@ -426,35 +456,50 @@ def plot_sequence_index(seqdata: SequenceData,
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
 
-    # Create standalone legend
-    colors = seqdata.color_map_by_label
-    legend_buffer = create_standalone_legend(
-        colors=colors,
-        labels=seqdata.labels,
-        ncol=min(5, len(seqdata.states)),
-        figsize=(actual_figsize[0] * ncols, 1),
-        fontsize=fontsize-2,
-        dpi=dpi
-    )
+    if include_legend:
+        # Create standalone legend
+        colors = seqdata.color_map_by_label
+        legend_buffer = create_standalone_legend(
+            colors=colors,
+            labels=seqdata.labels,
+            ncol=min(5, len(seqdata.states)),
+            figsize=(actual_figsize[0] * ncols, 1),
+            fontsize=fontsize-2,
+            dpi=dpi
+        )
 
-    # Combine plot with legend
-    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-        save_as = save_as + '.png'
+        # Combine plot with legend
+        if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+            save_as = save_as + '.png'
 
-    combined_img = combine_plot_with_legend(
-        main_buffer,
-        legend_buffer,
-        output_path=save_as,
-        dpi=dpi,
-        padding=20
-    )
+        combined_img = combine_plot_with_legend(
+            main_buffer,
+            legend_buffer,
+            output_path=save_as,
+            dpi=dpi,
+            padding=20
+        )
 
-    # Display combined image
-    plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows + 1))
-    plt.imshow(combined_img)
-    plt.axis('off')
-    plt.show()
-    plt.close()
+        # Display combined image
+        plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows + 1))
+        plt.imshow(combined_img)
+        plt.axis('off')
+        plt.show()
+        plt.close()
+    else:
+        # Display plot without legend
+        if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+            save_as = save_as + '.png'
+        
+        # Save or show the main plot directly
+        plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows))
+        plt.imshow(main_buffer)
+        plt.axis('off')
+        
+        if save_as:
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+        plt.show()
+        plt.close()
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
@@ -468,7 +513,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 ylabel="Sequences",
                                 save_as=None,
                                 dpi=200,
-                                fontsize=12):
+                                fontsize=12,
+                                include_legend=True):
     """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
@@ -482,6 +528,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     :param ylabel: (str): Label for the y-axis.
     :param save_as: File path to save the plot
     :param dpi: DPI for saved image
+    :param include_legend: Whether to include legend in the plot (True by default)
 
     :return None.
     """
@@ -490,13 +537,26 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         'standard': (10, 6),   # Balanced view
         'compact': (8, 8),     # More square, like R plots  
         'wide': (12, 4),       # Wide, emphasizes time
-        'narrow': (6, 10),     # Very vertical
+        'narrow': (8, 10),     # Moderately vertical
         'custom': figsize      # User-provided
     }
     
     if plot_style not in style_sizes:
         raise ValueError(f"Invalid plot_style '{plot_style}'. "
                         f"Supported styles: {list(style_sizes.keys())}")
+    
+    # Special validation for custom plot style
+    if plot_style == 'custom' and figsize == (10, 6):
+        raise ValueError(
+            "When using plot_style='custom', you must explicitly provide a figsize parameter "
+            "that differs from the default (10, 6). "
+            "Suggested custom sizes:\n"
+            "  - For wide plots: figsize=(15, 5)\n"
+            "  - For tall plots: figsize=(7, 12)\n"
+            "  - For square plots: figsize=(9, 9)\n"
+            "  - For small plots: figsize=(6, 4)\n"
+            "Example: plot_sequence_index(data, plot_style='custom', figsize=(12, 8))"
+        )
     
     actual_figsize = style_sizes[plot_style]
     
@@ -581,7 +641,11 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
     num_sequences = sorted_data.shape[0]
-    num_ticks = min(11, num_sequences)
+    # Adjust tick count for narrow plot styles to ensure visibility
+    if plot_style == "narrow":
+        num_ticks = min(8, num_sequences)  # Fewer ticks for narrow plots
+    else:
+        num_ticks = min(11, num_sequences)
     ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
     ytick_positions = np.unique(ytick_positions)
     ax.set_yticks(ytick_positions)
@@ -595,8 +659,19 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.spines['bottom'].set_color('gray')
     ax.spines['left'].set_linewidth(0.7)
     ax.spines['bottom'].set_linewidth(0.7)
-    ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
-    ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
+    
+    # Move spines slightly away from the plot area for better aesthetics
+    ax.spines['left'].set_position(('outward', 5))
+    ax.spines['bottom'].set_position(('outward', 5))
+    
+    # Ensure ticks are always visible regardless of plot style
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major')
+    ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
+    
+    # Force tick visibility for narrow plot styles
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+    ax.tick_params(axis='both', which='major', direction='out')
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
@@ -616,7 +691,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         
         ax.set_title(display_title, fontsize=fontsize+2, color='black')
 
-    # Use legend from SequenceData
-    ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
+    # Use legend from SequenceData if requested
+    if include_legend:
+        ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     save_and_show_results(save_as, dpi=dpi)
