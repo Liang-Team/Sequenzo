@@ -30,52 +30,145 @@ def smart_sort_groups(groups):
     """
     import re
     
+    # Compile regex once for better performance
+    numeric_pattern = re.compile(r'^(\d+)')
+    
     def sort_key(item):
-        match = re.match(r'^(\d+)', str(item))
+        match = numeric_pattern.match(str(item))
         return (int(match.group(1)), str(item)) if match else (float('inf'), str(item))
     
     return sorted(groups, key=sort_key)
 
 
-def sort_sequences_by_structure(seqdata, method="first_marriage", target_state=3, mask=None):
+def _cmdscale(D):
     """
-    Sort sequences in SequenceData based on structural information.
+    Classic Multidimensional Scaling (MDS), equivalent to R's cmdscale()
+    
+    :param D: A NxN symmetric distance matrix
+    :return: Y, a Nxd coordinate matrix, where d is the largest positive eigenvalues' count
+    """
+    n = len(D)
+    
+    # Step 1: Compute the centering matrix
+    H = np.eye(n) - np.ones((n, n)) / n
+    
+    # Step 2: Compute the double centered distance matrix
+    B = -0.5 * H @ (D ** 2) @ H
+    
+    # Step 3: Compute eigenvalues and eigenvectors
+    eigvals, eigvecs = np.linalg.eigh(B)
+    
+    # Step 4: Sort eigenvalues and eigenvectors in descending order
+    idx = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[idx]
+    eigvecs = eigvecs[:, idx]
+    
+    # Step 5: Select only positive eigenvalues
+    w, = np.where(eigvals > 0)
+    if len(w) > 0:
+        L = np.diag(np.sqrt(eigvals[w]))
+        V = eigvecs[:, w]
+        return V @ L  # Return the MDS coordinates
+    else:
+        # Fallback if no positive eigenvalues
+        return np.zeros((n, 1))
 
+
+def _find_most_frequent_sequence(sequences):
+    """
+    Find the most frequent sequence in the dataset.
+    
+    :param sequences: numpy array of sequences
+    :return: index of the most frequent sequence
+    """
+    from collections import Counter
+    
+    # Convert sequences to tuples for hashing
+    seq_tuples = [tuple(seq) for seq in sequences]
+    
+    # Count frequencies
+    counter = Counter(seq_tuples)
+    
+    # Find the most frequent sequence
+    most_frequent = counter.most_common(1)[0][0]
+    
+    # Find the index of this sequence in the original array
+    for i, seq in enumerate(seq_tuples):
+        if seq == most_frequent:
+            return i
+    
+    return 0  # Fallback
+
+
+def sort_sequences_by_method(seqdata, method="unsorted", mask=None, distance_matrix=None, weights=None):
+    """
+    Sort sequences in SequenceData based on specified method.
+    
     :param seqdata: SequenceData object
-    :param method: str, sorting method
-    :param target_state: int, target state for first_marriage method
+    :param method: str, sorting method - "unsorted", "lexicographic", "mds", "distance_to_most_frequent"
     :param mask: np.array(bool), if provided, sort only this subset
+    :param distance_matrix: np.array, required for "mds" and "distance_to_most_frequent" methods
+    :param weights: np.array, optional weights for sequences
     :return: np.array sorting indices (relative to original order)
     """
     values = seqdata.values.copy()
-    time_points = np.arange(values.shape[1])
-
+    
+    n_sequences = len(values) if mask is None else int(np.sum(mask))
+    
     if mask is not None:
         values = values[mask]
-
-    if method == "first_marriage":
-        sort_keys = np.array([
-            np.where(row == target_state)[0][0] if target_state in row else 99
-            for row in values
-        ])
-    elif method == "transition_count":
-        sort_keys = np.sum(values[:, 1:] != values[:, :-1], axis=1)
-    elif method == "final_state":
-        sort_keys = values[:, -1]
-    elif method == "happiness_slope":
-        sort_keys = np.array([
-            np.polyfit(time_points, row, 1)[0] for row in values
-        ])
+        if distance_matrix is not None:
+            # Only slice if distance_matrix is for the full sample
+            if distance_matrix.shape[0] != n_sequences:
+                masked_indices = np.where(mask)[0]
+                distance_matrix = distance_matrix[np.ix_(masked_indices, masked_indices)]
+    
+    if method == "unsorted" or method == "none":
+        # Keep original order (R default)
+        return np.arange(n_sequences)
+    
+    elif method == "lexicographic":
+        # Lexicographic sorting (NaN-safe)
+        vals = values.astype(float, copy=True)
+        # Push NaNs to the end for sorting
+        vals = np.nan_to_num(vals, nan=np.inf)
+        return np.lexsort(vals.T[::-1])
+    
+    elif method == "mds":
+        # MDS first dimension sorting
+        if distance_matrix is None:
+            raise ValueError("Distance matrix is required for MDS sorting")
+        
+        # TODO: Support weighted MDS (TraMineR's wcmdscale analogue) when weights are provided.
+        # Compute MDS coordinates
+        mds_coords = _cmdscale(distance_matrix)
+        
+        # Sort by first MDS dimension
+        return np.argsort(mds_coords[:, 0])
+    
+    elif method == "distance_to_most_frequent":
+        # Sort by distance to most frequent sequence
+        if distance_matrix is None:
+            raise ValueError("Distance matrix is required for distance_to_most_frequent sorting")
+        
+        # Find most frequent sequence
+        most_freq_idx = _find_most_frequent_sequence(values)
+        
+        # Get distances to most frequent sequence
+        distances = distance_matrix[most_freq_idx, :]
+        
+        # Sort by distance (ascending)
+        return np.argsort(distances)
+    
     else:
-        raise ValueError(f"Unsupported method: {method}")
-
-    return np.argsort(sort_keys)
+        raise ValueError(f"Unsupported sorting method: {method}. "
+                        f"Supported methods are: 'unsorted', 'lexicographic', 'mds', 'distance_to_most_frequent'")
 
 
 def plot_sequence_index(seqdata: SequenceData,
                         id_group_df=None,
                         categories=None,
-                        sort_by=None,
+                        sort_by="lexicographic",
                         sort_by_weight=False,
                         weights="auto",
                         figsize=(10, 6),
@@ -92,14 +185,20 @@ def plot_sequence_index(seqdata: SequenceData,
                         fontsize=12,
                         show_group_titles: bool = True
                         ):
-    """
-    Creates sequence index plots, optionally grouped by categories.
+    """Creates sequence index plots, optionally grouped by categories.
+    
+    This function creates index plots that visualize sequences as horizontal lines,
+    with different sorting options matching R's TraMineR functionality.
 
     :param seqdata: SequenceData object containing sequence information
     :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
     :param categories: Column name in id_group_df that contains grouping information
-    :param sort_by: Sorting method for sequences within groups
-    :param sort_by_weight: If True, sort sequences by weight (descending), overrides other sorting
+    :param sort_by: Sorting method for sequences within groups:
+        - 'unsorted' or 'none': Keep original order (R TraMineR default)
+        - 'lexicographic': Sort sequences lexicographically
+        - 'mds': Sort by first MDS dimension (requires distance computation)
+        - 'distance_to_most_frequent': Sort by distance to most frequent sequence
+    :param sort_by_weight: If True, sort sequences by weight (descending), overrides sort_by
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: Size of each subplot figure
     :param title: Title for the plot (if None, default titles will be used)
@@ -111,10 +210,14 @@ def plot_sequence_index(seqdata: SequenceData,
     :param group_order: List, manually specify group order (overrides sort_groups)
     :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
     :param fontsize: Base font size for text elements (titles use fontsize+2, ticks use fontsize-2)
+    :param show_group_titles: Whether to show group titles
+    
+    Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
+    automatically using Optimal Matching (OM) with constant substitution costs.
     """
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
-        return _sequence_index_plot_single(seqdata, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi, fontsize)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, figsize, title, xlabel, ylabel, save_as, dpi, fontsize)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -184,12 +287,49 @@ def plot_sequence_index(seqdata: SequenceData,
             group_sequences[np.isnan(group_sequences)] = np.nan
 
         if sort_by_weight and group_weights is not None:
-            # Sort by weight (descending), then by structure as secondary
+            # Sort by weight (descending)
             sorted_indices = np.argsort(-group_weights)
-        elif sort_by is not None:
-            sorted_indices = sort_sequences_by_structure(seqdata=seqdata, method=sort_by, mask=mask)
         else:
-            sorted_indices = np.lexsort(group_sequences.T[::-1])
+            # Use the new sorting method (requires distance matrix for some methods)
+            distance_matrix = None
+            if sort_by in ["mds", "distance_to_most_frequent"]:
+                # Import distance calculation function
+                try:
+                    from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+                    
+                    # Create subset of seqdata for this group
+                    group_seqdata = SequenceData(
+                        values=group_sequences,
+                        ids=seqdata.ids[mask] if hasattr(seqdata, 'ids') else None,
+                        time_points=seqdata.time_points,
+                        states=seqdata.states,
+                        labels=seqdata.labels,
+                        color_map=seqdata.color_map
+                    )
+                    
+                    # Compute distance matrix for this group
+                    distance_matrix = get_distance_matrix(
+                        seqdata=group_seqdata, 
+                        method="OM", 
+                        sm="CONSTANT", 
+                        indel="auto"
+                    )
+                    
+                    # Convert to numpy array if it's a DataFrame
+                    if hasattr(distance_matrix, 'values'):
+                        distance_matrix = distance_matrix.values
+                        
+                except ImportError:
+                    print(f"Warning: Cannot compute distance matrix for '{sort_by}' sorting. Using unsorted order.")
+                    sort_by = "unsorted"
+                    
+            sorted_indices = sort_sequences_by_method(
+                seqdata=seqdata, 
+                method=sort_by, 
+                mask=mask,
+                distance_matrix=distance_matrix,
+                weights=group_weights
+            )
 
         sorted_data = group_sequences[sorted_indices]
 
@@ -198,6 +338,13 @@ def plot_sequence_index(seqdata: SequenceData,
         # Use masked array for better NaN handling
         data = sorted_data.astype(float)
         data[data < 1] = np.nan
+        
+        # Check for all-missing or all-invalid data
+        if np.all(~np.isfinite(data)):
+            print(f"Warning: all values missing/invalid for group '{group}'")
+            ax.axis('off')
+            continue
+            
         im = ax.imshow(np.ma.masked_invalid(data), aspect='auto', cmap=seqdata.get_colormap(),
                        interpolation='nearest', vmin=1, vmax=len(seqdata.states))
 
@@ -248,8 +395,8 @@ def plot_sequence_index(seqdata: SequenceData,
         axes[j].set_visible(False)
 
     # Add a common title if provided
-        if title:
-            fig.suptitle(title, fontsize=fontsize+2, y=1.02)
+    if title:
+        fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning
     fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
@@ -289,6 +436,7 @@ def plot_sequence_index(seqdata: SequenceData,
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
+                                sort_by="unsorted",
                                 sort_by_weight=False,
                                 weights="auto",
                                 figsize=(10, 6),
@@ -298,11 +446,11 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 save_as=None,
                                 dpi=200,
                                 fontsize=12):
-    """
-    Efficiently creates a sequence index plot using `imshow` for faster rendering.
+    """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
-    :param sort_by_weight: If True, sort sequences by weight (descending)
+    :param sort_by: Sorting method ('unsorted', 'lexicographic', 'mds', 'distance_to_most_frequent')
+    :param sort_by_weight: If True, sort sequences by weight (descending), overrides sort_by
     :param weights: (np.ndarray or "auto") Weights for sequences. If "auto", uses seqdata.weights if available
     :param figsize: (tuple): Size of the figure.
     :param title: (str): Title for the plot.
@@ -330,13 +478,40 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         # Keep NaN as float for proper masking
         sequence_values = sequence_values.astype(float)
 
-    # Sort sequences for better visualization
+    # Sort sequences based on specified method
     if sort_by_weight and weights is not None:
         # Sort by weight (descending)
         sorted_indices = np.argsort(-weights)
     else:
-        # Sort sequences lexicographically for better visualization
-        sorted_indices = np.lexsort(sequence_values.T[::-1])
+        # Use the new sorting method
+        distance_matrix = None
+        if sort_by in ["mds", "distance_to_most_frequent"]:
+            # Import distance calculation function
+            try:
+                from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+                
+                # Compute distance matrix
+                distance_matrix = get_distance_matrix(
+                    seqdata=seqdata, 
+                    method="OM", 
+                    sm="CONSTANT", 
+                    indel="auto"
+                )
+                
+                # Convert to numpy array if it's a DataFrame
+                if hasattr(distance_matrix, 'values'):
+                    distance_matrix = distance_matrix.values
+                    
+            except ImportError:
+                print(f"Warning: Cannot compute distance matrix for '{sort_by}' sorting. Using unsorted order.")
+                sort_by = "unsorted"
+                
+        sorted_indices = sort_sequences_by_method(
+            seqdata=seqdata, 
+            method=sort_by, 
+            distance_matrix=distance_matrix,
+            weights=weights
+        )
     
     sorted_data = sequence_values[sorted_indices]
 
@@ -345,6 +520,13 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     # Use masked array for better NaN handling
     data = sorted_data.astype(float)
     data[data < 1] = np.nan
+    
+    # Check for all-missing or all-invalid data
+    if np.all(~np.isfinite(data)):
+        print(f"Warning: all values missing/invalid in sequence data")
+        ax.axis('off')
+        return
+        
     ax.imshow(np.ma.masked_invalid(data), aspect='auto', cmap=seqdata.get_colormap(), 
               interpolation='nearest', vmin=1, vmax=len(seqdata.states))
 
@@ -379,7 +561,6 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
-    ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
     
     # Set title with weight information if available
@@ -399,4 +580,4 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     # Use legend from SequenceData
     ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    save_and_show_results(save_as, dpi=200)
+    save_and_show_results(save_as, dpi=dpi)
