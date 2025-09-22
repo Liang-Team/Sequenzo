@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : __init__.py.py
+@File    : __init__.py
 @Time    : 02/05/2025 11:05
 @Desc    :
     Prefix Tree Framework – exposes core indicators and utilities for sequence divergence analysis.

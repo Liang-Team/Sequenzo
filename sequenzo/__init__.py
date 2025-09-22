@@ -79,6 +79,12 @@ from .suffix_tree import (
     plot_suffix_rarity_distribution,
 )
 
+from .sequence_characteristics import (
+    get_subsequences_in_single_sequence,
+    get_subsequences_all_sequences,
+    get_number_of_transitions,
+)
+
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
@@ -153,4 +159,9 @@ __all__ = [
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
     "plot_suffix_rarity_distribution",
+
+    # Sequence characteristics
+    "get_subsequences_in_single_sequence",
+    "get_subsequences_all_sequences",
+    "get_number_of_transitions",
 ]
