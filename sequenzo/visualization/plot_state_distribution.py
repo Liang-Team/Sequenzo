@@ -270,11 +270,19 @@ def plot_state_distribution(seqdata: SequenceData,
         ax.spines['bottom'].set_color('gray')
         ax.spines['left'].set_linewidth(0.7)
         ax.spines['bottom'].set_linewidth(0.7)
+        
+        # Move spines slightly away from the plot area for better aesthetics (same as index plot)
+        ax.spines['left'].set_position(('outward', 5))
+        ax.spines['bottom'].set_position(('outward', 5))
+        
         ax.tick_params(axis='x', colors='gray', length=4, width=0.7)
         ax.tick_params(axis='y', colors='gray', length=4, width=0.7)
 
         # Set x-axis labels
         set_up_time_labels_for_x_axis(seqdata, ax)
+        
+        # Set x-axis range to prevent over-extension like in the reference image
+        ax.set_xlim(-0.5, len(seqdata.cleaned_time) - 0.5)
 
         # Add axis labels
         if i % ncols == 0:
@@ -500,12 +508,25 @@ def _plot_state_distribution_single(seqdata: SequenceData,
 
     # Set x-axis labels based on time points
     set_up_time_labels_for_x_axis(seqdata, ax)
+    
+    # Set x-axis range to prevent over-extension like in the reference image
+    ax.set_xlim(-0.5, len(seqdata.cleaned_time) - 0.5)
 
     # Enhance aesthetics
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('gray')
+    ax.spines['bottom'].set_color('gray')
     ax.spines['left'].set_linewidth(0.7)
     ax.spines['bottom'].set_linewidth(0.7)
+    
+    # Move spines slightly away from the plot area for better aesthetics (same as index plot)
+    ax.spines['left'].set_position(('outward', 5))
+    ax.spines['bottom'].set_position(('outward', 5))
+    
+    # Ensure ticks are visible and styled consistently
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major')
+    ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
 
     # Set y-axis limits from 0 to 100%
     ax.set_ylim(0, 100)
