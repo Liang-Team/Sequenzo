@@ -42,7 +42,6 @@ csv_files = [
 ]
 
 U_files = [
-
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
@@ -51,9 +50,9 @@ U_files = [
     # 'synthetic_detailed_U25_N40000.csv',
     # 'synthetic_detailed_U25_N45000.csv',
     # 'synthetic_detailed_U25_N50000.csv',
-    'synthetic_detailed_U50_N500.csv',
+    # 'synthetic_detailed_U50_N500.csv',
     # 'synthetic_detailed_U50_N1000.csv',
-    # 'synthetic_detailed_U50_N1500.csv',
+    'synthetic_detailed_U50_N1500.csv',
     # 'synthetic_detailed_U50_N2000.csv',
     # 'synthetic_detailed_U50_N2500.csv',
     # 'synthetic_detailed_U50_N3000.csv',
