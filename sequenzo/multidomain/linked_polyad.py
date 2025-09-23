@@ -151,7 +151,6 @@ def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
     merged_seqdata = SequenceData(
         data=data_concat,
         time=seqlist[0].time,
-        time_type="age",
         states=[i for i in range(1, len(seqlist[0].states) + 1)],
         labels=labels,
         id_col="__id__"

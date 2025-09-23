@@ -663,7 +663,7 @@ if __name__ == '__main__':
     df = pd.read_csv("D:/country_co2_emissions_missing.csv")
     _time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
+    sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
     om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
 

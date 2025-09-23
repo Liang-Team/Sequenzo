@@ -130,7 +130,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             with redirect_stdout(fnull):
                 states = np.arange(1, len(seqdata.states) + 1).tolist()
                 data_subset = SequenceData(data_subset,
-                                           time_type=seqdata.time_type,
                                            time=seqdata.time,
                                            states=states)
                 dist_args['seqdata'] = data_subset
@@ -165,7 +164,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                 with redirect_stdout(fnull):
                     states = np.arange(1, len(seqdata.states) + 1).tolist()
                     agseqdata = SequenceData(agseqdata,
-                                             time_type=seqdata.time_type,
                                              time=seqdata.time,
                                              states=states)
                     dist_args['seqdata'] = agseqdata
@@ -445,7 +443,7 @@ if __name__ == '__main__':
     time = list(df.columns)[4:]
     states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
     sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-                                 time_type="age", time=time, id_col="worker_id", states=states)
+                                 time=time, id_col="worker_id", states=states)
 
     # ===============================
     #             broad

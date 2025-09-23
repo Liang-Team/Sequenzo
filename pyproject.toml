@@ -4,7 +4,7 @@ requires = [
     "wheel>=0.40.0",
     "pybind11>=2.10.0",
     "cython>=0.29.21",
-    "numpy>=1.19.5,<2.0"
+    "numpy>=1.19.5,<2.5"
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
@@ -31,7 +31,7 @@ classifiers = [
 ]
 version = "0.1.16"
 dependencies = [
-    "numpy>=1.19.5,<2.0",
+    "numpy>=1.19.5,<2.5",
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
