@@ -137,8 +137,10 @@ def combine_plot_with_legend(
     # Paste main image at top
     combined_img.paste(main_img, (0, 0))
 
-    # Center and paste legend below main image with padding
-    legend_x = (combined_width - legend_img.width) // 2
+    # Center legend relative to main image width (not combined width)
+    legend_x = (main_img.width - legend_img.width) // 2
+    # Ensure legend doesn't go outside the combined image bounds
+    legend_x = max(0, min(legend_x, combined_width - legend_img.width))
     combined_img.paste(legend_img, (legend_x, main_img.height + padding))
 
     # Save if output path is provided

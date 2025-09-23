@@ -289,6 +289,8 @@ def sort_sequences_by_method(seqdata, method="unsorted", mask=None, distance_mat
 
 
 def plot_sequence_index(seqdata: SequenceData,
+                        show_by_category=None,
+                        category_labels=None,
                         id_group_df=None,
                         categories=None,
                         sort_by="lexicographic",
@@ -319,8 +321,12 @@ def plot_sequence_index(seqdata: SequenceData,
     with different sorting options matching R's TraMineR functionality.
 
     :param seqdata: SequenceData object containing sequence information
-    :param id_group_df: DataFrame with entity IDs and group information (if None, creates a single plot)
-    :param categories: Column name in id_group_df that contains grouping information
+    :param show_by_category: (str, optional) Simple way to create grouped plots. 
+                            Specify the column name from the original data (e.g., "sex", "education").
+                            This will automatically create separate plots for each category.
+    :param category_labels: (dict, optional) Custom labels for category values. 
+                           Example: {0: "Female", 1: "Male"} or {"low": "Low Education", "high": "High Education"}.
+                           If not provided, will use original values or auto-generate readable labels.
     :param sort_by: Sorting method for sequences within groups:
         - 'unsorted' or 'none': Keep original order (R TraMineR default)
         - 'lexicographic': Sort sequences lexicographically
@@ -386,6 +392,43 @@ def plot_sequence_index(seqdata: SequenceData,
     
     actual_figsize = style_sizes[plot_style]
     
+    # Handle the new simplified API: show_by_category
+    if show_by_category is not None:
+        # Validate that the column exists in the original data
+        if show_by_category not in seqdata.data.columns:
+            available_cols = [col for col in seqdata.data.columns if col not in seqdata.time and col != seqdata.id_col]
+            raise ValueError(
+                f"Column '{show_by_category}' not found in the data. "
+                f"Available columns for grouping: {available_cols}"
+            )
+        
+        # Automatically create id_group_df and categories from the simplified API
+        id_group_df = seqdata.data[[seqdata.id_col, show_by_category]].copy()
+        id_group_df.columns = ['Entity ID', 'Category']
+        categories = 'Category'
+        
+        # Handle category labels - flexible and user-controllable
+        unique_values = seqdata.data[show_by_category].unique()
+        
+        if category_labels is not None:
+            # User provided custom labels - use them
+            missing_keys = set(unique_values) - set(category_labels.keys())
+            if missing_keys:
+                raise ValueError(
+                    f"category_labels missing mappings for values: {missing_keys}. "
+                    f"Please provide labels for all unique values in '{show_by_category}': {sorted(unique_values)}"
+                )
+            id_group_df['Category'] = id_group_df['Category'].map(category_labels)
+        else:
+            # No custom labels provided - use smart defaults
+            if all(isinstance(v, (int, float, np.integer, np.floating)) and not pd.isna(v) for v in unique_values):
+                # Numeric values - keep as is (user can provide category_labels if they want custom names)
+                pass
+            # For string/categorical values, keep original values
+            # This handles cases where users already have meaningful labels like "Male"/"Female"
+        
+        print(f"[>] Creating grouped plots by '{show_by_category}' with {len(unique_values)} categories")
+    
     # If no grouping information, create a single plot
     if id_group_df is None or categories is None:
         return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids)
@@ -427,7 +470,7 @@ def plot_sequence_index(seqdata: SequenceData,
         nrows=nrows,
         ncols=ncols,
         figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
-        gridspec_kw={'wspace': 0.2, 'hspace': 0.3}
+        gridspec_kw={'wspace': 0.15, 'hspace': 0.25}  # Reduced spacing for tighter layout
     )
     axes = axes.flatten()
 
@@ -591,8 +634,8 @@ def plot_sequence_index(seqdata: SequenceData,
     if title:
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
-    # Adjust layout to remove tight_layout warning
-    fig.subplots_adjust(wspace=0.2, hspace=0.3, bottom=0.1, top=0.9, right=0.9)
+    # Adjust layout to remove tight_layout warning and eliminate extra right space
+    fig.subplots_adjust(wspace=0.15, hspace=0.25, bottom=0.1, top=0.9, right=0.98, left=0.08)
 
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
