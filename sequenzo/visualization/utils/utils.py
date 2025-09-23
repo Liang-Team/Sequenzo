@@ -137,8 +137,10 @@ def combine_plot_with_legend(
     # Paste main image at top
     combined_img.paste(main_img, (0, 0))
 
-    # Center and paste legend below main image with padding
-    legend_x = (combined_width - legend_img.width) // 2
+    # Center legend relative to main image width (not combined width)
+    legend_x = (main_img.width - legend_img.width) // 2
+    # Ensure legend doesn't go outside the combined image bounds
+    legend_x = max(0, min(legend_x, combined_width - legend_img.width))
     combined_img.paste(legend_img, (legend_x, main_img.height + padding))
 
     # Save if output path is provided
@@ -231,7 +233,10 @@ def determine_layout(num_items: int,
 
     # Automatic layout
     if layout == 'column':
-        ncols = 3
+        # Use up to 3 columns, but never exceed the number of items.
+        # This avoids allocating invisible (but space-occupying) subplots
+        # that cause extra blank space on the right when num_items < 3.
+        ncols = int(min(3, max(1, num_items)))
         nrows = (num_items + ncols - 1) // ncols
     elif layout == 'grid':
         ncols = int(np.ceil(np.sqrt(num_items)))
