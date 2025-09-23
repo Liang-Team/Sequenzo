@@ -664,7 +664,7 @@ if __name__ == '__main__':
     _time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OMspell", sm="INDELSLOG", indel="auto")
 
 
     # ===============================

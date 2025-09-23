@@ -39,9 +39,9 @@ def seqstatd(seqdata: SequenceData,
     # Retrieve the states, shape and colors
     states = seqdata.states.copy()
     statl = range(1, len(states) + 1)
-    nbstates = len(statl)
+    number_states = len(statl)
 
-    seql = seqdata.seqdata.shape[1]
+    number_seq = seqdata.seqdata.shape[1]
 
     cpal = seqdata.custom_colors
 
@@ -50,7 +50,7 @@ def seqstatd(seqdata: SequenceData,
     #     statl.append(seqdata.missing_value)
     #     col.append(seqdata.missing_color)
 
-    sd = pd.DataFrame(np.zeros((nbstates, seql)), index=states, columns=seqdata.seqdata.columns)
+    sd = pd.DataFrame(np.zeros((number_states, number_seq)), index=states, columns=seqdata.seqdata.columns)
 
     # Weights
     weights = seqdata.weights if seqdata.weights is not None else np.ones(seqdata.seqdata.shape[0])
@@ -61,8 +61,8 @@ def seqstatd(seqdata: SequenceData,
     if np.all(weights == 1):
         weighted = False
 
-    for i in range(nbstates):
-        for j in range(seql):
+    for i in range(number_states):
+        for j in range(number_seq):
             sd.iloc[i, j] = np.sum(weights[(seqdata.seqdata.iloc[:, j] == statl[i]).values])
 
     N = sd.sum(axis=0)
@@ -72,7 +72,7 @@ def seqstatd(seqdata: SequenceData,
 
     # Maximum entropy is the entropy of the alphabet
     if norm:
-        E_max = entropy(np.ones(nbstates) / nbstates)
+        E_max = entropy(np.ones(number_states) / number_states)
         E = E / E_max
 
     res = {
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
+    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
     res = seqstatd(sequence_data)
 
     # ===============================
