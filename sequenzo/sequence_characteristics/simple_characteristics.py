@@ -9,6 +9,10 @@ import numpy as np
 import pandas as pd
 from typing import Union, List
 
+from sequenzo.dissimilarity_measures.utils.seqdss import seqdss
+from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
+from sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
+
 
 def get_subsequences_in_single_sequence(x: np.ndarray, nbstat: int, statlist: List, void=None, nr=None, with_missing: bool = False) -> int:
     """
@@ -191,7 +195,7 @@ def get_subsequences_all_sequences(seqdata, dss: bool = True, with_missing: bool
     return result_df
 
 
-def get_number_of_transitions(seqdata) -> pd.DataFrame:
+def get_number_of_transitions(seqdata, norm=False, pwight=False) -> pd.DataFrame:
     """
     Calculate how many state changes occur in each sequence.
     
@@ -201,6 +205,10 @@ def get_number_of_transitions(seqdata) -> pd.DataFrame:
     
     Args:
         seqdata: SequenceData object or pandas DataFrame containing your sequence data
+        norm:    If set as TRUE, the number of transitions is divided by its theoretical maximum, length of the sequence minus 1.
+                 When the length of the sequence is 1, the normalized value is set as 0.
+        pwight:  If set as TRUE, return count of transitions weighted
+                 by their probability to not occur to give higher weights to rare transitions.
         
     Returns:
         pd.DataFrame: Results table with one column 'Transitions' showing the number of 
@@ -223,34 +231,38 @@ def get_number_of_transitions(seqdata) -> pd.DataFrame:
         between valid sequence elements. Use this to measure sequence volatility.
     """
     # Check if input is a SequenceData object
-    if hasattr(seqdata, 'seqdata'):
-        sequences = seqdata.seqdata
-        ids = sequences.index
-    elif isinstance(seqdata, pd.DataFrame):
-        sequences = seqdata
-        ids = sequences.index
+    if not hasattr(seqdata, 'seqdata'):
+        raise ValueError("[!] seqdata must be a SequenceData object, see SequenceData function to create one.")
+
+    dss = seqdss(seqdata)
+    dss_length = seqlength(dss)
+    number_seq = seqdata.seqdata.shape[0]
+
+    if pwight:
+        # 返回的是每个id序列在每个时间点下的各状态不发生概率的累加和
+        tr = get_sm_trate_substitution_cost_matrix(seqdata)
+        dss = dss + 1
+        trans = np.zeros((number_seq, 1))
+
+        for i in range(number_seq):
+            if dss_length.iloc[i, 0] > 1:
+                for j in range(1, dss_length.iloc[i, 0]):
+                    state_from = dss.iloc[i, j-1]
+                    state_to = dss.iloc[i, j]
+                    trans[i, 0] += tr[state_from, state_to]
+
     else:
-        raise ValueError("seqdata must be a SequenceData object or pandas DataFrame")
-    
-    results = []
-    for idx in sequences.index:
-        seq_values = sequences.loc[idx].values
-        
-        # Remove NaN values
-        valid_values = seq_values[~pd.isna(seq_values)]
-        
-        if len(valid_values) <= 1:
-            transitions = 0
-        else:
-            # Count transitions (state changes)
-            transitions = 0
-            for i in range(1, len(valid_values)):
-                if valid_values[i] != valid_values[i-1]:
-                    transitions += 1
-        
-        results.append(transitions)
-    
-    # Create result DataFrame
-    result_df = pd.DataFrame(results, columns=['Transitions'], index=ids)
-    
-    return result_df
+        # 返回的是每个id序列的转变次数，与上面的例子一致
+        trans = dss_length - 1
+        if any(dss_length==0):
+            trans[dss_length==0] = 0
+
+    if norm:
+        seq_length = seqlength(seqdata)
+        trans = trans / (seq_length-1)
+        if any(seq_length<=1):
+            trans[seq_length<=1] = 0
+
+    trans = pd.DataFrame(trans, index=seqdata.seqdata.index, columns=['Transitions'])
+
+    return trans
