@@ -1,0 +1,263 @@
+%-*- TeX -*- -*- EN -*-
+%input "C:\Documents and Settings\Matthias\Application Data\MiKTeX\2.9\bibtex\bib\stat.bib"
+%input "C:\Documents and Settings\Matthias\Application Data\MiKTeX\2.9\bibtex\bib\bibliomat.bib"
+%input "C:\Users\Matthias-Util\AppData\Local\MiKTeX\2.9\bibtex\bib\stat.bib"
+%input "C:\Users\Matthias-Util\AppData\Local\MiKTeX\2.9\bibtex\bib\bibliomat.bib"
+
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{WeightedCluster Preview}
+%\VignetteKeywords{Clustering, Weights, state sequences, Optimal matching}
+\documentclass[a4paper]{article}
+\usepackage{hyperref}
+\usepackage{a4}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% declarations for jss.cls %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{ae}
+%% almost as usual
+\author{\pkg{Matthias Studer}\\ Institute for Demographic and Life Course Studies\\ University of Geneva\\matthias.studer@unige.ch}
+\title{\pkg{WeightedCluster} Preview}
+\date{}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{rotating}
+\usepackage{varioref}
+\usepackage{array}
+%\usepackage{subfigure}
+\usepackage{afterpage}
+\usepackage{booktabs}
+\usepackage[svgnames]{xcolor}
+\usepackage[authoryear]{natbib}
+\usepackage{url}
+
+\usepackage[absolute,overlay]{textpos}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{calc}
+\makeatletter
+\newcommand\code{\bgroup\@makeother\_\@makeother\~\@makeother\$\@codex}
+\def\@codex#1{{\normalfont\ttfamily\hyphenchar\font=-1 #1}\egroup}
+\makeatother
+%%\let\code=\texttt
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+\newcommand{\Com}[1]{\code{#1}}
+\newcommand{\Comt}[1]{\code{#1}}
+\newcommand{\File}[1]{\texttt{#1}}
+\newcommand{\Filet}[1]{\texttt{#1}}
+\newcommand{\Dataset}[1]{\code{#1}}
+\newcommand{\Datasett}[1]{\code{#1}} % for dataset without index reference
+\newcommand*\guil[1]{``#1''}
+
+\newlength\TableWidth
+
+\graphicspath{
+	{./graphics/}
+	}
+
+    \usepackage{tikz}
+
+\newlength{\RoundedBoxWidth}
+    \newsavebox{\GrayRoundedBox}
+    \newenvironment{GrayBox}[1][\dimexpr\textwidth-4.5ex]%
+       {\setlength{\RoundedBoxWidth}{\dimexpr#1}
+        \begin{lrbox}{\GrayRoundedBox}
+           \begin{minipage}{\RoundedBoxWidth}}%
+       {   \end{minipage}
+        \end{lrbox}
+        \begin{center}
+        \begin{tikzpicture}%
+           \draw node[draw=black,fill=black!10,rounded corners,%
+                 inner sep=2ex,text width=\RoundedBoxWidth]%
+                 {\usebox{\GrayRoundedBox}};
+        \end{tikzpicture}
+        \end{center}}
+
+
+
+\setcounter{topnumber}{4}          % \setcounter{topnumber}{2}
+\def\topfraction{1}                % \def\topfraction{.7}
+\setcounter{bottomnumber}{2}       % \setcounter{bottomnumber}{1}
+\def\bottomfraction{1}             % \def\bottomfraction{.3}
+\setcounter{totalnumber}{5}        % \setcounter{totalnumber}{3}
+\def\textfraction{0}               % \def\textfraction{.2}
+\def\floatpagefraction{1}          % \def\floatpagefraction{.5}
+
+%% preliminary R commands
+<<preliminary, echo=FALSE, results="hide", message=FALSE, fig.keep="none">>=
+options(width=60, prompt="R> ", continue="     ", useFancyQuotes=FALSE, digits=3)
+library(WeightedCluster)
+library(TraMineR)
+library(knitr)
+hook_setwidth <- local({
+    default.width <- 0
+	function(before, options, envir){
+		if(before) {
+            default.width <<- getOption("width")
+			options(width = options$consolew)
+		} else{
+			options(width = default.width)
+		}
+		return(NULL)
+	}
+})
+knit_hooks$set(consolew =hook_setwidth)
+## knit_hooks$set(crop =hook_pdfcrop)
+knit_hooks$set(small.mar = function(before, options, envir) {
+    if (before)  par(mar=c(2.1, 4.1, 4.1, 1.1))  # smaller margin on top and right
+})
+opts_chunk$set(message=FALSE, prompt=TRUE, dev="pdf", echo=TRUE, comment=NA, small.mar=TRUE, fig.align="center", fig.path="graphics/WCP-", size="small")
+## knit_hooks$set(error = function(x, options) stop(x))
+##knit_hooks$set(warning = function(x, options) stop("Warnings: ", x))
+@
+
+
+\bibliographystyle{jss}
+
+\begin{document}
+
+\setkeys{Gin}{width=.9\linewidth}
+\maketitle
+\section{Installation}
+Some functions of WeightedCluster require the free GraphViz program \citep{Gansner99anopen}. It needs to be installed before launching R for these functions to work properly. You can download it here: \url{http:\\www.graphviz.org}.
+
+The \pkg{WeightedCluster} library can be installed and loaded using the following commands:
+
+<<install, echo=TRUE, results="hide", eval=FALSE, fig.keep="none">>=
+install.packages("WeightedCluster")
+library(WeightedCluster)
+@
+
+
+\section{An illustrative example}
+
+In this preview, we use the dataset from \citet{McVicarAnyadike2002JRSSa} which is distributed with the \pkg{TraMineR} library \citep{GabadinhoRitschardMullerStuder2011JSS}. This dataset contains sequences of school-to-work transitions in Northern Ireland. The dataset is loaded using :
+
+<<dataload, echo=TRUE, results="hide", fig.keep="none">>=
+data(mvad)
+@
+
+
+\code{wcAggregateCases} allows us to identify and aggregate identical state sequences (which are in columns \code{17:86}). We print out the basic information about the aggregation and create the \code{uniqueMvad} object which contains only unique sequences.
+
+<<wcagg, echo=TRUE, fig.keep="none">>=
+aggMvad <- wcAggregateCases(mvad[, 17:86])
+print(aggMvad)
+uniqueMvad <- mvad[aggMvad$aggIndex, 17:86]
+@
+
+Using the unique sequence dataset, we build a sequence object and compute dissimilarities between sequences \citep[see][for more on this topics]{GabadinhoRitschardMullerStuder2011JSS}. The vector \code{aggMvad\$aggWeights} store the number of replication of each unique sequence. It is thus used as unique sequence weight.
+
+<<wcagg-diss, echo=TRUE, fig.keep="none">>=
+mvad.seq <- seqdef(uniqueMvad, weights=aggMvad$aggWeights)
+## Computing Hamming distance between sequence
+diss <- seqdist(mvad.seq, method="HAM")
+@
+
+\section{Hierarchical clustering}
+We can regroup similar sequences using hierarchical clustering with \code{"average"} method using weights (\code{aggMvad\$aggWeights}) (any method may be used).
+
+<<hierclust, echo=TRUE, consolew=50, fig.keep="none">>=
+averageClust <- hclust(as.dist(diss), method="average", members=aggMvad$aggWeights)
+@
+
+The agglomeration schedule can be represented graphically as a tree using:
+
+<<avgtreecomputeecho, echo=TRUE, eval=FALSE, fig.keep="none">>=
+averageTree <- as.seqtree(averageClust, seqdata=mvad.seq, diss=diss, ncluster=6)
+seqtreedisplay(averageTree, type="d", border=NA,  showdepth=TRUE)
+@
+
+%<<avgtreecompute, echo=FALSE, eval=TRUE>>=
+%averageTree <- as.seqtree(averageClust, seqdata=mvad.seq, diss=diss, ncluster=6)
+%seqtreedisplay(averageTree, type="d", border=NA,  showdepth=TRUE, showtree=FALSE, filename="previewhctree.png")
+%@
+
+\begin{center}
+\includegraphics[width=0.5\linewidth]{previewhctree}
+\end{center}
+
+\section{Cluster quality}
+We can automatically compute several clustering quality measures (presented in table~\ref{tb_cqm}) for a range of numbers of groups: 2 until ncluster=10.
+<<avgqualcompute, echo=TRUE, consolew=40, fig.keep="none">>=
+avgClustQual <- as.clustrange(averageClust, diss, weights=aggMvad$aggWeights, ncluster=10)
+@
+
+\begin{table}[htb]\centering
+\caption{Cluster Quality Measures Available in WeightedCluster}\label{tb_cqm}
+{\renewcommand\arraystretch{1.5}\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{2cm}lll>{\raggedright\arraybackslash}p{5.2cm}}
+\hline
+\hline
+Name   & Abrv. & Range & Min/Max & Interpretation\\
+\hline
+Point Biserial Correlation & PBC & $[-1;1]$ & Max & Capacity of the clustering to reproduce the original distance matrix.\\
+Hubert's Gamma & HG & $[-1;1]$ & Max & Capacity of the clustering to reproduce the original distance matrix (Order of magnitude).\\
+Hubert's Somers D & HGSD & $[-1;1]$ & Max & Same as above, taking into account ties in the distance matrix.\\
+Hubert's C & HC & $[0;1]$ & \textbf{Min} & Gap between the current quality of clustering and the best possible quality for this distance matrix and number of groups.\\
+Average Silhouette Width & ASW & $[-1;1]$ & Max & Coherence of the assignments. A high coherence indicates high between groups distances and high intra group homogeneity.\\
+Calinski-Harabasz index & CH & $[0;+\infty[$ & Max & Pseudo F computed from the distances.\\
+Calinski-Harabasz index & CHsq& $[0;+\infty[$ & Max & Idem, using the \textit{squared} distances.\\
+Pseudo $R^2$ & R2 & $[0;1]$ & Max & Share of the discrepancy explained by the clustering.\\
+Pseudo $R^2$ & R2sq & $[0;1]$ & Max & Idem, using the \textit{squared} distances.\\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+The results can be plotted and used to identify the best number of groups (you can also print them).
+
+<<avgqualplot, echo=TRUE, fig.height=3, fig.width=9>>=
+plot(avgClustQual)
+@
+
+It is usually easier to choose the number of groups based on standardized scores. Here, five groups seems to be a good solution.
+
+<<avgqualplotnorm, echo=TRUE, fig.height=3, fig.width=9>>=
+plot(avgClustQual, norm="zscore")
+@
+
+Alternatively, we can retrieve the two best solutions according to each quality measure:
+
+<<avgqualprint, echo=TRUE, fig.keep="none">>=
+summary(avgClustQual, max.rank=2)
+@
+
+\section{PAM clustering}
+
+The \pkg{WeightedCluster} library also provides an optimized PAM algorithm. We can automatically compute PAM cluster for a range of numbers of groups using:
+
+<<pamcompute, echo=TRUE, consolew=40, fig.keep="none">>=
+pamClustRange <- wcKMedRange(diss, kvals=2:10, weights=aggMvad$aggWeights)
+@
+
+As before, we can plot the quality measures of each solution (not shown here) or retrieve the two best solutions according to each quality measure using:
+
+<<pamqualprint, echo=TRUE, fig.keep="none">>=
+summary(pamClustRange, max.rank=2)
+@
+
+\section{Keeping a solution}
+
+The objets returned by \code{as.clustrange} or \code{wcKMedRange} contain a \code{data.frame} with cluster membership (named \code{clustering}). For instance, we can plot the sequences according to PAM clustering in 5 groups using:
+
+<<mppamplot, fig.height=6, fig.width=9>>=
+seqdplot(mvad.seq, group=pamClustRange$clustering$cluster5, border=NA)
+@
+
+%\includegraphics[width=.8\linewidth]{graphics/WCP-pamclust5}
+
+\section{Disaggregating data}
+
+Once the sequences have been regrouped, it is often useful to ``disaggregate'' the data. For instance, we may want to add the cluster membership in the original data set (i.e. before unique sequences were identified). This allows us to cross-tabulate cluster membership and father unemployment (variable \code{funemp}). This operation is performed using \code{aggMvad\$disaggIndex} which stores the index of each unique sequence in the original dataset.
+
+<<mvadcluster, echo=TRUE, fig.keep="none">>=
+uniqueCluster5 <- avgClustQual$clustering$cluster5
+mvad$cluster5 <- uniqueCluster5[aggMvad$disaggIndex]
+table(mvad$funemp, mvad$cluster5)
+@
+
+\bibliography{manual}
+
+\end{document}

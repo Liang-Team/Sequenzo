@@ -1,0 +1,144 @@
+---
+title: 'Short R Tutorial: Validating Sequence Analysis Typologies To be Used in Subsequent Regression'
+author: "Matthias Studer"
+output: rmarkdown::html_vignette
+bibliography: [manual.bib,packages.bib]
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Short R Tutorial: Validating Sequence Analysis Typologies To be Used in Subsequent Regression}
+  %\VignetteEncoding{UTF-8}
+    
+---
+
+
+# Introduction 
+
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "secs")
+      # return a character string to show the time
+      paste("Time for this code chunk to run:", round(res,
+        2), "seconds")
+    }
+  }
+}))
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"), time_it=TRUE)
+```
+
+This document provides a very quick introduction to the `R` code needed to estimate the quality of a typology in a subsequent regression or when the relationship between the typology and the covariate is of key interest. Readers interested in the methods and the exact interpretation of the results are referred to:
+
+- Unterlerchner, L., Studer, M. & Gomensoro, A. (2023). Back to the Features. Investigating the Relationship Between Educational Pathways and Income Using Sequence Analysis and Feature Extraction and Selection Approach. *Swiss Journal of Sociology, 49(2)*, 417–446. https://doi.org/10.2478/sjs-2023-0021
+
+You are kindly asked to cite the above reference if you use the methods presented in this document. 
+
+Let's start by setting the seed for reproducible results.
+
+
+```{r, message=FALSE}
+set.seed(1)
+```
+
+# Creating the State Sequence Object
+For this example, we use the `mvad` dataset. Let's start with the creation of the state sequence object.
+
+```{r, message=FALSE}
+## Loading the TraMineR library
+library(TraMineR)
+## Loading the data
+data(mvad)
+
+## State properties
+mvad.alphabet <- c("employment", "FE", "HE", "joblessness", "school", "training")
+mvad.lab <- c("employment", "further education", "higher education", "joblessness", "school", "training")
+mvad.shortlab <- c("EM","FE","HE","JL","SC","TR")
+
+## Creating the state sequence object
+mvad.seq <- seqdef(mvad, 17:86, alphabet = mvad.alphabet, states = mvad.shortlab, labels = mvad.lab, xtstep = 6)
+
+```
+
+
+# Creating the typology
+
+We will now create a typology using cluster analysis. Readers interested in more detail are referred to the `WeightedCluster` library manual (also available as a vignette), which goes into the details of the creation and computation of cluster quality measures. 
+
+We start by computing dissimilarities with the `seqdist` function using the Hamming distance. We then use Ward clustering to create a typology of the trajectories. For this step, we recommend the use of the `fastcluster` library [@R-fastcluster], which considerably speed up the computations.
+
+
+```{r, cache=TRUE, message=FALSE}
+## Using fastcluster for hierarchical clustering
+library(fastcluster)
+## Distance computation
+diss <- seqdist(mvad.seq, method="LCS")
+## Hierarchical clustering
+hc <- hclust(as.dist(diss), method="ward.D")
+```
+
+We can now compute several cluster quality indices using `as.clustrange` function from two to ten groups.
+
+```{r, message=FALSE}
+# Loading the WeightedCluster library
+library(WeightedCluster)
+# Computing cluster quality measures.
+clustqual <- as.clustrange(hc, diss=diss, ncluster=10)
+clustqual
+```
+
+# The `clustassoc` function
+
+In this example, we will focus on the association between father unemployment status (`funemp` variable) and our school-to-work trajectories. The `clustassoc` function provides several indicators of the quality of typology to study this association. 
+     
+     
+The function takes a `clustrange` object as the first argument. The `diss` argument specifies the distance matrix used for clustering, `covar` the covariate of association of interest, and `weights` an optional case weights vector.
+
+
+```{r}
+cla <- clustassoc(clustqual, diss=diss, covar=mvad$funemp)
+cla
+```
+The resulting object presents three indicators. The `Unaccounted` column shows the share of the direct association between the trajectories and the covariates that is \alert{not accounted for} by the typology. This computation are based on the discrepancy analysis framework [@StuderRitschardGabadinhoMuller2011SMR]. A low value means that the typology carries most of the information that is relevant to study the association between our covariate and the trajectories.
+
+
+The `Remaining` column presents the share of the overall variability of the trajectories that is \alert{not accounted for} by the typology. A low value indicates that there is no variation left not explained by the typology. Warning, this is usually a very low value. The value presented in the "No clustering" row (the first) is equivalent to the pseudo-$R^2$ of a discrepancy analysis between the trajectories and the covariates. 
+
+The `BIC` column presents the Bayesian Information Criterion for the association between the typology and the covariate (again the lower the better). While the first column provides the most reliable information, the `BIC` might be useful when parcimony is of key interest. 
+
+The general idea is to select a cluster solution with low values on `Unaccounted` and `BIC` (only if relevant).
+
+The results can be plotted to make it easier to find the minimum. 
+
+```{r}
+plot(cla, main="Unaccounted")
+```
+
+
+According to the plot, at least 6 groups are required. However, around one fifth of the association is left un-reproduced by the clustering. It might be interesting to compare the 5 and 6 clusters solutions to better understand the association.
+
+```{r, fig.width=8, fig.height=8}
+seqdplot(mvad.seq, group=clustqual$clustering$cluster5, border=NA)
+```
+
+
+```{r, fig.width=8, fig.height=8}
+seqdplot(mvad.seq, group=clustqual$clustering$cluster6, border=NA)
+```
+
+We can notice that the 6 cluster solutions contains a new joblessness cluster, which is found to be important to study the association between father unemployment and son school-to-work trajectories. 
+
+
+The presented might lead to different recommendations than the usual cluster quality indices, because it focuses on a relationship with a covariate. The method often suggests a higher number of groups. 
+
+
+```{r, include=FALSE}
+knitr::write_bib(file = 'packages.bib')
+```
+
+
+# References

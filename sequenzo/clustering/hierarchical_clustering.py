@@ -607,33 +607,35 @@ class ClusterQuality:
         """
         Compute clustering quality scores using C++ implementation (matches R WeightedCluster).
         """
-        print("[>] Using C++ implementation for cluster quality computation...")
-        
         # Convert matrix to format expected by C++
         # Ensure we have a full square matrix
         if self.matrix.shape[0] != self.matrix.shape[1]:
             raise ValueError("Matrix must be square for C++ implementation")
         
+        # Convert to condensed once to reduce per-call overhead in C++
+        condensed = squareform(self.matrix)
+
         for k in range(2, self.max_clusters + 1):
             # Get cluster labels (fcluster returns 1-based labels, which C++ expects)
             labels = fcluster(self.linkage_matrix, k, criterion="maxclust")
             
             try:
-                # Call C++ function - it expects 1-based cluster labels
-                result = clustering_c_code.cluster_quality(
-                    self.matrix.astype(np.float64, copy=False),
+                # Call C++ function (condensed) - expects 1-based labels
+                result = clustering_c_code.cluster_quality_condensed(
+                    condensed.astype(np.float64, copy=False),
                     labels.astype(np.int32, copy=False),
                     self.weights.astype(np.float64, copy=False),
+                    self.matrix.shape[0],
                     k
                 )
                 
-                # Extract results from C++ (mapping to our score names)
+                # Extract results from C++ (mapping to match R WeightedCluster exactly)
                 self.scores["ASW"].append(result.get("ASW", np.nan))
                 self.scores["ASWw"].append(result.get("ASWw", np.nan))
                 self.scores["HG"].append(result.get("HG", np.nan))
-                self.scores["PBC"].append(result.get("PBC", np.nan))  # Note: PBC mapping might need adjustment
-                self.scores["CH"].append(result.get("CH", np.nan))
-                self.scores["R2"].append(result.get("R2", np.nan))
+                self.scores["PBC"].append(result.get("PBC", np.nan))  # PBC uses HPG (Pearson correlation)
+                self.scores["CH"].append(result.get("CH", np.nan))    # Use CH (F statistic)
+                self.scores["R2"].append(result.get("R2", np.nan))    # Use R2 (R statistic)
                 self.scores["HC"].append(result.get("HC", np.nan))
                 
             except Exception as e:
@@ -686,46 +688,62 @@ class ClusterQuality:
         :return: Pandas DataFrame summarizing the optimal number of clusters (N groups),
                  the corresponding metric values (stat), and normalized values (z-score and min-max normalization).
         """
-        # Temporarily store original scores to avoid overwriting during normalization
-        original_scores = self.scores.copy()
+        # Deep copy original scores to avoid overwriting during normalization
+        original_scores = {}
+        for metric, values in self.scores.items():
+            original_scores[metric] = np.array(values).copy()
 
-        # Apply z-score normalization
-        self._normalize_scores(method="zscore")
-        zscore_normalized = {metric: np.array(values) for metric, values in self.scores.items()}
+        # Create temporary copy for z-score normalization
+        temp_scores = {}
+        for metric, values in original_scores.items():
+            temp_scores[metric] = values.copy()
+        
+        # Apply z-score normalization to temp copy
+        zscore_normalized = {}
+        for metric in temp_scores:
+            values = temp_scores[metric]
+            mean_val = np.nanmean(values)
+            std_val = np.nanstd(values)
+            if std_val > 0:
+                zscore_normalized[metric] = (values - mean_val) / std_val
+            else:
+                zscore_normalized[metric] = values.copy()
 
-        # Apply min-max normalization
-        self.scores = original_scores.copy()  # Restore original scores
-        self._normalize_scores(method="range")
-        minmax_normalized = {metric: np.array(values) for metric, values in self.scores.items()}
-
-        # Restore original scores for safety
-        self.scores = original_scores
+        # Apply min-max normalization to another temp copy
+        minmax_normalized = {}
+        for metric in original_scores:
+            values = original_scores[metric].copy()
+            min_val = np.nanmin(values)
+            max_val = np.nanmax(values)
+            if max_val > min_val:
+                minmax_normalized[metric] = (values - min_val) / (max_val - min_val)
+            else:
+                minmax_normalized[metric] = values.copy()
 
         # Generate summary table
         summary = {
             "Metric": [],
             "Opt. Clusters": [],  # Abbreviated from "Optimal Clusters"
-            "Opt. Value": [],  # Abbreviated from "Optimal Value"
-            "Z-Score Norm.": [],  # Abbreviated from "Z-Score Normalized Value"
-            "Min-Max Norm.": []  # Abbreviated from "Min-Max Normalized Value"
+            "Opt. Value": [],  # Raw optimal value (not normalized)
+            "Z-Score Norm.": [],  # Z-Score normalized optimal value
+            "Min-Max Norm.": []  # Min-Max normalized optimal value
         }
 
         # Get maximum value and its position from original scores
         for metric, values in original_scores.items():
-            vals = np.array(values)
-            if np.all(np.isnan(vals)):
-                optimal_k, max_value, z_val, mm_val = np.nan, np.nan, np.nan, np.nan
+            if np.all(np.isnan(values)):
+                optimal_k, raw_value, z_val, mm_val = np.nan, np.nan, np.nan, np.nan
             else:
-                pos = np.nanargmax(vals)
+                pos = np.nanargmax(values)
                 optimal_k = pos + 2
-                max_value = vals[pos]
+                raw_value = values[pos]  # Use raw original value
                 z_val = zscore_normalized[metric][pos]
                 mm_val = minmax_normalized[metric][pos]
 
             # Add data to the summary table
             summary["Metric"].append(metric)
             summary["Opt. Clusters"].append(optimal_k)
-            summary["Opt. Value"].append(max_value)
+            summary["Opt. Value"].append(raw_value)  # Raw value, not normalized
             summary["Z-Score Norm."].append(z_val)
             summary["Min-Max Norm."].append(mm_val)
 

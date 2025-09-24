@@ -1,0 +1,77 @@
+import(TraMineR, cluster)
+importFrom(utils, packageDescription, packageVersion)
+importFrom(RColorBrewer, brewer.pal)
+importFrom("graphics", "par", "plot", "legend", "lines", "polygon", "layout")
+importFrom("nnet", "multinom")
+importFrom("grDevices", "adjustcolor", "gray")
+importFrom("stats", "var", "cutree", "median", "qnorm", "quantile", "xtabs", "aggregate", "as.dist", "as.formula", "runif", "density", "sd", "BIC", "lm")
+importFrom("graphics", "barplot", "boxplot", "abline", "segments", "text")
+importFrom("future", "plan", "multisession", "sequential")
+importFrom("foreach", "foreach")
+importFrom("progressr", "handlers", "handler_progress", "progressor")
+importFrom("doFuture", "%dofuture%")
+importFrom("doFuture", "%dofuture%")
+importFrom("fastcluster", "hclust")
+importFrom("vegclust", "as.memb", "crossmemb")
+importFrom("utils", "flush.console", "getS3method")
+
+
+export(
+as.clustrange,
+as.seqtree,
+bootclustrange,
+clustassoc,
+dtcut,
+fuzzyseqplot,
+wcAggregateCases,
+wcClusterQuality,
+wcCmpCluster,
+wcKMedoids,
+wcKMedRange,
+wcPropertyClustering,
+wcSilhouetteObs,
+seqclustname,
+seqnull,
+seqnullcqi, 
+seqpropclust,
+seqclararange
+)
+
+S3method(as.clustrange, hclust)
+S3method(as.clustrange, twins)
+S3method(as.clustrange, dtclust)
+S3method(as.clustrange, default)
+
+S3method(as.seqtree, hclust)
+S3method(as.seqtree, twins)
+S3method(as.seqtree, default)
+
+S3method(print, clustrange)
+S3method(plot, clustrange)
+S3method(summary, clustrange)
+
+S3method(plot, clustassoc)
+
+S3method(print, clustrangefamily)
+S3method(plot, clustrangefamily)
+S3method(summary, clustrangefamily)
+
+
+S3method(plot, seqclararange)
+S3method(print, bootclustrange)
+S3method(plot, bootclustrange)
+
+
+S3method(print, seqnullcqi)
+S3method(plot, seqnullcqi)
+
+
+S3method(print, kmedoids)
+
+S3method(print, wcAggregateCases)
+S3method(wcAggregateCases, data.frame)
+S3method(wcAggregateCases, stslist)
+S3method(wcAggregateCases, matrix)
+S3method(wcAggregateCases, default)
+
+useDynLib(WeightedCluster, .registration = TRUE, .fixes = "C_")

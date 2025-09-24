@@ -191,7 +191,7 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
             nc += cmpclust->clustDist0 * (totdist1 - currentclustdist1);
             nd += cmpclust->clustDist1 * (totdist0 - currentclustdist0);
         }
-    }"}
+    }
     
     // Compute final Kendall statistics (guard divisions to avoid NaN while matching R behavior)
     double denom_hg = (nc + nd);
