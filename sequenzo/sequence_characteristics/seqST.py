@@ -88,17 +88,20 @@ def seqST(seqdata, norm=False, silent=True, with_missing=False,type=1):
     return Tx_df
 
 if __name__ == "__main__":
+
+    from sequenzo import *
+    
     # ===============================
     #             Sohee
     # ===============================
     # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
-    df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
-    time_list = list(df.columns)[1:133]
-    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    res = seqST(sequence_data, norm=True)
+    # df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
+    # time_list = list(df.columns)[1:133]
+    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
+    # res = seqST(sequence_data, norm=True)
 
     # ===============================
     #             kass
@@ -114,10 +117,11 @@ if __name__ == "__main__":
     #             CO2
     # ===============================
     # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # _time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    # res = seqST(sequence_data)
+    df = load_dataset('country_co2_emissions')
+    _time = list(df.columns)[1:]
+    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
+    res = seqST(sequence_data)
 
     # ===============================
     #            detailed
