@@ -8,10 +8,8 @@
 #endif
 
 /**
- * Implementation of cluster quality indicators matching R WeightedCluster package
- * 
- * This implementation closely follows the logic in R's clusterquality.cpp
- * to ensure numerical consistency with the WeightedCluster package.
+ * Implementation matching R WeightedCluster exactly
+ * Based on clusterqualitybody.cpp from R package
  */
 
 void resetKendallTree(KendallTree& kendall) {
@@ -29,166 +27,7 @@ void finalizeKendall(KendallTree& kendall) {
 }
 
 /**
- * Compute individual ASW scores for full distance matrix
- */
-void indiv_asw(const double* diss, const int* cluster, const double* weights,
-               int n, int nclusters, double* asw_i, double* asw_w) {
-    
-    // Initialize output arrays
-    std::fill(asw_i, asw_i + n, std::numeric_limits<double>::quiet_NaN());
-    std::fill(asw_w, asw_w + n, std::numeric_limits<double>::quiet_NaN());
-    
-    // Count cluster sizes and validate
-    std::vector<int> cluster_sizes(nclusters + 1, 0);
-    for (int i = 0; i < n; i++) {
-        if (cluster[i] >= 1 && cluster[i] <= nclusters) {
-            cluster_sizes[cluster[i]]++;
-        }
-    }
-    
-    #pragma omp parallel for
-    for (int i = 0; i < n; i++) {
-        int ci = cluster[i];
-        if (ci < 1 || ci > nclusters || cluster_sizes[ci] <= 1) {
-            continue; // Skip singletons or invalid clusters
-        }
-        
-        double a_i = 0.0;  // Within-cluster average distance
-        double b_i = std::numeric_limits<double>::max();  // Min between-cluster average
-        
-        // Calculate within-cluster average (a_i)
-        double sum_within = 0.0;
-        double weight_within = 0.0;
-        
-        for (int j = 0; j < n; j++) {
-            if (i != j && cluster[j] == ci) {
-                double dist = diss[i * n + j];
-                sum_within += dist * weights[j];
-                weight_within += weights[j];
-            }
-        }
-        
-        if (weight_within > 0) {
-            a_i = sum_within / weight_within;
-        }
-        
-        // Calculate minimum between-cluster average (b_i)
-        for (int k = 1; k <= nclusters; k++) {
-            if (k == ci || cluster_sizes[k] == 0) continue;
-            
-            double sum_between = 0.0;
-            double weight_between = 0.0;
-            
-            for (int j = 0; j < n; j++) {
-                if (cluster[j] == k) {
-                    double dist = diss[i * n + j];
-                    sum_between += dist * weights[j];
-                    weight_between += weights[j];
-                }
-            }
-            
-            if (weight_between > 0) {
-                double avg_between = sum_between / weight_between;
-                b_i = std::min(b_i, avg_between);
-            }
-        }
-        
-        // Calculate silhouette scores
-        if (b_i != std::numeric_limits<double>::max()) {
-            double max_ab = std::max(a_i, b_i);
-            if (max_ab > 0) {
-                asw_i[i] = (b_i - a_i) / max_ab;
-                asw_w[i] = asw_i[i]; // For individual scores, weighted = unweighted
-            } else {
-                asw_i[i] = 0.0;
-                asw_w[i] = 0.0;
-            }
-        }
-    }
-}
-
-/**
- * Compute individual ASW scores for condensed distance array
- */
-void indiv_asw_dist(const double* diss, const int* cluster, const double* weights,
-                   int n, int nclusters, double* asw_i, double* asw_w) {
-    
-    // Initialize output arrays
-    std::fill(asw_i, asw_i + n, std::numeric_limits<double>::quiet_NaN());
-    std::fill(asw_w, asw_w + n, std::numeric_limits<double>::quiet_NaN());
-    
-    // Count cluster sizes and validate
-    std::vector<int> cluster_sizes(nclusters + 1, 0);
-    for (int i = 0; i < n; i++) {
-        if (cluster[i] >= 1 && cluster[i] <= nclusters) {
-            cluster_sizes[cluster[i]]++;
-        }
-    }
-    
-    #pragma omp parallel for
-    for (int i = 0; i < n; i++) {
-        int ci = cluster[i];
-        if (ci < 1 || ci > nclusters || cluster_sizes[ci] <= 1) {
-            continue; // Skip singletons or invalid clusters
-        }
-        
-        double a_i = 0.0;  // Within-cluster average distance
-        double b_i = std::numeric_limits<double>::max();  // Min between-cluster average
-        
-        // Calculate within-cluster average (a_i)
-        double sum_within = 0.0;
-        double weight_within = 0.0;
-        
-        for (int j = 0; j < n; j++) {
-            if (i != j && cluster[j] == ci) {
-                double dist = getDistanceFromCondensed(diss, i, j, n);
-                sum_within += dist * weights[j];
-                weight_within += weights[j];
-            }
-        }
-        
-        if (weight_within > 0) {
-            a_i = sum_within / weight_within;
-        }
-        
-        // Calculate minimum between-cluster average (b_i)
-        for (int k = 1; k <= nclusters; k++) {
-            if (k == ci || cluster_sizes[k] == 0) continue;
-            
-            double sum_between = 0.0;
-            double weight_between = 0.0;
-            
-            for (int j = 0; j < n; j++) {
-                if (cluster[j] == k) {
-                    double dist = getDistanceFromCondensed(diss, i, j, n);
-                    sum_between += dist * weights[j];
-                    weight_between += weights[j];
-                }
-            }
-            
-            if (weight_between > 0) {
-                double avg_between = sum_between / weight_between;
-                b_i = std::min(b_i, avg_between);
-            }
-        }
-        
-        // Calculate silhouette scores
-        if (b_i != std::numeric_limits<double>::max()) {
-            double max_ab = std::max(a_i, b_i);
-            if (max_ab > 0) {
-                asw_i[i] = (b_i - a_i) / max_ab;
-                asw_w[i] = asw_i[i]; // For individual scores, weighted = unweighted
-            } else {
-                asw_i[i] = 0.0;
-                asw_w[i] = 0.0;
-            }
-        }
-    }
-}
-
-/**
- * Core function to compute all cluster quality indicators
- * This follows the R implementation logic exactly
+ * Core function exactly matching R WeightedCluster implementation
  */
 template<bool UseCondensed>
 void compute_cluster_quality_core(const double* diss, const int* cluster, const double* weights,
@@ -199,326 +38,287 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
     std::fill(stats, stats + ClusterQualNumStat, std::numeric_limits<double>::quiet_NaN());
     std::fill(asw, asw + 2 * nclusters, std::numeric_limits<double>::quiet_NaN());
     
-    // Validate input
-    if (n < 2 || nclusters < 1 || nclusters >= n) {
-        return;
+    // Variables following R implementation exactly - use double like R
+    double totweights = 0.0, wxy = 0.0, wx = 0.0, wy = 0.0, wx2 = 0.0;
+    double ww, xx, covxy, covx, covy, pearson, xb, yb, xw, xxw;
+    int ij = 0;
+    
+    // Allocate arrays like R version (0-based indexing)
+    std::vector<double> errors(nclusters, 0.0);
+    std::vector<double> sizes(nclusters, 0.0);
+    
+    // Initialize ASW arrays (output)
+    for (int i = 0; i < nclusters; i++) {
+        asw[i] = 0.0;
+        asw[i + nclusters] = 0.0;
     }
     
-    // Count cluster sizes and compute total weight
-    std::vector<int> cluster_sizes(nclusters + 1, 0);
-    std::vector<double> cluster_weights(nclusters + 1, 0.0);
-    double total_weight = 0.0;
-    
-    for (int i = 0; i < n; i++) {
-        if (cluster[i] >= 1 && cluster[i] <= nclusters) {
-            cluster_sizes[cluster[i]]++;
-            cluster_weights[cluster[i]] += weights[i];
-        }
-        total_weight += weights[i];
-    }
-    
-    // Check for valid clustering
-    int valid_clusters = 0;
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] > 0) valid_clusters++;
-    }
-    if (valid_clusters < 2) return;
-    
-    // ===== Compute ASW (both individual and weighted) =====
-    std::vector<double> asw_individual(n);
-    std::vector<double> asw_weighted(n);
-    
-    if constexpr (UseCondensed) {
-        indiv_asw_dist(diss, cluster, weights, n, nclusters, asw_individual.data(), asw_weighted.data());
+    // Initialize Kendall tree with zero distance node (like R)
+    CmpCluster* ZeroDist;
+    auto it_zero = kendall.find(0.0);
+    if (it_zero != kendall.end()) {
+        ZeroDist = it_zero->second;
     } else {
-        indiv_asw(diss, cluster, weights, n, nclusters, asw_individual.data(), asw_weighted.data());
+        ZeroDist = new CmpCluster();
+        kendall[0.0] = ZeroDist;
     }
     
-    // Aggregate ASW by cluster
-    std::vector<double> cluster_asw_sum(nclusters + 1, 0.0);
-    std::vector<double> cluster_asw_weight(nclusters + 1, 0.0);
-    std::vector<double> cluster_asw_weighted_sum(nclusters + 1, 0.0);
+    // Main computation loop following R version exactly
+    if constexpr (UseCondensed) {
+        ij = -n;  // Condensed version initialization
+    }
     
     for (int i = 0; i < n; i++) {
-        int ci = cluster[i];
-        if (ci >= 1 && ci <= nclusters && !std::isnan(asw_individual[i])) {
-            cluster_asw_sum[ci] += asw_individual[i];
-            cluster_asw_weighted_sum[ci] += asw_weighted[i] * weights[i];
-            cluster_asw_weight[ci] += weights[i];
+        int iclustIndex = cluster[i] - 1;  // Convert to 0-based for array access
+        if (iclustIndex >= 0 && iclustIndex < nclusters) {
+            sizes[iclustIndex] += weights[i];
         }
-    }
-    
-    // Store cluster-level ASW
-    double global_asw = 0.0, global_asw_weighted = 0.0;
-    double global_weight = 0.0;
-    int global_count = 0;
-    
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] > 0) {
-            asw[2 * (c - 1)] = cluster_asw_sum[c] / cluster_sizes[c];  // Unweighted ASW
-            if (cluster_asw_weight[c] > 0) {
-                asw[2 * (c - 1) + 1] = cluster_asw_weighted_sum[c] / cluster_asw_weight[c];  // Weighted ASW
-            }
+        
+        if constexpr (!UseCondensed) {
+            ij = i * n;  // Full matrix version
+        } else {
+            ij += n - i - 1;  // Condensed version offset
+        }
+        
+        if (weights[i] > 0) {
+            // Diagonal term (distance to self = 0)
+            ww = weights[i] * weights[i];
+            wy += ww;
+            ZeroDist->clustDist0 += ww;
+            totweights += ww;
             
-            global_asw += cluster_asw_sum[c];
-            global_asw_weighted += cluster_asw_weighted_sum[c];
-            global_weight += cluster_asw_weight[c];
-            global_count += cluster_sizes[c];
-        }
-    }
-    
-    stats[ClusterQualASWi] = (global_count > 0) ? global_asw / global_count : 0.0;
-    stats[ClusterQualASWw] = (global_weight > 0) ? global_asw_weighted / global_weight : 0.0;
-    
-    // ===== Compute R² (weighted) =====
-    double D_bar = 0.0;  // Global weighted mean of distances
-    double total_pair_weight = 0.0;
-    
-    // Calculate global weighted mean (using upper triangle only)
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            double dist;
-            if constexpr (UseCondensed) {
-                dist = diss[getCondensedIndex(i, j, n)];
-            } else {
-                dist = diss[i * n + j];
-            }
-            double pair_weight = weights[i] * weights[j];
-            D_bar += dist * pair_weight;
-            total_pair_weight += pair_weight;
-        }
-    }
-    D_bar /= total_pair_weight;
-    
-    // Calculate total sum of squares
-    double total_ss = 0.0;
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            double dist;
-            if constexpr (UseCondensed) {
-                dist = diss[getCondensedIndex(i, j, n)];
-            } else {
-                dist = diss[i * n + j];
-            }
-            double pair_weight = weights[i] * weights[j];
-            total_ss += pair_weight * (dist - D_bar) * (dist - D_bar);
-        }
-    }
-    
-    // Calculate within-cluster sum of squares
-    double within_ss = 0.0;
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] < 2) continue;
-        
-        // Get cluster members
-        std::vector<int> cluster_members;
-        for (int i = 0; i < n; i++) {
-            if (cluster[i] == c) {
-                cluster_members.push_back(i);
-            }
-        }
-        
-        // Calculate cluster weighted mean
-        double cluster_sum = 0.0;
-        double cluster_weight = 0.0;
-        for (size_t ii = 0; ii < cluster_members.size() - 1; ii++) {
-            for (size_t jj = ii + 1; jj < cluster_members.size(); jj++) {
-                int i = cluster_members[ii];
-                int j = cluster_members[jj];
-                double dist;
-                if constexpr (UseCondensed) {
-                    dist = diss[getCondensedIndex(i, j, n)];
-                } else {
-                    dist = diss[i * n + j];
-                }
-                double pair_weight = weights[i] * weights[j];
-                cluster_sum += dist * pair_weight;
-                cluster_weight += pair_weight;
-            }
-        }
-        
-        if (cluster_weight > 0) {
-            double cluster_mean = cluster_sum / cluster_weight;
-            
-            // Add to within-cluster sum of squares
-            for (size_t ii = 0; ii < cluster_members.size() - 1; ii++) {
-                for (size_t jj = ii + 1; jj < cluster_members.size(); jj++) {
-                    int i = cluster_members[ii];
-                    int j = cluster_members[jj];
-                    double dist;
+            for (int j = i + 1; j < n; j++) {
+                if (weights[j] > 0) {
+                    ww = 2.0 * weights[i] * weights[j];  // Factor of 2 like R
+                    
                     if constexpr (UseCondensed) {
-                        dist = diss[getCondensedIndex(i, j, n)];
+                        xx = diss[ij + j];
                     } else {
-                        dist = diss[i * n + j];
+                        xx = diss[ij + j];
                     }
-                    double pair_weight = weights[i] * weights[j];
-                    within_ss += pair_weight * (dist - cluster_mean) * (dist - cluster_mean);
-                }
-            }
-        }
-    }
-    
-    stats[ClusterQualR] = (total_ss > 0) ? 1.0 - within_ss / total_ss : 0.0;
-    stats[ClusterQualR2] = stats[ClusterQualR] * stats[ClusterQualR];
-    
-    // ===== Compute Calinski-Harabasz =====
-    double between_ss = total_ss - within_ss;
-    if (within_ss > 0 && nclusters > 1) {
-        stats[ClusterQualF] = (between_ss / (nclusters - 1)) / (within_ss / (n - nclusters));
-        stats[ClusterQualF2] = stats[ClusterQualF] * stats[ClusterQualF];
-    }
-    
-    // ===== Compute PBC (Point-Biserial Correlation) =====
-    // Based on R WeightedCluster implementation
-    double pbc_sum_x = 0.0, pbc_sum_y = 0.0, pbc_sum_xy = 0.0;
-    double pbc_sum_x2 = 0.0, pbc_sum_y2 = 0.0;
-    int pbc_n = 0;
-    
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            double dist_ij;
-            if constexpr (UseCondensed) {
-                dist_ij = diss[getCondensedIndex(i, j, n)];
-            } else {
-                dist_ij = diss[i * n + j];
-            }
-            
-            // Binary variable: 1 if same cluster, 0 if different clusters
-            double cluster_same = (cluster[i] == cluster[j]) ? 1.0 : 0.0;
-            
-            pbc_sum_x += dist_ij;
-            pbc_sum_y += cluster_same;
-            pbc_sum_xy += dist_ij * cluster_same;
-            pbc_sum_x2 += dist_ij * dist_ij;
-            pbc_sum_y2 += cluster_same * cluster_same;
-            pbc_n++;
-        }
-    }
-    
-    if (pbc_n > 1) {
-        double pbc_mean_x = pbc_sum_x / pbc_n;
-        double pbc_mean_y = pbc_sum_y / pbc_n;
-        double pbc_cov = (pbc_sum_xy / pbc_n) - (pbc_mean_x * pbc_mean_y);
-        double pbc_var_x = (pbc_sum_x2 / pbc_n) - (pbc_mean_x * pbc_mean_x);
-        double pbc_var_y = (pbc_sum_y2 / pbc_n) - (pbc_mean_y * pbc_mean_y);
-        
-        if (pbc_var_x > 0 && pbc_var_y > 0) {
-            stats[ClusterQualHPG] = pbc_cov / sqrt(pbc_var_x * pbc_var_y);
-        }
-    }
-    
-    // ===== Compute HG and HGSD (Hubert's Gamma) =====
-    // Based on R WeightedCluster implementation - correct Kendall tau calculation
-    
-    // Reset Kendall tree
-    for (auto& pair : kendall) {
-        pair.second->clustDist0 = 0.0;
-        pair.second->clustDist1 = 0.0;
-    }
-    
-    // Build distance groups with cluster memberships
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            double dist_ij;
-            if constexpr (UseCondensed) {
-                dist_ij = diss[getCondensedIndex(i, j, n)];
-            } else {
-                dist_ij = diss[i * n + j];
-            }
-            
-            // Get or create entry in Kendall tree
-            auto it = kendall.find(dist_ij);
-            CmpCluster* cmp;
-            if (it == kendall.end()) {
-                cmp = new CmpCluster();
-                kendall[dist_ij] = cmp;
-            } else {
-                cmp = it->second;
-            }
-            
-            // Count pairs: clustDist1 = same cluster, clustDist0 = different clusters
-            double weight_pair = weights[i] * weights[j];
-            if (cluster[i] == cluster[j]) {
-                cmp->clustDist1 += weight_pair;
-            } else {
-                cmp->clustDist0 += weight_pair;
-            }
-        }
-    }
-    
-    // Calculate Kendall's tau (Gamma) from the tree
-    double gamma_concordant = 0.0;
-    double gamma_discordant = 0.0;
-    
-    for (auto it1 = kendall.begin(); it1 != kendall.end(); ++it1) {
-        for (auto it2 = std::next(it1); it2 != kendall.end(); ++it2) {
-            double d1 = it1->first;
-            double d2 = it2->first;
-            CmpCluster* cmp1 = it1->second;
-            CmpCluster* cmp2 = it2->second;
-            
-            if (d1 < d2) {
-                // For distances d1 < d2, we expect same-cluster pairs to be more common at d1
-                // Concordant: more same-cluster pairs at smaller distance
-                gamma_concordant += cmp1->clustDist1 * cmp2->clustDist0;
-                // Discordant: more different-cluster pairs at smaller distance  
-                gamma_discordant += cmp1->clustDist0 * cmp2->clustDist1;
-            }
-        }
-    }
-    
-    double gamma_total = gamma_concordant + gamma_discordant;
-    if (gamma_total > 0) {
-        stats[ClusterQualHG] = (gamma_concordant - gamma_discordant) / gamma_total;
-        // HGSD is typically the standard deviation, but simplified here
-        stats[ClusterQualHGSD] = std::abs(stats[ClusterQualHG]) * 0.3; // Approximate scaling
-    }
-    
-    // ===== Compute HC (Hierarchical Criterion) =====
-    // This is a simplified version - the full implementation would need the dendrogram
-    std::vector<double> cluster_means(nclusters + 1, 0.0);
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] > 0) {
-            // Calculate mean within-cluster distance
-            double sum_dist = 0.0;
-            int count = 0;
-            for (int i = 0; i < n; i++) {
-                if (cluster[i] == c) {
-                    for (int j = i + 1; j < n; j++) {
-                        if (cluster[j] == c) {
-                            double dist;
-                            if constexpr (UseCondensed) {
-                                dist = diss[getCondensedIndex(i, j, n)];
-                            } else {
-                                dist = diss[i * n + j];
-                            }
-                            sum_dist += dist;
-                            count++;
+                    
+                    // Find or create Kendall tree node
+                    auto it = kendall.find(xx);
+                    CmpCluster* cmpclust;
+                    if (it != kendall.end()) {
+                        cmpclust = it->second;
+                    } else {
+                        cmpclust = new CmpCluster();
+                        kendall[xx] = cmpclust;
+                    }
+                    
+                    xw = ww * xx;
+                    xxw = xw * xx;
+                    wx += xw;
+                    wx2 += xxw;
+                    
+                    if (cluster[i] == cluster[j]) {
+                        // Same cluster
+                        if (iclustIndex >= 0 && iclustIndex < nclusters) {
+                            errors[iclustIndex] += xw;
                         }
+                        wxy += xw;
+                        wy += ww;
+                        cmpclust->clustDist0 += ww;
+                    } else {
+                        // Different clusters
+                        cmpclust->clustDist1 += ww;
+                    }
+                    
+                    totweights += ww;
+                }
+            }
+        }
+    }
+    
+    // Calculate Pearson correlation (HPG) exactly like R
+    if (totweights > 0) {
+        xb = wx / totweights;
+        yb = wy / totweights;
+        covx = wx2 / totweights - xb * xb;
+        covy = wy / totweights - yb * yb;
+        covxy = wxy / totweights - yb * xb;
+        
+        if (covx > 0 && covy > 0) {
+            pearson = covxy / std::sqrt(covx * covy);
+            stats[ClusterQualHPG] = -1.0 * static_cast<double>(pearson);  // Negative like R
+        }
+    }
+    
+    // Compute Kendall statistics (HG, HGSD, HC) exactly like R
+    double nc = 0.0, nd = 0.0, currentclustdist0 = 0.0, currentclustdist1 = 0.0;
+    double totdist0 = wy, totdist1 = totweights - wy, ntiesdist = 0.0;
+    double Smin = 0.0, wSmin = wy, Smax = 0.0, wSmax = totdist1, currentww = 0.0;
+    
+    for (auto it = kendall.begin(); it != kendall.end(); ++it) {
+        CmpCluster* cmpclust = it->second;
+        ww = cmpclust->clustDist1 + cmpclust->clustDist0;
+        
+        if (ww > 0) {
+            // Smin calculation
+            if (currentww <= wSmin) {
+                if (currentww + ww > wSmin) {
+                    Smin += (wSmin - currentww) * it->first;
+                } else {
+                    Smin += ww * it->first;
+                }
+            }
+            currentww += ww;
+            
+            // Smax calculation  
+            if (currentww > wSmax) {
+                if (currentww - ww < wSmax) {
+                    Smax += (currentww - wSmax) * it->first;
+                } else {
+                    Smax += ww * it->first;
+                }
+            }
+            
+            // Count ties
+            ntiesdist += cmpclust->clustDist1 * cmpclust->clustDist0;
+            
+            // Concordant and discordant pairs - exactly like R
+            nc += cmpclust->clustDist1 * currentclustdist0;  // Bottom of table
+            nd += cmpclust->clustDist0 * currentclustdist1;
+            
+            // Update running totals
+            currentclustdist0 += cmpclust->clustDist0;
+            currentclustdist1 += cmpclust->clustDist1;
+            
+            // Top of table
+            nc += cmpclust->clustDist0 * (totdist1 - currentclustdist1);
+            nd += cmpclust->clustDist1 * (totdist0 - currentclustdist0);
+        }
+    }"}
+    
+    // Compute final Kendall statistics exactly like R (no safety checks)
+    if ((nc + nd) > 0) {
+        stats[ClusterQualHG] = static_cast<double>((nc - nd) / (nc + nd));  // Gamma
+    }
+    
+    // HGSD (Somers' D) - like R, no safety check
+    stats[ClusterQualHGSD] = (nc - nd) / (nc + nd + ntiesdist);
+    
+    // HC (Hierarchical Criterion) - like R, no safety check  
+    stats[ClusterQualHC] = (wxy - Smin) / (Smax - Smin);
+    
+    
+    // Compute F and R statistics exactly like R
+    double SSres = 0.0;
+    double SS2res = 0.0;
+    double total_cluster_weights = 0.0;
+    
+    for (int i = 0; i < nclusters; i++) {
+        if (sizes[i] > 0) {
+            SSres += errors[i] / sizes[i];
+            total_cluster_weights += sizes[i];
+        }
+    }
+    
+    if (total_cluster_weights > 0) {
+        double SSexpl = wx / total_cluster_weights - SSres;
+        double dncluster = static_cast<double>(nclusters);
+        
+        if (total_cluster_weights > dncluster && SSres > 0) {
+            stats[ClusterQualF] = (SSexpl / (dncluster - 1.0)) / (SSres / (total_cluster_weights - dncluster));
+            stats[ClusterQualR] = SSexpl / (SSres + SSexpl);
+            stats[ClusterQualF2] = stats[ClusterQualF] * stats[ClusterQualF];
+            stats[ClusterQualR2] = stats[ClusterQualR] * stats[ClusterQualR];
+        }
+    }
+    
+    // Compute ASW exactly like R version
+    double asw_i = 0.0;
+    double asw_w = 0.0;
+    
+    // Reset ASW arrays
+    for (int j = 0; j < nclusters; j++) {
+        asw[j] = 0.0;
+        asw[j + nclusters] = 0.0;
+    }
+    
+    for (int i = 0; i < n; i++) {
+        if (weights[i] > 0) {
+            int iclustIndex = cluster[i] - 1;  // Convert to 0-based
+            if (iclustIndex < 0 || iclustIndex >= nclusters) continue;
+            
+            double aik = 0.0;
+            std::vector<double> othergroups(nclusters, 0.0);
+            
+            // Calculate distances to all other points
+            if constexpr (!UseCondensed) {
+                ij = i * n;
+                for (int j = 0; j < n; j++) {
+                    if (i == j) continue;
+                    int jclustIndex = cluster[j] - 1;
+                    if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
+                    
+                    if (iclustIndex == jclustIndex) {
+                        aik += weights[j] * diss[ij + j];
+                    } else {
+                        othergroups[jclustIndex] += weights[j] * diss[ij + j];
+                    }
+                }
+            } else {
+                // Condensed version
+                for (int j = 0; j < n; j++) {
+                    if (i == j) continue;
+                    int jclustIndex = cluster[j] - 1;
+                    if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
+                    
+                    double dist_val = (i < j) ? diss[getCondensedIndex(i, j, n)] : diss[getCondensedIndex(j, i, n)];
+                    
+                    if (iclustIndex == jclustIndex) {
+                        aik += weights[j] * dist_val;
+                    } else {
+                        othergroups[jclustIndex] += weights[j] * dist_val;
                     }
                 }
             }
-            cluster_means[c] = (count > 0) ? sum_dist / count : 0.0;
+            
+            // Find minimum average distance to other clusters
+            double bik = std::numeric_limits<double>::max();
+            for (int j = 0; j < nclusters; j++) {
+                if (j != iclustIndex && sizes[j] > 0) {
+                    double avg_dist = othergroups[j] / sizes[j];
+                    if (bik >= avg_dist) {
+                        bik = avg_dist;
+                    }
+                }
+            }
+            
+            // Calculate ASW values like R
+            double aik_w = aik / sizes[iclustIndex];  // Weighted version
+            if (sizes[iclustIndex] <= 1.0) {
+                aik = 0.0;  // Avoid division by zero for singletons
+            } else {
+                aik /= (sizes[iclustIndex] - 1.0);  // Unweighted version
+            }
+            
+            if (bik != std::numeric_limits<double>::max()) {
+                double sik_i = weights[i] * ((bik - aik) / std::max(aik, bik));
+                double sik_w = weights[i] * ((bik - aik_w) / std::max(aik_w, bik));
+                
+                asw[iclustIndex] += sik_i;
+                asw[iclustIndex + nclusters] += sik_w;
+                asw_i += sik_i;
+                asw_w += sik_w;
+            }
         }
     }
     
-    double mean_of_means = 0.0;
-    int valid_mean_count = 0;
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] > 0) {
-            mean_of_means += cluster_means[c];
-            valid_mean_count++;
+    // Normalize cluster ASW by cluster sizes
+    for (int j = 0; j < nclusters; j++) {
+        if (sizes[j] > 0) {
+            asw[j] /= sizes[j];
+            asw[j + nclusters] /= sizes[j];
         }
     }
-    mean_of_means /= valid_mean_count;
     
-    double variance = 0.0;
-    for (int c = 1; c <= nclusters; c++) {
-        if (cluster_sizes[c] > 0) {
-            variance += (cluster_means[c] - mean_of_means) * (cluster_means[c] - mean_of_means);
-        }
+    if (total_cluster_weights > 0) {
+        stats[ClusterQualASWi] = asw_i / total_cluster_weights;
+        stats[ClusterQualASWw] = asw_w / total_cluster_weights;
     }
-    stats[ClusterQualHC] = variance / valid_mean_count;
 }
 
 // Template instantiations
@@ -534,17 +334,132 @@ void clusterquality_dist(const double* diss, const int* cluster, const double* w
     compute_cluster_quality_core<true>(diss, cluster, weights, n, stats, nclusters, asw, kendall);
 }
 
-// Simplified versions (subset of statistics)
+// Individual ASW functions (simplified, calling the main function)
+void indiv_asw(const double* diss, const int* cluster, const double* weights,
+               int n, int nclusters, double* asw_i, double* asw_w) {
+    
+    std::fill(asw_i, asw_i + n, std::numeric_limits<double>::quiet_NaN());
+    std::fill(asw_w, asw_w + n, std::numeric_limits<double>::quiet_NaN());
+    
+    // For individual ASW, we can use simplified computation
+    std::vector<double> sizes(nclusters, 0.0);
+    for (int i = 0; i < n; i++) {
+        int clustIndex = cluster[i] - 1;
+        if (clustIndex >= 0 && clustIndex < nclusters) {
+            sizes[clustIndex] += weights[i];
+        }
+    }
+    
+    for (int i = 0; i < n; i++) {
+        int iclustIndex = cluster[i] - 1;
+        if (iclustIndex < 0 || iclustIndex >= nclusters || sizes[iclustIndex] <= 1.0) {
+            continue;
+        }
+        
+        double aik = 0.0, aik_w = 0.0;
+        std::vector<double> othergroups(nclusters, 0.0);
+        
+        for (int j = 0; j < n; j++) {
+            if (i == j) continue;
+            int jclustIndex = cluster[j] - 1;
+            if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
+            
+            double dist = diss[i * n + j];
+            if (iclustIndex == jclustIndex) {
+                aik += weights[j] * dist;
+            } else {
+                othergroups[jclustIndex] += weights[j] * dist;
+            }
+        }
+        
+        double bik = std::numeric_limits<double>::max();
+        for (int j = 0; j < nclusters; j++) {
+            if (j != iclustIndex && sizes[j] > 0) {
+                double avg_dist = othergroups[j] / sizes[j];
+                if (bik >= avg_dist) {
+                    bik = avg_dist;
+                }
+            }
+        }
+        
+        aik_w = aik / sizes[iclustIndex];
+        aik /= (sizes[iclustIndex] - 1.0);
+        
+        if (bik != std::numeric_limits<double>::max()) {
+            asw_i[i] = (bik - aik) / std::max(aik, bik);
+            asw_w[i] = (bik - aik_w) / std::max(aik_w, bik);
+        }
+    }
+}
+
+void indiv_asw_dist(const double* diss, const int* cluster, const double* weights,
+                   int n, int nclusters, double* asw_i, double* asw_w) {
+    
+    std::fill(asw_i, asw_i + n, std::numeric_limits<double>::quiet_NaN());
+    std::fill(asw_w, asw_w + n, std::numeric_limits<double>::quiet_NaN());
+    
+    // For condensed version
+    std::vector<double> sizes(nclusters, 0.0);
+    for (int i = 0; i < n; i++) {
+        int clustIndex = cluster[i] - 1;
+        if (clustIndex >= 0 && clustIndex < nclusters) {
+            sizes[clustIndex] += weights[i];
+        }
+    }
+    
+    for (int i = 0; i < n; i++) {
+        int iclustIndex = cluster[i] - 1;
+        if (iclustIndex < 0 || iclustIndex >= nclusters || sizes[iclustIndex] <= 1.0) {
+            continue;
+        }
+        
+        double aik = 0.0, aik_w = 0.0;
+        std::vector<double> othergroups(nclusters, 0.0);
+        
+        for (int j = 0; j < n; j++) {
+            if (i == j) continue;
+            int jclustIndex = cluster[j] - 1;
+            if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
+            
+            double dist = getDistanceFromCondensed(diss, i, j, n);
+            if (iclustIndex == jclustIndex) {
+                aik += weights[j] * dist;
+            } else {
+                othergroups[jclustIndex] += weights[j] * dist;
+            }
+        }
+        
+        double bik = std::numeric_limits<double>::max();
+        for (int j = 0; j < nclusters; j++) {
+            if (j != iclustIndex && sizes[j] > 0) {
+                double avg_dist = othergroups[j] / sizes[j];
+                if (bik >= avg_dist) {
+                    bik = avg_dist;
+                }
+            }
+        }
+        
+        aik_w = aik / sizes[iclustIndex];
+        aik /= (sizes[iclustIndex] - 1.0);
+        
+        if (bik != std::numeric_limits<double>::max()) {
+            asw_i[i] = (bik - aik) / std::max(aik, bik);
+            asw_w[i] = (bik - aik_w) / std::max(aik_w, bik);
+        }
+    }
+}
+
+// Simplified versions
 void clusterqualitySimple(const double* diss, const int* cluster, const double* weights,
                          int n, double* stats, int nclusters, double* asw) {
-    KendallTree kendall;  // Local Kendall tree for simple version
+    KendallTree kendall;
     clusterquality(diss, cluster, weights, n, stats, nclusters, asw, kendall);
     finalizeKendall(kendall);
 }
 
 void clusterqualitySimple_dist(const double* diss, const int* cluster, const double* weights,
                               int n, double* stats, int nclusters, double* asw) {
-    KendallTree kendall;  // Local Kendall tree for simple version
+    KendallTree kendall;
     clusterquality_dist(diss, cluster, weights, n, stats, nclusters, asw, kendall);
     finalizeKendall(kendall);
 }

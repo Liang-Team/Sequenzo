@@ -58,7 +58,9 @@
             Thus, we provide Ward D by ourselves here. 
 
         ClusterQuality(): Derived from ``, a key function from weightedcluster
-            CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
+            CQI equivalence of R is here (two files):
+                https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
+                https://github.com/cran/WeightedCluster/blob/master/src/clusterqualitybody.cpp
             plot_cqi_scores(): `wcCmpCluster()` produces `clustrangefamily` object + `plot.clustrangefamily()` for plotting
 """
 import matplotlib.pyplot as plt

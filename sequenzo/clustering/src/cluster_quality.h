@@ -116,13 +116,13 @@ void finalizeKendall(KendallTree& kendall);
  */
 inline int getCondensedIndex(int i, int j, int n) {
     // Convert (i,j) indices to condensed array index
-    // Assumes i < j and returns index in upper triangular form
-    if (i >= j) std::swap(i, j);
+    // Use SciPy/R standard upper triangle ordering: for i < j
+    if (i > j) std::swap(i, j);  // Ensure i < j for upper triangle
     return i * n - i * (i + 1) / 2 + j - i - 1;
 }
 
 inline double getDistanceFromCondensed(const double* diss, int i, int j, int n) {
     if (i == j) return 0.0;
-    if (i > j) std::swap(i, j);
+    // No need to swap here since getCondensedIndex handles it
     return diss[getCondensedIndex(i, j, n)];
 }

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Test script using MVAD data to compare with R WeightedCluster results
 """
@@ -193,25 +192,6 @@ def expected_r_results():
     print("\n" + "="*60)
     print("EXPECTED R WEIGHTEDCLUSTER RESULTS")
     print("="*60)
-    
-    print("""
-For MVAD data with Ward clustering, typical R WeightedCluster results are:
-
-k=3 clusters:
-  PBC : ~0.65-0.75 (Point-Biserial Correlation)
-  HG  : ~0.40-0.60 (Hubert's Gamma)
-  HGSD: ~0.15-0.25 (Hubert's Gamma Standard Deviation)
-  ASW : ~0.35-0.55 (Average Silhouette Width)
-  ASWw: ~0.35-0.55 (Weighted Average Silhouette Width)
-  CH  : ~80-150   (Calinski-Harabasz)
-  R2  : ~0.40-0.65 (R-squared)
-  CHsq: CH²       (Calinski-Harabasz squared)
-  R2sq: R2²       (R-squared squared)
-  HC  : ~0.01-0.05 (Hierarchical Criterion)
-
-Our C++ implementation should produce values in these ranges.
-Large deviations indicate implementation errors.
-""")
 
 if __name__ == "__main__":
     print("MVAD Cluster Quality Test")
