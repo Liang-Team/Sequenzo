@@ -54,7 +54,14 @@ def seqST(seqdata, norm=False, silent=True, with_missing=False,type=1):
         turb_seq = pd.DataFrame(np.array((alph * nrep)[:maxlength]).reshape(1, -1))
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
-                turb_seq = SequenceData(turb_seq, time=list(range(turb_seq.shape[1])), states=alph)
+                # 为 states 创建对应的 labels，需要特别处理 np.nan 的情况
+                turb_labels = []
+                for i, state in enumerate(alph):
+                    if pd.isna(state):
+                        turb_labels.append("Missing")
+                    else:
+                        turb_labels.append(f"State_{i}")
+                turb_seq = SequenceData(turb_seq, time=list(range(turb_seq.shape[1])), states=alph, labels=turb_labels)
 
         if len(alph) > 1:
             turb_phi = seqsubsn(turb_seq, DSS=False, with_missing=True)
@@ -85,12 +92,13 @@ if __name__ == "__main__":
     #             Sohee
     # ===============================
     # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
-    # time_list = list(df.columns)[1:133]
-    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    # res = seqST(sequence_data, norm=True)
+    df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
+    time_list = list(df.columns)[1:133]
+    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
+    res = seqST(sequence_data, norm=True)
 
     # ===============================
     #             kass
@@ -124,11 +132,11 @@ if __name__ == "__main__":
     # ===============================
     #             broad
     # ===============================
-    df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
-    _time = list(df.columns)[4:]
-    states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-                                 time=_time, id_col="worker_id", states=states)
-    res = seqST(sequence_data, norm=True, type=2)
+    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
+    # _time = list(df.columns)[4:]
+    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
+    #                              time=_time, id_col="worker_id", states=states)
+    # res = seqST(sequence_data, norm=True, type=2)
 
     print(res)
