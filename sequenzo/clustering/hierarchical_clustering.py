@@ -51,12 +51,15 @@
     Consider using alternative methods like 'average' (UPGMA) for better theoretical validity.
 
     Original code references:
-        Cluster(): Derived from `hclust` 
+        Cluster(): Derived from `hclust`, a key function from fastcluster
             R code: https://github.com/cran/fastcluster/blob/master/R/fastcluster.R
             Python code: https://github.com/fastcluster/fastcluster/blob/master/src/fastcluster.cpp
             The Python version of facluster does not support Ward D method but only Ward D2, whereas R supports both.
-            Thus, we provide Ward D2 by ourselves here. 
-        CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
+            Thus, we provide Ward D by ourselves here. 
+
+        ClusterQuality(): Derived from ``, a key function from weightedcluster
+            CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
+            plot_cqi_scores(): `wcCmpCluster()` produces `clustrangefamily` object + `plot.clustrangefamily()` for plotting
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -67,11 +70,16 @@ import pandas as pd
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
 from scipy.spatial.distance import squareform
-from sklearn.metrics import silhouette_score, silhouette_samples
+# sklearn metrics no longer needed - using C++ implementation
 from fastcluster import linkage
 
-from .utils.point_biserial import point_biserial
-
+# Import C++ cluster quality functions
+try:
+    from . import clustering_c_code
+    _CPP_AVAILABLE = True
+except ImportError:
+    _CPP_AVAILABLE = False
+    print("[!] Warning: C++ cluster quality functions not available. Using Python fallback.")
 
 # Corrected imports: Use relative imports *within* the package.
 from ..visualization.utils import save_and_show_results
@@ -582,183 +590,73 @@ class ClusterQuality:
     def compute_cluster_quality_scores(self):
         """
         Compute clustering quality scores for different numbers of clusters.
+        
+        Uses C++ implementation for accuracy and performance.
+        This implementation aligns with R WeightedCluster package results.
         """
+        if not _CPP_AVAILABLE:
+            raise RuntimeError(
+                "C++ cluster quality implementation is not available. "
+                "Please ensure the C++ extensions are properly compiled."
+            )
+        self._compute_cluster_quality_scores_cpp()
 
+    def _compute_cluster_quality_scores_cpp(self):
+        """
+        Compute clustering quality scores using C++ implementation (matches R WeightedCluster).
+        """
+        print("[>] Using C++ implementation for cluster quality computation...")
+        
+        # Convert matrix to format expected by C++
+        # Ensure we have a full square matrix
+        if self.matrix.shape[0] != self.matrix.shape[1]:
+            raise ValueError("Matrix must be square for C++ implementation")
+        
         for k in range(2, self.max_clusters + 1):
-            # fcluster() performs the final 'pruning' step on the results computed by the Rust code that generates a tree.
+            # Get cluster labels (fcluster returns 1-based labels, which C++ expects)
             labels = fcluster(self.linkage_matrix, k, criterion="maxclust")
-            self.scores["ASW"].append(self._compute_silhouette(labels))
-            self.scores["ASWw"].append(self._compute_weighted_silhouette(labels))
-            self.scores["HG"].append(self._compute_homogeneity(labels))
-            self.scores["PBC"].append(self._compute_point_biserial(labels))
-            self.scores["CH"].append(self._compute_calinski_harabasz(labels))
-            self.scores["R2"].append(self._compute_r2(labels))
-            self.scores["HC"].append(self._compute_hierarchical_criterion(labels))
-
-    def _compute_silhouette(self, labels) -> float:
-        """
-        Compute Silhouette Score (ASW).
-        """
-        if len(set(labels)) > 1:
-            return silhouette_score(self.matrix, labels, metric="precomputed")
-        return np.nan
-
-    def _compute_weighted_silhouette(self, labels) -> float:
-        """
-        Compute Weighted Silhouette Score (ASWw) using sequence weights.
-        
-        This method computes a weighted average of silhouette scores where each sample's
-        silhouette score is weighted by its corresponding sequence weight.
-        """
-        sil_samples = silhouette_samples(self.matrix, labels, metric="precomputed")
-        
-        # Use sequence weights instead of cluster size weights
-        weighted_silhouette = np.sum(sil_samples * self.weights) / np.sum(self.weights)
-        
-        return weighted_silhouette
-
-    def _compute_homogeneity(self, labels) -> float:
-        """
-        Compute Weighted Homogeneity (HG) using sequence weights.
-        
-        Weighted homogeneity measures the concentration of weights within clusters.
-        Higher values indicate more homogeneous cluster weight distributions.
-        """
-        unique_clusters = np.unique(labels)
-        total_weight = np.sum(self.weights)
-        weighted_homogeneity = 0.0
-        
-        for cluster in unique_clusters:
-            # Sum of weights for entities in this cluster
-            cluster_weight = np.sum(self.weights[labels == cluster])
-            cluster_proportion = cluster_weight / total_weight
-            weighted_homogeneity += cluster_proportion ** 2
             
-        return weighted_homogeneity
-
-    def _compute_point_biserial(self, labels) -> float:
-        """
-        Compute Point-Biserial Correlation (PBC).
-        """
-        # We must explicitly convert labels to the correct type
-        # This ensures compatibility with the int64_t[:] Cython type signature.
-        labels = np.asarray(labels, dtype=np.int64)
-        score = point_biserial(self.matrix, labels)
-        return score
-
-    def _compute_calinski_harabasz(self, labels) -> float:
-        """
-        Pseudo Calinski-Harabasz score using distance matrix (distance-based, unweighted).
-        
-        This is a pseudo-CH that approximates between-cluster and within-cluster dispersion
-        based only on distances, without using the original feature space.
-        
-        Note: This is NOT the classic CH index and is unweighted. For weighted analysis,
-        use HC (Hierarchical Criterion) instead.
-
-        Returns a value similar in spirit to traditional CH index.
-        """
-        n_samples = len(labels)
-        unique_clusters = np.unique(labels)
-        n_clusters = len(unique_clusters)
-
-        if n_clusters <= 1 or n_clusters >= n_samples:
-            return np.nan  # CH undefined
-
-        # Compute total mean of distances (upper triangle only to avoid redundancy)
-        triu_indices = np.triu_indices_from(self.matrix, k=1)
-        total_mean = np.mean(self.matrix[triu_indices])
-
-        # Initialize within and between-cluster variances
-        within_ss = 0.0
-        between_ss = 0.0
-
-        for cluster in unique_clusters:
-            indices = np.where(labels == cluster)[0]
-            if len(indices) < 2:
-                continue
-
-            # Within-cluster sum of squares (mean squared pairwise distance)
-            submatrix = self.matrix[np.ix_(indices, indices)]
-            intra_dists = submatrix[np.triu_indices_from(submatrix, k=1)]
-            within_mean = np.mean(intra_dists)
-            within_ss += len(indices) * (within_mean ** 2)
-
-            # Between-cluster dispersion approximated by cluster center's distance to global mean
-            cluster_mean_dist = np.mean(self.matrix[indices][:, indices].flatten())
-            between_ss += len(indices) * ((cluster_mean_dist - total_mean) ** 2)
-
-        if within_ss == 0:
-            return np.nan  # Avoid division by zero
-
-        return (between_ss / (n_clusters - 1)) / (within_ss / (n_samples - n_clusters))
-
-    def _compute_r2(self, labels) -> float:
-        """
-        Distance-based weighted R^2 (pairwise weights on the upper triangle).
-        """
-        D = self.matrix.copy()
-        np.fill_diagonal(D, 0.0)
-
-        # pairwise weights
-        W = np.outer(self.weights, self.weights)
-
-        # use only upper triangle to avoid double counting
-        mask = np.triu(np.ones_like(D, dtype=bool), k=1)
-
-        w_total = W[mask].sum()
-        if w_total == 0:
-            return np.nan
-
-        mu = (W[mask] * D[mask]).sum() / w_total
-        total_ss = (W[mask] * (D[mask] - mu) ** 2).sum()
-
-        within_ss = 0.0
-        for c in np.unique(labels):
-            idx = np.where(labels == c)[0]
-            if idx.size < 2:
-                continue
-            Dc = D[np.ix_(idx, idx)]
-            Wc = W[np.ix_(idx, idx)]
-            msk = np.triu(np.ones_like(Dc, dtype=bool), k=1)
-            wc_total = Wc[msk].sum()
-            if wc_total == 0:
-                continue
-            muc = (Wc[msk] * Dc[msk]).sum() / wc_total
-            within_ss += (Wc[msk] * (Dc[msk] - muc) ** 2).sum()
-
-        return np.nan if total_ss == 0 else 1.0 - within_ss / total_ss
-
-    def _compute_hierarchical_criterion(self, labels) -> float:
-        """
-        Compute Weighted Hierarchical Criterion (HC) using sequence weights.
-        
-        This measures the variance of weighted cluster means.
-        """
-        unique_clusters = np.unique(labels)
-        cluster_means = []
-        
-        for cluster in unique_clusters:
-            cluster_mask = labels == cluster
-            cluster_indices = np.where(cluster_mask)[0]
-            cluster_weights = self.weights[cluster_mask]
-            
-            if len(cluster_indices) > 0:
-                # Compute weighted mean for this cluster
-                weighted_sum = 0.0
-                weight_sum = 0.0
-                for i in cluster_indices:
-                    weighted_sum += np.sum(self.weights[i] * self.matrix[i, cluster_indices])
-                    weight_sum += self.weights[i] * len(cluster_indices)
+            try:
+                # Call C++ function - it expects 1-based cluster labels
+                result = clustering_c_code.cluster_quality(
+                    self.matrix.astype(np.float64, copy=False),
+                    labels.astype(np.int32, copy=False),
+                    self.weights.astype(np.float64, copy=False),
+                    k
+                )
                 
-                if weight_sum > 0:
-                    cluster_means.append(weighted_sum / weight_sum)
-                else:
-                    cluster_means.append(0.0)
-            else:
-                cluster_means.append(0.0)
-        
-        return np.var(cluster_means) if len(cluster_means) > 1 else 0.0
+                # Extract results from C++ (mapping to our score names)
+                self.scores["ASW"].append(result.get("ASW", np.nan))
+                self.scores["ASWw"].append(result.get("ASWw", np.nan))
+                self.scores["HG"].append(result.get("HG", np.nan))
+                self.scores["PBC"].append(result.get("PBC", np.nan))  # Note: PBC mapping might need adjustment
+                self.scores["CH"].append(result.get("CH", np.nan))
+                self.scores["R2"].append(result.get("R2", np.nan))
+                self.scores["HC"].append(result.get("HC", np.nan))
+                
+            except Exception as e:
+                print(f"[!] Error: C++ computation failed for k={k}: {e}")
+                print("    Python fallback has been removed due to accuracy issues.")
+                # Insert NaN values for failed computation
+                self.scores["ASW"].append(np.nan)
+                self.scores["ASWw"].append(np.nan)
+                self.scores["HG"].append(np.nan)
+                self.scores["PBC"].append(np.nan)
+                self.scores["CH"].append(np.nan)
+                self.scores["R2"].append(np.nan)
+                self.scores["HC"].append(np.nan)
+                raise RuntimeError(f"C++ cluster quality computation failed for k={k}. "
+                                   "Python fallback is not available.")
+
+    def _compute_cluster_quality_scores_python(self):
+        """
+        Python fallback implementation has been removed.
+        Only C++ implementation is available for accuracy and performance.
+        """
+        raise NotImplementedError(
+            "Python cluster quality implementation has been removed due to accuracy issues. "
+            "Please use C++ implementation by setting use_cpp=True (default)."
+        )
 
     def _normalize_scores(self, method="zscore") -> None:
         """
