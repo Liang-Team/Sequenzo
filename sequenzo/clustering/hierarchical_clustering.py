@@ -28,18 +28,35 @@
     making the analysis more representative when sequences have different sampling weights
     or population sizes.
 
+    WARD METHOD VARIANTS:
+    The module supports two Ward linkage variants:
+    - 'ward_d' (Ward D): Classic Ward method using squared Euclidean distances ÷ 2
+    - 'ward_d2' (Ward D2): Ward method using squared Euclidean distances
+    For backward compatibility, 'ward' maps to 'ward_d'.
+    
+    The difference affects clustering results and dendrogram heights:
+    - Ward D produces smaller distances in the linkage matrix
+    - Ward D2 produces distances equal to the increase in cluster variance
+    - Both methods produce identical cluster assignments, only distances differ
+
     ROBUSTNESS AND VALIDATION FEATURES:
     - Ward Method Validation: Automatic detection of non-Euclidean distance matrices
-    - One-time Warning System: Alerts users when Ward is used with potentially incompatible distances
+    - One-time Warning System: Alerts users when Ward methods are used with potentially incompatible distances
     - Robust Matrix Cleanup: Handles NaN/Inf values using 95th percentile replacement
     - Distance Matrix Validation: Ensures zero diagonal and non-negativity
     - Symmetry Handling: Automatically symmetrizes matrices when required by clustering algorithms
-    - Method Recommendations: Suggests 'average', 'complete', or 'single' for sequence distances
+    - Method Recommendations: Suggests alternative methods for sequence distances
 
-    For sequence distances (OM, LCS, etc.), Ward linkage may produce suboptimal results.
+    For sequence distances (OM, LCS, etc.), Ward linkage methods may produce suboptimal results.
     Consider using alternative methods like 'average' (UPGMA) for better theoretical validity.
 
-    Note that the CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
+    Original code references:
+        Cluster(): Derived from `hclust` 
+            R code: https://github.com/cran/fastcluster/blob/master/R/fastcluster.R
+            Python code: https://github.com/fastcluster/fastcluster/blob/master/src/fastcluster.cpp
+            The Python version of facluster does not support Ward D method but only Ward D2, whereas R supports both.
+            Thus, we provide Ward D2 by ourselves here. 
+        CQI equivalence of R is here: https://github.com/cran/WeightedCluster/blob/master/src/clusterquality.cpp
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -82,7 +99,8 @@ def _check_euclidean_compatibility(matrix, method):
     bool
         True if matrix appears Euclidean-compatible, False otherwise
     """
-    if method.lower() != "ward":
+    # Check for Ward methods (both Ward D and Ward D2 require Euclidean distances)
+    if method.lower() not in ["ward", "ward_d", "ward_d2"]:
         return True  # Other methods don't require Euclidean distances
     
     # Basic checks for Euclidean properties
@@ -150,11 +168,17 @@ def _warn_ward_usage_once(matrix, method):
     """
     global _WARD_WARNING_SHOWN
     
-    if not _WARD_WARNING_SHOWN and method.lower() == "ward":
+    # Check for both Ward D and Ward D2 methods
+    if not _WARD_WARNING_SHOWN and method.lower() in ["ward", "ward_d", "ward_d2"]:
         if not _check_euclidean_compatibility(matrix, method):
             warnings.warn(
                 "\n⚠️  Ward linkage method detected with potentially non-Euclidean distance matrix!\n"
-                "   Ward clustering assumes Euclidean distances for theoretical validity.\n"
+                "   Ward clustering (both Ward D and Ward D2) assumes Euclidean distances for theoretical validity.\n"
+                "   \n"
+                "   Ward method variants:\n"
+                "   - 'ward_d' (classic): Uses squared Euclidean distances ÷ 2\n"
+                "   - 'ward_d2': Uses squared Euclidean distances\n"
+                "   \n"
                 "   For sequence distances (OM, LCS, etc.), consider using:\n"
                 "   - method='average' (UPGMA)\n"
                 "   - method='complete' (complete linkage)\n"
@@ -236,7 +260,14 @@ class Cluster:
 
         :param matrix: Precomputed distance matrix (full square form).
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
-        :param clustering_method: Clustering algorithm to use (default: "ward").
+        :param clustering_method: Clustering algorithm to use. Options include:
+            - "ward" or "ward_d": Classic Ward method (squared Euclidean distances ÷ 2) [default]
+            - "ward_d2": Ward method with squared Euclidean distances
+            - "single": Single linkage (minimum method)
+            - "complete": Complete linkage (maximum method)
+            - "average": Average linkage (UPGMA)
+            - "centroid": Centroid linkage
+            - "median": Median linkage
         :param weights: Optional array of weights for each entity (default: None for equal weights).
         """
         # Ensure entity_ids is a numpy array for consistent processing
@@ -277,10 +308,16 @@ class Cluster:
         self.clustering_method = clustering_method.lower()
 
         # Supported clustering methods
-        supported_methods = ["ward", "single", "complete", "average", "centroid", "median"]
+        supported_methods = ["ward", "ward_d", "ward_d2", "single", "complete", "average", "centroid", "median"]
         if self.clustering_method not in supported_methods:
             raise ValueError(
                 f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
+        
+        # Handle backward compatibility: 'ward' maps to 'ward_d' (classic Ward method)
+        if self.clustering_method == "ward":
+            self.clustering_method = "ward_d"
+            print("[>] Note: 'ward' method maps to 'ward_d' (classic Ward method).")
+            print("    Use 'ward_d2' for Ward method with squared Euclidean distances.")
 
         # Compute linkage matrix using fastcluster
         self.linkage_matrix = self._compute_linkage()
@@ -288,6 +325,7 @@ class Cluster:
     def _compute_linkage(self):
         """
         Compute the linkage matrix using fastcluster for improved performance.
+        Supports both Ward D (classic) and Ward D2 methods.
         """
         # Clean and validate the distance matrix using robust methods
         self.full_matrix = _clean_distance_matrix(self.full_matrix)
@@ -308,15 +346,47 @@ class Cluster:
         self.condensed_matrix = squareform(self.full_matrix)
 
         try:
-            linkage_matrix = linkage(self.condensed_matrix, method=self.clustering_method)
+            # Map our method names to fastcluster's expected method names
+            fastcluster_method = self._map_method_name(self.clustering_method)
+            linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
+            
+            # Apply Ward D correction if needed (divide distances by 2 for classic Ward)
+            if self.clustering_method == "ward_d":
+                linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
+                
         except Exception as e:
             raise RuntimeError(
                 f"Failed to compute linkage with method '{self.clustering_method}'. "
                 "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
-                "For sequence distances, consider using 'average', 'complete', or 'single' instead of 'ward'. "
+                "For sequence distances, consider using 'average', 'complete', or 'single' instead of Ward methods. "
                 f"Original error: {e}"
             )
         return linkage_matrix
+
+    def _map_method_name(self, method):
+        """
+        Map our internal method names to fastcluster's expected method names.
+        """
+        method_mapping = {
+            "ward_d": "ward",    # Classic Ward (will be corrected later)
+            "ward_d2": "ward",   # Ward D2 (no correction needed)
+            "single": "single",
+            "complete": "complete",
+            "average": "average",
+            "centroid": "centroid",
+            "median": "median"
+        }
+        return method_mapping.get(method, method)
+    
+    def _apply_ward_d_correction(self, linkage_matrix):
+        """
+        Apply Ward D correction by dividing distances by 2.
+        This converts Ward D2 results to classic Ward D results.
+        """
+        linkage_corrected = linkage_matrix.copy()
+        linkage_corrected[:, 2] = linkage_corrected[:, 2] / 2.0
+        print("[>] Applied Ward D correction: distances divided by 2 for classic Ward method.")
+        return linkage_corrected
 
     def plot_dendrogram(self,
                         save_as=None,
@@ -405,7 +475,7 @@ class ClusterQuality:
                 print("[>] Detected Pandas DataFrame. Converting to NumPy array...")
                 matrix_or_cluster = matrix_or_cluster.values
             self.matrix = matrix_or_cluster
-            self.clustering_method = clustering_method or "ward"
+            self.clustering_method = clustering_method or "ward_d"  # Default to classic Ward
             
             # Initialize weights for direct matrix input
             if weights is not None:
@@ -440,7 +510,14 @@ class ClusterQuality:
     def _compute_linkage_for_direct_input(self):
         """
         Compute linkage matrix for direct matrix input (similar to Cluster class logic).
+        Supports both Ward D and Ward D2 methods.
         """
+        # Handle backward compatibility: 'ward' maps to 'ward_d'
+        if self.clustering_method == "ward":
+            self.clustering_method = "ward_d"
+            print("[>] Note: 'ward' method maps to 'ward_d' (classic Ward method).")
+            print("    Use 'ward_d2' for Ward method with squared Euclidean distances.")
+            
         # Clean and validate the distance matrix using robust methods
         self.matrix = _clean_distance_matrix(self.matrix)
         
@@ -460,15 +537,47 @@ class ClusterQuality:
         condensed_matrix = squareform(self.matrix)
 
         try:
-            linkage_matrix = linkage(condensed_matrix, method=self.clustering_method)
+            # Map our method names to fastcluster's expected method names
+            fastcluster_method = self._map_method_name(self.clustering_method)
+            linkage_matrix = linkage(condensed_matrix, method=fastcluster_method)
+            
+            # Apply Ward D correction if needed
+            if self.clustering_method == "ward_d":
+                linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
+                
         except Exception as e:
             raise RuntimeError(
                 f"Failed to compute linkage with method '{self.clustering_method}'. "
                 "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
-                "For sequence distances, consider using 'average', 'complete', or 'single' instead of 'ward'. "
+                "For sequence distances, consider using 'average', 'complete', or 'single' instead of Ward methods. "
                 f"Original error: {e}"
             )
         return linkage_matrix
+        
+    def _map_method_name(self, method):
+        """
+        Map our internal method names to fastcluster's expected method names.
+        """
+        method_mapping = {
+            "ward_d": "ward",    # Classic Ward (will be corrected later)
+            "ward_d2": "ward",   # Ward D2 (no correction needed)
+            "single": "single",
+            "complete": "complete",
+            "average": "average",
+            "centroid": "centroid",
+            "median": "median"
+        }
+        return method_mapping.get(method, method)
+    
+    def _apply_ward_d_correction(self, linkage_matrix):
+        """
+        Apply Ward D correction by dividing distances by 2.
+        This converts Ward D2 results to classic Ward D results.
+        """
+        linkage_corrected = linkage_matrix.copy()
+        linkage_corrected[:, 2] = linkage_corrected[:, 2] / 2.0
+        print("[>] Applied Ward D correction: distances divided by 2 for classic Ward method.")
+        return linkage_corrected
 
     def compute_cluster_quality_scores(self):
         """
