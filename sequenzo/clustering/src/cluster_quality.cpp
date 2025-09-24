@@ -45,6 +45,7 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
     
     // Allocate arrays like R version (0-based indexing)
     std::vector<double> errors(nclusters, 0.0);
+    std::vector<double> errors2(nclusters, 0.0);
     std::vector<double> sizes(nclusters, 0.0);
     
     // Initialize ASW arrays (output)
@@ -118,6 +119,7 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
                         // Same cluster
                         if (iclustIndex >= 0 && iclustIndex < nclusters) {
                             errors[iclustIndex] += xw;
+                            errors2[iclustIndex] += xxw;  // Add errors2 calculation like R
                         }
                         wxy += xw;
                         wy += ww;
@@ -141,9 +143,22 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
         covy = wy / totweights - yb * yb;
         covxy = wxy / totweights - yb * xb;
         
+        // Debug: Print intermediate values
+        #ifdef DEBUG_PBC
+        std::cout << "DEBUG PBC: totweights=" << totweights << ", wx=" << wx << ", wy=" << wy << ", wxy=" << wxy << ", wx2=" << wx2 << std::endl;
+        std::cout << "DEBUG PBC: xb=" << xb << ", yb=" << yb << std::endl;
+        std::cout << "DEBUG PBC: covx=" << covx << ", covy=" << covy << ", covxy=" << covxy << std::endl;
+        #endif
+        
         if (covx > 0 && covy > 0) {
             pearson = covxy / std::sqrt(covx * covy);
-            stats[ClusterQualHPG] = -1.0 * static_cast<double>(pearson);  // Negative like R
+            double pbc_value = -1.0 * static_cast<double>(pearson);  // Apply negative to get positive PBC
+            stats[ClusterQualHPG] = pbc_value;
+            
+            // Debug: Print final calculation
+            #ifdef DEBUG_PBC
+            std::cout << "DEBUG PBC: pearson=" << pearson << ", pbc_value=" << pbc_value << std::endl;
+            #endif
         }
     }
     
@@ -224,19 +239,22 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
     for (int i = 0; i < nclusters; i++) {
         if (sizes[i] > 0) {
             SSres += errors[i] / sizes[i];
+            SS2res += errors2[i] / sizes[i];
             total_cluster_weights += sizes[i];
         }
     }
     
     if (total_cluster_weights > 0) {
         double SSexpl = wx / total_cluster_weights - SSres;
+        double SS2expl = wx2 / total_cluster_weights - SS2res;
         double dncluster = static_cast<double>(nclusters);
         
         if (total_cluster_weights > dncluster && SSres > 0) {
             stats[ClusterQualF] = (SSexpl / (dncluster - 1.0)) / (SSres / (total_cluster_weights - dncluster));
             stats[ClusterQualR] = SSexpl / (SSres + SSexpl);
-            stats[ClusterQualF2] = stats[ClusterQualF] * stats[ClusterQualF];
-            stats[ClusterQualR2] = stats[ClusterQualR] * stats[ClusterQualR];
+            // F2 and R2 should be based on SS2, not squares of F and R
+            stats[ClusterQualF2] = (SS2expl / (dncluster - 1.0)) / (SS2res / (total_cluster_weights - dncluster));
+            stats[ClusterQualR2] = SS2expl / (SS2res + SS2expl);
         }
     }
     
