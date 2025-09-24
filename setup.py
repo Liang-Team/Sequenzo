@@ -334,7 +334,7 @@ def configure_cython_extensions():
     """
     try:
         pyx_paths = [
-            Path("sequenzo/clustering/utils/point_biserial.pyx").as_posix(),
+            # point_biserial.pyx removed - using C++ implementation instead
             Path("sequenzo/dissimilarity_measures/utils/get_sm_trate_substitution_cost_matrix.pyx").as_posix(),
             Path("sequenzo/dissimilarity_measures/utils/seqconc.pyx").as_posix(),
             Path("sequenzo/dissimilarity_measures/utils/seqdss.pyx").as_posix(),

@@ -1,0 +1,20 @@
+Package: WeightedCluster
+Version: 1.8-1
+Date: 2024-12-10
+Title: Clustering of Weighted Data
+Authors@R: person("Matthias", "Studer", email = "matthias.studer@unige.ch", role = c("aut", "cre"))
+Author: Matthias Studer [aut, cre]
+Maintainer: Matthias Studer <matthias.studer@unige.ch>
+Depends: R (>= 3.0.0), TraMineR (>= 2.0-6), cluster
+Imports: utils, RColorBrewer, foreach, progressr, future, doFuture,
+        nnet, fastcluster, vegclust
+Suggests: RUnit, knitr, isotone, vegan, lattice, rmarkdown, Cairo,
+        progress, DirichletReg, betareg
+VignetteBuilder: knitr
+Description: Clusters state sequences and weighted data. It provides an optimized weighted PAM algorithm as well as functions for aggregating replicated cases, computing cluster quality measures for a range of clustering solutions and plotting (fuzzy) clusters of state sequences. Parametric bootstraps methods to validate typology of sequences are also provided. Finally, it provides a fuzzy and crisp CLARA algorithm to cluster large database with sequence analysis.
+License: GPL (>= 2)
+URL: http://mephisto.unige.ch/weightedcluster/
+NeedsCompilation: yes
+Packaged: 2024-12-10 21:06:25 UTC; studerm
+Repository: CRAN
+Date/Publication: 2024-12-10 22:00:02 UTC

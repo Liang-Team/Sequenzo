@@ -1,0 +1,43 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+use("TraMineR")
+data(mvad)
+mvad.labels <- c("employment", "further education", "higher education",
+                    "joblessness", "school", "training")
+mvad.scodes <- c("EM","FE","HE","JL","SC","TR")
+mvad.seq <- seqdef(mvad, 15:86, states=mvad.scodes, labels=mvad.labels)
+```
+
+You can add options to executable code like this
+
+```{r}
+
+om <- seqdist(mvad.seq, method="OM", indel=1, sm="CONSTANT") 
+```
+
+```{r}
+library(WeightedCluster)
+
+## Perform hierarchical clustering using "ward.D" method, the input is the OM-based dissimilarity matrix (specified in as.dist)
+wardCluster <- hclust(as.dist(om), method="ward.D")
+
+## as.clustrange() produces the all the quality indices 
+wardRange<-as.clustrange(wardCluster, diss=om)
+
+## print the quality indices for the two best solutions
+summary(wardRange, max.rank=2)
+
+```
