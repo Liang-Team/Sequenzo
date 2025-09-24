@@ -234,10 +234,11 @@ class SequenceData:
 
         if self.ismissing:
             # 判断 states 中是否已经含有 Missing（无论是字符串还是 np.nan）
-            # 兼容用户传进来的各种形式的“missing”
-            if (not any(s.lower() == "missing" for s in self.states if isinstance(s, str))
-                and not any(pd.isna(s) for s in self.states)):
-
+            # 兼容用户传进来的各种形式的"missing"
+            has_missing_state = any(pd.isna(s) for s in self.states) or any(s.lower() == "missing" for s in self.states if isinstance(s, str))
+            has_missing_label = any(label.lower() == "missing" for label in self.labels if isinstance(label, str))
+            
+            if not has_missing_state:
                 # 自动判断 states 是字符串型还是数字型
                 example_missing = "'Missing'" if all(isinstance(s, str) for s in self.states) else "np.nan"
                 quote = "" if example_missing == "np.nan" else "'"
@@ -255,20 +256,14 @@ class SequenceData:
                 # 添加 missing 到 states 和 labels
                 if example_missing == "'Missing'":
                     self.states.append("Missing")
+                else:
+                    self.states.append(np.nan)
+                    
+                # 只有当labels中没有Missing时才添加
+                if not has_missing_label:
                     self.labels = [label for label in self.labels   # 去除所有大小写混杂的 "missing"
                                    if not (isinstance(label, str) and label.lower() == "missing")]
                     self.labels.append("Missing")
-
-                else:
-                    self.states.append(np.nan)
-                    self.labels = [label for label in self.labels  # 去除所有大小写混杂的 "missing"
-                                   if not (isinstance(label, str) and label.lower() == "missing")]
-                    self.labels.append("Missing")
-
-            else:
-                self.states = [state for state in self.states  # 去除所有大小写混杂的 "missing"
-                               if not (isinstance(state, str) and state.lower() == "missing")]
-                self.states.append("Missing")
 
     def _convert_states(self):
         """
@@ -519,7 +514,7 @@ class SequenceData:
 
         return table
 
-    def uniqueness_stats(self, top_k: int = 10, as_labels: bool = False, weighted: bool = False):
+    def uniqueness_stats(self, weighted: bool = False):
         """
         Compute uniqueness statistics of the sequences.
 
@@ -528,14 +523,10 @@ class SequenceData:
                 - n_sequences: total number of sequences (unweighted count)
                 - n_unique: number of unique sequence patterns
                 - uniqueness_rate: n_unique / n_sequences
-                - counts: pd.Series (index=pattern_id, values=frequency), sorted desc
-                - examples: pd.DataFrame (pattern_id, freq, example) with up to top_k rows
                 - weighted_total: total weighted count (only if weighted=True)
                 - weighted_uniqueness_rate: n_unique / weighted_total (only if weighted=True)
                 
         Parameters:
-            top_k: show top-k most frequent patterns in 'examples'
-            as_labels: if True, show example sequences with state labels; else with numeric codes.
             weighted: if True, use sequence weights to calculate weighted frequencies and uniqueness rates;
                      if False, use simple counts (default behavior for backward compatibility).
         """
@@ -549,62 +540,23 @@ class SequenceData:
         A_contig = np.ascontiguousarray(A)
         row_view = A_contig.view(np.dtype((np.void, A_contig.dtype.itemsize * m))).ravel()
 
-        # Get unique patterns and their assignment per row
-        uniq, inverse, counts = np.unique(row_view, return_inverse=True, return_counts=True)
+        # Get unique patterns 
+        uniq, inverse = np.unique(row_view, return_inverse=True)
 
         n_unique = uniq.size
         uniqueness_rate = float(n_unique) / float(n) if n > 0 else np.nan
 
-        # Calculate frequencies (weighted or unweighted)
-        if weighted:
-            # For weighted calculation: aggregate weights by pattern
-            # Create a mapping from pattern_id to weighted sum
-            weighted_counts = np.zeros(n_unique, dtype=np.float64)
-            for i, pattern_id in enumerate(inverse):
-                weighted_counts[pattern_id] += self.weights[i]
-            
-            # Build frequency table with weighted counts
-            freq = pd.Series(weighted_counts, index=pd.Index(range(n_unique), name="pattern_id")).sort_values(ascending=False)
-            weighted_total = float(np.sum(self.weights))
-            weighted_uniqueness_rate = float(n_unique) / weighted_total if weighted_total > 0 else np.nan
-        else:
-            # Unweighted calculation (original behavior)
-            freq = pd.Series(counts, index=pd.Index(range(n_unique), name="pattern_id")).sort_values(ascending=False)
-
-        # Prepare readable examples for the top-k most frequent patterns
-        top_ids = freq.head(top_k).index.tolist()
-        # Pick the first row of each pattern as example
-        # Map pattern_id -> first row index
-        first_row_idx = {}
-        for i, pid in enumerate(inverse):
-            if pid in top_ids and pid not in first_row_idx:
-                first_row_idx[pid] = i
-                if len(first_row_idx) == len(top_ids):
-                    break
-
-        ex_rows = []
-        for pid in top_ids:
-            r = A[first_row_idx[pid]]
-            if as_labels:
-                # Turn numeric codes 1..K into labels
-                r = [self.state_to_label[self.inverse_state_mapping[int(x)]] for x in r]
-            else:
-                r = r.tolist()
-            ex_rows.append({"pattern_id": int(pid), "freq": float(freq.loc[pid]), "example": r})
-
-        examples = pd.DataFrame(ex_rows)
-
-        # Build result dictionary
+        # Build simplified result dictionary with only essential statistics
         result = {
             "n_sequences": int(n),
             "n_unique": int(n_unique),
-            "uniqueness_rate": uniqueness_rate,
-            "counts": freq,
-            "examples": examples
+            "uniqueness_rate": uniqueness_rate
         }
 
         # Add weighted statistics if requested
         if weighted:
+            weighted_total = float(np.sum(self.weights))
+            weighted_uniqueness_rate = float(n_unique) / weighted_total if weighted_total > 0 else np.nan
             result["weighted_total"] = weighted_total
             result["weighted_uniqueness_rate"] = weighted_uniqueness_rate
 
