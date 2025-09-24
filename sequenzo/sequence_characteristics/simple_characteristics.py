@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Union, List
 
+from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.utils.seqdss import seqdss
 from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
 from sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
@@ -38,7 +39,7 @@ def get_subsequences_in_single_sequence(x: np.ndarray, nbstat: int, statlist: Li
         sequence datasets. The algorithm uses dynamic programming for efficiency.
     """
     # Initialize state tracking array
-    l = np.zeros(nbstat, dtype=int)
+    l = np.zeros(nbstat, dtype=int) - 1  # 必须是 -1（或其他负数）。避免 0-based 索引与 0 代表的无效值冲突
     
     # Remove void elements if specified
     if void is not None:
@@ -55,7 +56,7 @@ def get_subsequences_in_single_sequence(x: np.ndarray, nbstat: int, statlist: Li
         return 1
     
     # Dynamic programming array
-    N = np.zeros(slength + 1, dtype=int)
+    N = np.zeros(slength + 1, dtype=object)  # Use object dtype to handle large integers
     N[0] = 1
     
     for i in range(1, slength + 1):
@@ -70,7 +71,7 @@ def get_subsequences_in_single_sequence(x: np.ndarray, nbstat: int, statlist: Li
             continue
         
         # Subtract previously counted subsequences ending with this state
-        if l[cidx] > 0:
+        if l[cidx] > -1:
             N[i] = N[i] - N[l[cidx]]
         
         # Update last position of this state
@@ -112,6 +113,9 @@ def get_subsequences_all_sequences(seqdata, dss: bool = True, with_missing: bool
         This function works with SequenceData objects (recommended) or pandas DataFrames.
         Use this to understand the complexity and diversity patterns in your sequences.
     """
+    if isinstance(seqdata, np.ndarray):
+        seqdata = pd.DataFrame(seqdata)
+
     # Check if input is a SequenceData object
     if hasattr(seqdata, 'seqdata'):
         # It is a SequenceData object
@@ -194,6 +198,44 @@ def get_subsequences_all_sequences(seqdata, dss: bool = True, with_missing: bool
     
     return result_df
 
+def cut_prefix(row, x=0):
+    arr = row.to_numpy()
+    if np.issubdtype(arr.dtype, np.number):
+        pos_idx = np.where(arr < x)[0]
+        if len(pos_idx) > 0:
+            arr = arr[:pos_idx[0]]
+    return arr
+
+def seqsubsn(seqdata, DSS=True, with_missing=False) -> pd.DataFrame:
+    if isinstance(seqdata, np.ndarray):
+        sl = pd.unique(seqdata.ravel())
+        seqdata = pd.DataFrame(seqdata)
+        statelist = sl.tolist()
+    elif isinstance(seqdata, pd.DataFrame):
+        sl = pd.unique(seqdata.values.ravel())
+        statelist = sl.tolist()
+        pass
+    elif isinstance(seqdata, SequenceData):
+        sl = seqdata.states.copy()
+        seqdata = seqdata.seqdata
+        statelist = list(range(1, len(sl) + 1))
+    else:
+        raise ValueError("[!] seqdata must be a SequenceData object, see SequenceData function to create one.")
+
+    if DSS:
+        seqdata = seqdss(seqdata)
+        seqdata = pd.DataFrame(seqdata)
+
+    ns = len(sl)
+
+    result = seqdata.apply(lambda row: get_subsequences_in_single_sequence(
+        cut_prefix(row),
+        nbstat=ns,
+        statlist=statelist
+    ), axis=1)
+
+    result = pd.DataFrame(result, columns=['Subseq.'], index=seqdata.index)
+    return result
 
 def get_number_of_transitions(seqdata, norm=False, pwight=False) -> pd.DataFrame:
     """

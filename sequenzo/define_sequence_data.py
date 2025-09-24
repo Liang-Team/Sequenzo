@@ -155,7 +155,8 @@ class SequenceData:
 
         # Validate that states are present in the actual data values
         data_values = set(self.data[self.time].stack().unique())
-        unmatched_states = [s for s in self.states if s not in data_values]
+        states_clean = [s for s in self.states if not pd.isna(s)]    # stack() 会去掉 nan 值，因此如果传进来的 states 有 np.nan，则会报错
+        unmatched_states = [s for s in states_clean if s not in data_values]
 
         if unmatched_states:
             raise ValueError(
