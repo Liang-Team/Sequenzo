@@ -507,16 +507,20 @@ class ClusterQuality:
             raise ValueError("Matrix must be a full square-form distance matrix.")
 
         self.max_clusters = max_clusters
-        self.scores = {
-            "ASW": [],
-            "ASWw": [],
-            "HG": [],
-            "PBC": [],
-            "CH": [],
-            "R2": [],
-            "HC": [],
-        }
-        
+        self.metric_order = [
+            "PBC",
+            "HG",
+            "HGSD",
+            "ASW",
+            "ASWw",
+            "CH",
+            "R2",
+            "CHsq",
+            "R2sq",
+            "HC",
+        ]
+        self.scores = {metric: [] for metric in self.metric_order}
+
         # Store original scores separately to preserve raw values
         self.original_scores = None
 
@@ -638,25 +642,15 @@ class ClusterQuality:
                 )
                 
                 # Extract results from C++ (mapping to match R WeightedCluster exactly)
-                self.scores["ASW"].append(result.get("ASW", np.nan))
-                self.scores["ASWw"].append(result.get("ASWw", np.nan))
-                self.scores["HG"].append(result.get("HG", np.nan))
-                self.scores["PBC"].append(result.get("PBC", np.nan))  # PBC uses HPG (Pearson correlation)
-                self.scores["CH"].append(result.get("CH", np.nan))    # Use CH (F statistic)
-                self.scores["R2"].append(result.get("R2", np.nan))    # Use R2 (R statistic)
-                self.scores["HC"].append(result.get("HC", np.nan))
+                for metric in self.metric_order:
+                    self.scores[metric].append(result.get(metric, np.nan))
                 
             except Exception as e:
                 print(f"[!] Error: C++ computation failed for k={k}: {e}")
                 print("    Python fallback has been removed due to accuracy issues.")
                 # Insert NaN values for failed computation
-                self.scores["ASW"].append(np.nan)
-                self.scores["ASWw"].append(np.nan)
-                self.scores["HG"].append(np.nan)
-                self.scores["PBC"].append(np.nan)
-                self.scores["CH"].append(np.nan)
-                self.scores["R2"].append(np.nan)
-                self.scores["HC"].append(np.nan)
+                for metric in self.metric_order:
+                    self.scores[metric].append(np.nan)
                 raise RuntimeError(f"C++ cluster quality computation failed for k={k}. "
                                    "Python fallback is not available.")
 
@@ -688,6 +682,49 @@ class ClusterQuality:
                 max_val = np.nanmax(values)
                 if max_val > min_val:
                     self.scores[metric] = (values - min_val) / (max_val - min_val)
+
+    def get_cluster_range_table(self) -> pd.DataFrame:
+        """
+        Return a metrics-by-cluster table mirroring R's `as.clustrange()` output.
+
+        :return: DataFrame indexed by cluster count ("cluster2", ...)
+                 with raw metric values for each quality indicator.
+        """
+        # Prefer preserved raw scores to avoid normalization side-effects
+        if self.original_scores is not None:
+            scores_to_use = self.original_scores
+        else:
+            scores_to_use = self.scores
+
+        # Ensure metrics are available
+        if not scores_to_use or not any(len(scores_to_use[m]) for m in self.metric_order):
+            raise ValueError("Cluster quality scores are empty. Run `compute_cluster_quality_scores()` first.")
+
+        # Determine number of evaluated cluster counts
+        lengths = [len(scores_to_use[metric]) for metric in self.metric_order if metric in scores_to_use]
+        if not lengths:
+            raise ValueError("No recognized metrics found in scores.")
+
+        if len(set(lengths)) != 1:
+            raise ValueError("Inconsistent metric lengths detected. Please recompute cluster quality scores.")
+
+        n_rows = lengths[0]
+        if n_rows == 0:
+            raise ValueError("Cluster quality scores contain no entries.")
+
+        # Build DataFrame matching R output ordering
+        data = {}
+        for metric in self.metric_order:
+            values = scores_to_use.get(metric)
+            if values is None:
+                continue
+            data[metric] = np.array(values, dtype=np.float64)
+
+        index_labels = [f"cluster{k}" for k in range(2, 2 + n_rows)]
+        table = pd.DataFrame(data, index=index_labels)
+        table.index.name = "Cluster"
+
+        return table
 
     def get_cqi_table(self):
         """
@@ -732,7 +769,11 @@ class ClusterQuality:
         }
 
         # Get maximum value and its position from original scores
-        for metric, values in original_scores.items():
+        for metric in self.metric_order:
+            values = original_scores.get(metric)
+            if values is None:
+                continue
+
             if np.all(np.isnan(values)):
                 optimal_k, raw_value, z_val = np.nan, np.nan, np.nan
             else:
@@ -795,7 +836,7 @@ class ClusterQuality:
 
         # Calculate statistics from original data
         original_stats = {}
-        for metric in metrics_list or self.scores.keys():
+        for metric in metrics_list or self.metric_order:
             values = np.array(original_scores[metric])
             original_stats[metric] = {
                 'mean': np.nanmean(values),
@@ -812,7 +853,9 @@ class ClusterQuality:
         plt.figure(figsize=figsize)
 
         if metrics_list is None:
-            metrics_list = self.scores.keys()
+            metrics_list = list(self.metric_order)
+        else:
+            metrics_list = [metric for metric in metrics_list if metric in self.metric_order]
 
         # Plot each metric
         for idx, metric in enumerate(metrics_list):
