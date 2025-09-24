@@ -92,8 +92,10 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
                     ww = 2.0 * weights[i] * weights[j];  // Factor of 2 like R
                     
                     if constexpr (UseCondensed) {
-                        xx = diss[ij + j];
+                        // Use explicit condensed indexing to avoid stride/layout issues
+                        xx = diss[getCondensedIndex(i, j, n)];
                     } else {
+                        // Full square matrix (row-major) indexing
                         xx = diss[ij + j];
                     }
                     
@@ -191,16 +193,27 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
         }
     }"}
     
-    // Compute final Kendall statistics exactly like R (no safety checks)
-    if ((nc + nd) > 0) {
-        stats[ClusterQualHG] = static_cast<double>((nc - nd) / (nc + nd));  // Gamma
+    // Compute final Kendall statistics (guard divisions to avoid NaN while matching R behavior)
+    double denom_hg = (nc + nd);
+    if (denom_hg > 0) {
+        stats[ClusterQualHG] = static_cast<double>((nc - nd) / denom_hg);  // Gamma
     }
-    
-    // HGSD (Somers' D) - like R, no safety check
-    stats[ClusterQualHGSD] = (nc - nd) / (nc + nd + ntiesdist);
-    
-    // HC (Hierarchical Criterion) - like R, no safety check  
-    stats[ClusterQualHC] = (wxy - Smin) / (Smax - Smin);
+
+    // HGSD (Somers' D)
+    double denom_hgsd = (nc + nd + ntiesdist);
+    if (denom_hgsd > 0) {
+        stats[ClusterQualHGSD] = (nc - nd) / denom_hgsd;
+    } else {
+        stats[ClusterQualHGSD] = 0.0; // avoid NaN in degenerate cases
+    }
+
+    // HC (Hierarchical Criterion)
+    double denom_hc = (Smax - Smin);
+    if (denom_hc > 0) {
+        stats[ClusterQualHC] = (wxy - Smin) / denom_hc;
+    } else {
+        stats[ClusterQualHC] = 0.0; // avoid NaN when Smax == Smin
+    }
     
     
     // Compute F and R statistics exactly like R
