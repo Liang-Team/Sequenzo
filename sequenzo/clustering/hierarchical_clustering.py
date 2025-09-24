@@ -516,6 +516,9 @@ class ClusterQuality:
             "R2": [],
             "HC": [],
         }
+        
+        # Store original scores separately to preserve raw values
+        self.original_scores = None
 
     def _compute_linkage_for_direct_input(self):
         """
@@ -602,6 +605,11 @@ class ClusterQuality:
                 "Please ensure the C++ extensions are properly compiled."
             )
         self._compute_cluster_quality_scores_cpp()
+        
+        # Save original scores immediately after computation
+        self.original_scores = {}
+        for metric, values in self.scores.items():
+            self.original_scores[metric] = np.array(values).copy()
 
     def _compute_cluster_quality_scores_cpp(self):
         """
@@ -686,11 +694,17 @@ class ClusterQuality:
         Generate a summary table of clustering quality indicators with concise column names.
 
         :return: Pandas DataFrame summarizing the optimal number of clusters (N groups),
-                 the corresponding metric values (stat), and normalized values (z-score and min-max normalization).
+                 the corresponding raw metric values, and z-score normalized values.
         """
-        # Deep copy original scores to avoid overwriting during normalization
+        # Use original scores if available, otherwise fall back to current scores
+        if self.original_scores is not None:
+            scores_to_use = self.original_scores
+        else:
+            scores_to_use = self.scores
+        
+        # Deep copy to avoid overwriting during normalization
         original_scores = {}
-        for metric, values in self.scores.items():
+        for metric, values in scores_to_use.items():
             original_scores[metric] = np.array(values).copy()
 
         # Create temporary copy for z-score normalization
@@ -709,43 +723,29 @@ class ClusterQuality:
             else:
                 zscore_normalized[metric] = values.copy()
 
-        # Apply min-max normalization to another temp copy
-        minmax_normalized = {}
-        for metric in original_scores:
-            values = original_scores[metric].copy()
-            min_val = np.nanmin(values)
-            max_val = np.nanmax(values)
-            if max_val > min_val:
-                minmax_normalized[metric] = (values - min_val) / (max_val - min_val)
-            else:
-                minmax_normalized[metric] = values.copy()
-
-        # Generate summary table
+        # Generate summary table (removed redundant Min-Max Norm column)
         summary = {
             "Metric": [],
             "Opt. Clusters": [],  # Abbreviated from "Optimal Clusters"
-            "Opt. Value": [],  # Raw optimal value (not normalized)
+            "Raw Value": [],  # Raw optimal value (not normalized)
             "Z-Score Norm.": [],  # Z-Score normalized optimal value
-            "Min-Max Norm.": []  # Min-Max normalized optimal value
         }
 
         # Get maximum value and its position from original scores
         for metric, values in original_scores.items():
             if np.all(np.isnan(values)):
-                optimal_k, raw_value, z_val, mm_val = np.nan, np.nan, np.nan, np.nan
+                optimal_k, raw_value, z_val = np.nan, np.nan, np.nan
             else:
                 pos = np.nanargmax(values)
                 optimal_k = pos + 2
                 raw_value = values[pos]  # Use raw original value
                 z_val = zscore_normalized[metric][pos]
-                mm_val = minmax_normalized[metric][pos]
 
             # Add data to the summary table
             summary["Metric"].append(metric)
             summary["Opt. Clusters"].append(optimal_k)
-            summary["Opt. Value"].append(raw_value)  # Raw value, not normalized
+            summary["Raw Value"].append(raw_value)  # Raw value, not normalized
             summary["Z-Score Norm."].append(z_val)
-            summary["Min-Max Norm."].append(mm_val)
 
         return pd.DataFrame(summary)
 
