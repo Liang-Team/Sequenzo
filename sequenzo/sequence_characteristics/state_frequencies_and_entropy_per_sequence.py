@@ -1,15 +1,18 @@
 """
 @Author  : 李欣怡
-@File    : seqistatd.py
+@File    : state_frequencies_and_entropy_per_sequence.py
 @Time    : 2025/9/23 19:34
 @Desc    : State distribution for each individual
+
+        The corresponding function name in TraMineR is seqistatd.R,
+        with the source code available at: https://github.com/cran/TraMineR/blob/master/R/seqistatd.R
 """
 import numpy as np
 import pandas as pd
 
 from sequenzo.define_sequence_data import SequenceData
 
-def seqistatd(seqdata, prop=False):
+def get_state_freq_and_entropy_per_seq(seqdata, prop=False):
     if not isinstance(seqdata, SequenceData):
         raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
 

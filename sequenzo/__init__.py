@@ -83,6 +83,12 @@ from .sequence_characteristics import (
     get_subsequences_in_single_sequence,
     get_subsequences_all_sequences,
     get_number_of_transitions,
+
+    get_turbulence,
+    get_within_sequence_entropy,
+    get_spell_duration_variance,
+    get_state_freq_and_entropy_per_seq,
+    get_cross_sectional_entropy,
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -164,4 +170,9 @@ __all__ = [
     "get_subsequences_in_single_sequence",
     "get_subsequences_all_sequences",
     "get_number_of_transitions",
+    "get_turbulence",
+    "get_within_sequence_entropy",
+    "get_spell_duration_variance",
+    "get_state_freq_and_entropy_per_seq",
+    "get_cross_sectional_entropy",
 ]

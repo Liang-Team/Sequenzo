@@ -3,6 +3,10 @@
 @File    : seqST.py
 @Time    : 2025/9/24 14:09
 @Desc    : Computes the sequence turbulence measure
+
+        The corresponding function name in TraMineR is seqST.R,
+        with the source code available at: https://github.com/cran/TraMineR/blob/master/R/seqST.R
+
 """
 import os
 from contextlib import redirect_stdout
@@ -12,8 +16,8 @@ import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.utils.seqdss import seqdss
 from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
-from simple_characteristics import seqsubsn
-from seqivardur import seqivardur
+from .simple_characteristics import seqsubsn
+from .variance_of_spell_durations import get_spell_duration_variance
 
 def turb(x):
     phi = x[0]
@@ -23,7 +27,27 @@ def turb(x):
     Tux = np.log2(phi * ((s2max + 1) / (s2_tx + 1)))
     return Tux
 
-def seqST(seqdata, norm=False, silent=True, with_missing=False,type=1):
+def get_turbulence(seqdata, norm=False, silent=True, type=1):
+    """
+    Computes the sequence turbulence measure
+
+    Parameters
+    ----------
+    seqdata : SequenceData
+        A sequence object created by the SequenceData function.
+    norm : bool, default True
+        If True, the frequencies are normalized to sum to 1 at each time unit.
+    silent : bool, default True
+        If True, suppresses the output messages.
+    type : int, default 1
+        Type of spell duration variance to be used. Can be either 1 or 2.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with one column containing the turbulence measure for each sequence.
+    """
+
     if not hasattr(seqdata, 'seqdata'):
         raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
 
@@ -33,13 +57,13 @@ def seqST(seqdata, norm=False, silent=True, with_missing=False,type=1):
 
     if not silent:
         print(f"  - computing turbulence type {type} for {seqdata.seqdata.shape[0]} sequence(s) ...")
-    phi = seqsubsn(spells, DSS=False, with_missing=with_missing)
+    phi = seqsubsn(spells, DSS=False, with_missing=True)
 
     if any(np.isnan(phi)):
         phi = np.where(np.isnan(phi), np.finfo(float).max, phi)
-        print("[!] Error in subsequence extraction, please check your data.")
+        print("[!] Some phi set as np.finfo(float).max because there has missing values.")
 
-    s2_tx = seqivardur(seqdata=seqdata, type=type)
+    s2_tx = get_spell_duration_variance(seqdata=seqdata, type=type)
     s2_tx_max = s2_tx['vmax']
     s2_tx = s2_tx['result']
 
@@ -72,7 +96,7 @@ def seqST(seqdata, norm=False, silent=True, with_missing=False,type=1):
             turb_phi = np.finfo(float).max
             print("[!] phi set as max float due to exceeding value when computing max turbulence.")
 
-        turb_s2 = seqivardur(turb_seq, type=type)
+        turb_s2 = get_spell_duration_variance(turb_seq, type=type)
         turb_s2_max = turb_s2['vmax']
         turb_s2 = turb_s2['result']
 
@@ -94,14 +118,14 @@ if __name__ == "__main__":
     # ===============================
     #             Sohee
     # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
+    df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
     # df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
-    # time_list = list(df.columns)[1:133]
-    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    # res = seqST(sequence_data, norm=True)
+    time_list = list(df.columns)[1:133]
+    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
+    res = get_turbulence(sequence_data)
 
     # ===============================
     #             kass
@@ -117,11 +141,11 @@ if __name__ == "__main__":
     #             CO2
     # ===============================
     # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    df = load_dataset('country_co2_emissions')
-    _time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    res = seqST(sequence_data)
+    # df = load_dataset('country_co2_emissions')
+    # _time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
+    # res = seqST(sequence_data)
 
     # ===============================
     #            detailed

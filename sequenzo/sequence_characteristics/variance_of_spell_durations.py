@@ -1,8 +1,12 @@
 """
 @Author  : 李欣怡
-@File    : seqivardur.py
+@File    : variance_of_spell_durations.py
 @Time    : 2025/9/24 14:22
 @Desc    : Variance of spell durations of individual state sequences.
+
+        The corresponding function name in TraMineR is seqivardur,
+        with the source code available at: https://github.com/cran/TraMineR/blob/master/R/seqivardur.R
+
 """
 import os
 from contextlib import redirect_stdout
@@ -13,10 +17,10 @@ import pandas as pd
 from sequenzo.dissimilarity_measures.utils.seqdss import seqdss
 from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
 from sequenzo.dissimilarity_measures.utils.seqdur import seqdur
-from seqistatd import seqistatd
-from simple_characteristics import cut_prefix
+from .state_frequencies_and_entropy_per_sequence import get_state_freq_and_entropy_per_seq
+from .simple_characteristics import cut_prefix
 
-def seqivardur(seqdata, type=1):
+def get_spell_duration_variance(seqdata, type=1):
     if not hasattr(seqdata, 'seqdata'):
         raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
     if type not in [1, 2]:
@@ -28,7 +32,7 @@ def seqivardur(seqdata, type=1):
 
             lgth = seqlength(seqdata)
             dlgth = seqlength(dss)
-            sdist = seqistatd(seqdata)
+            sdist = get_state_freq_and_entropy_per_seq(seqdata)
             nnvisit = (sdist==0).sum(axis=1)
 
     def realvar(x):
@@ -46,6 +50,7 @@ def seqivardur(seqdata, type=1):
     elif type == 2:
         meand = dur.apply(lambda arr: np.nansum(arr))
         meand /= dlgth + nnvisit.to_numpy()
+
         ddur = dur.to_frame("arr").join(meand.rename("m")).apply(
                     lambda row: (np.array(row["arr"]) - row["m"]) ** 2, axis=1
                 )

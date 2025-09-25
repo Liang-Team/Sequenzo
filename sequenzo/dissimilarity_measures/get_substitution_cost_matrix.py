@@ -10,7 +10,7 @@ import numpy as np
 
 from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
 from sequenzo.define_sequence_data import SequenceData
-from sequenzo.sequence_characteristics.seqstatd import seqstatd
+from sequenzo.sequence_characteristics.overall_cross_sectional_entropy import get_cross_sectional_entropy
 from .get_distance_matrix import with_missing_warned
 
 def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, time_varying=False,
@@ -142,7 +142,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
     # ================================
     if method in ["INDELS", "INDELSLOG"]:
         if time_varying:
-            indels = seqstatd(seqdata)['Frequencies']
+            indels = get_cross_sectional_entropy(seqdata)['Frequencies']
         else:
             ww = seqdata.weights
             if ww is None:

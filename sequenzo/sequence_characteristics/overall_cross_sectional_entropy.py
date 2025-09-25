@@ -1,8 +1,11 @@
 """
 @Author  : 李欣怡
-@File    : seqstatd.py
+@File    : overall_cross_sectional_entropy.py
 @Time    : 2025/9/15 21:52
 @Desc    : States frequency by time unit
+
+        The corresponding function name in TraMineR is seqstatd.R,
+        with the source code available at: https://github.com/cran/TraMineR/blob/master/R/seqstatd.R
 """
 
 import numpy as np
@@ -10,9 +13,9 @@ import pandas as pd
 from scipy.stats import entropy
 from sequenzo.define_sequence_data import SequenceData
 
-def seqstatd(seqdata: SequenceData,
-             weighted: bool = True,
-             norm: bool = True):
+def get_cross_sectional_entropy(seqdata: SequenceData,
+                                weighted: bool = True,
+                                norm: bool = True):
     """
     Compute the states frequency by time unit.
 
@@ -105,7 +108,7 @@ if __name__ == "__main__":
     # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
     sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    res = seqstatd(sequence_data)
+    res = get_cross_sectional_entropy(sequence_data)
 
     # ===============================
     #             kass
