@@ -48,6 +48,8 @@ def plot_longitudinal_characteristics(seqdata,
                                       show_title=True,
                                       xlabel="Normalized Values",
                                       ylabel="Sequence ID",
+                                      save_as=None,
+                                      dpi=200,
                                       custom_colors=None,
                                       show_sequence_ids=False):
     """
@@ -109,6 +111,15 @@ def plot_longitudinal_characteristics(seqdata,
     ylabel : str, optional (default="Sequence ID")
         Label for the vertical axis (y-axis).
 
+    save_as : str, optional (default=None)
+        File path to save the plot. If None, plot will only be displayed.
+        Supported formats: .png, .jpg, .jpeg, .pdf, .svg
+        If no extension provided, .png will be added automatically.
+        
+    dpi : int, optional (default=200)
+        Resolution (dots per inch) for saved image. Higher values result in
+        better quality but larger file sizes.
+
     custom_colors : dict or list, optional (default=None)
         Colors used for the four bars. If dict, keys can include
         {'Transitions', 'Entropy', 'Turbulence', 'Complexity'} to override defaults.
@@ -155,6 +166,15 @@ def plot_longitudinal_characteristics(seqdata,
     
     Plot without title:
     >>> metrics = plot_longitudinal_characteristics(my_seqdata, show_title=False)
+    
+    Save plot to file:
+    >>> metrics = plot_longitudinal_characteristics(my_seqdata,
+    ...                                           save_as="sequence_characteristics.png",
+    ...                                           dpi=300)
+    
+    Save as PDF:
+    >>> metrics = plot_longitudinal_characteristics(my_seqdata,
+    ...                                           save_as="characteristics_analysis.pdf")
     
     Notes
     -----
@@ -306,7 +326,15 @@ def plot_longitudinal_characteristics(seqdata,
     ax.set_xlim(-0.05, 1.05)
     
     plt.tight_layout()
+    
+    # Handle saving and display
+    if save_as:
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as += '.png'
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+    
     plt.show()
+    plt.close()
 
     return metrics  # Return the data used for plotting for inspection
 
@@ -319,6 +347,8 @@ def plot_cross_sectional_characteristics(seqdata,
                                           xlabel="Time",
                                           ylabel="Entropy (0–1)",
                                           line_color="#74C9B4",
+                                          save_as=None,
+                                          dpi=200,
                                           return_data=False,
                                           custom_state_colors=None):
     """
@@ -328,8 +358,7 @@ def plot_cross_sectional_characteristics(seqdata,
     providing a complementary view to longitudinal analysis which tracks
     individual sequences over time.
     
-    The plot displays cross-sectional entropy with an optional secondary axis
-    showing the number of valid observations per time point.
+    The plot displays cross-sectional entropy across time points.
     
     Parameters
     ----------
@@ -359,6 +388,15 @@ def plot_cross_sectional_characteristics(seqdata,
         Color for the entropy line. Can be any valid matplotlib color including
         hex colors like "#FF5733", named colors like "red", or RGB tuples.
         
+    save_as : str, optional (default=None)
+        File path to save the plot. If None, plot will only be displayed.
+        Supported formats: .png, .jpg, .jpeg, .pdf, .svg
+        If no extension provided, .png will be added automatically.
+        
+    dpi : int, optional (default=200)
+        Resolution (dots per inch) for saved image. Higher values result in
+        better quality but larger file sizes.
+        
     return_data : bool, optional (default=False)
         Whether to return the computed data. If False, only displays the plot.
         If True, returns a dictionary with frequencies, entropy, and valid states.
@@ -386,9 +424,8 @@ def plot_cross_sectional_characteristics(seqdata,
     - 0: Everyone is in the same state (no diversity)
     - 1: Population is equally distributed across all possible states (maximum diversity)
     
-    The plot uses index plot styling with clean borders and optional secondary
-    axis showing sample sizes. For state distribution visualization, use the
-    dedicated `plot_state_distribution` function.
+    The plot uses index plot styling with clean borders. For state distribution 
+    visualization, use the dedicated `plot_state_distribution` function.
     
     Examples
     --------
@@ -411,6 +448,15 @@ def plot_cross_sectional_characteristics(seqdata,
     
     Custom hex color:
     >>> plot_cross_sectional_characteristics(my_seqdata, line_color="#2E86AB")
+    
+    Save plot to file:
+    >>> plot_cross_sectional_characteristics(my_seqdata, 
+    ...                                     save_as="entropy_plot.png",
+    ...                                     dpi=300)
+    
+    Save with custom format:
+    >>> plot_cross_sectional_characteristics(my_seqdata,
+    ...                                     save_as="entropy_analysis.pdf")
     
     Get data when needed (only when explicitly requested):
     >>> result = plot_cross_sectional_characteristics(my_seqdata, return_data=True)
@@ -486,22 +532,6 @@ def plot_cross_sectional_characteristics(seqdata,
     if show_title and title:
         ax1.set_title(title, fontsize=fontsize+1, color=axis_gray)
     
-    # Add sample size as secondary y-axis if available
-    if N is not None:
-        ax1_twin = ax1.twinx()
-        ax1_twin.plot(ent.index, N.values, linestyle='--', alpha=0.35, color=axis_gray)
-        ax1_twin.set_ylabel("Valid N", fontsize=max(8, fontsize-2), color=axis_gray)
-        ax1_twin.grid(False)
-        
-        # Style the twin axis with same border style as main plot
-        ax1_twin.spines['top'].set_visible(False)
-        ax1_twin.spines['left'].set_visible(False)  # Hide left spine since main plot has it
-        ax1_twin.spines['right'].set_color('gray')
-        ax1_twin.spines['bottom'].set_visible(False)  # Hide bottom spine since main plot has it
-        ax1_twin.spines['right'].set_linewidth(0.7)
-        ax1_twin.spines['right'].set_position(('outward', 5))
-        
-        ax1_twin.tick_params(axis='y', colors=axis_gray, labelsize=max(6, fontsize-1), length=4, width=0.7)
     
     # Set up x-axis labels using the utility function
     set_up_time_labels_for_x_axis(seqdata, ax1, color=axis_gray)
@@ -527,7 +557,15 @@ def plot_cross_sectional_characteristics(seqdata,
     ax1.set_xlabel(xlabel, fontsize=fontsize, color=axis_gray)
 
     plt.tight_layout()
+    
+    # Handle saving and display
+    if save_as:
+        if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
+            save_as += '.png'
+        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+    
     plt.show()
+    plt.close()
 
     # Only return data if explicitly requested
     if return_data:
