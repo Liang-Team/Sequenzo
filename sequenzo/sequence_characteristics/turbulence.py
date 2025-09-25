@@ -61,7 +61,7 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1):
 
     if any(np.isnan(phi)):
         phi = np.where(np.isnan(phi), np.finfo(float).max, phi)
-        print("[!] Some phi set as np.finfo(float).max because there has missing values.")
+        print("[!] There are missing values in the data. A very large number was used instead so the calculation can continue.")
 
     s2_tx = get_spell_duration_variance(seqdata=seqdata, type=type)
     s2_tx_max = s2_tx['vmax']
@@ -118,14 +118,14 @@ if __name__ == "__main__":
     # ===============================
     #             Sohee
     # ===============================
-    df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
-    # df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
-    time_list = list(df.columns)[1:133]
-    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    res = get_turbulence(sequence_data)
+    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
+    # # df = pd.read_csv('/Users/lei/Documents/Sequenzo_all_folders/sequence_data_sources/sohee/sequence_data.csv')
+    # time_list = list(df.columns)[1:133]
+    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
+    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
+    # res = get_turbulence(sequence_data)
 
     # ===============================
     #             kass
@@ -141,11 +141,13 @@ if __name__ == "__main__":
     #             CO2
     # ===============================
     # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # df = load_dataset('country_co2_emissions')
-    # _time = list(df.columns)[1:]
+    df = load_dataset('country_co2_emissions_local_deciles')
+    df.to_csv("D:/country_co2_emissions_local_deciles.csv", index=False)
+    _time = list(df.columns)[1:]
     # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    # res = seqST(sequence_data)
+    states = ['D1 (Very Low)', 'D10 (Very High)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9']
+    sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
+    res = get_turbulence(sequence_data, norm=True, type=2)
 
     # ===============================
     #            detailed

@@ -485,6 +485,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         sign = -1
 
     del index_map
+    del seqdata_num
 
     # ===========================
     # Pre-Process Data (part 2/2)
@@ -664,7 +665,7 @@ if __name__ == '__main__':
     _time = list(df.columns)[1:]
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
     sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    om = get_distance_matrix(sequence_data, method="OMspell", sm="INDELSLOG", indel="auto")
+    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
 
     # ===============================
