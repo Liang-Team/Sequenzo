@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
+from matplotlib.font_manager import FontProperties
 
 # Import the correct functions from sequence characteristics modules
 from .simple_characteristics import get_number_of_transitions
@@ -22,9 +23,12 @@ def plot_longitudinal_characteristics(seqdata,
                                       selection='first',
                                       order_by="complexity",
                                       figsize=(8, 6),
+                                      fontsize=12,
                                       title=None,
                                       xlabel="Normalized Values",
-                                      ylabel="Sequence ID"):
+                                      ylabel="Sequence ID",
+                                      custom_colors=None,
+                                      show_sequence_ids=False):
     """
     Create a horizontal bar chart showing four key characteristics for selected sequences.
     
@@ -66,6 +70,9 @@ def plot_longitudinal_characteristics(seqdata,
     figsize : tuple, optional (default=(8, 6))
         Size of the plot as (width, height) in inches.
         Example: (10, 8) for a larger plot, (6, 4) for a smaller one
+
+    fontsize : int, optional (default=12)
+        Base font size for labels, ticks, and legend. Title uses fontsize+2.
         
     title : str, optional (default=None)
         Title to display at the top of the plot. If None, no title is shown.
@@ -76,6 +83,15 @@ def plot_longitudinal_characteristics(seqdata,
         
     ylabel : str, optional (default="Sequence ID")
         Label for the vertical axis (y-axis).
+
+    custom_colors : dict or list, optional (default=None)
+        Colors used for the four bars. If dict, keys can include
+        {'Transitions', 'Entropy', 'Turbulence', 'Complexity'} to override defaults.
+        If list/tuple of length 4, it maps to the above order.
+
+    show_sequence_ids : bool, optional (default=False)
+        If True, y-axis shows actual sequence IDs (when available).
+        If False, shows 1..N index positions.
     
     Returns
     -------
@@ -181,7 +197,10 @@ def plot_longitudinal_characteristics(seqdata,
 
     # Create horizontal grouped bar chart
     # Use the DataFrame index which now contains the actual sequence IDs
-    labels = list(metrics.index)
+    if show_sequence_ids:
+        labels = list(metrics.index)
+    else:
+        labels = list(range(1, len(metrics) + 1))
     y = np.arange(len(metrics))
     bar_h = 0.18
 
@@ -189,21 +208,32 @@ def plot_longitudinal_characteristics(seqdata,
     plt.figure(figsize=figsize)
     ax = plt.gca()
     
-    # Add simple background grid [[memory:7276795]]
+    # Add simple background grid
     ax.grid(True, axis='x', alpha=0.3)
     ax.set_axisbelow(True)
     
+    # Axis/text color theme
+    axis_gray = '#666666'
+
     # Add title only if provided
     if title is not None:
-        plt.title(title, fontsize=14)
+        plt.title(title, fontsize=fontsize + 2, color=axis_gray)
 
-    # User's preferred color palette
-    colors = {
+    # Color palette with optional overrides
+    default_colors = {
         'Transitions': '#74C9B4',  # Soft green
         'Entropy': '#A6E3D0',      # Light green  
         'Turbulence': '#F9E79F',   # Light yellow
         'Complexity': '#F6CDA3'    # Light orange
     }
+
+    if isinstance(custom_colors, dict):
+        colors = {**default_colors, **custom_colors}
+    elif isinstance(custom_colors, (list, tuple)) and len(custom_colors) == 4:
+        ordered_keys = ['Transitions', 'Entropy', 'Turbulence', 'Complexity']
+        colors = {k: v for k, v in zip(ordered_keys, custom_colors)}
+    else:
+        colors = default_colors
 
     plt.barh(y + 0.30, metrics["Transitions"].values, height=bar_h, 
              label="Transitions", color=colors['Transitions'])
@@ -218,23 +248,30 @@ def plot_longitudinal_characteristics(seqdata,
     plt.yticks(y, labels)
     plt.xlim(0, 1)
     
-    # Use custom labels
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    # Use custom labels with refined spacing
+    ax.set_xlabel(xlabel, labelpad=8, fontsize=fontsize, color=axis_gray)
+    # Slightly expand y-axis label letter spacing
+    ylabel_props = FontProperties(stretch='expanded')
+    ax.set_ylabel(ylabel, labelpad=6, fontproperties=ylabel_props, fontsize=fontsize, color=axis_gray)
     
     # Simple legend
-    plt.legend(loc="lower right")
+    plt.legend(loc="lower right", fontsize=max(6, fontsize - 1))
     
     # Style axes like index plot - clean and minimal
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_linewidth(0.8)
     ax.spines['bottom'].set_linewidth(0.8)
-    ax.spines['left'].set_color('#666666')
-    ax.spines['bottom'].set_color('#666666')
+    ax.spines['left'].set_color(axis_gray)
+    ax.spines['bottom'].set_color(axis_gray)
     
-    # Add some padding between axes and plot area
-    ax.tick_params(axis='both', which='major', pad=5)
+    # Move spines slightly away from the plot area (but keep y-axis closer than before)
+    ax.spines['left'].set_position(('outward', 2))
+    ax.spines['bottom'].set_position(('outward', 4))
+    
+    # Ticks styling and subtle padding
+    ax.tick_params(axis='x', which='major', colors=axis_gray, length=4, width=0.7, direction='out', pad=4, labelsize=max(6, fontsize - 1))
+    ax.tick_params(axis='y', which='major', colors=axis_gray, length=4, width=0.7, direction='out', pad=3, labelsize=max(6, fontsize - 1))
     
     # Extend axes slightly beyond the data range for better spacing
     ax.set_ylim(-0.5, len(metrics) - 0.5)

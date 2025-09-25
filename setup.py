@@ -211,7 +211,11 @@ def get_compile_args_for_file(filename):
         # More conservative Windows flags for better compatibility
         compile_args = ["/O2"]
     else:
-        compile_args = ["-O3", "-march=native", "-ffast-math"]
+        # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
+        if sys.platform == 'darwin':
+            compile_args = ["-O3", "-ffast-math"]
+        else:
+            compile_args = ["-O3", "-march=native", "-ffast-math"]
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
