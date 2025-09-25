@@ -18,7 +18,7 @@ from .variance_of_spell_durations import get_spell_duration_variance
 
 from .turbulence import get_turbulence
 
-from .plot_characteristics import plot_longitudinal_characteristics
+from .plot_characteristics import plot_longitudinal_characteristics, plot_cross_sectional_characteristics
 
 __all__ = [
     "get_subsequences_in_single_sequence",
@@ -31,5 +31,6 @@ __all__ = [
     "get_spell_duration_variance",
     "get_turbulence",
 
-    "plot_longitudinal_characteristics"
+    "plot_longitudinal_characteristics",
+    "plot_cross_sectional_characteristics"
 ]

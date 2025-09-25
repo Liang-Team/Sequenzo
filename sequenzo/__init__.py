@@ -88,9 +88,11 @@ from .sequence_characteristics import (
     get_within_sequence_entropy,
     get_spell_duration_variance,
     get_state_freq_and_entropy_per_seq,
-    get_cross_sectional_entropy,
 
-    plot_longitudinal_characteristics,
+    get_cross_sectional_entropy,
+    plot_cross_sectional_characteristics,
+    plot_longitudinal_characteristics
+
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
@@ -177,5 +179,6 @@ __all__ = [
     "get_spell_duration_variance",
     "get_state_freq_and_entropy_per_seq",
     "get_cross_sectional_entropy",
-    "plot_longitudinal_characteristics"
+    "plot_longitudinal_characteristics",
+    "plot_cross_sectional_characteristics"
 ]

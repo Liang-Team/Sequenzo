@@ -16,6 +16,26 @@ from .simple_characteristics import get_number_of_transitions
 from .within_sequence_entropy import get_within_sequence_entropy
 from .turbulence import get_turbulence
 from .complexity_index import get_complexity_index
+from .overall_cross_sectional_entropy import get_cross_sectional_entropy
+
+# Import visualization utilities
+try:
+    from ..visualization.utils.utils import set_up_time_labels_for_x_axis
+except ImportError:
+    # Fallback function if import fails
+    def set_up_time_labels_for_x_axis(seqdata, ax, color="gray"):
+        time_labels = np.array(seqdata.cleaned_time)
+        num_time_steps = len(time_labels)
+        
+        if num_time_steps <= 10:
+            xtick_positions = np.arange(num_time_steps)
+        elif num_time_steps <= 20:
+            xtick_positions = np.arange(0, num_time_steps, step=2)
+        else:
+            xtick_positions = np.linspace(0, num_time_steps - 1, num=10, dtype=int)
+        
+        ax.set_xticks(xtick_positions)
+        ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color=color)
 
 def plot_longitudinal_characteristics(seqdata,
                                       pick_ids=None,
@@ -281,3 +301,296 @@ def plot_longitudinal_characteristics(seqdata,
     plt.show()
 
     return metrics  # Return the data used for plotting for inspection
+
+
+def plot_cross_sectional_characteristics(seqdata,
+                                          figsize=(10, 6),
+                                          fontsize=12,
+                                          title_entropy="Cross-sectional entropy over time",
+                                          title_frequencies="Cross-sectional state distribution over time",
+                                          show_both=True,
+                                          kind_frequencies="area",
+                                          custom_state_colors=None):
+    """
+    Visualize cross-sectional characteristics across time points.
+    
+    This function shows two complementary views of how sequences evolve:
+    - Cross-sectional entropy: How diverse the population is at each time point
+    - State distribution: What proportion of the population is in each state over time
+    
+    Cross-sectional analysis focuses on the overall population at each moment,
+    complementing longitudinal analysis which tracks individual sequences over time.
+    
+    Parameters
+    ----------
+    seqdata : SequenceData
+        Your sequence data object containing the sequences to analyze.
+        
+    figsize : tuple, optional (default=(10, 6))
+        Size of the plot as (width, height) in inches.
+        If show_both=False, uses the same size for entropy-only plot.
+        
+    fontsize : int, optional (default=12)
+        Base font size for labels, ticks, and legend. Title uses fontsize+1.
+        
+    title_entropy : str, optional (default="Cross-sectional entropy over time")
+        Title for the entropy plot (top panel when show_both=True).
+        
+    title_frequencies : str, optional (default="Cross-sectional state distribution over time")
+        Title for the state distribution plot (bottom panel when show_both=True).
+        
+    show_both : bool, optional (default=True)
+        If True, displays both entropy (top) and state distribution (bottom) plots.
+        If False, shows only the entropy plot.
+        
+    kind_frequencies : {'area', 'bar'}, optional (default='area')
+        Type of plot for state distributions:
+        - 'area': Stacked area chart (smooth, good for trends)
+        - 'bar': Stacked bar chart (precise, good for discrete time points)
+        
+    custom_state_colors : dict, optional (default=None)
+        Custom color mapping for states. Keys should match your state labels.
+        If None, uses the colors defined in your SequenceData object.
+        Example: {"Education": "#A7D8DE", "Employment": "#F6CDA3"}
+        
+    Returns
+    -------
+    dict
+        Dictionary containing the computed data:
+        - "Frequencies": DataFrame with states as rows and time points as columns
+        - "Entropy": Series with entropy values for each time point (0-1 normalized)
+        - "ValidStates": Series with number of valid observations per time point
+        
+    Notes
+    -----
+    **Cross-sectional entropy** measures how diverse the population is at each
+    time point. Values range from 0 to 1:
+    - 0: Everyone is in the same state (no diversity)
+    - 1: Population is equally distributed across all possible states (maximum diversity)
+    
+    **State distribution** shows what proportion of the population is in each
+    state at each time point. All proportions at each time point sum to 1.
+    
+    This analysis complements longitudinal characteristics by focusing on
+    population-level patterns rather than individual sequence patterns.
+    
+    Examples
+    --------
+    Basic usage with both plots:
+    >>> data = plot_cross_sectional_characteristics(my_seqdata)
+    
+    Show only entropy trends:
+    >>> data = plot_cross_sectional_characteristics(my_seqdata, show_both=False)
+    
+    Use bar chart for state distributions:
+    >>> data = plot_cross_sectional_characteristics(my_seqdata, 
+    ...                                           kind_frequencies="bar")
+    
+    Custom colors and larger plot:
+    >>> colors = {"Education": "#A7D8DE", "Employment": "#F6CDA3", 
+    ...           "Unemployed": "#F9E79F", "Other": "#C6E2E9"}
+    >>> data = plot_cross_sectional_characteristics(my_seqdata,
+    ...                                           figsize=(12, 8),
+    ...                                           custom_state_colors=colors)
+    """
+    # Get cross-sectional data using the existing function
+    res = get_cross_sectional_entropy(seqdata, weighted=True, norm=True)
+    
+    freq = res["Frequencies"]          # rows: states, cols: time points
+    ent = res["Entropy"]               # index: time points
+    N = res.get("ValidStates", None)   # valid sample sizes per time point
+
+    # Sort time axis if possible (handles both numeric and string time labels)
+    try:
+        # Try to sort columns as integers first
+        sorted_cols = sorted(freq.columns, key=lambda x: int(x))
+        freq = freq[sorted_cols]
+        ent = ent.loc[sorted_cols]
+        if N is not None:
+            N = N.loc[sorted_cols]
+    except (ValueError, TypeError):
+        try:
+            # If that fails, sort as strings
+            sorted_cols = sorted(freq.columns)
+            freq = freq[sorted_cols]
+            ent = ent.loc[sorted_cols]
+            if N is not None:
+                N = N.loc[sorted_cols]
+        except Exception:
+            # If all sorting fails, keep original order
+            pass
+
+    # Prepare color scheme - use SequenceData's color mapping
+    if custom_state_colors is not None:
+        # Use custom colors if provided
+        colors = [custom_state_colors.get(s, None) for s in freq.index]
+        colors = [c for c in colors if c is not None] or None
+    else:
+        # Use SequenceData's built-in color mapping (this is the standard way)
+        colors = None
+        if hasattr(seqdata, 'color_map') and seqdata.color_map:
+            # Map state labels to colors using the sequence data's color mapping
+            colors = []
+            for state_label in freq.index:
+                # Find the state index for this label
+                if hasattr(seqdata, 'state_mapping') and seqdata.state_mapping:
+                    state_idx = seqdata.state_mapping.get(state_label)
+                    if state_idx is not None and state_idx in seqdata.color_map:
+                        colors.append(seqdata.color_map[state_idx])
+                    else:
+                        colors.append(None)
+                else:
+                    # Fallback: try direct label lookup
+                    colors.append(seqdata.color_map.get(state_label, None))
+            
+            # Filter out None values
+            colors = [c for c in colors if c is not None] or None
+
+    # Color scheme consistent with existing plot style
+    axis_gray = '#666666'
+    
+    if show_both:
+        # Create figure with two subplots (entropy top, state distribution bottom)
+        # Make plots less flat by adjusting height ratios
+        fig = plt.figure(figsize=figsize)
+        gs = fig.add_gridspec(2, 1, height_ratios=[1.2, 1.8], hspace=0.3)
+
+        # Top plot: Entropy over time
+        ax1 = fig.add_subplot(gs[0, 0])
+        ax1.plot(ent.index, ent.values, marker='o', color='#74C9B4', linewidth=2, markersize=4)
+        ax1.set_ylim(0, 1)
+        ax1.set_ylabel("Entropy (0–1)", fontsize=fontsize, color=axis_gray)
+        ax1.set_title(title_entropy, fontsize=fontsize+1, color=axis_gray)
+        
+        # Add sample size as secondary y-axis if available
+        if N is not None:
+            ax1_twin = ax1.twinx()
+            ax1_twin.plot(ent.index, N.values, linestyle='--', alpha=0.35, color=axis_gray)
+            ax1_twin.set_ylabel("Valid N", fontsize=max(8, fontsize-2), color=axis_gray)
+            ax1_twin.grid(False)
+            ax1_twin.tick_params(axis='y', colors=axis_gray, labelsize=max(6, fontsize-1))
+        
+        # Set up x-axis labels for top plot using the utility function
+        set_up_time_labels_for_x_axis(seqdata, ax1, color=axis_gray)
+        
+        # Style top plot consistent with index plot design
+        ax1.grid(True, axis='y', alpha=0.3)
+        ax1.set_axisbelow(True)
+        # Use index plot style borders - only show left and bottom spines
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        ax1.spines['left'].set_color('gray')
+        ax1.spines['bottom'].set_color('gray')
+        ax1.spines['left'].set_linewidth(0.7)
+        ax1.spines['bottom'].set_linewidth(0.7)
+        
+        # Move spines slightly away from the plot area for better aesthetics
+        ax1.spines['left'].set_position(('outward', 5))
+        ax1.spines['bottom'].set_position(('outward', 5))
+        
+        ax1.tick_params(axis='both', colors=axis_gray, labelsize=max(6, fontsize-1), length=4, width=0.7)
+
+        # Bottom plot: State distribution over time
+        ax2 = fig.add_subplot(gs[1, 0])
+        
+        if kind_frequencies == "area":
+            # Stacked area plot
+            ax2.stackplot(freq.columns, *freq.values, labels=freq.index, colors=colors, alpha=0.8)
+        else:
+            # Stacked bar plot
+            bottom = np.zeros(freq.shape[1])
+            for i, state in enumerate(freq.index):
+                color = colors[i] if colors and i < len(colors) else None
+                ax2.bar(freq.columns, freq.loc[state].values, bottom=bottom,
+                        label=state, color=color, width=0.9, alpha=0.8)
+                bottom += freq.loc[state].values
+
+        ax2.set_ylim(0, 1)
+        ax2.set_ylabel("Proportion", fontsize=fontsize, color=axis_gray)
+        ax2.set_xlabel("Time", fontsize=fontsize, color=axis_gray)
+        ax2.set_title(title_frequencies, fontsize=fontsize+1, color=axis_gray)
+        
+        # Set up x-axis labels for bottom plot using the utility function
+        set_up_time_labels_for_x_axis(seqdata, ax2, color=axis_gray)
+        
+        # Style bottom plot consistent with index plot design
+        ax2.grid(True, axis='y', alpha=0.25)
+        ax2.set_axisbelow(True)
+        # Use index plot style borders - only show left and bottom spines
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.spines['left'].set_color('gray')
+        ax2.spines['bottom'].set_color('gray')
+        ax2.spines['left'].set_linewidth(0.7)
+        ax2.spines['bottom'].set_linewidth(0.7)
+        
+        # Move spines slightly away from the plot area for better aesthetics
+        ax2.spines['left'].set_position(('outward', 5))
+        ax2.spines['bottom'].set_position(('outward', 5))
+        
+        ax2.tick_params(axis='both', colors=axis_gray, labelsize=max(6, fontsize-1), length=4, width=0.7)
+
+        # Adjust layout to make more room for legend at bottom - increase bottom margin
+        plt.subplots_adjust(bottom=0.25)
+        
+        # Create legend at bottom using index plot style
+        if colors and len(freq.index) > 0:
+            # Create legend handles
+            legend_handles = []
+            legend_labels = []
+            for i, state_label in enumerate(freq.index):
+                color = colors[i] if i < len(colors) else 'gray'
+                legend_handles.append(plt.Rectangle((0, 0), 1, 1, color=color))
+                legend_labels.append(state_label)
+            
+            # Add legend below the plots using index plot style
+            # Increase spacing to avoid overlap with x-axis label
+            ncol = min(5, len(freq.index))  # Maximum 5 columns like in index plot
+            fig.legend(
+                legend_handles,
+                legend_labels,
+                loc='lower center',
+                ncol=ncol,
+                frameon=False,  # No frame like in index plot
+                fontsize=max(7, fontsize-2),
+                bbox_to_anchor=(0.5, 0.05)  # Move higher to avoid overlap with xlabel
+            )
+        
+        plt.show()
+        
+    else:
+        # Single plot: Entropy only
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        
+        plt.plot(ent.index, ent.values, marker='o', color='#74C9B4', linewidth=2, markersize=4)
+        plt.ylim(0, 1)
+        plt.ylabel("Entropy (0–1)", fontsize=fontsize, color=axis_gray)
+        plt.xlabel("Time", fontsize=fontsize, color=axis_gray)
+        plt.title(title_entropy, fontsize=fontsize+1, color=axis_gray)
+        
+        # Set up x-axis labels using the utility function
+        set_up_time_labels_for_x_axis(seqdata, ax, color=axis_gray)
+        
+        # Style consistent with index plot design
+        ax.grid(True, axis='y', alpha=0.3)
+        ax.set_axisbelow(True)
+        # Use index plot style borders - only show left and bottom spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('gray')
+        ax.spines['bottom'].set_color('gray')
+        ax.spines['left'].set_linewidth(0.7)
+        ax.spines['bottom'].set_linewidth(0.7)
+        
+        # Move spines slightly away from the plot area for better aesthetics
+        ax.spines['left'].set_position(('outward', 5))
+        ax.spines['bottom'].set_position(('outward', 5))
+        
+        ax.tick_params(axis='both', colors=axis_gray, labelsize=max(6, fontsize-1), length=4, width=0.7)
+        
+        plt.tight_layout()
+        plt.show()
+
+    # Return the computed data for further analysis
+    return {"Frequencies": freq, "Entropy": ent, "ValidStates": N}
