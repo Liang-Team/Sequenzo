@@ -162,7 +162,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
             indels = np.log(2 / (1 + indels))
         else:
             indels = 1 / indels
-            indels[np.isinf(indels)] = np.finfo(float).max
+            indels[np.isinf(indels)] = 1e15  # 避免cast警告
 
         if time_varying:
             return_result['indel'] = indels
@@ -181,7 +181,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
                     for j in range(1, alphsize):
                         if i != j:
                             val = indels.iloc[i - 1, t] + indels.iloc[j - 1, t]
-                            costs[t, i, j] = np.clip(val, -np.finfo(np.float64).max, np.finfo(np.float64).max)
+                            costs[t, i, j] = np.clip(val, -1e15, 1e15)  # 避免cast警告
 
         else:
             costs = np.full((alphsize, alphsize), 0.0)
@@ -189,7 +189,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
                 for j in range(1, alphsize):
                     if i != j:
                         costs[i, j] = indels[i - 1] + indels[j - 1]
-            costs[np.isinf(costs)] = np.finfo(float).max
+            costs[np.isinf(costs)] = 1e15  # 避免cast警告
 
     # =================================
     # Process the Cost of Missing Value

@@ -60,7 +60,10 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1):
     phi = seqsubsn(spells, DSS=False, with_missing=True)
 
     if any(np.isnan(phi)):
-        phi = np.where(np.isnan(phi), np.finfo(float).max, phi)
+        # 使用有限的大数值，避免转换警告
+        # np.finfo(float).max 在NumPy 1.24+会触发"invalid value encountered in cast"警告
+        large_but_finite = 1e15  # 足够大但不会导致溢出警告
+        phi = np.where(np.isnan(phi), large_but_finite, phi)
         print("[!] There are missing values in the data. A very large number was used instead so the calculation can continue.")
 
     s2_tx = get_spell_duration_variance(seqdata=seqdata, type=type)
@@ -93,7 +96,7 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1):
             turb_phi = 2
 
         if turb_phi.isna().any().any():
-            turb_phi = np.finfo(float).max
+            turb_phi = 1e15  # 使用有限大数值避免转换警告
             print("[!] phi set as max float due to exceeding value when computing max turbulence.")
 
         turb_s2 = get_spell_duration_variance(turb_seq, type=type)

@@ -23,7 +23,8 @@ def seqdss(seqdata):
     cdef list groups = [row[boundary & (row >= 0)] for row, boundary in zip(ffill, boundaries)]
     cdef int max_groups = max(len(g) for g in groups)
 
-    cdef cnp.ndarray[int32_t, ndim=2] result = np.full((n, max_groups), np.nan, dtype=np.int32)
+    # 使用int32能表示的缺失值标记，避免np.nan转换为int32时的警告
+    cdef cnp.ndarray[int32_t, ndim=2] result = np.full((n, max_groups), -999, dtype=np.int32)
 
     for i in range(n):
         g = groups[i]
