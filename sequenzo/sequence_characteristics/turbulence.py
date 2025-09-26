@@ -64,7 +64,7 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1):
         # np.finfo(float).max 在NumPy 1.24+会触发"invalid value encountered in cast"警告
         large_but_finite = 1e15  # 足够大但不会导致溢出警告
         phi = np.where(np.isnan(phi), large_but_finite, phi)
-        print("[!] There are missing values in the data. A very large number was used instead so the calculation can continue.")
+        print("[!] One or more missing values were found after calculating the number of distinct subsequences. They have been replaced with a large number of 1e15 to ensure the calculation continues.")
 
     s2_tx = get_spell_duration_variance(seqdata=seqdata, type=type)
     s2_tx_max = s2_tx['vmax']

@@ -242,8 +242,8 @@ summary.clustrange <- function(object, max.rank=1, ...){
 	clindices <- ((1:max.rank) *2) -1
 	valindices <- ((1:max.rank) *2)
 	cnames <- character(max.rank*2)
-	cnames[clindices] <- paste(1:max.rank, "N groups", sep=". ")
-	cnames[valindices] <- paste(1:max.rank, " stat", sep=". ")
+	cnames[clindices] <- paste(1:max.rank, "N groups", sep= "")
+	cnames[valindices] <- paste(1:max.rank, " stat", sep= "")
 	colnames(clusterrank) <- cnames
 	for(s in colnames(object$stats)){
 		od <- order(object$stats[, s], decreasing=(s!="HC"))[1:max.rank]

@@ -28,7 +28,7 @@ seqclararange <- function(seqdata, R = 100, sample.size = 40 + 2 * max(kvals), k
     stop(" [!] At least one unkown criteria among ", paste(criteria, collapse = ", "), ". Please specify at leat one among the following: ", paste(allcriteria, collapse = ", "))
   }
   criteria <- allcriteria[critindex]
-  message(" [>] Using ", method, " clustering optimizing the following criterion: ", paste(criteria, collapse = ", "), ".")
+  message(" [>] Using ", method, " clustering optimizing the following criterion: ", paste(criteria, collapse = ", "), "")
 
   ## FIXME Add coherance check between method and criteria
 

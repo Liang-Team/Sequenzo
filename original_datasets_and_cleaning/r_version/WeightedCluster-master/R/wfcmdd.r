@@ -96,7 +96,7 @@ wfcmdd <- function(diss, memb, weights = NULL, method = "FCMdd",
 		      uPrev <- u
 		      iter <- iter + 1
 		      if (verbose) {
-		    	    cat(".")
+		    	    cat("")
 		      }
 	    }
   	}
@@ -226,7 +226,7 @@ wfcmdd.old <- function(diss, memb, weights = NULL, method = "FCMdd",
 			uPrev <- u
 			iter <- iter + 1
 			if (verbose) {
-				cat(".")
+				cat("")
 			}
 		}
 	}

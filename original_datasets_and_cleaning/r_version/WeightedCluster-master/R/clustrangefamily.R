@@ -32,7 +32,7 @@ wcCmpCluster <- function(diss, weights=NULL, maxcluster, method="all", pam.combi
 			}
 			ret[[meth]] <- as.clustrange(hc, diss=diss, weights=weights, ncluster=maxcluster)
 			if(pam.combine){
-				ret[[paste("pam", meth, sep=".")]] <- wcKMedRange(diss, kvals=pamrange, weights=weights, initialclust=hc)
+				ret[[paste("pam", meth, sep= "")]] <- wcKMedRange(diss, kvals=pamrange, weights=weights, initialclust=hc)
 			}
 		}else{
 			ret[[meth]] <- wcKMedRange(diss, kvals=pamrange, weights=weights)
@@ -61,8 +61,8 @@ summary.clustrangefamily <- function(object, max.rank=1, ...){
 	clindices <- ((1:max.rank) *2) -1
 	valindices <- ((1:max.rank) *2)
 	cnames <- character(max.rank*2)
-	cnames[clindices] <- paste(1:max.rank, "Cluster", sep=". ")
-	cnames[valindices] <- paste(1:max.rank, " stat", sep=". ")
+	cnames[clindices] <- paste(1:max.rank, "Cluster", sep= "")
+	cnames[valindices] <- paste(1:max.rank, " stat", sep= "")
 	colnames(clusterrank) <- cnames
 	for(s in statnames){
 		od <- order(object$allstats[, s], decreasing=(s!="HC"))[1:max.rank]
