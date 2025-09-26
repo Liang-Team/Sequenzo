@@ -6,7 +6,7 @@
 """
 # sequenzo/__init__.py (Top-level)
 
-__version__ = "0.1.16"
+__version__ = "0.1.17"
 
 # Lazy import: public submodules
 from sequenzo import (datasets, data_preprocessing, visualization, clustering,
