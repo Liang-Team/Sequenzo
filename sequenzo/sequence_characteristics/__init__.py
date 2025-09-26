@@ -18,12 +18,16 @@ from .variance_of_spell_durations import get_spell_duration_variance
 
 from .turbulence import get_turbulence
 
+from .complexity_index import get_complexity_index
+
 from .plot_characteristics import plot_longitudinal_characteristics, plot_cross_sectional_characteristics
 
 __all__ = [
     "get_subsequences_in_single_sequence",
     "get_subsequences_all_sequences",
     "get_number_of_transitions",
+
+    "get_complexity_index",
 
     "get_state_freq_and_entropy_per_seq",
     "get_within_sequence_entropy",

@@ -85,6 +85,7 @@ from .sequence_characteristics import (
     get_number_of_transitions,
 
     get_turbulence,
+    get_complexity_index,
     get_within_sequence_entropy,
     get_spell_duration_variance,
     get_state_freq_and_entropy_per_seq,
@@ -175,6 +176,7 @@ __all__ = [
     "get_subsequences_all_sequences",
     "get_number_of_transitions",
     "get_turbulence",
+    "get_complexity_index",
     "get_within_sequence_entropy",
     "get_spell_duration_variance",
     "get_state_freq_and_entropy_per_seq",
