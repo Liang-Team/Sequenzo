@@ -33,9 +33,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install build essentials
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
+      - name: Ensure setuptools/wheel for macOS Python 3.12
+        if: runner.os == 'macOS' && matrix.python-version == '3.12'
+        run: python -m pip install --upgrade pip setuptools wheel
 
       # Add OpenMP support
       - name: Install OpenMP (macOS)
