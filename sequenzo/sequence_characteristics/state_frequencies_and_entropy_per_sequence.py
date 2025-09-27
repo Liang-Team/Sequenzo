@@ -14,7 +14,7 @@ from sequenzo.define_sequence_data import SequenceData
 
 def get_state_freq_and_entropy_per_seq(seqdata, prop=False):
     if not isinstance(seqdata, SequenceData):
-        raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
+        raise ValueError("[!] data is NOT a sequence object, see SequenceData function to create one.")
 
     states = seqdata.states.copy()
     number_states = len(states)
@@ -22,7 +22,7 @@ def get_state_freq_and_entropy_per_seq(seqdata, prop=False):
 
     iseqtab = pd.DataFrame(np.zeros((number_seq, number_states)), index=seqdata.seqdata.index, columns=states)
 
-    print(f"  - computing state distribution for {number_seq} sequences and {number_states} states ...")
+    print(f"[>] Computing state distribution for {number_seq} sequences and {number_states} states ...")
 
     for i, state in enumerate(states):
         iseqtab.iloc[:, i] = (seqdata.seqdata == (i+1)).sum(axis=1)

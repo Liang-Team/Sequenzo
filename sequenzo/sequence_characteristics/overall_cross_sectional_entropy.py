@@ -37,7 +37,7 @@ def get_cross_sectional_entropy(seqdata: SequenceData,
     """
 
     if not isinstance(seqdata, SequenceData):
-        raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
+        raise ValueError("[!] data is NOT a sequence object, see SequenceData function to create one.")
 
     # Retrieve the states, shape and colors
     states = seqdata.states.copy()
@@ -97,58 +97,3 @@ def get_cross_sectional_entropy(seqdata: SequenceData,
     res["__attrs__"] = res_attrs
 
     return res
-
-if __name__ == "__main__":
-    # ===============================
-    #             Sohee
-    # ===============================
-    df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
-    time_list = list(df.columns)[1:133]
-    states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    res = get_cross_sectional_entropy(sequence_data)
-
-    # ===============================
-    #             kass
-    # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/kass/wide_civil_final_df.csv')
-    # time_list = list(df.columns)[1:]
-    # states = ['Extensive Warfare', 'Limited Violence', 'No Violence', 'Pervasive Warfare', 'Prolonged Warfare',
-    #           'Serious Violence', 'Serious Warfare', 'Sporadic Violence', 'Technological Warfare', 'Total Warfare']
-    # sequence_data = SequenceData(df, time=time_list, time_type="year", states=states, id_col="COUNTRY")
-    # res = seqstatd(sequence_data)
-
-    # ===============================
-    #             CO2
-    # ===============================
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # _time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time_type="age", time=_time, id_col="country", states=states)
-    # res = seqstatd(sequence_data)
-
-    # ===============================
-    #            detailed
-    # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    # _time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-    #                              time_type="age", time=_time, id_col="worker_id", states=states)
-    # res = seqstatd(sequence_data)
-
-    # ===============================
-    #             broad
-    # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
-    # _time = list(df.columns)[4:]
-    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-    #                              time_type="age", time=_time, id_col="worker_id", states=states)
-    # res = seqstatd(sequence_data)
-
-    print(res['Frequencies'])
-    print(res['ValidStates'])
-    print(res['Entropy'])

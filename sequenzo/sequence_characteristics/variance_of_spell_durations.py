@@ -22,9 +22,9 @@ from .simple_characteristics import cut_prefix
 
 def get_spell_duration_variance(seqdata, type=1):
     if not hasattr(seqdata, 'seqdata'):
-        raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
+        raise ValueError("[!] data is NOT a sequence object, see SequenceData function to create one.")
     if type not in [1, 2]:
-        raise ValueError(" [!] type must be 1 or 2.")
+        raise ValueError("[!] type must be 1 or 2.")
 
     with open(os.devnull, 'w') as fnull:
         with redirect_stdout(fnull):
@@ -68,6 +68,14 @@ def get_spell_duration_variance(seqdata, type=1):
 
         meand_max = meand.to_numpy() * (dlgth + nnvisit.to_numpy()) / (dlgth + maxnnv)
         var_max = ((dlgth-1) * (1-meand_max)**2 + (lgth - dlgth + 1 - meand_max)**2 + maxnnv * meand_max**2) / (dlgth + maxnnv)
+
+    meand.index = seqdata.seqdata.index
+    ret.index = seqdata.seqdata.index
+    var_max.index = seqdata.seqdata.index
+
+    meand = meand.to_frame("meand")
+    ret = ret.to_frame("var_spell_dur")
+    var_max = var_max.to_frame("var_max")
 
     return {
         "meand": meand,
