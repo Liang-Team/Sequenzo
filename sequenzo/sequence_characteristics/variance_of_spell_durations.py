@@ -33,7 +33,7 @@ def get_spell_duration_variance(seqdata, type=1):
             lgth = seqlength(seqdata)
             dlgth = seqlength(dss)
             sdist = get_state_freq_and_entropy_per_seq(seqdata)
-            nnvisit = (sdist==0).sum(axis=1)
+            nnvisit = (sdist.iloc[:, 1:]==0).sum(axis=1)
 
     def realvar(x):
         n = len(x)
@@ -80,7 +80,7 @@ def get_spell_duration_variance(seqdata, type=1):
     var_max = var_max.to_frame("var_max")
 
     return {
-        "meand": meand,
-        "result": ret,
-        "vmax": var_max
+        "meand": meand.reset_index().rename(columns={"index": "ID"}),
+        "result": ret.reset_index().rename(columns={"index": "ID"}),
+        "vmax": var_max.reset_index().rename(columns={"index": "ID"}),
     }

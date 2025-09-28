@@ -85,8 +85,8 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1, id_as_column=True):
     phi_values = np.asarray(phi_values).flatten()
     
     # Extract 1D arrays from s2_tx and s2_tx_max DataFrames
-    s2_tx_values = s2_tx.iloc[:, 0].values if hasattr(s2_tx, 'iloc') else np.asarray(s2_tx).flatten()
-    s2_tx_max_values = s2_tx_max.iloc[:, 0].values if hasattr(s2_tx_max, 'iloc') else np.asarray(s2_tx_max).flatten()
+    s2_tx_values = s2_tx.iloc[:, 1].values if hasattr(s2_tx, 'iloc') else np.asarray(s2_tx).flatten()
+    s2_tx_max_values = s2_tx_max.iloc[:, 1].values if hasattr(s2_tx_max, 'iloc') else np.asarray(s2_tx_max).flatten()
     
     tmp = pd.DataFrame({'phi': phi_values, 's2_tx': s2_tx_values, 's2max': s2_tx_max_values})
     Tx = tmp.apply(lambda row: turb([row['phi'], row['s2_tx'], row['s2max']]), axis=1).to_numpy()
@@ -130,8 +130,8 @@ def get_turbulence(seqdata, norm=False, silent=True, type=1, id_as_column=True):
         phi_value = np.asarray(phi_value).flatten()
         
         # Extract 1D arrays from turb_s2 and turb_s2_max DataFrames
-        turb_s2_values = turb_s2.iloc[:, 0].values if hasattr(turb_s2, 'iloc') else np.asarray(turb_s2).flatten()
-        turb_s2_max_values = turb_s2_max.iloc[:, 0].values if hasattr(turb_s2_max, 'iloc') else np.asarray(turb_s2_max).flatten()
+        turb_s2_values = turb_s2.iloc[:, 1].values if hasattr(turb_s2, 'iloc') else np.asarray(turb_s2).flatten()
+        turb_s2_max_values = turb_s2_max.iloc[:, 1].values if hasattr(turb_s2_max, 'iloc') else np.asarray(turb_s2_max).flatten()
         
         tmp = pd.DataFrame({'phi': phi_value, 's2_tx': turb_s2_values, 's2max': turb_s2_max_values})
         maxT = tmp.apply(lambda row: turb([row['phi'], row['s2_tx'], row['s2max']]), axis=1).to_numpy()

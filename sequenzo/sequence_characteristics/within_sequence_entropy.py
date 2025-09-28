@@ -29,13 +29,15 @@ def get_within_sequence_entropy(seqdata, norm=True, base=np.e, silent=True):
     with open(os.devnull, 'w') as fnull:
         with redirect_stdout(fnull):
             iseqtab = get_state_freq_and_entropy_per_seq(seqdata=seqdata)
+            iseqtab.index = seqdata.seqdata.index
 
-    ient = iseqtab.apply(lambda row: entropy(row, base=base), axis=1)
+    ient = iseqtab.iloc[:, 1:].apply(lambda row: entropy(row, base=base), axis=1)
 
     if norm:
         maxent = np.log(len(states))
         ient = ient / maxent
 
     ient = pd.DataFrame(ient, index=seqdata.seqdata.index, columns=['Entropy'])
+    ient = ient.reset_index().rename(columns={'index': 'ID'})
 
     return ient

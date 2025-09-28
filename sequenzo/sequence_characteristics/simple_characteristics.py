@@ -306,5 +306,6 @@ def get_number_of_transitions(seqdata, norm=False, pwight=False) -> pd.DataFrame
             trans[seq_length<=1] = 0
 
     trans = pd.DataFrame(trans, index=seqdata.seqdata.index, columns=['Transitions'])
+    trans = trans.reset_index().rename(columns={'index': 'ID'})
 
     return trans

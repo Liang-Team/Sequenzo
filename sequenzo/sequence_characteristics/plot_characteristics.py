@@ -194,15 +194,15 @@ def plot_longitudinal_characteristics(seqdata,
     types of sequences and datasets.
     """
     # Calculate four metrics (all should be 0-1 normalized)
-    df_t = get_number_of_transitions(seqdata=seqdata, norm=True).iloc[:, 0]   # Series
+    df_t = get_number_of_transitions(seqdata=seqdata, norm=True).iloc[:, 1]   # Series
     df_e = get_within_sequence_entropy(seqdata=seqdata, norm=True)           # Series or single-column DataFrame
-    if isinstance(df_e, pd.DataFrame): df_e = df_e.iloc[:, 0]
+    if isinstance(df_e, pd.DataFrame): df_e = df_e.iloc[:, 1]
 
-    df_tb = get_turbulence(seqdata=seqdata, norm=True, type=2, id_as_column=False)               # Normalized turbulence
-    if isinstance(df_tb, pd.DataFrame): df_tb = df_tb.iloc[:, 0]
+    df_tb = get_turbulence(seqdata=seqdata, norm=True, type=2, id_as_column=True)               # Normalized turbulence
+    if isinstance(df_tb, pd.DataFrame): df_tb = df_tb.iloc[:, 1]
 
     df_c = get_complexity_index(seqdata=seqdata)                             # Already 0-1 normalized
-    if isinstance(df_c, pd.DataFrame): df_c = df_c.iloc[:, 0]
+    if isinstance(df_c, pd.DataFrame): df_c = df_c.iloc[:, 1]
 
     # Create metrics DataFrame with actual sequence IDs as index
     metrics = pd.DataFrame({

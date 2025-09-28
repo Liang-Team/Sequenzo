@@ -30,4 +30,6 @@ def get_state_freq_and_entropy_per_seq(seqdata, prop=False):
     if prop:
         iseqtab = iseqtab.div(iseqtab.sum(axis=1), axis=0)
 
+    iseqtab = iseqtab.reset_index().rename(columns={'index': 'ID'})
+
     return iseqtab
