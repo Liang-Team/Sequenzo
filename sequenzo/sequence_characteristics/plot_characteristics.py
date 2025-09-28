@@ -51,7 +51,8 @@ def plot_longitudinal_characteristics(seqdata,
                                       save_as=None,
                                       dpi=200,
                                       custom_colors=None,
-                                      show_sequence_ids=False):
+                                      show_sequence_ids=False,
+                                      id_as_column=True):
     """
     Create a horizontal bar chart showing four key characteristics for selected sequences.
     
@@ -128,13 +129,17 @@ def plot_longitudinal_characteristics(seqdata,
     show_sequence_ids : bool, optional (default=False)
         If True, y-axis shows actual sequence IDs (when available).
         If False, shows 1..N index positions.
+        
+    id_as_column : bool, optional (default=True)
+        If True, the returned DataFrame will include ID as a separate column on the same level as other columns.
+        If False, IDs will be used as the DataFrame index.
     
     Returns
     -------
     pandas.DataFrame
         A DataFrame containing the calculated metrics for all plotted sequences.
-        Columns: ['Transitions', 'Entropy', 'Turbulence', 'Complexity']
-        Index: The sequence IDs that were plotted
+        If id_as_column=True: Columns: ['ID', 'Transitions', 'Entropy', 'Turbulence', 'Complexity'] (all columns at same level)
+        If id_as_column=False: Columns: ['Transitions', 'Entropy', 'Turbulence', 'Complexity'], Index: The sequence IDs
         
     Warnings
     --------
@@ -193,7 +198,7 @@ def plot_longitudinal_characteristics(seqdata,
     df_e = get_within_sequence_entropy(seqdata=seqdata, norm=True)           # Series or single-column DataFrame
     if isinstance(df_e, pd.DataFrame): df_e = df_e.iloc[:, 0]
 
-    df_tb = get_turbulence(seqdata=seqdata, norm=True, type=2)               # Normalized turbulence
+    df_tb = get_turbulence(seqdata=seqdata, norm=True, type=2, id_as_column=False)               # Normalized turbulence
     if isinstance(df_tb, pd.DataFrame): df_tb = df_tb.iloc[:, 0]
 
     df_c = get_complexity_index(seqdata=seqdata)                             # Already 0-1 normalized
@@ -336,7 +341,17 @@ def plot_longitudinal_characteristics(seqdata,
     plt.show()
     plt.close()
 
-    return metrics  # Return the data used for plotting for inspection
+    # Handle ID display options for returned DataFrame
+    if id_as_column:
+        # Add ID as a separate column and reset index to numeric
+        metrics_result = metrics.copy()
+        metrics_result['ID'] = metrics_result.index
+        metrics_result = metrics_result[['ID', 'Transitions', 'Entropy', 'Turbulence', 'Complexity']].reset_index(drop=True)
+        return metrics_result
+    else:
+        # Return with ID as index (traditional format)
+        metrics.index.name = 'ID'
+        return metrics
 
 
 def plot_cross_sectional_characteristics(seqdata,

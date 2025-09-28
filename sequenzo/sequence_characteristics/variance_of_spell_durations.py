@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : Xinyi Li, Yuqi Liang
 @File    : variance_of_spell_durations.py
 @Time    : 2025/9/24 14:22
 @Desc    : Variance of spell durations of individual state sequences.
@@ -57,7 +57,8 @@ def get_spell_duration_variance(seqdata, type=1):
         # ret = (np.nansum(ddur, axis=1) + nnvisit * (meand ** 2)) / (dlgth + nnvisit)
         ddur = pd.DataFrame(ddur.tolist())
         sum_sqdiff = np.nansum(ddur.to_numpy(), axis=1)
-        ret = (sum_sqdiff + nnvisit.to_numpy() * (meand.to_numpy() ** 2)) / (dlgth + nnvisit.to_numpy())
+        ret_values = (sum_sqdiff + nnvisit.to_numpy() * (meand.to_numpy() ** 2)) / (dlgth + nnvisit.to_numpy())
+        ret = pd.Series(ret_values, index=meand.index)
 
         alph = seqdata.states.copy()
         alph_size = len(alph)
@@ -67,7 +68,8 @@ def get_spell_duration_variance(seqdata, type=1):
             maxnnv = np.where(dlgth == 1, alph_size - 1, alph_size - 2)
 
         meand_max = meand.to_numpy() * (dlgth + nnvisit.to_numpy()) / (dlgth + maxnnv)
-        var_max = ((dlgth-1) * (1-meand_max)**2 + (lgth - dlgth + 1 - meand_max)**2 + maxnnv * meand_max**2) / (dlgth + maxnnv)
+        var_max_values = ((dlgth-1) * (1-meand_max)**2 + (lgth - dlgth + 1 - meand_max)**2 + maxnnv * meand_max**2) / (dlgth + maxnnv)
+        var_max = pd.Series(var_max_values, index=meand.index)
 
     meand.index = seqdata.seqdata.index
     ret.index = seqdata.seqdata.index
