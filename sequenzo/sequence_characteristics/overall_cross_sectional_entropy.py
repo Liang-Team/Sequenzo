@@ -93,7 +93,7 @@ def get_cross_sectional_entropy(
     freq_counts = np.zeros((S, T), dtype=float)
 
     for j in range(T):
-        col = seqdata.seqdata.iloc[:, j].values
+        col = seqdata.seqdata.iloc[:, j]
         for i in range(S):
             # Try both encoding and label matching
             mask_num = (col == (i+1))
