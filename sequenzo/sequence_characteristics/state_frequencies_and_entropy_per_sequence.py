@@ -16,7 +16,11 @@ def get_state_freq_and_entropy_per_seq(seqdata, prop=False):
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[!] data is NOT a sequence object, see SequenceData function to create one.")
 
-    states = seqdata.states.copy()
+    if seqdata.labels is not None:
+        states = seqdata.labels
+    else:
+        states = seqdata.states
+
     number_states = len(states)
     number_seq = seqdata.seqdata.shape[0]
 
