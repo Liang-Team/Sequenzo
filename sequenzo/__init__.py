@@ -96,6 +96,18 @@ from .sequence_characteristics import (
 
 )
 
+# Event History Analysis (SAMM)
+from .with_event_history_analysis import (
+    SAMM,
+    sequence_analysis_multi_state_model,
+    plot_samm,
+    seqsammseq,
+    set_typology,
+    seqsammeha,
+    # Keep old names for backward compatibility
+    seqsamm
+)
+
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
@@ -182,5 +194,15 @@ __all__ = [
     "get_state_freq_and_entropy_per_seq",
     "get_cross_sectional_entropy",
     "plot_longitudinal_characteristics",
-    "plot_cross_sectional_characteristics"
+    "plot_cross_sectional_characteristics",
+
+    # Event History Analysis (SAMM)
+    "SAMM",
+    "sequence_analysis_multi_state_model",
+    "plot_samm",
+    "seqsammseq",
+    "set_typology",
+    "seqsammeha",
+    # Keep old names for backward compatibility
+    "seqsamm"
 ]
