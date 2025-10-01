@@ -142,7 +142,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
     # ================================
     if method in ["INDELS", "INDELSLOG"]:
         if time_varying:
-            indels = get_cross_sectional_entropy(seqdata)['Frequencies']
+            indels = get_cross_sectional_entropy(seqdata, return_format="dict")['Frequencies']
         else:
             ww = seqdata.weights
             if ww is None:

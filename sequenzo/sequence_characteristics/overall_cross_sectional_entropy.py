@@ -25,13 +25,13 @@ def get_cross_sectional_entropy(
     """
     Cross-sectional state distribution by time with entropy and readable outputs.
 
-    What you get (tidy):
-        time   state   freq   entropy   entropy_norm   N_valid   rank   is_top
+    What you get in a tidy format:
+        time   state   freq   entropy   per_time_entropy_norm   N_valid   rank   is_top
         1      A       0.645  0.380     0.380          2346.27   1      True
         ...
 
     Additional metrics:
-        - entropy_norm: If norm=True, normalized by maximum entropy (|S|), range 0–1
+        - per_time_entropy_norm: If norm=True, normalized by maximum entropy (|S|), range 0–1
         - effective_states (H_effective): exp(H), equivalent "effective number of states"
         - summary: Key interpretation points (entropy peaks/valleys, dominant state intervals, average entropy, etc.)
 
@@ -122,7 +122,7 @@ def get_cross_sectional_entropy(
 
     # Organize output: wide format
     freq_df_wide = pd.DataFrame(P, index=states_labels, columns=times).round(round_decimals)
-    entropy_s = pd.Series(H_norm if norm else H, index=times, name=("Entropy_norm" if norm else "Entropy")).round(round_decimals)
+    entropy_s = pd.Series(H_norm if norm else H, index=times, name=("per_time_entropy_norm" if norm else "Entropy")).round(round_decimals)
     valid_s   = pd.Series(N_valid, index=times, name="N_valid").round(round_decimals)
     eff_s     = (pd.Series(H_eff, index=times, name="Effective States").round(round_decimals)
                  if include_effective_states else None)
@@ -151,7 +151,7 @@ def get_cross_sectional_entropy(
     # Friendly column order
     cols = ["time", "state", "freq"]
     if norm:
-        cols += ["Entropy_norm"]
+        cols += ["per_time_entropy_norm"]
     else:
         cols += ["Entropy"]
     cols += ["N_valid"]
@@ -165,13 +165,26 @@ def get_cross_sectional_entropy(
         "states": states_labels,
         "n_states": S,
         "n_timepoints": T,
-        "avg_entropy_norm": float(tidy["Entropy_norm"].mean()) if norm else None,
+        "avg_entropy_norm": float(tidy["per_time_entropy_norm"].mean()) if norm else None,
         "avg_entropy": float((entropy_s if not norm else entropy_s * entropy(np.ones(S)/S)).mean()) if not norm else None,
-        "peak_entropy_time": tidy.loc[tidy["Entropy_norm" if norm else "Entropy"].idxmax(), "time"] if T > 0 else None,
-        "lowest_entropy_time": tidy.loc[tidy["Entropy_norm" if norm else "Entropy"].idxmin(), "time"] if T > 0 else None,
+        "peak_entropy_time": tidy.loc[tidy["per_time_entropy_norm" if norm else "Entropy"].idxmax(), "time"] if T > 0 else None,
+        "lowest_entropy_time": tidy.loc[tidy["per_time_entropy_norm" if norm else "Entropy"].idxmin(), "time"] if T > 0 else None,
         "dominant_stability_ratio": float(tidy.query("rank==1")["freq"].mean()),  # Average proportion of dominant state
         "cpal": cpal
     }
+
+    # Print descriptive statistics
+    print("\n" + "="*70)
+    print("Cross-Sectional Entropy Summary")
+    print("="*70)
+    print(f"[>] Number of states: {summary['n_states']}")
+    print(f"[>] Number of time points: {summary['n_timepoints']}")
+    print(f"[>] On average, the most common state accounts for {summary['dominant_stability_ratio']:.1%} of cases")
+    print(f"[>] Entropy is highest at time point {summary['peak_entropy_time']}")
+    print(f"[>] Entropy is lowest at time point {summary['lowest_entropy_time']}")
+    if norm:
+        print(f"[>] Average normalized entropy: {summary['avg_entropy_norm']:.3f} (range: 0 = fully concentrated, 1 = evenly distributed)")
+    print("="*70 + "\n")
 
     # Compatible with different return formats
     if return_format == "tidy":
@@ -181,7 +194,7 @@ def get_cross_sectional_entropy(
         out = {
             "Frequencies": freq_df_wide,
             "N_valid": valid_s,
-            ("Entropy_norm" if norm else "Entropy"): entropy_s
+            ("per_time_entropy_norm" if norm else "Entropy"): entropy_s
         }
         if eff_s is not None:
             out["Effective States"] = eff_s
@@ -191,7 +204,7 @@ def get_cross_sectional_entropy(
             "Frequencies": freq_df_wide,
             "ValidStates": valid_s,
             "Entropy": entropy_s if not norm else None,
-            "Entropy_norm": entropy_s if norm else None,
+            "per_time_entropy_norm": entropy_s if norm else None,
             "Effective States": eff_s,
             "__attrs__": {
                 "nbseq": float(valid_s.iloc[0]) if len(valid_s)>0 else None,

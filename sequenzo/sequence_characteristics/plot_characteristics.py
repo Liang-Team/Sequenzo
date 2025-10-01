@@ -480,10 +480,14 @@ def plot_cross_sectional_characteristics(seqdata,
     >>> valid_n = result['ValidStates']         # Sample sizes by time
     """
     # Get cross-sectional data using the existing function
-    res = get_cross_sectional_entropy(seqdata, weighted=True, norm=True)
+    res = get_cross_sectional_entropy(seqdata, weighted=True, norm=True, return_format="dict")
     
     freq = res["Frequencies"]          # rows: states, cols: time points
-    ent = res["Entropy"]               # index: time points
+    # Get normalized or raw entropy (check which key exists)
+    if "per_time_entropy_norm" in res and res["per_time_entropy_norm"] is not None:
+        ent = res["per_time_entropy_norm"]
+    else:
+        ent = res["Entropy"]
     N = res.get("ValidStates", None)   # valid sample sizes per time point
 
     # Sort time axis if possible (handles both numeric and string time labels)
