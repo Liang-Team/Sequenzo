@@ -16,6 +16,11 @@ from .sequence_analysis_multi_state_model import (
     seqsamm
 )
 
+from .sequence_history_analysis import (
+    seqsha,
+    person_level_to_person_period
+)
+
 __all__ = [
     'SAMM',
     'sequence_analysis_multi_state_model',
@@ -23,6 +28,8 @@ __all__ = [
     'seqsammseq',
     'set_typology',
     'seqsammeha',
+    'seqsha',
+    'person_level_to_person_period',
     # Keep old names for backward compatibility
     'seqsamm'
 ]

@@ -45,3 +45,7 @@ unit_test/
 # Rust build outputs
 **/target/
 sequenzo/rust_fast_cluster/target/
+
+# Large data files
+Tutorials/with_event_history_analysis/eha_persper_data.csv
+Tutorials/with_event_history_analysis/result.csv

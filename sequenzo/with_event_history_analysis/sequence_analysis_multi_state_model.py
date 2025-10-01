@@ -49,7 +49,7 @@ for exploratory data analysis and detailed pattern inspection.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Tuple
 import matplotlib.pyplot as plt
 
 # Import the SequenceData class from the parent package
@@ -527,7 +527,121 @@ def seqsammseq(samm: SAMM, spell: str) -> pd.DataFrame:
     return subsequences
 
 
-def set_typology(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, list]) -> SAMM:
+def _expand_typology_for_transitions(
+    samm: SAMM,
+    spell: str,
+    mapping: Union[Dict, pd.Series],
+    by: Optional[str] = None,
+    cluster_to_name: Optional[Dict] = None
+) -> np.ndarray:
+    """
+    Build a row-aligned typology vector for transition rows given a mapping.
+
+    Parameters
+    ----------
+    samm : SAMM
+        The SAMM object.
+    spell : str
+        The state to analyze transitions out of.
+    mapping : dict or pandas.Series
+        Either a mapping of id -> cluster/label, or (id, begin) -> cluster/label.
+        Values can be final label strings, or cluster ids to be mapped via cluster_to_name.
+    by : {"id", "id_begin"}, optional
+        If None, auto-detect by inspecting mapping keys/index. Use "id_begin" when
+        mapping is keyed by (id, begin).
+    cluster_to_name : dict, optional
+        Mapping from cluster id to human-readable label. Required if mapping values
+        are cluster ids rather than label strings.
+
+    Returns
+    -------
+    numpy.ndarray
+        A vector of labels aligned to samm.data.loc[(s.1==spell) & transition].
+    """
+    condition = (samm.data['s.1'] == spell) & (samm.data['transition'] == True)
+    trans_df = samm.data.loc[condition, ['id', 'begin']].copy()
+
+    # Normalize mapping to a dict for fast lookup
+    if isinstance(mapping, pd.Series):
+        if mapping.index.nlevels == 1:
+            normalized: Dict = mapping.to_dict()
+            inferred_by = 'id'
+        elif mapping.index.nlevels == 2:
+            normalized = {tuple(idx): val for idx, val in mapping.items()}
+            inferred_by = 'id_begin'
+        else:
+            raise ValueError("Mapping Series index must be 1 or 2 levels: id or (id, begin)")
+    else:
+        normalized = dict(mapping)
+        # Auto-detect key type when by is not provided
+        if by is None:
+            if len(normalized) == 0:
+                inferred_by = 'id'  # default
+            else:
+                sample_key = next(iter(normalized.keys()))
+                inferred_by = 'id_begin' if isinstance(sample_key, tuple) and len(sample_key) == 2 else 'id'
+        else:
+            inferred_by = by
+
+    labels: List[str] = []
+    missing_keys: List[Union[int, Tuple[int, int]]] = []
+
+    if inferred_by == 'id':
+        for pid in trans_df['id'].tolist():
+            if pid not in normalized:
+                missing_keys.append(pid)
+                labels.append(None)
+                continue
+            val = normalized[pid]
+            # If val is numeric-like and cluster_to_name is provided, map to name
+            if cluster_to_name is not None and pd.notna(val):
+                try:
+                    labels.append(cluster_to_name[val])
+                except KeyError:
+                    raise ValueError(f"cluster_to_name is missing key {val!r} for id {pid}")
+            else:
+                labels.append(val)
+    elif inferred_by == 'id_begin':
+        ids = trans_df['id'].to_list()
+        begins = trans_df['begin'].to_list()
+        for pid, b in zip(ids, begins):
+            key = (pid, b)
+            if key not in normalized:
+                missing_keys.append(key)
+                labels.append(None)
+                continue
+            val = normalized[key]
+            if cluster_to_name is not None and pd.notna(val):
+                try:
+                    labels.append(cluster_to_name[val])
+                except KeyError:
+                    raise ValueError(f"cluster_to_name is missing key {val!r} for (id, begin) {key}")
+            else:
+                labels.append(val)
+    else:
+        raise ValueError("Parameter 'by' must be one of {'id', 'id_begin'}")
+
+    if missing_keys:
+        sample = missing_keys[:5]
+        raise ValueError(
+            f"Missing {len(missing_keys)} keys in mapping for transitions from '{spell}'. "
+            f"Examples: {sample}. You can provide (id, begin) or id mappings, "
+            f"and use cluster_to_name to map cluster ids to names."
+        )
+
+    return np.asarray(labels, dtype=object)
+
+
+def set_typology(
+    samm: SAMM,
+    spell: str,
+    typology: Union[pd.Series, np.ndarray, list, None] = None,
+    *,
+    clusters: Optional[Union[pd.Series, np.ndarray, list]] = None,
+    cluster_to_name: Optional[Dict] = None,
+    mapping: Optional[Union[Dict, pd.Series]] = None,
+    by: Optional[str] = None
+) -> SAMM:
     """
     Assign a typology classification to subsequences following a specific state.
     
@@ -545,10 +659,12 @@ def set_typology(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, 
     Args:
         samm (SAMM): A SAMM object created by sequence_analysis_multi_state_model()
         spell (str): The state for which you're setting typologies
-        typology (pd.Series, np.ndarray, or list): Classification labels for each transition
-                                                   from the specified spell.
-                                                   Length must match the number of transitions
-                                                   from that spell.
+        typology (array-like, optional): Final labels for each transition row (length = n_transitions).
+        clusters (array-like, optional): Cluster ids per transition row (length = n_transitions).
+        cluster_to_name (dict, optional): Mapping from cluster id -> label name. Used with clusters
+                                          or when mapping values are cluster ids.
+        mapping (dict or pandas.Series, optional): id -> cluster/label or (id, begin) -> cluster/label.
+        by (str, optional): 'id' or 'id_begin'. If None, auto-detect from mapping keys.
     
     Returns:
         SAMM: The updated SAMM object with typology column filled in
@@ -564,29 +680,70 @@ def set_typology(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, 
     
     # Find rows where: state is the specified spell AND there's a transition
     condition = (samm.data['s.1'] == spell) & (samm.data['transition'] == True)
-    
-    # Convert typology to numpy array for easier handling
-    if isinstance(typology, pd.Series):
-        typology_array = typology.values
-    else:
-        typology_array = np.array(typology)
-    
-    # Validate that the typology length matches the number of transitions
-    n_transitions = condition.sum()
-    if len(typology_array) != n_transitions:
-        raise ValueError(
-            f"Length mismatch: typology has {len(typology_array)} elements "
-            f"but there are {n_transitions} transitions from state '{spell}'"
+
+    n_transitions = int(condition.sum())
+
+    labels_array: Optional[np.ndarray] = None
+
+    # Case 1: direct typology vector
+    if typology is not None:
+        if isinstance(typology, pd.Series):
+            labels_array = typology.values
+        else:
+            labels_array = np.asarray(typology, dtype=object)
+        if len(labels_array) != n_transitions:
+            raise ValueError(
+                f"Length mismatch: provided length {len(labels_array)} but there are {n_transitions} "
+                f"transitions from state '{spell}'. You should provide a typology vector of length n_transitions "
+                f"(one label per transition row), not a list of unique type names. Use clusters+cluster_to_name "
+                f"or mapping parameters instead."
+            )
+
+    # Case 2: clusters aligned to transition rows + mapping dict
+    elif clusters is not None:
+        clusters_array = clusters.values if isinstance(clusters, pd.Series) else np.asarray(clusters)
+        if len(clusters_array) != n_transitions:
+            raise ValueError(
+                f"Length mismatch: clusters length {len(clusters_array)} must match n_transitions={n_transitions}"
+            )
+        if cluster_to_name is not None:
+            try:
+                labels_array = np.asarray([cluster_to_name[c] for c in clusters_array], dtype=object)
+            except KeyError as e:
+                raise ValueError(f"cluster_to_name is missing key {e.args[0]!r}")
+        else:
+            # Assume clusters are already label strings
+            labels_array = clusters_array.astype(object)
+
+    # Case 3: mapping keyed by id or (id, begin)
+    elif mapping is not None:
+        labels_array = _expand_typology_for_transitions(
+            samm=samm, spell=spell, mapping=mapping, by=by, cluster_to_name=cluster_to_name
         )
-    
+
+    else:
+        raise ValueError(
+            "You must provide one of: typology (row-aligned), clusters+cluster_to_name (row-aligned), "
+            "or mapping (id or (id, begin) to cluster/label)."
+        )
+
     # Assign the typology labels to the corresponding rows
-    samm.data.loc[condition, 'typology'] = typology_array
+    samm.data.loc[condition, 'typology'] = labels_array
     
     return samm
 
 
-def seqsammeha(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, list], 
-               persper: bool = True) -> pd.DataFrame:
+def seqsammeha(
+    samm: SAMM,
+    spell: str,
+    typology: Union[pd.Series, np.ndarray, list, None] = None,
+    *,
+    clusters: Optional[Union[pd.Series, np.ndarray, list]] = None,
+    cluster_to_name: Optional[Dict] = None,
+    mapping: Optional[Union[Dict, pd.Series]] = None,
+    by: Optional[str] = None,
+    persper: bool = True
+) -> pd.DataFrame:
     """
     Generate a dataset for Event History Analysis (EHA) with typology outcomes.
     
@@ -608,10 +765,13 @@ def seqsammeha(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, li
     Args:
         samm (SAMM): A SAMM object created by sequence_analysis_multi_state_model()
         spell (str): The state you're analyzing (e.g., 'unemployed', 'single')
-        typology (pd.Series, np.ndarray, or list): Classification of outcomes
-                                                   (e.g., ['reemployed', 'education', 'retired'])
+        typology (array-like, optional): Final labels for each transition row (length = n_transitions)
+        clusters (array-like, optional): Cluster ids per transition row (length = n_transitions)
+        cluster_to_name (dict, optional): Mapping from cluster id -> label name
+        mapping (dict or pandas.Series, optional): id -> cluster/label or (id, begin) -> cluster/label
+        by (str, optional): 'id' or 'id_begin'. If None, auto-detect
         persper (bool): If True, return person-period data (multiple rows per spell).
-                       If False, return spell-level data (one row per spell).
+                        If False, return spell-level data (one row per spell).
     
     Returns:
         pd.DataFrame: A dataset ready for event history analysis with:
@@ -630,8 +790,16 @@ def seqsammeha(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, li
         >>> # For example: predict probability of reemployment vs. other outcomes
     """
     
-    # First, set the typology in the SAMM object
-    samm = set_typology(samm, spell=spell, typology=typology)
+    # First, set the typology in the SAMM object using any of the supported inputs
+    samm = set_typology(
+        samm,
+        spell=spell,
+        typology=typology,
+        clusters=clusters,
+        cluster_to_name=cluster_to_name,
+        mapping=mapping,
+        by=by
+    )
     
     # Filter data to only include rows in the specified spell
     spell_condition = (samm.data['s.1'] == spell)
@@ -643,10 +811,9 @@ def seqsammeha(samm: SAMM, spell: str, typology: Union[pd.Series, np.ndarray, li
     
     # Create binary indicator variables for each typology category
     # This creates dummy variables that statistical models can use
-    if isinstance(typology, pd.Series):
-        unique_types = typology.unique()
-    else:
-        unique_types = np.unique(typology)
+    # Determine unique typologies from the rows where typology is set
+    typology_series = samm.data.loc[(samm.data['s.1'] == spell) & (samm.data['transition'] == True), 'typology']
+    unique_types = typology_series.dropna().unique()
     
     # Create a column for each unique typology
     for type_label in unique_types:
@@ -674,6 +841,7 @@ __all__ = [
     'seqsammseq',
     'set_typology',
     'seqsammeha',
+    '_expand_typology_for_transitions',
     # Keep old names for backward compatibility
     'seqsamm'
 ]
