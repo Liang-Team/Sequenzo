@@ -325,7 +325,23 @@ class SequenceData:
                 if non_missing_states <= 20:
                     non_missing_color_list = sns.color_palette("Spectral", non_missing_states)
                 else:
-                    non_missing_color_list = sns.color_palette("cubehelix", non_missing_states)
+                    # Use a more elegant color palette for many states - combination of viridis and pastel colors
+                    if non_missing_states <= 40:
+                        # Use viridis for up to 40 states (more colorful than cubehelix)
+                        non_missing_color_list = sns.color_palette("viridis", non_missing_states)
+                    else:
+                        # For very large state counts, use a custom palette combining multiple schemes
+                        viridis_colors = sns.color_palette("viridis", min(non_missing_states // 2, 20))
+                        pastel_colors = sns.color_palette("Set3", min(non_missing_states // 2, 12))
+                        tab20_colors = sns.color_palette("tab20", min(non_missing_states // 3, 20))
+                        
+                        # Combine and extend the palette
+                        combined_colors = viridis_colors + pastel_colors + tab20_colors
+                        # If we need more colors, cycle through the combined palette
+                        while len(combined_colors) < non_missing_states:
+                            combined_colors.extend(combined_colors[:min(len(combined_colors), non_missing_states - len(combined_colors))])
+                        
+                        non_missing_color_list = combined_colors[:non_missing_states]
 
                 if reverse_colors:
                     non_missing_color_list = list(reversed(non_missing_color_list))
@@ -342,7 +358,23 @@ class SequenceData:
                 if num_states <= 20:
                     color_list = sns.color_palette("Spectral", num_states)
                 else:
-                    color_list = sns.color_palette("cubehelix", num_states)
+                    # Use a more elegant color palette for many states - combination of viridis and pastel colors
+                    if num_states <= 40:
+                        # Use viridis for up to 40 states (more colorful than cubehelix)
+                        color_list = sns.color_palette("viridis", num_states)
+                    else:
+                        # For very large state counts, use a custom palette combining multiple schemes
+                        viridis_colors = sns.color_palette("viridis", min(num_states // 2, 20))
+                        pastel_colors = sns.color_palette("Set3", min(num_states // 2, 12))
+                        tab20_colors = sns.color_palette("tab20", min(num_states // 3, 20))
+                        
+                        # Combine and extend the palette
+                        combined_colors = viridis_colors + pastel_colors + tab20_colors
+                        # If we need more colors, cycle through the combined palette
+                        while len(combined_colors) < num_states:
+                            combined_colors.extend(combined_colors[:min(len(combined_colors), num_states - len(combined_colors))])
+                        
+                        color_list = combined_colors[:num_states]
 
                 if reverse_colors:
                     color_list = list(reversed(color_list))
