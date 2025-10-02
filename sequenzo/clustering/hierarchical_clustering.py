@@ -75,6 +75,12 @@ from scipy.spatial.distance import squareform
 # sklearn metrics no longer needed - using C++ implementation
 from fastcluster import linkage
 
+import rpy2.robjects as ro
+from rpy2.robjects import numpy2ri
+from rpy2.robjects.packages import importr
+from rpy2.robjects.conversion import localconverter
+from rpy2.robjects import FloatVector
+
 # Import C++ cluster quality functions
 try:
     from . import clustering_c_code
@@ -84,7 +90,7 @@ except ImportError:
     print("[!] Warning: C++ cluster quality functions not available. Using Python fallback.")
 
 # Corrected imports: Use relative imports *within* the package.
-from ..visualization.utils import save_and_show_results
+from sequenzo.visualization.utils import save_and_show_results
 
 # Global flag to ensure Ward warning is only shown once per session
 _WARD_WARNING_SHOWN = False
@@ -259,6 +265,79 @@ def _clean_distance_matrix(matrix):
     return matrix
 
 
+def _hclust_to_linkage_matrix(linkage_matrix):
+    """
+    Convert an R `hclust` object to a SciPy-compatible linkage matrix.
+
+    This function takes an `hclust` object returned by R (e.g., from
+    `fastcluster::hclust`) and converts it into the standard linkage matrix
+    format used by SciPy (`scipy.cluster.hierarchy.linkage`), which can be
+    used for dendrogram plotting or further clustering analysis in Python.
+
+    Parameters
+    ----------
+    linkage_matrix : rpy2.robjects.ListVector
+        An R `hclust` object. Expected to contain at least the following fields:
+        - 'merge': ndarray of shape (n-1, 2), indicating which clusters are merged
+                   at each step (negative indices for original observations,
+                   positive indices for previously merged clusters).
+        - 'height': ndarray of shape (n-1,), distances at which merges occur.
+        - 'order': ordering of the leaves.
+
+    Returns
+    -------
+    Z : numpy.ndarray, shape (n-1, 4), dtype=float
+        A SciPy-compatible linkage matrix where each row represents a merge:
+        - Z[i, 0] : index of the first cluster (0-based)
+        - Z[i, 1] : index of the second cluster (0-based)
+        - Z[i, 2] : distance between the merged clusters
+        - Z[i, 3] : total number of original samples in the newly formed cluster
+
+    Notes
+    -----
+    - The conversion handles the difference in indexing:
+        - In R's `hclust`, negative numbers in 'merge' indicate original samples
+          and positive numbers indicate previously merged clusters (1-based).
+        - In the returned SciPy linkage matrix, all indices are converted to 0-based.
+    - The function iteratively tracks cluster sizes to populate the fourth column
+      (sample counts) required by SciPy.
+    """
+
+    n = len(linkage_matrix.rx2("order"))  # 样本数
+    merge = np.array(linkage_matrix.rx2("merge"), dtype=int)  # (n-1, 2)
+    height = np.array(linkage_matrix.rx2("height"), dtype=float)
+
+    cluster_sizes = np.ones(n, dtype=int)  # 单个样本初始大小 = 1
+    Z = np.zeros((n - 1, 4), dtype=float)
+
+    for i in range(n - 1):
+        a, b = merge[i]
+
+        # R hclust 编号负数表示原始样本
+        if a < 0:
+            idx1 = -a - 1  # 转成 0-based
+            size1 = 1
+        else:
+            idx1 = n + a - 1  # 已合并簇，0-based
+            size1 = cluster_sizes[idx1]
+
+        if b < 0:
+            idx2 = -b - 1
+            size2 = 1
+        else:
+            idx2 = n + b - 1
+            size2 = cluster_sizes[idx2]
+
+        Z[i, 0] = idx1
+        Z[i, 1] = idx2
+        Z[i, 2] = height[i]
+        Z[i, 3] = size1 + size2
+
+        # 更新 cluster_sizes，用于后续簇
+        cluster_sizes = np.append(cluster_sizes, size1 + size2)
+
+    return Z
+
 class Cluster:
     def __init__(self,
                  matrix,
@@ -358,12 +437,27 @@ class Cluster:
         try:
             # Map our method names to fastcluster's expected method names
             fastcluster_method = self._map_method_name(self.clustering_method)
-            linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
-            
+
+            if self.clustering_method == "ward_d" or self.clustering_method == "ward":
+                fastcluster_r = importr("fastcluster")
+
+                # 将 full_matrix 转换为 R 矩阵（直接从 Python 数组创建），避免 rpy2 对大向量长度出错
+                # 用‘F’强制按列展开，符合 R 的内存布局（列优先）
+                full_matrix_r = ro.r.matrix(ro.FloatVector(self.full_matrix.flatten('F')),
+                                            nrow=self.full_matrix.shape[0], ncol=self.full_matrix.shape[1])
+                r_om = ro.r['as.dist'](full_matrix_r)
+
+                linkage_matrix = fastcluster_r.hclust(r_om, method="ward.D")
+
+                linkage_matrix = _hclust_to_linkage_matrix(linkage_matrix)
+
+            else:
+                linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
+
             # Apply Ward D correction if needed (divide distances by 2 for classic Ward)
-            if self.clustering_method == "ward_d":
-                linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
-                
+            # if self.clustering_method == "ward_d":
+            #     linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
+
         except Exception as e:
             raise RuntimeError(
                 f"Failed to compute linkage with method '{self.clustering_method}'. "
@@ -1080,5 +1174,105 @@ class ClusterResults:
         save_and_show_results(save_as, dpi)
 
 
+# For xinyi's test, because she can't debug in Jupyter :
+    # Traceback (most recent call last):
+    #   File "/Applications/PyCharm.app/Contents/plugins/python-ce/helpers/pydev/_pydevd_bundle/pydevd_comm.py", line 736, in make_thread_stack_str
+    #     append('file="%s" line="%s">' % (make_valid_xml_value(my_file), lineno))
+    #   File "/Applications/PyCharm.app/Contents/plugins/python-ce/helpers/pydev/_pydevd_bundle/pydevd_xml.py", line 36, in make_valid_xml_value
+    #     return s.replace("&", "&amp;").replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    # AttributeError: 'tuple' object has no attribute 'replace'
 
+if __name__ == '__main__':
+    # Import necessary libraries
+    # Your calling code (e.g., in a script or notebook)
 
+    from sequenzo import *  # Import the package, give it a short alias
+    import pandas as pd  # Data manipulation
+    import numpy as np
+
+    # List all the available datasets in Sequenzo
+    # Now access functions using the alias:
+    print('Available datasets in Sequenzo: ', list_datasets())
+
+    # Load the data that we would like to explore in this tutorial
+    # `df` is the short for `dataframe`, which is a common variable name for a dataset
+    # df = load_dataset('country_co2_emissions')
+    df = load_dataset('mvad')
+
+    # 时间列表
+    time_list = ['Jul.93', 'Aug.93', 'Sep.93', 'Oct.93', 'Nov.93', 'Dec.93',
+                 'Jan.94', 'Feb.94', 'Mar.94', 'Apr.94', 'May.94', 'Jun.94', 'Jul.94',
+                 'Aug.94', 'Sep.94', 'Oct.94', 'Nov.94', 'Dec.94', 'Jan.95', 'Feb.95',
+                 'Mar.95', 'Apr.95', 'May.95', 'Jun.95', 'Jul.95', 'Aug.95', 'Sep.95',
+                 'Oct.95', 'Nov.95', 'Dec.95', 'Jan.96', 'Feb.96', 'Mar.96', 'Apr.96',
+                 'May.96', 'Jun.96', 'Jul.96', 'Aug.96', 'Sep.96', 'Oct.96', 'Nov.96',
+                 'Dec.96', 'Jan.97', 'Feb.97', 'Mar.97', 'Apr.97', 'May.97', 'Jun.97',
+                 'Jul.97', 'Aug.97', 'Sep.97', 'Oct.97', 'Nov.97', 'Dec.97', 'Jan.98',
+                 'Feb.98', 'Mar.98', 'Apr.98', 'May.98', 'Jun.98', 'Jul.98', 'Aug.98',
+                 'Sep.98', 'Oct.98', 'Nov.98', 'Dec.98', 'Jan.99', 'Feb.99', 'Mar.99',
+                 'Apr.99', 'May.99', 'Jun.99']
+
+    # 方法1: 使用pandas获取所有唯一值
+    time_states_df = df[time_list]
+    all_unique_states = set()
+
+    for col in time_list:
+        unique_vals = df[col].dropna().unique()  # Remove NaN values
+        all_unique_states.update(unique_vals)
+
+    # 转换为排序的列表
+    states = sorted(list(all_unique_states))
+    print("All unique states:")
+    for i, state in enumerate(states, 1):
+        print(f"{i:2d}. {state}")
+
+    print(f"\nstates list:")
+    print(f"states = {states}")
+
+    # Create a SequenceData object
+
+    # Define the time-span variable
+    time_list = ['Jul.93', 'Aug.93', 'Sep.93', 'Oct.93', 'Nov.93', 'Dec.93',
+                 'Jan.94', 'Feb.94', 'Mar.94', 'Apr.94', 'May.94', 'Jun.94', 'Jul.94',
+                 'Aug.94', 'Sep.94', 'Oct.94', 'Nov.94', 'Dec.94', 'Jan.95', 'Feb.95',
+                 'Mar.95', 'Apr.95', 'May.95', 'Jun.95', 'Jul.95', 'Aug.95', 'Sep.95',
+                 'Oct.95', 'Nov.95', 'Dec.95', 'Jan.96', 'Feb.96', 'Mar.96', 'Apr.96',
+                 'May.96', 'Jun.96', 'Jul.96', 'Aug.96', 'Sep.96', 'Oct.96', 'Nov.96',
+                 'Dec.96', 'Jan.97', 'Feb.97', 'Mar.97', 'Apr.97', 'May.97', 'Jun.97',
+                 'Jul.97', 'Aug.97', 'Sep.97', 'Oct.97', 'Nov.97', 'Dec.97', 'Jan.98',
+                 'Feb.98', 'Mar.98', 'Apr.98', 'May.98', 'Jun.98', 'Jul.98', 'Aug.98',
+                 'Sep.98', 'Oct.98', 'Nov.98', 'Dec.98', 'Jan.99', 'Feb.99', 'Mar.99',
+                 'Apr.99', 'May.99', 'Jun.99']
+
+    states = ['FE', 'HE', 'employment', 'joblessness', 'school', 'training']
+    labels = ['further education', 'higher education', 'employment', 'joblessness', 'school', 'training']
+
+    # TODO: write a try and error: if no such a parameter, then ask to pass the right ones
+    # sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", ids=df['country'].values, states=states)
+
+    sequence_data = SequenceData(df,
+                                 time=time_list,
+                                 id_col="id",
+                                 states=states,
+                                 labels=labels,
+                                 )
+
+    om = get_distance_matrix(sequence_data,
+                             method="OM",
+                             sm="CONSTANT",
+                             indel=1)
+
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    cluster.plot_dendrogram(xlabel="Individuals", ylabel="Distance")
+
+    # Create a ClusterQuality object to evaluate clustering quality
+    cluster_quality = ClusterQuality(cluster)
+    cluster_quality.compute_cluster_quality_scores()
+    cluster_quality.plot_cqi_scores(norm='zscore')
+    summary_table = cluster_quality.get_cqi_table()
+    print(summary_table)
+
+    table = cluster_quality.get_cluster_range_table()
+    # table.to_csv("cluster_quality_table.csv")
+
+    print(table)
