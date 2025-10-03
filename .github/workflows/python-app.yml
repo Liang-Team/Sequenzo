@@ -66,6 +66,12 @@ jobs:
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
 
+      - name: Install R (Windows)
+        if: runner.os == 'Windows'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.1'
+
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
@@ -102,14 +108,18 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
 
           # Linux: install system dependencies
-          CIBW_BEFORE_BUILD_LINUX: >
-            yum install -y libgomp-devel || 
-            apt-get update && apt-get install -y libomp-dev ||
+          CIBW_BEFORE_BUILD_LINUX: |
+            sudo apt-get update
+            sudo apt-get install -y libomp-dev r-base r-base-dev
+            python -m pip install --upgrade pip
+            python -m pip install rpy2
             echo "System dependencies installation attempted"
 
           # Windows: skip all extra dependencies, let setup.py handle them
-          CIBW_BEFORE_BUILD_WINDOWS: >
+          CIBW_BEFORE_BUILD_WINDOWS: |
             echo "Using setup.py dependencies only"
+            python -m pip install --upgrade pip
+            python -m pip install rpy2
 
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
