@@ -106,15 +106,19 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
-          CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
+          CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1 R_HOME=/usr/lib/R
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
 
           # Linux: install system dependencies
           CIBW_BEFORE_BUILD_LINUX: |
             sudo apt-get update
             sudo apt-get install -y libomp-dev r-base r-base-dev
+            export PATH=/usr/bin:$PATH
+            export R_HOME=/usr/lib/R
+            echo "R_HOME set to $R_HOME"
+            echo "which R: $(which R)"
             python -m pip install --upgrade pip
-            python -m pip install --prefer-binary rpy2
+            python -m pip install --prefer-binary rpy2 || python -m pip install rpy2
             echo "System dependencies installation attempted"
 
           # Windows: setup MSVC environment and install rpy2
