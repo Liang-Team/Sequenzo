@@ -106,18 +106,19 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
-          CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1 R_HOME=/usr/lib/R
+          CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1 R_HOME=/usr/lib64/R LD_LIBRARY_PATH=/usr/lib64/R/lib
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
 
-          # Linux: install system dependencies
+          # Linux: install system dependencies (manylinux uses yum)
           CIBW_BEFORE_BUILD_LINUX: |
-            sudo apt-get update
-            sudo apt-get install -y libomp-dev r-base r-base-dev
-            sudo mkdir -p /usr/lib/R/bin
-            sudo ln -s /usr/bin/R /usr/lib/R/bin/R
+            yum install -y epel-release
+            yum install -y R R-devel
+            mkdir -p /usr/lib64/R/bin
+            ln -s /usr/bin/R /usr/lib64/R/bin/R
             echo "Creating R symlink for rpy2 build"
             export PATH=/usr/bin:$PATH
-            export R_HOME=/usr/lib/R
+            export R_HOME=/usr/lib64/R
+            export LD_LIBRARY_PATH=/usr/lib64/R/lib
             echo "R_HOME set to $R_HOME"
             echo "which R: $(which R)"
             python -m pip install --upgrade pip
@@ -140,13 +141,14 @@ jobs:
 
           # Linux: prepare test environment (install R for rpy2 dependency installation)
           CIBW_BEFORE_TEST_LINUX: |
-            sudo apt-get update
-            sudo apt-get install -y r-base r-base-dev
-            sudo mkdir -p /usr/lib/R/bin
-            sudo ln -s /usr/bin/R /usr/lib/R/bin/R
+            yum install -y epel-release
+            yum install -y R R-devel
+            mkdir -p /usr/lib64/R/bin
+            ln -s /usr/bin/R /usr/lib64/R/bin/R
             echo "Creating R symlink for rpy2 test installation"
             export PATH=/usr/bin:$PATH
-            export R_HOME=/usr/lib/R
+            export R_HOME=/usr/lib64/R
+            export LD_LIBRARY_PATH=/usr/lib64/R/lib
             echo "R_HOME set to $R_HOME for test"
             echo "which R: $(which R)"
 
