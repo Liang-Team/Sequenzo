@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include "utils.h"
+#include "dp_utils.h"
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -104,26 +105,11 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
-            auto buffer = dist_matrix.mutable_unchecked<2>();
-
-            #pragma omp parallel
-            {
-                #pragma omp for schedule(guided)
-                for (int i = 0; i < nseq; i++) {
-                    for (int j = i; j < nseq; j++) {
-                        buffer(i, j) = compute_distance(i, j);
-                    }
-                }
-            }
-
-            #pragma omp for schedule(static)
-            for (int i = 0; i < nseq; ++i) {
-                for (int j = i + 1; j < nseq; ++j) {
-                    buffer(j, i) = buffer(i, j);
-                }
-            }
-
-            return dist_matrix;
+            return dp_utils::compute_all_distances_simple(
+                nseq,
+                dist_matrix,
+                [this](int i, int j){ return this->compute_distance(i, j); }
+            );
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
             throw;
@@ -132,23 +118,13 @@ public:
 
     py::array_t<double> compute_refseq_distances() {
         try {
-            auto buffer = refdist_matrix.mutable_unchecked<2>();
-
-            #pragma omp parallel
-            {
-                #pragma omp for schedule(guided)
-                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                    for (int is = 0; is < nseq; is ++) {
-                        if(is == rseq){
-                            buffer(is, rseq-rseq1) = 0;
-                        }else{
-                            buffer(is, rseq-rseq1) = compute_distance(is, rseq);
-                        }
-                    }
-                }
-            }
-
-            return refdist_matrix;
+            return dp_utils::compute_refseq_distances_simple(
+                nseq,
+                rseq1,
+                rseq2,
+                refdist_matrix,
+                [this](int is, int rseq){ return this->compute_distance(is, rseq); }
+            );
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
             throw;

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include "utils.h"
+#include "dp_utils.h"
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -85,22 +86,7 @@ public:
         }
     }
 
-    // 对齐分配函数
-    #ifdef _WIN32
-    inline double* aligned_alloc_double(size_t size, size_t align=64) {
-        return reinterpret_cast<double*>(_aligned_malloc(size * sizeof(double), align));
-    }
-    inline void aligned_free_double(double* ptr) {
-        _aligned_free(ptr);
-    }
-    #else
-    inline double* aligned_alloc_double(size_t size, size_t align=64) {
-        void* ptr = nullptr;
-        if(posix_memalign(&ptr, align, size*sizeof(double)) != 0) throw std::bad_alloc();
-        return reinterpret_cast<double*>(ptr);
-    }
-    inline void aligned_free_double(double* ptr) { free(ptr); }
-    #endif
+    // 对齐分配函数 moved to dp_utils.h
 
     double getIndel(int i, int j, int state){
         auto ptr_indel = indellist.mutable_unchecked<1>();
@@ -225,33 +211,14 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
-            auto buffer = dist_matrix.mutable_unchecked<2>();
-
-            #pragma omp parallel
-            {
-                // 每线程独立分配 prev/curr
-                double* prev = aligned_alloc_double(fmatsize);
-                double* curr = aligned_alloc_double(fmatsize);
-
-                #pragma omp parallel for schedule(dynamic)
-                for (int i = 0; i < nseq; i++) {
-                    for (int j = i; j < nseq; j++) {
-                        buffer(i, j) = compute_distance(i, j, prev, curr);
-                    }
+            return dp_utils::compute_all_distances(
+                nseq,
+                fmatsize,
+                dist_matrix,
+                [this](int i, int j, double* prev, double* curr) {
+                    return this->compute_distance(i, j, prev, curr);
                 }
-
-                aligned_free_double(prev);
-                aligned_free_double(curr);
-            }
-
-            #pragma omp parallel for schedule(dynamic)
-            for(int i = 0; i < nseq; i++) {
-                for(int j = i + 1; j < nseq; j++) {
-                    buffer(j, i) = buffer(i, j);
-                }
-            }
-
-            return dist_matrix;
+            );
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
             throw;
@@ -264,8 +231,8 @@ public:
 
             #pragma omp parallel
             {
-                double* prev = aligned_alloc_double(fmatsize);
-                double* curr = aligned_alloc_double(fmatsize);
+                double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
+                double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
 
                 #pragma omp for schedule(static)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {
@@ -278,6 +245,8 @@ public:
                         buffer(is, rseq - rseq1) = cmpres;
                     }
                 }
+                dp_utils::aligned_free_double(prev);
+                dp_utils::aligned_free_double(curr);
             }
 
             return refdist_matrix;
