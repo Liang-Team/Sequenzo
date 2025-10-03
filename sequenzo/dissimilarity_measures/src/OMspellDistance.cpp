@@ -128,44 +128,95 @@ public:
         try {
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_len = seqlength.unchecked<1>();
+            auto ptr_sm = sm.unchecked<2>();
+            auto ptr_dur = seqdur.unchecked<2>();
+            auto ptr_indel = indellist.unchecked<1>();
 
             int i_state = 0, j_state = 0;
-            double maxpossiblecost;
             int mm = ptr_len(is);
             int nn = ptr_len(js);
-            int mSuf = mm+1, nSuf = nn+1;
+            int mSuf = mm + 1;
+            int nSuf = nn + 1;
 
             prev[0] = 0;
             curr[0] = 0;
 
-            for(int ii = 1; ii<mSuf; ii++){
-                i_state = ptr_seq(is, ii-1);
-                prev[ii] = prev[ii-1] + getIndel(is, ii-1, i_state);
+            // initialize first row: cumulative insertions into js along columns
+            for (int jj = 1; jj < nSuf; jj++) {
+                int bj = ptr_seq(js, jj - 1);
+                prev[jj] = prev[jj - 1] + (ptr_indel(bj) + timecost * ptr_dur(js, jj - 1));
             }
 
-            for(int i = 1; i < mSuf; i++){
-                i_state = ptr_seq(is, i-1);
-                curr[0] = prev[i-1] + getIndel(js, i-1, j_state);
+            using batch_t = xsimd::batch<double>;
+            constexpr std::size_t B = batch_t::size;
 
-                for(int j = 1; j < nSuf; j++){
-                    j_state = ptr_seq(js, j-1);
+            for (int i = 1; i < mSuf; i++) {
+                i_state = ptr_seq(is, i - 1);
+                // per-row deletion cost (depends only on i_state and i position)
+                double dur_i = ptr_dur(is, i - 1);
+                double del_cost_i = ptr_indel(i_state) + timecost * dur_i;
 
-                    double minimum = prev[j] + getIndel(is, i-1 ,i_state);
-                    double j_indel = curr[j-1] + getIndel(js, j-1, j_state);
-                    double sub = prev[j-1] + getSubCost(i_state, j_state, is, i-1, js, j-1);
+                // first column: cumulative deletions D[i][0] = D[i-1][0] + del_cost_i
+                curr[0] = prev[0] + del_cost_i;
 
-                    curr[j] = std::min({minimum, j_indel, sub});
+                int j = 1;
+                for (; j + (int)B <= nSuf; j += (int)B) {
+                    const double* prev_ptr = prev + j;
+                    const double* prevm1_ptr = prev + (j - 1);
+
+                    batch_t prevj = batch_t::load_unaligned(prev_ptr);
+                    batch_t prevjm1 = batch_t::load_unaligned(prevm1_ptr);
+
+                    alignas(64) double subs[B];
+                    alignas(64) double ins[B];
+                    for (std::size_t b = 0; b < B; ++b) {
+                        int jj_idx = j + (int)b - 1;
+                        int bj = ptr_seq(js, jj_idx);
+                        double dur_j = ptr_dur(js, jj_idx);
+
+                        if (i_state == bj) {
+                            subs[b] = std::abs(timecost * (dur_i - dur_j));
+                        } else {
+                            subs[b] = ptr_sm(i_state, bj) + (dur_i + dur_j) * timecost;
+                        }
+                        ins[b] = ptr_indel(bj) + timecost * dur_j;
+                    }
+
+                    batch_t sub_batch = batch_t::load_unaligned(subs);
+                    batch_t cand_del = prevj + batch_t(del_cost_i);
+                    batch_t cand_sub = prevjm1 + sub_batch;
+                    batch_t vert = xsimd::min(cand_del, cand_sub);
+
+                    double running = curr[j - 1] + ins[0];
+                    for (std::size_t b = 0; b < B; ++b) {
+                        double v = vert.get(b);
+                        double c = std::min(v, running);
+                        curr[j + (int)b] = c;
+                        if (b + 1 < B) running = c + ins[b + 1];
+                    }
                 }
 
-                std::vector(prev, curr);
+                // tail scalar handling
+                for (; j < nSuf; ++j) {
+                    j_state = ptr_seq(js, j - 1);
+                    double minimum = prev[j] + del_cost_i;
+                    double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * ptr_dur(js, j - 1));
+                    double sub = prev[j - 1] + (
+                        (i_state == j_state)
+                        ? std::abs(timecost * (dur_i - ptr_dur(js, j - 1)))
+                        : (ptr_sm(i_state, j_state) + (dur_i + ptr_dur(js, j - 1)) * timecost)
+                    );
+                    curr[j] = std::min({ minimum, j_indel, sub });
+                }
+
+                std::swap(prev, curr);
             }
 
-            maxpossiblecost = abs(nn - mm) * indel + maxscost * std::min(mm, nn);
-
+            double maxpossiblecost = std::abs(nn - mm) * indel + maxscost * std::min(mm, nn);
             double ml = double(mm) * indel;
             double nl = double(nn) * indel;
 
-            return normalize_distance(prev[nSuf-1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;

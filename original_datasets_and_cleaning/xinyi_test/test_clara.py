@@ -10,17 +10,15 @@ import os
 import pandas as pd
 from sequenzo import *
 
-df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/orignal data/detailed_expanded_80w.csv")
-
-df = df.sample(n=1000, random_state=42)
+df = pd.read_csv("synthetic_detailed_U50_N400000.csv")
 
 sequence_data = SequenceData(
     df,
-    time=list(df.columns)[9:],
+    time=list(df.columns)[1:],
     time_type="age",
     states=["Data", "Data science", "Hardware", "Research",
             "Software", "Support & test", "Systems & infrastructure"],
-    id_col="worker_id"
+    id_col="id"
 )
 
 print("="*60)

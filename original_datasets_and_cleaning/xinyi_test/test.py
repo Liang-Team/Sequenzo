@@ -5,21 +5,18 @@ import pandas as pd
 from sequenzo import *
 
 # 读取扩展数据
-df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/orignal data/detailed_expanded_80w.csv")
+df = pd.read_csv("synthetic_detailed_U50_N400000.csv")
 
 df = df.sample(n=1000, random_state=42)
 
 # 构建 SequenceData
 sequence_data = SequenceData(
     df,
-    time=list(df.columns)[9:],
-    time_type="age",
+    time=list(df.columns)[1:],
     states=["Data", "Data science", "Hardware", "Research",
             "Software", "Support & test", "Systems & infrastructure"],
-    id_col="worker_id"
+    id_col="id"
 )
-
-# plot_sequence_index(sequence_data, save_as='sequence_index_80w.png')
 
 print("="*60)
 print("现在开始测试 get_distance_matrix")

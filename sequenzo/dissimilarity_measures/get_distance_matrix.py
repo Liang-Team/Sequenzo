@@ -379,15 +379,15 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_num = np.unique(seqdata_num, axis=0)
 
     # Check that dseqs_num does not exceed the max allowed number
-    if check_max_size:
-        max_allowed_seq = np.floor(np.sqrt(np.iinfo(np.int32).max)) if refseq_type == "none" else np.iinfo(np.int32).max - 1
-
-        if refseq_type == "sets":
-            if (np.sqrt(nunique1) * np.sqrt(nunique2)) > max_allowed_seq:
-                raise ValueError(f"[!] Number of {nunique1} and {nunique2} unique sequences too large for max allowed distances {max_allowed_seq}.")
-        else:
-            if len(dseqs_num) > max_allowed_seq:
-                raise ValueError(f"[!] {len(dseqs_num)} unique sequences exceeds max allowed of {max_allowed_seq}.")
+    # if check_max_size:
+    #     max_allowed_seq = np.floor(np.sqrt(np.iinfo(np.int32).max)) if refseq_type == "none" else np.iinfo(np.int32).max - 1
+    #
+    #     if refseq_type == "sets":
+    #         if (np.sqrt(nunique1) * np.sqrt(nunique2)) > max_allowed_seq:
+    #             raise ValueError(f"[!] Number of {nunique1} and {nunique2} unique sequences too large for max allowed distances {max_allowed_seq}.")
+    #     else:
+    #         if len(dseqs_num) > max_allowed_seq:
+    #             raise ValueError(f"[!] {len(dseqs_num)} unique sequences exceeds max allowed of {max_allowed_seq}.")
 
     # =========================
     # Handle Reference Sequence
