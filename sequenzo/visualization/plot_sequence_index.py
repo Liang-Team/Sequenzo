@@ -289,10 +289,12 @@ def sort_sequences_by_method(seqdata, method="unsorted", mask=None, distance_mat
 
 
 def plot_sequence_index(seqdata: SequenceData,
-                        show_by_category=None,
-                        category_labels=None,
-                        id_group_df=None,
-                        categories=None,
+                        # Grouping parameters
+                        group_by_column=None,
+                        group_dataframe=None,
+                        group_column_name=None,
+                        group_labels=None,
+                        # Other parameters
                         sort_by="lexicographic",
                         sort_by_weight=False,
                         weights="auto",
@@ -320,13 +322,34 @@ def plot_sequence_index(seqdata: SequenceData,
     This function creates index plots that visualize sequences as horizontal lines,
     with different sorting options matching R's TraMineR functionality.
 
+    **Two API modes for grouping:**
+    
+    1. **Simplified API** (when grouping info is already in the data):
+       ```python
+       plot_sequence_index(seqdata, group_by_column="Cluster", group_labels=cluster_labels)
+       ```
+    
+    2. **Complete API** (when grouping info is in a separate dataframe):
+       ```python
+       plot_sequence_index(seqdata, group_dataframe=membership_df, 
+                          group_column_name="Cluster", group_labels=cluster_labels)
+       ```
+
     :param seqdata: SequenceData object containing sequence information
-    :param show_by_category: (str, optional) Simple way to create grouped plots. 
-                            Specify the column name from the original data (e.g., "sex", "education").
-                            This will automatically create separate plots for each category.
-    :param category_labels: (dict, optional) Custom labels for category values. 
-                           Example: {0: "Female", 1: "Male"} or {"low": "Low Education", "high": "High Education"}.
-                           If not provided, will use original values or auto-generate readable labels.
+    
+    **New API parameters (recommended):**
+    :param group_by_column: (str, optional) Column name from seqdata.data to group by.
+                           Use this when grouping information is already in your data.
+                           Example: "Cluster", "sex", "education"
+    :param group_dataframe: (pd.DataFrame, optional) Separate dataframe containing grouping information.
+                           Use this when grouping info is in a separate table (e.g., clustering results).
+                           Must contain ID column and grouping column.
+    :param group_column_name: (str, optional) Name of the grouping column in group_dataframe.
+                             Required when using group_dataframe.
+    :param group_labels: (dict, optional) Custom labels for group values.
+                        Example: {1: "Late Family Formation", 2: "Early Partnership"}
+                        Maps original values to display labels.
+    
     :param sort_by: Sorting method for sequences within groups:
         - 'unsorted' or 'none': Keep original order (R TraMineR default)
         - 'lexicographic': Sort sequences lexicographically
@@ -392,45 +415,45 @@ def plot_sequence_index(seqdata: SequenceData,
     
     actual_figsize = style_sizes[plot_style]
     
-    # Handle the new simplified API: show_by_category
-    if show_by_category is not None:
+    # Handle the simplified API: group_by_column
+    if group_by_column is not None:
         # Validate that the column exists in the original data
-        if show_by_category not in seqdata.data.columns:
+        if group_by_column not in seqdata.data.columns:
             available_cols = [col for col in seqdata.data.columns if col not in seqdata.time and col != seqdata.id_col]
             raise ValueError(
-                f"Column '{show_by_category}' not found in the data. "
+                f"Column '{group_by_column}' not found in the data. "
                 f"Available columns for grouping: {available_cols}"
             )
         
-        # Automatically create id_group_df and categories from the simplified API
-        id_group_df = seqdata.data[[seqdata.id_col, show_by_category]].copy()
-        id_group_df.columns = ['Entity ID', 'Category']
-        categories = 'Category'
+        # Automatically create group_dataframe and group_column_name from the simplified API
+        group_dataframe = seqdata.data[[seqdata.id_col, group_by_column]].copy()
+        group_dataframe.columns = ['Entity ID', 'Category']
+        group_column_name = 'Category'
         
-        # Handle category labels - flexible and user-controllable
-        unique_values = seqdata.data[show_by_category].unique()
+        # Handle group labels - flexible and user-controllable
+        unique_values = seqdata.data[group_by_column].unique()
         
-        if category_labels is not None:
+        if group_labels is not None:
             # User provided custom labels - use them
-            missing_keys = set(unique_values) - set(category_labels.keys())
+            missing_keys = set(unique_values) - set(group_labels.keys())
             if missing_keys:
                 raise ValueError(
-                    f"category_labels missing mappings for values: {missing_keys}. "
-                    f"Please provide labels for all unique values in '{show_by_category}': {sorted(unique_values)}"
+                    f"group_labels missing mappings for values: {missing_keys}. "
+                    f"Please provide labels for all unique values in '{group_by_column}': {sorted(unique_values)}"
                 )
-            id_group_df['Category'] = id_group_df['Category'].map(category_labels)
+            group_dataframe['Category'] = group_dataframe['Category'].map(group_labels)
         else:
             # No custom labels provided - use smart defaults
             if all(isinstance(v, (int, float, np.integer, np.floating)) and not pd.isna(v) for v in unique_values):
-                # Numeric values - keep as is (user can provide category_labels if they want custom names)
+                # Numeric values - keep as is (user can provide group_labels if they want custom names)
                 pass
             # For string/categorical values, keep original values
             # This handles cases where users already have meaningful labels like "Male"/"Female"
         
-        print(f"[>] Creating grouped plots by '{show_by_category}' with {len(unique_values)} categories")
+        print(f"[>] Creating grouped plots by '{group_by_column}' with {len(unique_values)} categories")
     
     # If no grouping information, create a single plot
-    if id_group_df is None or categories is None:
+    if group_dataframe is None or group_column_name is None:
         return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids)
 
     # Process weights
@@ -443,21 +466,21 @@ def plot_sequence_index(seqdata: SequenceData,
             raise ValueError("Length of weights must equal number of sequences.")
     
     # Ensure ID columns match (convert if needed)
-    id_col_name = "Entity ID" if "Entity ID" in id_group_df.columns else id_group_df.columns[0]
+    id_col_name = "Entity ID" if "Entity ID" in group_dataframe.columns else group_dataframe.columns[0]
 
     # Get unique groups and sort them based on user preference
     if group_order:
         # Use manually specified order, filter out non-existing groups
-        groups = [g for g in group_order if g in id_group_df[categories].unique()]
-        missing_groups = [g for g in id_group_df[categories].unique() if g not in group_order]
+        groups = [g for g in group_order if g in group_dataframe[group_column_name].unique()]
+        missing_groups = [g for g in group_dataframe[group_column_name].unique() if g not in group_order]
         if missing_groups:
             print(f"[Warning] Groups not in group_order will be excluded: {missing_groups}")
     elif sort_groups == 'numeric' or sort_groups == 'auto':
-        groups = smart_sort_groups(id_group_df[categories].unique())
+        groups = smart_sort_groups(group_dataframe[group_column_name].unique())
     elif sort_groups == 'alpha':
-        groups = sorted(id_group_df[categories].unique())
+        groups = sorted(group_dataframe[group_column_name].unique())
     elif sort_groups == 'none':
-        groups = list(id_group_df[categories].unique())
+        groups = list(group_dataframe[group_column_name].unique())
     else:
         raise ValueError(f"Invalid sort_groups value: {sort_groups}. Use 'auto', 'numeric', 'alpha', or 'none'.")
     
@@ -477,7 +500,7 @@ def plot_sequence_index(seqdata: SequenceData,
     # Create a plot for each group
     for i, group in enumerate(groups):
         # Get IDs for this group
-        group_ids = id_group_df[id_group_df[categories] == group][id_col_name].values
+        group_ids = group_dataframe[group_dataframe[group_column_name] == group][id_col_name].values
 
         # Match IDs with sequence data
         mask = np.isin(seqdata.ids, group_ids)
