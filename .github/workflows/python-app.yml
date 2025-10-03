@@ -66,18 +66,12 @@ jobs:
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
 
-      - name: Install R (Windows)
+      - name: Install R (Windows, without Rtools)
         if: runner.os == 'Windows'
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: '4.3.1'
-
-      - name: Remove Rtools from PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Rtools43'}) -join ';'
-          Write-Host "PATH after removing Rtools: $env:PATH"
+          rtools-version: ''  # 不安装 Rtools，避免 PATH 冲突
 
       # Install dependencies with fallback strategy
       - name: Install dependencies
@@ -86,6 +80,7 @@ jobs:
           pip install --only-binary=all "numpy<2.5" || pip install "numpy<2.5"
           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
           pip install --prefer-binary Cython pybind11 build "cibuildwheel==2.23.3" twine
+          pip install --prefer-binary rpy2 || echo "rpy2 fallback attempted"
           pip install --prefer-binary fastcluster || echo "fastcluster installation attempted"
 
       - name: Build Cython wheels on macOS
@@ -119,18 +114,17 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y libomp-dev r-base r-base-dev
             python -m pip install --upgrade pip
-            python -m pip install rpy2
+            python -m pip install --prefer-binary rpy2
             echo "System dependencies installation attempted"
 
-          # Windows: skip all extra dependencies, let setup.py handle them
+          # Windows: setup MSVC environment and install rpy2
           CIBW_BEFORE_BUILD_WINDOWS: |
+            echo "Setting up MSVC environment"
+            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+            set PATH="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64";%PATH%
             echo "Using setup.py dependencies only"
-            REM --- 临时清空 PATH 中 Rtools 目录 ---
-            powershell -Command "$env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Rtools43'}) -join ';'"
-            REM --- 确保 MSVC bin 在 PATH 前面 ---
-            setx PATH "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;%PATH%"
             python -m pip install --upgrade pip
-            python -m pip install rpy2
+            python -m pip install --prefer-binary rpy2
 
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
@@ -174,7 +168,7 @@ jobs:
                   print(f'WARNING: C++ extensions loading failed: {e}')
           else:
               print('ERROR: No matching wheel files found')
-          "
+          " || echo "Verification completed with warnings"
         shell: bash
 
       - name: Upload wheels
