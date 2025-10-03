@@ -238,8 +238,8 @@ public:
 
             #pragma omp parallel
             {
-                double* prev = aligned_alloc_double(2 * seqlen + 1);
-                double* curr = aligned_alloc_double(2 * seqlen + 1);
+                double* prev = aligned_alloc_double(fmatsize);
+                double* curr = aligned_alloc_double(fmatsize);
 
                 #pragma omp for schedule(static)
                 for (int rseq = rseq1; rseq < rseq2; rseq ++) {

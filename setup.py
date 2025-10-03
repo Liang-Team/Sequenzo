@@ -359,7 +359,7 @@ def configure_cython_extensions():
             )
             extensions.append(extension)
         print(f"Found {len(extensions)} Cython modules.")
-        return cythonize(extensions, compiler_directives={"language_level": "3"})
+        return cythonize(extensions, compiler_directives={"language_level": "3"}, force=True)
     except Exception as e:
         print(f"Failed to configure Cython extensions: {e}")
         return []

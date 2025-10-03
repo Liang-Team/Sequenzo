@@ -3,11 +3,11 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
-#include <xsimd/xsimd.hpp>
 #include "utils.h"
 #ifdef _OPENMP
     #include <omp.h>
 #endif
+#include <xsimd/xsimd.hpp>
 
 namespace py = pybind11;
 
@@ -85,43 +85,46 @@ public:
         }
     }
 
-    double getIndel(int i, int j, int state) {
+    // 对齐分配函数
+    #ifdef _WIN32
+    inline double* aligned_alloc_double(size_t size, size_t align=64) {
+        return reinterpret_cast<double*>(_aligned_malloc(size * sizeof(double), align));
+    }
+    inline void aligned_free_double(double* ptr) {
+        _aligned_free(ptr);
+    }
+    #else
+    inline double* aligned_alloc_double(size_t size, size_t align=64) {
+        void* ptr = nullptr;
+        if(posix_memalign(&ptr, align, size*sizeof(double)) != 0) throw std::bad_alloc();
+        return reinterpret_cast<double*>(ptr);
+    }
+    inline void aligned_free_double(double* ptr) { free(ptr); }
+    #endif
+
+    double getIndel(int i, int j, int state){
         auto ptr_indel = indellist.mutable_unchecked<1>();
         auto ptr_dur = seqdur.mutable_unchecked<2>();
 
-        xsimd::batch<double, xsimd::default_arch> state_vec(ptr_indel(state));
-        xsimd::batch<double, xsimd::default_arch> timecost_vec(timecost);
-
-        xsimd::batch<double, xsimd::default_arch> dur_vec(ptr_dur(i, j));
-        xsimd::batch<double, xsimd::default_arch> result = state_vec + timecost_vec * dur_vec;
-
-        return result.get(0);
+        return ptr_indel(state) + timecost * ptr_dur(i, j);
     }
 
-
-    double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y) {
+    double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y){
         auto ptr_dur = seqdur.mutable_unchecked<2>();
 
-        if (i_state == j_state) {
+        if(i_state == j_state){
             double diffdur = ptr_dur(i_x, i_y) - ptr_dur(j_x, j_y);
-            return std::abs(timecost * diffdur);
-        } else {
+
+            return abs(timecost * diffdur);
+        }else{
             auto ptr_sm = sm.mutable_unchecked<2>();
 
-            double d1 = ptr_dur(i_x, i_y);
-            double d2 = ptr_dur(j_x, j_y);
-
-            xsimd::batch<double, xsimd::default_arch> d1_vec = xsimd::batch<double, xsimd::default_arch>::broadcast(d1);
-            xsimd::batch<double, xsimd::default_arch> d2_vec = xsimd::batch<double, xsimd::default_arch>::broadcast(d2);
-            xsimd::batch<double, xsimd::default_arch> cost = xsimd::batch<double, xsimd::default_arch>::broadcast(timecost);
-            xsimd::batch<double, xsimd::default_arch> sum = (d1_vec + d2_vec) * cost;
-
-            return ptr_sm(i_state, j_state) + sum.get(0);
+            return ptr_sm(i_state, j_state) +
+                    (ptr_dur(i_x, i_y) + ptr_dur(j_x, j_y)) * timecost;
         }
     }
 
-
-    double compute_distance(int is, int js) {
+    double compute_distance(int is, int js, double* prev, double* curr) {
         try {
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_len = seqlength.unchecked<1>();
@@ -130,63 +133,69 @@ public:
             double maxpossiblecost;
             int mm = ptr_len(is);
             int nn = ptr_len(js);
-            int mSuf = mm + 1, nSuf = nn + 1;
-
-            std::vector<double> prev(fmatsize, 0.0);
-            std::vector<double> curr(fmatsize, 0.0);
+            int mSuf = mm+1, nSuf = nn+1;
 
             prev[0] = 0;
             curr[0] = 0;
 
-            for (int ii = 1; ii < nSuf; ii++) {
-                j_state = ptr_seq(js, ii - 1);
-                prev[ii] = prev[ii-1] + getIndel(js, ii-1, j_state);
+            for(int ii = 1; ii<mSuf; ii++){
+                i_state = ptr_seq(is, ii-1);
+                prev[ii] = prev[ii-1] + getIndel(is, ii-1, i_state);
             }
 
-            for (int i = 1; i < mSuf; i++) {
-                i_state = ptr_seq(is, i - 1);
-                curr[0] = prev[0] + getIndel(is, i - 1, i_state);
+            for(int i = 1; i < mSuf; i++){
+                i_state = ptr_seq(is, i-1);
+                curr[0] = prev[i-1] + getIndel(js, i-1, j_state);
 
-                for (int j = 1; j < nSuf; j++) {
-                    j_state = ptr_seq(js, j - 1);
+                for(int j = 1; j < nSuf; j++){
+                    j_state = ptr_seq(js, j-1);
 
-                    xsimd::batch<double, xsimd::default_arch> minimum_batch = prev[j] + getIndel(is, i - 1, i_state);
-                    xsimd::batch<double, xsimd::default_arch> j_indel_batch = curr[j - 1] + getIndel(js, j - 1, j_state);
-                    xsimd::batch<double, xsimd::default_arch> sub_batch = prev[j - 1] + getSubCost(i_state, j_state, is, i - 1, js, j - 1);
+                    double minimum = prev[j] + getIndel(is, i-1 ,i_state);
+                    double j_indel = curr[j-1] + getIndel(js, j-1, j_state);
+                    double sub = prev[j-1] + getSubCost(i_state, j_state, is, i-1, js, j-1);
 
-                    xsimd::batch<double> result = xsimd::min(xsimd::min(minimum_batch, j_indel_batch), sub_batch);
-                    curr[j] = result.get(0);
+                    curr[j] = std::min({minimum, j_indel, sub});
                 }
 
-                std::swap(prev, curr);
+                std::vector(prev, curr);
             }
 
-            maxpossiblecost = std::abs(nn - mm) * indel + maxscost * std::min(mm, nn);
+            maxpossiblecost = abs(nn - mm) * indel + maxscost * std::min(mm, nn);
+
             double ml = double(mm) * indel;
             double nl = double(nn) * indel;
 
-            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf-1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
         }
     }
 
-
     py::array_t<double> compute_all_distances() {
         try {
             auto buffer = dist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < nseq; i++) {
-                for (int j = i; j < nseq; j++) {
-                    buffer(i, j) = compute_distance(i, j);
+            #pragma omp parallel
+            {
+                // 每线程独立分配 prev/curr
+                double* prev = aligned_alloc_double(fmatsize);
+                double* curr = aligned_alloc_double(fmatsize);
+
+                #pragma omp parallel for schedule(dynamic)
+                for (int i = 0; i < nseq; i++) {
+                    for (int j = i; j < nseq; j++) {
+                        buffer(i, j) = compute_distance(i, j, prev, curr);
+                    }
                 }
+
+                aligned_free_double(prev);
+                aligned_free_double(curr);
             }
 
             #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < nseq; i++) {
-                for (int j = i + 1; j < nseq; j++) {
+            for(int i = 0; i < nseq; i++) {
+                for(int j = i + 1; j < nseq; j++) {
                     buffer(j, i) = buffer(i, j);
                 }
             }
@@ -202,13 +211,20 @@ public:
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel for schedule(static)
-            for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                for (int is = 0; is < nseq; is ++) {
-                    if(is == rseq){
-                        buffer(is, rseq-rseq1) = 0;
-                    }else{
-                        buffer(is, rseq-rseq1) = compute_distance(is, rseq);
+            #pragma omp parallel
+            {
+                double* prev = aligned_alloc_double(fmatsize);
+                double* curr = aligned_alloc_double(fmatsize);
+
+                #pragma omp for schedule(static)
+                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
+                    for (int is = 0; is < nseq; is ++) {
+                        double cmpres = 0;
+                        if(is != rseq){
+                            cmpres = compute_distance(is, rseq, prev, curr);
+                        }
+
+                        buffer(is, rseq - rseq1) = cmpres;
                     }
                 }
             }
