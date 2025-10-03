@@ -58,12 +58,12 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 Sequenzo provides pre-built Python wheels for maximum compatibility — no need to compile from source.
 
-| Platform         | Architecture                  | Python Versions      | Status            |
+| Platform         | Architecture                  | Python Versions       | Status            |
 |------------------|-------------------------------|-----------------------|-------------------|
-| **macOS**        | `universal2` (Intel + Apple Silicon) | 3.9, 3.11       | ✅ Pre-built wheel |
-| **Windows**      | `AMD64` (64-bit)              | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
-| **Linux (glibc)**| `x86_64` (standard Linux)     | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
-| **Linux (musl)** | `x86_64` (Alpine Linux)       | 3.9, 3.10, 3.11       | ✅ Pre-built wheel |
+| **macOS**        | `universal2` (Intel + Apple Silicon) | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Windows**      | `AMD64` (64-bit)              | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (glibc)**| `x86_64` (standard Linux)     | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (musl)** | `x86_64` (Alpine Linux)       | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
 
 
 What do these terms mean?
