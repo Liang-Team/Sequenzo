@@ -118,10 +118,10 @@ jobs:
           # Windows: skip all extra dependencies, let setup.py handle them
           CIBW_BEFORE_BUILD_WINDOWS: |
             echo "Using setup.py dependencies only"
-            REM --- 临时从 PATH 移除 Rtools bin ---
-            set PATH=%PATH:C:\rtools43\usr\bin;=%
-            REM --- 确保 MSVC link.exe 在 PATH 前面 ---
-            set PATH=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;%PATH%
+            REM --- 临时清空 PATH 中 Rtools 目录 ---
+            powershell -Command "$env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Rtools43'}) -join ';'"
+            REM --- 确保 MSVC bin 在 PATH 前面 ---
+            setx PATH "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;%PATH%"
             python -m pip install --upgrade pip
             python -m pip install rpy2
 
