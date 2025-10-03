@@ -72,6 +72,13 @@ jobs:
         with:
           r-version: '4.3.1'
 
+      - name: Remove Rtools from PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Rtools43'}) -join ';'
+          Write-Host "PATH after removing Rtools: $env:PATH"
+
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
