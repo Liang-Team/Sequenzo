@@ -45,7 +45,6 @@ dependencies = [
     "docutils>=0.17",
     "tqdm>=4.62.3,<5.0.0",
     "missingno>=0.5.2,<0.6.0",
-    "rpy2",
 ]
 
 [project.optional-dependencies]

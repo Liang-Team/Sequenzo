@@ -113,6 +113,9 @@ jobs:
           CIBW_BEFORE_BUILD_LINUX: |
             sudo apt-get update
             sudo apt-get install -y libomp-dev r-base r-base-dev
+            sudo mkdir -p /usr/lib/R/bin
+            sudo ln -s /usr/bin/R /usr/lib/R/bin/R
+            echo "Creating R symlink for rpy2 build"
             export PATH=/usr/bin:$PATH
             export R_HOME=/usr/lib/R
             echo "R_HOME set to $R_HOME"
@@ -134,6 +137,18 @@ jobs:
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
             echo "Using setup.py dependencies only"
+
+          # Linux: prepare test environment (install R for rpy2 dependency installation)
+          CIBW_BEFORE_TEST_LINUX: |
+            sudo apt-get update
+            sudo apt-get install -y r-base r-base-dev
+            sudo mkdir -p /usr/lib/R/bin
+            sudo ln -s /usr/bin/R /usr/lib/R/bin/R
+            echo "Creating R symlink for rpy2 test installation"
+            export PATH=/usr/bin:$PATH
+            export R_HOME=/usr/lib/R
+            echo "R_HOME set to $R_HOME for test"
+            echo "which R: $(which R)"
 
           # Test command
           CIBW_TEST_COMMAND: >
