@@ -75,11 +75,16 @@ from scipy.spatial.distance import squareform
 # sklearn metrics no longer needed - using C++ implementation
 from fastcluster import linkage
 
-import rpy2.robjects as ro
-from rpy2.robjects import numpy2ri
-from rpy2.robjects.packages import importr
-from rpy2.robjects.conversion import localconverter
-from rpy2.robjects import FloatVector
+# Optional R integration for Ward D method
+try:
+    import rpy2.robjects as ro
+    from rpy2.robjects.packages import importr
+    _RPY2_AVAILABLE = True
+except ImportError:
+    _RPY2_AVAILABLE = False
+    print("[!] Warning: rpy2 not available. Ward D clustering method will not be supported.")
+    print("    To use Ward D clustering, install with: pip install sequenzo[r]")
+    print("    Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods.")
 
 # Import C++ cluster quality functions
 try:
@@ -439,6 +444,13 @@ class Cluster:
             fastcluster_method = self._map_method_name(self.clustering_method)
 
             if self.clustering_method == "ward_d" or self.clustering_method == "ward":
+                if not _RPY2_AVAILABLE:
+                    raise ImportError(
+                        "rpy2 is required for Ward D clustering method but is not installed.\n"
+                        "Install with: pip install sequenzo[r]\n"
+                        "Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods."
+                    )
+                
                 fastcluster_r = importr("fastcluster")
 
                 # 将 full_matrix 转换为 R 矩阵（直接从 Python 数组创建），避免 rpy2 对大向量长度出错
