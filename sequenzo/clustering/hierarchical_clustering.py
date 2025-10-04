@@ -76,14 +76,21 @@ from scipy.spatial.distance import squareform
 from fastcluster import linkage
 
 # Optional R integration for Ward D method
+_RPY2_AVAILABLE = False
+ro = None
+importr = None
+
 try:
     import rpy2.robjects as ro
     from rpy2.robjects.packages import importr
     _RPY2_AVAILABLE = True
-except ImportError:
-    _RPY2_AVAILABLE = False
-    print("[!] Warning: rpy2 not available. Ward D clustering method will not be supported.")
-    print("    To use Ward D clustering, install with: pip install sequenzo[r]")
+except Exception:
+    # Catch any exception during rpy2 import/initialization
+    pass
+
+if not _RPY2_AVAILABLE:
+    print("[!] Warning: rpy2 not available or R not properly configured. Ward D clustering method will not be supported.")
+    print("    To use Ward D clustering, ensure R is installed and rpy2 is properly configured.")
     print("    Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods.")
 
 # Import C++ cluster quality functions
@@ -446,8 +453,8 @@ class Cluster:
             if self.clustering_method == "ward_d" or self.clustering_method == "ward":
                 if not _RPY2_AVAILABLE:
                     raise ImportError(
-                        "rpy2 is required for Ward D clustering method but is not installed.\n"
-                        "Install with: pip install sequenzo[r]\n"
+                        "rpy2 is required for Ward D clustering method but is not available or R is not properly configured.\n"
+                        "Install rpy2 and ensure R is properly set up, or install with: pip install sequenzo[r]\n"
                         "Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods."
                     )
                 
