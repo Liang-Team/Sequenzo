@@ -8,11 +8,12 @@ import pandas as pd
 import time
 import os
 
+from sequenzo import Cluster
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
 U_files = [
-    'synthetic_detailed_U5_N500.csv',
+    # 'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -33,6 +34,7 @@ U_files = [
     # 'synthetic_detailed_U5_N50000.csv',
 
     # 'synthetic_detailed_U25_N500.csv',
+    # 'synthetic_detailed_U25_N1000.csv',
     # 'synthetic_detailed_U25_N1500.csv',
     # 'synthetic_detailed_U25_N2000.csv',
     # 'synthetic_detailed_U25_N2500.csv',
@@ -72,6 +74,7 @@ U_files = [
     # 'synthetic_detailed_U50_N50000.csv',
 
     # 'synthetic_detailed_U85_N500.csv',
+    # 'synthetic_detailed_U85_N1000.csv',
     # 'synthetic_detailed_U85_N1500.csv',
     # 'synthetic_detailed_U85_N2000.csv',
     # 'synthetic_detailed_U85_N2500.csv',
@@ -88,14 +91,14 @@ U_files = [
     # 'synthetic_detailed_U85_N35000.csv',
     # 'synthetic_detailed_U85_N40000.csv',
     # 'synthetic_detailed_U85_N45000.csv',
-    # 'synthetic_detailed_U85_N50000.csv',
+    'synthetic_detailed_U85_N50000.csv',
 ]
 
 # data_dir = '/home/xinyi_test/data/detailed_data'
 # data_dir = 'D:/college/research/QiQi/sequenzo/files/detialed_transposed.csv'
 # data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\broad_data'
 # data_dir = 'D:\\college\\research\\QiQi\\sequenzo\\data_and_output\\sampled_data_sets\\detailed_data'
-data_dir = 'D:/college/research/QiQi/sequenzo/data_and_output/orignal data/not_real_detailed_data'
+data_dir = '/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/not_real_detailed_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []
@@ -124,18 +127,13 @@ for filename in U_files:
     # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 
     # data = SequenceData(df, time=_time, time_type="age", id_col="worker_id", states=states)
-    data = SequenceData(df, time=_time, time_type="age", id_col="id", states=states)
+    data = SequenceData(df, time=_time, id_col="id", states=states)
     # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
 
-    # refseq = [[0, 1, 2], [99, 100]]
-
-    start_time = time.time()
     diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1)
 
-    # centroids = [1, 50, 100, 150]
-    # clustering = KMedoids(diss=diss, k=4, method='pamonce')
-    # print(clustering)
-    # print(diss)
+    start_time = time.time()
+    Cluster(diss, data.ids, clustering_method='ward_d2')
     end_time = time.time()
 
     runtime = end_time - start_time
