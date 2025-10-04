@@ -84,8 +84,8 @@ try:
     import rpy2.robjects as ro
     from rpy2.robjects.packages import importr
     _RPY2_AVAILABLE = True
-except Exception:
-    # Catch any exception during rpy2 import/initialization
+except ImportError:
+    # Catch ImportError during rpy2 import/initialization
     pass
 
 if not _RPY2_AVAILABLE:
