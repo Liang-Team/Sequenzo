@@ -32,12 +32,12 @@ def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False,
     # Process weights
     if isinstance(weights, str) and weights == "auto":
         weights = getattr(seqdata, "weights", None)
-    
+
     if weights is not None:
         weights = np.asarray(weights, dtype=float).reshape(-1)
         if len(weights) != len(seqdata.values):
             raise ValueError("Length of weights must equal number of sequences.")
-    
+
     num_states = len(seqdata.states)
     A = seqdata.to_dataframe().to_numpy()
     n, T = A.shape
@@ -52,19 +52,19 @@ def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False,
     nxt = A[:, 1:].flatten()
     w_pair = np.repeat(w, T-1)  # Each sequence weight replicated (T-1) times
 
-    # Filter valid transitions
-    valid = (current >= 0) & (current < num_states) & (nxt >= 0) & (nxt < num_states)
+    # Filter valid transitions (states are encoded as 1, 2, 3, ..., num_states)
+    valid = (current >= 1) & (current <= num_states) & (nxt >= 1) & (nxt <= num_states)
     current, nxt, w_pair = current[valid], nxt[valid], w_pair[valid]
 
     # Compute weighted transition counts
     # Create mapping from state codes to matrix indices
     state_codes = sorted(set(current) | set(nxt))
     code_to_idx = {code: idx for idx, code in enumerate(state_codes)}
-    
+
     # Use only the actual number of unique states for matrix size
     actual_num_states = len(state_codes)
     trans = np.zeros((actual_num_states, actual_num_states), dtype=float)
-    
+
     for c, n2, ww in zip(current, nxt, w_pair):
         trans[code_to_idx[int(c)], code_to_idx[int(n2)]] += ww
 
@@ -75,7 +75,7 @@ def compute_transition_matrix(seqdata: SequenceData, with_missing: bool = False,
 
     # Create a properly sized matrix with correct mapping to original states
     final_matrix = np.zeros((num_states, num_states), dtype=float)
-    
+
     # Map back to the original state positions
     for i, from_code in enumerate(state_codes):
         for j, to_code in enumerate(state_codes):
@@ -92,7 +92,7 @@ def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray)
     :param seqdata: SequenceData object containing state information
     :param transition_rates: numpy array containing transition rates
     """
-    state_labels = seqdata.states
+    state_labels = seqdata.labels
 
     # Calculate max width needed for state labels
     max_label_width = max(len(s) for s in state_labels) + 3  # +3 for arrow
@@ -187,4 +187,3 @@ def plot_transition_matrix(seqdata: SequenceData,
     plt.tight_layout()
 
     save_and_show_results(save_as, dpi=200)
-

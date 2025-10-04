@@ -106,6 +106,16 @@ If you have some issues with the installation, it might because you have both Py
 pip3 install sequenzo
 ```
 
+### Optional R Integration
+
+Sequenzo supports advanced Ward clustering methods that require R integration. If you need to use the `ward_d` clustering method, install with R support:
+
+```
+pip install sequenzo[r]
+```
+
+This will install the optional `rpy2` dependency, which provides Python-R interoperability. Note that R must also be installed on your system for `rpy2` to work.
+
 For more information about the latest stable release and required dependencies, please refer to [PyPI](https://pypi.org/project/sequenzo/). 
 
 ## Documentation
