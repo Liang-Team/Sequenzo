@@ -81,7 +81,8 @@ result_df, merged_seq_data = linked_polyadic_sequence_analysis(
     T=1500,
     random_seed=123,
     n_jobs=4,
-    return_df=True  # Return a DataFrame directly
+    return_df=True,  # Return a DataFrame directly
+    return_merged_seqdata=True  # Also return merged sequence data
 )
 
 # 4. View results
