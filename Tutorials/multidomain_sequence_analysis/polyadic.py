@@ -55,7 +55,6 @@ df_parent["id"] = range(1, len(df_parent) + 1)
 # 2. Create SequenceData objects (including id, state dictionary, etc.)
 seq_child = SequenceData(
     data=df_child,
-    time_type="age",
     time=[str(i) for i in range(15, 40)],
     states=["S", "M0", "M1", "M2", "M3+", "D"],
     labels=["S", "M0", "M1", "M2", "M3+", "D"],
@@ -65,7 +64,6 @@ seq_child = SequenceData(
 
 seq_parent = SequenceData(
     data=df_parent,
-    time_type="age",
     time=[str(i) for i in range(15, 40)],
     states=["S", "M0", "M1", "M2", "M3+", "D"],
     labels=["S", "M0", "M1", "M2", "M3+", "D"],

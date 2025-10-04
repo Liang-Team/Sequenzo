@@ -17,11 +17,11 @@ married_df = load_dataset('biofam_married_domain')
 
 time_cols = [col for col in children_df.columns if col.startswith("age_")]
 
-seq_left = SequenceData(left_df, time_type="age", time=time_cols, states=[0, 1],
+seq_left = SequenceData(left_df, time=time_cols, states=[0, 1],
                         labels=["At home", "Left home"], id_col="id")
-seq_child = SequenceData(children_df, time_type="age", time=time_cols, states=[0, 1],
+seq_child = SequenceData(children_df, time=time_cols, states=[0, 1],
                          labels=["No child", "Child"], id_col="id")
-seq_marr = SequenceData(married_df, time_type="age", time=time_cols, states=[0, 1],
+seq_marr = SequenceData(married_df, time=time_cols, states=[0, 1],
                         labels=["Not married", "Married"], id_col="id")
 
 domains = [seq_left, seq_child, seq_marr]
