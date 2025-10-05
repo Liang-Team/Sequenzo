@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺, Sebastian Daza
 @File    : plot_transition_matrix.py
 @Time    : 13/02/2025 12:39
 @Desc    :

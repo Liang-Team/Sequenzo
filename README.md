@@ -166,23 +166,31 @@ pip install .  # Uses pyproject.toml
 
 **Paper Authors**
 * [Yuqi Liang, University of Oxford](https://www.yuqi-liang.tech/)
-* [Xinyi Li, Heilongjiang University](https://github.com/Fantasy201)
+* [Xinyi Li, Northeastern University](https://github.com/Fantasy201)
 * [Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford](https://www.inet.ox.ac.uk/people/jan-meyerhoff-liang)
 
 **Package Contributors**
-* [Liangxingyun He, Stockholm School of Economics (Sweden)](https://www.linkedin.com/in/liangxingyun-he-6aa128304/)
-* [Yukun Ming, Universidad Carlos III de Madrid (Spain)](www.linkedin.com/in/yukun)
-* [Ziting Yang, Rochester Wniversity (US)](www.linkedin.com/in/ziting-yang-7b33832bb)
+
+Coding contributors:
+* [Sebastian Daza](https://sdaza.com/)
+* [Cheng Deng](https://github.com/de-de-de-de-de)
+* [Liangxingyun He, Stockholm School of Economics, Sweden](https://www.linkedin.com/in/liangxingyun-he-6aa128304/)
+
+Documentation contributors:
+* [Liangxingyun He, Stockholm School of Economics, Sweden](https://www.linkedin.com/in/liangxingyun-he-6aa128304/)
+* [Yukun Ming, Universidad Carlos III de Madrid (Spain)](https://www.linkedin.com/in/yukun)
 * [Sizhu Qu, Northeastern University (US)](https://www.linkedin.com/in/sizhuq)
+* [Ziting Yang, Rochester Wniversity (US)](https://www.linkedin.com/in/ziting-yang-7b33832bb)
+
+Others
 * With special thanks to our initial testers (alphabetically ordered): [Joji Chia](https://sociology.illinois.edu/directory/profile/jbchia2), [Kass Gonzalez](https://www.linkedin.com/in/kass-gonzalez-72a778276/), [Sinyee Lu](https://sociology.illinois.edu/directory/profile/qianyil4), [Sohee Shin](https://sociology.illinois.edu/directory/profile/sohees2)
 * Website and related technical support: [Mactavish](https://github.com/mactavishz)
-* PAM clustering algorithm implementation: Cheng Deng
 * Sequence data sources compilation - History: Jingrui Chen
 * Visual design consultant: Changyu Yi
 
 **Acknowledgements**
 
-* Methodological advisor in sequence analysis: [Professor Tim Liao, University of Illinois Urbana-Champaign](https://sociology.illinois.edu/directory/profile/tfliao)
-* Yuqi's PhD advisor: [Professor Ridhi Kashyap, University of Oxford](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/)
+* Methodological advisor in sequence analysis: [Professor Tim Liao (University of Illinois Urbana-Champaign)](https://sociology.illinois.edu/directory/profile/tfliao)
+* Yuqi's PhD advisor [Professor Ridhi Kashyap (University of Oxford)](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/), and mentor [Charles Rahal (University of Oxford)](https://crahal.com/)
 * Yuqi's original programming mentor: [JiangHuShiNian](https://github.com/jianghushinian)
 
