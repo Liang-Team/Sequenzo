@@ -8,4 +8,5 @@
 import sequenzo
 
 def test_version():
-    assert sequenzo.__version__ is not None  # Ensure version is not empty
+    # Ensure version is not empty
+    assert sequenzo.__version__ is not None
