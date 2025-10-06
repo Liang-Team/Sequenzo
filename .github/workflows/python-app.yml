@@ -38,17 +38,13 @@ jobs:
         run: python -m pip install --upgrade pip setuptools wheel
 
       # Add OpenMP support (macOS, compatible with macOS 11+)
-      - name: Install OpenMP (macOS)
+      - name: Setup OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@16 libomp
-          echo "CC=$(brew --prefix llvm@16)/bin/clang" >> $GITHUB_ENV
-          echo "CXX=$(brew --prefix llvm@16)/bin/clang++" >> $GITHUB_ENV
-          echo "PATH=$(brew --prefix llvm@16)/bin:$PATH" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
-          echo "CFLAGS=-I$(brew --prefix libomp)/include -Xpreprocessor -fopenmp" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'

@@ -193,34 +193,17 @@ def get_homebrew_libomp_paths():
 
 def get_macos_openmp_config():
     """
-    检测 macOS 上的 libomp 安装路径并返回 (compile_flags, link_flags)
+    使用系统自带 OpenMP，返回编译和链接标志。
     """
-    try:
-        # 允许用户通过环境变量指定 libomp 安装位置
-        brew_prefix = os.environ.get("LIBOMP_PREFIX")
-        if not brew_prefix:
-            # 尝试通过 Homebrew 获取路径
-            brew_prefix = subprocess.check_output(
-                ["brew", "--prefix", "libomp"],
-                stderr=subprocess.DEVNULL,
-                text=True
-            ).strip()
-    except Exception:
-        brew_prefix = "/usr/local"  # fallback
-
-    include_dir = os.path.join(brew_prefix, "include")
-    lib_dir = os.path.join(brew_prefix, "lib")
-
+    # 系统自带 libomp 一般在 /usr/local/include 和 /usr/local/lib，或者 Xcode CLI 默认路径
     compile_flags = [
-        "-Xpreprocessor", "-fopenmp",
-        f"-I{include_dir}"
+        "-Xpreprocessor", "-fopenmp"
     ]
     link_flags = [
-        f"-L{lib_dir}",
-        "-lomp"
+        "-fopenmp"
     ]
 
-    print(f"[SETUP] macOS OpenMP from: {brew_prefix}")
+    print("[SETUP] macOS system OpenMP")
     print(f"[SETUP] OpenMP compile flags: {' '.join(compile_flags)}")
     print(f"[SETUP] OpenMP link flags: {' '.join(link_flags)}")
 
@@ -242,15 +225,15 @@ def get_compile_args_for_file(filename):
         compile_args = []
 
         if sys.platform == 'darwin':
-            os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
+            os.environ['MACOSX_DEPLOYMENT_TARGET'] = '11.0'
             compile_args = ["-O3", "-ffast-math"]
 
             if has_openmp_support():
                 omp_compile_flags, omp_link_flags = get_macos_openmp_config()
                 openmp_flag.extend(omp_compile_flags)
-                os.environ["LDFLAGS"] = " ".join(omp_link_flags)
-                # ✅ 在这里设置 LDFLAGS，供 setuptools/distutils 自动拾取
-                print(f"[SETUP] LDFLAGS set: {os.environ['LDFLAGS']}")
+                # 对系统自带 OpenMP 不需要修改 LDFLAGS，直接使用 link_flags
+                compile_args.extend(omp_link_flags)
+                print(f"[SETUP] macOS OpenMP flags: {openmp_flag + omp_link_flags}")
         else:
             if has_openmp_support():
                 openmp_flag = ['-fopenmp']
