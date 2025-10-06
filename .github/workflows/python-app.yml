@@ -37,16 +37,18 @@ jobs:
         if: runner.os == 'macOS' && matrix.python-version == '3.12'
         run: python -m pip install --upgrade pip setuptools wheel
 
-      # Add OpenMP support
+            # Add OpenMP support (macOS, compatible with macOS 11+)
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp
+          brew install llvm@16
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$(brew --prefix llvm@16)/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$(brew --prefix llvm@16)/include" >> $GITHUB_ENV
+          echo "CFLAGS=-I$(brew --prefix llvm@16)/include -Xpreprocessor -fopenmp" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -113,7 +115,7 @@ jobs:
             LDFLAGS="-L$(brew --prefix libomp)/lib"
             CPPFLAGS="-I$(brew --prefix libomp)/include"
             CFLAGS="-I$(brew --prefix libomp)/include -Xpreprocessor -fopenmp"
-            MACOSX_DEPLOYMENT_TARGET=12.0
+            MACOSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build wheels with cibuildwheel
         if: runner.os != 'macOS'
@@ -245,7 +247,39 @@ jobs:
 
           # Windows test command using python -c with exec for multiline code
           CIBW_TEST_COMMAND_WINDOWS: |
-            python -c "import importlib, sys, numpy as np; import sequenzo; print('Sequenzo import successful'); mod=importlib.util.find_spec('sequenzo.clustering.clustering_c_code'); print('Clustering C++ extensions loaded' if mod else 'WARNING: Clustering C++ extensions not found'); exec('try:\n    from sequenzo.dissimilarity_measures import c_code\n    print(\"Dissimilarity measures C++ extensions (c_code) loaded successfully\")\n    try:\n        if hasattr(c_code, \"OMdistance\"): print(\"✓ OMdistance class available\")\n        if hasattr(c_code, \"OMspellDistance\"): print(\"✓ OMspellDistance class available\")\n        if hasattr(c_code, \"DHDdistance\"): print(\"✓ DHDdistance class available\")\n        if hasattr(c_code, \"LCPdistance\"): print(\"✓ LCPdistance class available\")\n        if hasattr(c_code, \"dist2matrix\"): print(\"✓ dist2matrix class available\")\n    except Exception as e: print(f\"WARNING: Some C++ classes may not be available: {e}\")\nexcept ImportError as e: print(f\"ERROR: Dissimilarity measures C++ extensions (c_code) failed to load: {e}\")'); exec('cython_modules = [\"get_sm_trate_substitution_cost_matrix\", \"seqconc\", \"seqdss\", \"seqdur\", \"seqlength\"]\nfor module_name in cython_modules:\n    try:\n        module = __import__(f\"sequenzo.dissimilarity_measures.utils.{module_name}\", fromlist=[module_name])\n        print(f\"✓ Cython module {module_name} loaded successfully\")\n    except ImportError as e: print(f\"ERROR: Cython module {module_name} failed to load: {e}\")'); exec('try:\n    from sequenzo.dissimilarity_measures.utils import get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength\n    print(\"✓ All utility functions imported successfully\")\nexcept ImportError as e: print(f\"ERROR: Utility functions failed to load: {e}\")'); exec('try:\n    import rpy2.robjects as ro\n    from rpy2.robjects.packages import importr\n    print(\"R environment (rpy2) loaded successfully\")\n    try:\n        fastcluster_r = importr(\"fastcluster\")\n        print(\"R fastcluster package available\")\n    except Exception as e: print(f\"WARNING: R fastcluster package not available: {e}\")\nexcept ImportError as e: print(f\"WARNING: R environment (rpy2) not available: {e}\")')"
+            echo "Testing Sequenzo wheel on Windows"
+            echo "" > test_sequenzo_ci.py
+            Add-Content test_sequenzo_ci.py @"
+            import importlib, sys
+            import numpy as np
+            import sequenzo
+            print('Sequenzo import successful')
+          
+            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
+            print('Clustering C++ extensions loaded' if mod else 'WARNING: Clustering C++ extensions not found')
+          
+            try:
+                from sequenzo.dissimilarity_measures import c_code
+                print('✓ Dissimilarity measures C++ extensions (c_code) loaded successfully')
+                for name in ['OMdistance', 'OMspellDistance', 'DHDdistance', 'LCPdistance', 'dist2matrix']:
+                    if hasattr(c_code, name):
+                        print(f'✓ {name} class available')
+            except ImportError as e:
+                print(f'ERROR: Failed to import c_code: {e}')
+          
+            try:
+                import rpy2.robjects as ro
+                from rpy2.robjects.packages import importr
+                print('R environment (rpy2) loaded successfully')
+                try:
+                    importr('fastcluster')
+                    print('R fastcluster package available')
+                except Exception as e:
+                    print(f'WARNING: R fastcluster package not available: {e}')
+            except ImportError as e:
+                print(f'WARNING: R environment (rpy2) not available: {e}')
+            "@
+            python test_sequenzo_ci.py
 
       - name: Show dist content
         run: ls -lah dist/
