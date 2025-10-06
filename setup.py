@@ -178,66 +178,66 @@ def has_openmp_support():
         has_openmp_support._checked = True
         return False
 
-def get_homebrew_libomp_paths():
-    """检测 libomp 的 Homebrew 路径（兼容 Intel / Apple Silicon）"""
-    candidates = [
-        "/opt/homebrew/opt/libomp",  # Apple Silicon (ARM64)
-        "/usr/local/opt/libomp",     # Intel macOS
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            include_dir = os.path.join(path, "include")
-            lib_dir = os.path.join(path, "lib")
-            return include_dir, lib_dir
-    return None, None
-
-def get_macos_openmp_config():
-    """
-    使用系统自带 OpenMP，返回编译和链接标志。
-    """
-    # 系统自带 libomp 一般在 /usr/local/include 和 /usr/local/lib，或者 Xcode CLI 默认路径
-    compile_flags = [
-        "-Xpreprocessor", "-fopenmp"
-    ]
-    link_flags = [
-        "-fopenmp"
-    ]
-
-    print("[SETUP] macOS system OpenMP")
-    print(f"[SETUP] OpenMP compile flags: {' '.join(compile_flags)}")
-    print(f"[SETUP] OpenMP link flags: {' '.join(link_flags)}")
-
-    return compile_flags, link_flags
-
 
 def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
-        base_cflags = ['/W1', '/bigobj']
+        base_cflags = ['/W1', '/bigobj']  # Reduced warning level for faster compilation
         base_cppflags = ['/std:c++17'] + base_cflags
-        openmp_flag = ['/openmp:experimental'] if has_openmp_support() else []
-        compile_args = ["/O2"]
-        arch_flags = []
+        
+        # Windows OpenMP support
+        if has_openmp_support():
+            openmp_flag = ['/openmp:experimental']
+            print("[SETUP] Windows OpenMP flags: /openmp")
+        else:
+            openmp_flag = []
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
-        arch_flags = []
-        openmp_flag = []
-        compile_args = []
-
-        if sys.platform == 'darwin':
-            os.environ['MACOSX_DEPLOYMENT_TARGET'] = '11.0'
-            compile_args = ["-O3", "-ffast-math"]
-
-            if has_openmp_support():
-                omp_compile_flags, omp_link_flags = get_macos_openmp_config()
-                openmp_flag.extend(omp_compile_flags)
-                # 对系统自带 OpenMP 不需要修改 LDFLAGS，直接使用 link_flags
-                compile_args.extend(omp_link_flags)
-                print(f"[SETUP] macOS OpenMP flags: {openmp_flag + omp_link_flags}")
+        
+        # OpenMP flags with platform-specific optimization
+        if has_openmp_support():
+            if sys.platform == 'darwin':
+                # macOS: 使用libomp，分离编译和链接标志
+                openmp_flag = ['-Xpreprocessor', '-fopenmp']
+                print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp")
+            else:
+                # Linux/Other: 使用libgomp
+                openmp_flag = ['-fopenmp']  
+                print("[SETUP] Linux OpenMP flags: -fopenmp")
         else:
-            if has_openmp_support():
-                openmp_flag = ['-fopenmp']
+            openmp_flag = []
+
+    if sys.platform == 'win32':
+        # More conservative Windows flags for better compatibility
+        compile_args = ["/O2"]
+    else:
+        # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
+        if sys.platform == 'darwin':
+            compile_args = ["-O3", "-ffast-math"]
+        else:
             compile_args = ["-O3", "-march=native", "-ffast-math"]
+
+    if sys.platform == 'darwin':
+        os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
+        arch = get_mac_arch()
+        
+        # Handle both single architecture and multiple architectures
+        if isinstance(arch, list):
+            # Multiple architectures (Universal Binary)
+            arch_flags = []
+            for a in arch:
+                if a in ('x86_64', 'arm64'):
+                    arch_flags.extend(['-arch', a])
+        elif isinstance(arch, str) and arch in ('x86_64', 'arm64'):
+            # Single architecture
+            arch_flags = ['-arch', arch]
+        else:
+            # Unknown or unsupported architecture
+            arch_flags = []
+            if arch:
+                print(f"[SETUP] Warning: Unsupported architecture '{arch}', skipping arch flags")
+    else:
+        arch_flags = []
 
     if filename.endswith(".cpp"):
         return base_cppflags + arch_flags + openmp_flag + compile_args
@@ -279,8 +279,7 @@ def get_link_args():
     """获取平台特定的链接参数"""
     if has_openmp_support():
         if sys.platform == 'darwin':
-            _, omp_link_flags = get_macos_openmp_config()
-            return omp_link_flags
+            return ['-lomp']
         elif sys.platform == 'win32':
             return []  # Windows MSVC自动链接
         else:
