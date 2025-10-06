@@ -7,6 +7,10 @@
 import pandas as pd
 import time
 import os
+import fastcluster
+from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import dendrogram
+from scipy.spatial.distance import squareform
 
 from sequenzo import Cluster
 from sequenzo.define_sequence_data import SequenceData
@@ -65,7 +69,7 @@ U_files = [
     # 'synthetic_detailed_U50_N5000.csv',
     # 'synthetic_detailed_U50_N10000.csv',
     # 'synthetic_detailed_U50_N15000.csv',
-    # 'synthetic_detailed_U50_N20000.csv',
+    'synthetic_detailed_U50_N20000.csv',
     # 'synthetic_detailed_U50_N25000.csv',
     # 'synthetic_detailed_U50_N30000.csv',
     # 'synthetic_detailed_U50_N35000.csv',
@@ -91,7 +95,7 @@ U_files = [
     # 'synthetic_detailed_U85_N35000.csv',
     # 'synthetic_detailed_U85_N40000.csv',
     # 'synthetic_detailed_U85_N45000.csv',
-    'synthetic_detailed_U85_N50000.csv',
+    # 'synthetic_detailed_U85_N50000.csv',
 ]
 
 # data_dir = '/home/xinyi_test/data/detailed_data'
@@ -130,13 +134,17 @@ for filename in U_files:
     data = SequenceData(df, time=_time, id_col="id", states=states)
     # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
 
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1)
+    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
 
-    start_time = time.time()
-    Cluster(diss, data.ids, clustering_method='ward_d2')
-    end_time = time.time()
+    # Cluster(diss, data.ids, clustering_method='ward_d2')
+    # diss = pdist(diss, metric='euclidean')
+    # diss = squareform(diss, checks=False)
 
-    runtime = end_time - start_time
+    start = time.time()
+    linkage_matrix = fastcluster.linkage(diss, method='ward')
+    end = time.time()
+
+    runtime = end - start
     runtimes.append(runtime)
     filenames.append(filename)
 

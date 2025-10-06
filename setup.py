@@ -178,6 +178,19 @@ def has_openmp_support():
         has_openmp_support._checked = True
         return False
 
+def get_homebrew_libomp_paths():
+    """检测 libomp 的 Homebrew 路径（兼容 Intel / Apple Silicon）"""
+    candidates = [
+        "/opt/homebrew/opt/libomp",  # Apple Silicon (ARM64)
+        "/usr/local/opt/libomp",     # Intel macOS
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            include_dir = os.path.join(path, "include")
+            lib_dir = os.path.join(path, "lib")
+            return include_dir, lib_dir
+    return None, None
+
 
 def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
@@ -213,7 +226,12 @@ def get_compile_args_for_file(filename):
     else:
         # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
         if sys.platform == 'darwin':
+            include_dir, lib_dir = get_homebrew_libomp_paths()
             compile_args = ["-O3", "-ffast-math"]
+            if include_dir and lib_dir:
+                compile_args += [f"-I{include_dir}", f"-L{lib_dir}"]
+            else:
+                print("[SETUP] Warning: libomp not found in standard Homebrew paths.")
         else:
             compile_args = ["-O3", "-march=native", "-ffast-math"]
 
@@ -279,6 +297,12 @@ def get_link_args():
     """获取平台特定的链接参数"""
     if has_openmp_support():
         if sys.platform == 'darwin':
+            include_dir, lib_dir = get_homebrew_libomp_paths()
+            if lib_dir:
+                static_lib = os.path.join(lib_dir, 'libomp.a')
+                if os.path.exists(static_lib):
+                    print(f"[SETUP] Linking statically with {static_lib}")
+                    return [static_lib]
             return ['-lomp']
         elif sys.platform == 'win32':
             return []  # Windows MSVC自动链接
