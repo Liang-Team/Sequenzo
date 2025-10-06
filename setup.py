@@ -192,105 +192,69 @@ def get_homebrew_libomp_paths():
     return None, None
 
 def get_macos_openmp_config():
-    """获取 macOS 上的 OpenMP 配置"""
-    if sys.platform != 'darwin':
-        return [], []
-    
-    include_dir, lib_dir = get_homebrew_libomp_paths()
-    
-    if include_dir and lib_dir:
-        # 检查必要的文件是否存在
-        omp_h = os.path.join(include_dir, "omp.h")
-        libomp_a = os.path.join(lib_dir, "libomp.a")
-        libomp_dylib = os.path.join(lib_dir, "libomp.dylib")
-        
-        if os.path.exists(omp_h):
-            print(f"[SETUP] Found OpenMP headers at {include_dir}")
-            compile_flags = [f"-I{include_dir}"]
-            link_flags = [f"-L{lib_dir}"]
-            
-            # 优先使用静态库
-            if os.path.exists(libomp_a):
-                print(f"[SETUP] Using static libomp: {libomp_a}")
-                link_flags.append(libomp_a)
-            elif os.path.exists(libomp_dylib):
-                print(f"[SETUP] Using dynamic libomp: {libomp_dylib}")
-                link_flags.append("-lomp")
-            else:
-                print("[SETUP] Warning: No libomp library found")
-                return [], []
-            
-            return compile_flags, link_flags
-        else:
-            print(f"[SETUP] Warning: omp.h not found at {include_dir}")
-    
-    # 回退到系统路径
-    print("[SETUP] Trying system OpenMP paths...")
-    return ["-I/usr/local/include"], ["-L/usr/local/lib", "-lomp"]
+    """
+    检测 macOS 上的 libomp 安装路径并返回 (compile_flags, link_flags)
+    """
+    try:
+        # 允许用户通过环境变量指定 libomp 安装位置
+        brew_prefix = os.environ.get("LIBOMP_PREFIX")
+        if not brew_prefix:
+            # 尝试通过 Homebrew 获取路径
+            brew_prefix = subprocess.check_output(
+                ["brew", "--prefix", "libomp"],
+                stderr=subprocess.DEVNULL,
+                text=True
+            ).strip()
+    except Exception:
+        brew_prefix = "/usr/local"  # fallback
+
+    include_dir = os.path.join(brew_prefix, "include")
+    lib_dir = os.path.join(brew_prefix, "lib")
+
+    compile_flags = [
+        "-Xpreprocessor", "-fopenmp",
+        f"-I{include_dir}"
+    ]
+    link_flags = [
+        f"-L{lib_dir}",
+        "-lomp"
+    ]
+
+    print(f"[SETUP] macOS OpenMP from: {brew_prefix}")
+    print(f"[SETUP] OpenMP compile flags: {' '.join(compile_flags)}")
+    print(f"[SETUP] OpenMP link flags: {' '.join(link_flags)}")
+
+    return compile_flags, link_flags
 
 
 def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
-        base_cflags = ['/W1', '/bigobj']  # Reduced warning level for faster compilation
+        base_cflags = ['/W1', '/bigobj']
         base_cppflags = ['/std:c++17'] + base_cflags
-        
-        # Windows OpenMP support
-        if has_openmp_support():
-            openmp_flag = ['/openmp:experimental']
-            print("[SETUP] Windows OpenMP flags: /openmp")
-        else:
-            openmp_flag = []
+        openmp_flag = ['/openmp:experimental'] if has_openmp_support() else []
+        compile_args = ["/O2"]
+        arch_flags = []
     else:
         base_cflags = ['-Wall', '-Wextra']
         base_cppflags = ['-std=c++17'] + base_cflags
-        
-        # OpenMP flags with platform-specific optimization
-        if has_openmp_support():
-            if sys.platform == 'darwin':
-                # macOS: 使用libomp，需要正确的编译和链接标志
-                openmp_flag = ['-Xpreprocessor', '-fopenmp']
-                print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp")
-            else:
-                # Linux/Other: 使用libgomp
-                openmp_flag = ['-fopenmp']  
-                print("[SETUP] Linux OpenMP flags: -fopenmp")
-        else:
-            openmp_flag = []
-
-    if sys.platform == 'win32':
-        # More conservative Windows flags for better compatibility
-        compile_args = ["/O2"]
-    else:
-        # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
-        if sys.platform == 'darwin':
-            compile_args = ["-O3", "-ffast-math"]
-            if has_openmp_support():
-                omp_compile_flags, _ = get_macos_openmp_config()
-                compile_args.extend(omp_compile_flags)
-        else:
-            compile_args = ["-O3", "-march=native", "-ffast-math"]
-
-    if sys.platform == 'darwin':
-        os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
-        arch = get_mac_arch()
-        
-        # Handle both single architecture and multiple architectures
-        if isinstance(arch, list):
-            # Multiple architectures (Universal Binary)
-            arch_flags = []
-            for a in arch:
-                if a in ('x86_64', 'arm64'):
-                    arch_flags.extend(['-arch', a])
-        elif isinstance(arch, str) and arch in ('x86_64', 'arm64'):
-            # Single architecture
-            arch_flags = ['-arch', arch]
-        else:
-            # Unknown or unsupported architecture
-            arch_flags = []
-            if arch:
-                print(f"[SETUP] Warning: Unsupported architecture '{arch}', skipping arch flags")
-    else:
         arch_flags = []
+        openmp_flag = []
+        compile_args = []
+
+        if sys.platform == 'darwin':
+            os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
+            compile_args = ["-O3", "-ffast-math"]
+
+            if has_openmp_support():
+                omp_compile_flags, omp_link_flags = get_macos_openmp_config()
+                openmp_flag.extend(omp_compile_flags)
+                os.environ["LDFLAGS"] = " ".join(omp_link_flags)
+                # ✅ 在这里设置 LDFLAGS，供 setuptools/distutils 自动拾取
+                print(f"[SETUP] LDFLAGS set: {os.environ['LDFLAGS']}")
+        else:
+            if has_openmp_support():
+                openmp_flag = ['-fopenmp']
+            compile_args = ["-O3", "-march=native", "-ffast-math"]
 
     if filename.endswith(".cpp"):
         return base_cppflags + arch_flags + openmp_flag + compile_args
