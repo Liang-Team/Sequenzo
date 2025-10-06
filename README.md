@@ -108,6 +108,8 @@ pip3 install sequenzo
 
 ### Optional R Integration
 
+Sequenzo now checks the system environment variables before running ward.D hierarchical clustering. If R and fastcluster are missing, Sequenzo will download and set them up via the CRAN interface.
+
 Sequenzo supports advanced Ward clustering methods that require R integration. If you need to use the `ward_d` clustering method, install with R support:
 
 ```
