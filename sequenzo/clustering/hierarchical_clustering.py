@@ -132,6 +132,7 @@ from sequenzo.visualization.utils import save_and_show_results
 
 # Global flag to ensure Ward warning is only shown once per session
 _WARD_WARNING_SHOWN = False
+
 def _ensure_r_environment_and_fastcluster():
     """
     Ensure R runtime is discoverable and R package 'fastcluster' is installed.
@@ -140,12 +141,49 @@ def _ensure_r_environment_and_fastcluster():
     - Auto-install 'fastcluster' if not present
     """
     import os as _os
-    # Best-effort: set R_HOME if not set and common locations exist
-    if 'R_HOME' not in _os.environ or not _os.environ.get('R_HOME'):
-        for candidate in ('/usr/lib/R', '/usr/local/lib/R'):
-            if _os.path.isdir(candidate):
-                _os.environ['R_HOME'] = candidate
+    import sys as _sys
+    import glob as _glob
+
+    # Best-effort: set R_HOME if not set and common locations exist (Linux, macOS, Windows)
+    if not _os.environ.get('R_HOME'):
+        candidates = []
+        if _sys.platform.startswith('linux'):
+            candidates.extend([
+                '/usr/lib/R',
+                '/usr/local/lib/R'
+            ])
+        elif _sys.platform == 'darwin':
+            candidates.extend([
+                '/Library/Frameworks/R.framework/Resources',  # CRAN pkg for macOS
+                '/usr/local/lib/R',
+                '/usr/lib/R'
+            ])
+        elif _sys.platform == 'win32':
+            # Probe common Windows locations; pick highest version folder if multiple
+            win_globs = [
+                r'C:\\Program Files\\R\\R-*',
+                r'C:\\Program Files (x86)\\R\\R-*',
+                r'C:\\R\\R-*'
+            ]
+            for pattern in win_globs:
+                versions = sorted(_glob.glob(pattern))
+                if versions:
+                    # Use the last (lexicographically highest) as latest
+                    candidates.append(versions[-1])
+        # Set first existing candidate
+        for path in candidates:
+            if _os.path.isdir(path):
+                _os.environ['R_HOME'] = path
                 break
+
+    # On Windows, ensure PATH includes R bin directory so rpy2 can load R dlls
+    if _sys.platform == 'win32' and _os.environ.get('R_HOME'):
+        r_bin64 = _os.path.join(_os.environ['R_HOME'], 'bin', 'x64')
+        r_bin = _os.path.join(_os.environ['R_HOME'], 'bin')
+        current_path = _os.environ.get('PATH', '')
+        for p in (r_bin64, r_bin):
+            if _os.path.isdir(p) and p not in current_path:
+                _os.environ['PATH'] = p + _os.pathsep + current_path
 
     # Ensure utils and mirror
     utils = importr('utils')
