@@ -31,6 +31,11 @@ Sequenzo outperforms traditional R-based tools in social sequence analysis, deli
 >  
 > 📖 Available in **English and Chinese**, our docs are written to be approachable, practical, and easy to follow.
 
+## ✨ Be part of the Sequenzo community
+Join our Discord channel to iscuss ideas, get help, and hear about upcoming Sequenzo versions, tutorials, and workshops first.
+
+➡️ https://discord.gg/3bMDKRHW
+
 ## Target Users
 
 Sequenzo is designed for:
