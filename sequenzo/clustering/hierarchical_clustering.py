@@ -82,7 +82,7 @@ importr = None
 
 try:
     import rpy2.robjects as ro
-    from rpy2.robjects.packages import importr
+    from rpy2.robjects.packages import importr, PackageNotInstalledError
     _RPY2_AVAILABLE = True
 except ImportError:
     # Catch ImportError during rpy2 import/initialization
@@ -132,6 +132,48 @@ from sequenzo.visualization.utils import save_and_show_results
 
 # Global flag to ensure Ward warning is only shown once per session
 _WARD_WARNING_SHOWN = False
+def _ensure_r_environment_and_fastcluster():
+    """
+    Ensure R runtime is discoverable and R package 'fastcluster' is installed.
+    - Optionally set R_HOME if common paths exist and env var is missing
+    - Choose CRAN mirror
+    - Auto-install 'fastcluster' if not present
+    """
+    import os as _os
+    # Best-effort: set R_HOME if not set and common locations exist
+    if 'R_HOME' not in _os.environ or not _os.environ.get('R_HOME'):
+        for candidate in ('/usr/lib/R', '/usr/local/lib/R'):
+            if _os.path.isdir(candidate):
+                _os.environ['R_HOME'] = candidate
+                break
+
+    # Ensure utils and mirror
+    utils = importr('utils')
+    try:
+        # If a mirror is not chosen, choose the first (may be reset by user later)
+        utils.chooseCRANmirror(ind=1)
+    except Exception:
+        # Fallback to cloud mirror
+        try:
+            ro.r('options(repos = c(CRAN = "https://cloud.r-project.org"))')
+        except Exception:
+            pass
+
+    # Ensure fastcluster installed
+    try:
+        importr('fastcluster')
+    except PackageNotInstalledError:
+        try:
+            # Try install with explicit repo and limited parallelism
+            utils.install_packages('fastcluster', repos='https://cloud.r-project.org', Ncpus=2)
+            importr('fastcluster')
+        except Exception as install_err:
+            raise RuntimeError(
+                "Failed to install R package 'fastcluster' automatically. "
+                "Please ensure internet access and a working R toolchain are available. "
+                f"Original error: {install_err}"
+            )
+
 
 
 def _check_euclidean_compatibility(matrix, method):
@@ -483,7 +525,9 @@ class Cluster:
                         "Install rpy2 and ensure R is properly set up, or install with: pip install sequenzo[r]\n"
                         "Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods."
                     )
-                
+                # Ensure R and R package fastcluster are available (auto-install if needed)
+                _ensure_r_environment_and_fastcluster()
+
                 fastcluster_r = importr("fastcluster")
 
                 # 将 full_matrix 转换为 R 矩阵（直接从 Python 数组创建），避免 rpy2 对大向量长度出错
