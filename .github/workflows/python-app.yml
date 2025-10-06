@@ -185,11 +185,11 @@ jobs:
 
           # Windows needs a different approach: use PowerShell to write a temp script and run it
           CIBW_TEST_COMMAND_WINDOWS: >
-            powershell -NoProfile -Command "$code=@'
+            $code = @"
             import importlib
             import sys
-
             import sequenzo
+
             print('Sequenzo import successful')
 
             mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
@@ -212,7 +212,10 @@ jobs:
                     print(f'WARNING: R fastcluster package not available: {e}')
             except ImportError as e:
                 print(f'WARNING: R environment (rpy2) not available: {e}')
-            '@; Set-Content -LiteralPath test_sequenzo_ci.py -Value $code -Encoding ascii; python test_sequenzo_ci.py"
+            "@
+
+            Set-Content -LiteralPath test_sequenzo_ci.py -Value $code -Encoding ascii
+            python test_sequenzo_ci.py
 
       - name: Show dist content
         run: ls -lah dist/
