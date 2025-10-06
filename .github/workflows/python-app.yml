@@ -184,38 +184,8 @@ jobs:
             PY
 
           # Windows needs a different approach: use PowerShell to write a temp script and run it
-          CIBW_TEST_COMMAND_WINDOWS: >
-            $code = @"
-            import importlib
-            import sys
-            import sequenzo
-
-            print('Sequenzo import successful')
-
-            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
-            print('C++ extensions loaded' if mod else 'WARNING: C++ extensions not found')
-
-            try:
-                from sequenzo.dissimilarity_measures.utils import get_sm_trate_substitution_cost_matrix
-                print('Cython modules loaded successfully')
-            except ImportError as e:
-                print(f'ERROR: Cython modules failed to load: {e}')
-
-            try:
-                import rpy2.robjects as ro
-                from rpy2.robjects.packages import importr
-                print('R environment (rpy2) loaded successfully')
-                try:
-                    fastcluster_r = importr('fastcluster')
-                    print('R fastcluster package available')
-                except Exception as e:
-                    print(f'WARNING: R fastcluster package not available: {e}')
-            except ImportError as e:
-                print(f'WARNING: R environment (rpy2) not available: {e}')
-            "@
-
-            Set-Content -LiteralPath test_sequenzo_ci.py -Value $code -Encoding ascii
-            python test_sequenzo_ci.py
+          CIBW_TEST_COMMAND_WINDOWS: |
+            python -c "import importlib, sys, sequenzo; print('Sequenzo import successful'); mod=importlib.util.find_spec('sequenzo.clustering.clustering_c_code'); print('C++ extensions loaded' if mod else 'WARNING: C++ extensions not found')"
 
       - name: Show dist content
         run: ls -lah dist/
