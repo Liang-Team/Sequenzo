@@ -154,10 +154,33 @@ jobs:
 
           # Test command
           CIBW_TEST_COMMAND: >
+            # 测试Cython模块
             python -c "import sequenzo; print('Sequenzo import successful');
             import importlib; 
             mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code'); 
             print('C++ extensions loaded' if mod else 'WARNING: C++ extensions not found')"
+
+            try:
+              from sequenzo.dissimilarity_measures.utils import get_sm_trate_substitution_cost_matrix;
+              print('Cython modules loaded successfully');
+            except ImportError as e:
+              print(f'ERROR: Cython modules failed to load: {e}');
+            
+            # 测试R环境
+            try:
+              import rpy2.robjects as ro;
+              from rpy2.robjects.packages import importr;
+              print('R environment (rpy2) loaded successfully');
+              
+              # 测试R包安装
+              try:
+                fastcluster_r = importr('fastcluster');
+                print('R fastcluster package available');
+              except Exception as e:
+                print(f'WARNING: R fastcluster package not available: {e}');
+            except ImportError as e:
+              print(f'WARNING: R environment (rpy2) not available: {e}');
+            "
 
       - name: Show dist content
         run: ls -lah dist/
