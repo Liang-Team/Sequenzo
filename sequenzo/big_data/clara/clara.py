@@ -23,31 +23,25 @@ from sequenzo.big_data.clara.utils.get_weighted_diss import *
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
-import os
+# 兼容 Windows 对 API 和 ABI 模式
 import glob
+import os
 import sys
 import cffi
 
 ffi = cffi.FFI()
-
-lib_dir = os.path.join(os.path.dirname(__file__), "utils")
-lib_dir = os.path.abspath(lib_dir)
-
 if sys.platform.startswith("win"):
-    files = glob.glob(os.path.join(lib_dir, "*.pyd"))
+    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
 else:
-    files = glob.glob(os.path.join(lib_dir, "*.so"))
-
+    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
 if not files:
-    raise FileNotFoundError(f"No compiled library found in {lib_dir}")
-
+    raise FileNotFoundError("No compiled library found")
 lib_file = files[0]
-
 try:
     lib = ffi.dlopen(lib_file)
 except ImportError as e:
     if sys.platform.startswith("win") and 'cffi mode "ANY" is only "ABI"' in str(e):
-        lib = ffi.dlopen(lib_file)
+        lib = ffi.dlopen(lib_file)   # Windows 降级到 ABI 模式
     else:
         raise
 

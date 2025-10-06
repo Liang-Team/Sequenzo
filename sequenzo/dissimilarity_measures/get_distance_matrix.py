@@ -64,30 +64,25 @@ import pandas as pd
 
 from sequenzo.define_sequence_data import SequenceData
 
+# 兼容 Windows 对 API 和 ABI 模式
 import glob
 import os
 import sys
 import cffi
 
 ffi = cffi.FFI()
-
 if sys.platform.startswith("win"):
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
 else:
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
-
 if not files:
     raise FileNotFoundError("No compiled library found")
-
-lib_file = files[0]  # 取第一个匹配的文件
-
-# 尝试导入
+lib_file = files[0]
 try:
     lib = ffi.dlopen(lib_file)
 except ImportError as e:
     if sys.platform.startswith("win") and 'cffi mode "ANY" is only "ABI"' in str(e):
-        # Windows 降级到 ABI 模式
-        lib = ffi.dlopen(lib_file)
+        lib = ffi.dlopen(lib_file)   # Windows 降级到 ABI 模式
     else:
         raise
 

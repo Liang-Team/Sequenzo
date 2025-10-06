@@ -101,29 +101,25 @@ except ImportError:
     _CPP_AVAILABLE = False
     print("[!] Warning: C++ cluster quality functions not available. Using Python fallback.")
 
+# 兼容 Windows 对 API 和 ABI 模式
 import glob
 import os
 import sys
 import cffi
 
 ffi = cffi.FFI()
-
 if sys.platform.startswith("win"):
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
 else:
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
-
 if not files:
     raise FileNotFoundError("No compiled library found")
-
 lib_file = files[0]
-
 try:
     lib = ffi.dlopen(lib_file)
 except ImportError as e:
     if sys.platform.startswith("win") and 'cffi mode "ANY" is only "ABI"' in str(e):
-        # Windows 降级到 ABI 模式
-        lib = ffi.dlopen(lib_file)
+        lib = ffi.dlopen(lib_file)   # Windows 降级到 ABI 模式
     else:
         raise
 
@@ -140,25 +136,23 @@ def _ensure_r_environment_and_fastcluster():
     - Choose CRAN mirror
     - Auto-install 'fastcluster' if not present
     """
-    import os as _os
-    import sys as _sys
-    import glob as _glob
+    print('  - Checking R runtime environment and fastcluster.')
 
     # Best-effort: set R_HOME if not set and common locations exist (Linux, macOS, Windows)
-    if not _os.environ.get('R_HOME'):
+    if not os.environ.get('R_HOME'):
         candidates = []
-        if _sys.platform.startswith('linux'):
+        if sys.platform.startswith('linux'):
             candidates.extend([
                 '/usr/lib/R',
                 '/usr/local/lib/R'
             ])
-        elif _sys.platform == 'darwin':
+        elif sys.platform == 'darwin':
             candidates.extend([
                 '/Library/Frameworks/R.framework/Resources',  # CRAN pkg for macOS
                 '/usr/local/lib/R',
                 '/usr/lib/R'
             ])
-        elif _sys.platform == 'win32':
+        elif sys.platform == 'win32':
             # Probe common Windows locations; pick highest version folder if multiple
             win_globs = [
                 r'C:\\Program Files\\R\\R-*',
@@ -166,24 +160,24 @@ def _ensure_r_environment_and_fastcluster():
                 r'C:\\R\\R-*'
             ]
             for pattern in win_globs:
-                versions = sorted(_glob.glob(pattern))
+                versions = sorted(glob.glob(pattern))
                 if versions:
                     # Use the last (lexicographically highest) as latest
                     candidates.append(versions[-1])
         # Set first existing candidate
         for path in candidates:
-            if _os.path.isdir(path):
-                _os.environ['R_HOME'] = path
+            if os.path.isdir(path):
+                os.environ['R_HOME'] = path
                 break
 
     # On Windows, ensure PATH includes R bin directory so rpy2 can load R dlls
-    if _sys.platform == 'win32' and _os.environ.get('R_HOME'):
-        r_bin64 = _os.path.join(_os.environ['R_HOME'], 'bin', 'x64')
-        r_bin = _os.path.join(_os.environ['R_HOME'], 'bin')
-        current_path = _os.environ.get('PATH', '')
+    if sys.platform == 'win32' and os.environ.get('R_HOME'):
+        r_bin64 = os.path.join(os.environ['R_HOME'], 'bin', 'x64')
+        r_bin = os.path.join(os.environ['R_HOME'], 'bin')
+        current_path = os.environ.get('PATH', '')
         for p in (r_bin64, r_bin):
-            if _os.path.isdir(p) and p not in current_path:
-                _os.environ['PATH'] = p + _os.pathsep + current_path
+            if os.path.isdir(p) and p not in current_path:
+                os.environ['PATH'] = p + os.pathsep + current_path
 
     # Ensure utils and mirror
     utils = importr('utils')
