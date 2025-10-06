@@ -154,7 +154,6 @@ jobs:
 
           # Test command
           CIBW_TEST_COMMAND: >
-            # 测试Cython模块
             python -c "import sequenzo; print('Sequenzo import successful');
             import importlib; 
             mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code'); 
@@ -166,13 +165,11 @@ jobs:
             except ImportError as e:
               print(f'ERROR: Cython modules failed to load: {e}');
             
-            # 测试R环境
             try:
               import rpy2.robjects as ro;
               from rpy2.robjects.packages import importr;
               print('R environment (rpy2) loaded successfully');
               
-              # 测试R包安装
               try:
                 fastcluster_r = importr('fastcluster');
                 print('R fastcluster package available');
