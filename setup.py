@@ -191,6 +191,43 @@ def get_homebrew_libomp_paths():
             return include_dir, lib_dir
     return None, None
 
+def get_macos_openmp_config():
+    """获取 macOS 上的 OpenMP 配置"""
+    if sys.platform != 'darwin':
+        return [], []
+    
+    include_dir, lib_dir = get_homebrew_libomp_paths()
+    
+    if include_dir and lib_dir:
+        # 检查必要的文件是否存在
+        omp_h = os.path.join(include_dir, "omp.h")
+        libomp_a = os.path.join(lib_dir, "libomp.a")
+        libomp_dylib = os.path.join(lib_dir, "libomp.dylib")
+        
+        if os.path.exists(omp_h):
+            print(f"[SETUP] Found OpenMP headers at {include_dir}")
+            compile_flags = [f"-I{include_dir}"]
+            link_flags = [f"-L{lib_dir}"]
+            
+            # 优先使用静态库
+            if os.path.exists(libomp_a):
+                print(f"[SETUP] Using static libomp: {libomp_a}")
+                link_flags.append(libomp_a)
+            elif os.path.exists(libomp_dylib):
+                print(f"[SETUP] Using dynamic libomp: {libomp_dylib}")
+                link_flags.append("-lomp")
+            else:
+                print("[SETUP] Warning: No libomp library found")
+                return [], []
+            
+            return compile_flags, link_flags
+        else:
+            print(f"[SETUP] Warning: omp.h not found at {include_dir}")
+    
+    # 回退到系统路径
+    print("[SETUP] Trying system OpenMP paths...")
+    return ["-I/usr/local/include"], ["-L/usr/local/lib", "-lomp"]
+
 
 def get_compile_args_for_file(filename):
     if sys.platform == 'win32':
@@ -210,7 +247,7 @@ def get_compile_args_for_file(filename):
         # OpenMP flags with platform-specific optimization
         if has_openmp_support():
             if sys.platform == 'darwin':
-                # macOS: 使用libomp，分离编译和链接标志
+                # macOS: 使用libomp，需要正确的编译和链接标志
                 openmp_flag = ['-Xpreprocessor', '-fopenmp']
                 print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp")
             else:
@@ -226,12 +263,10 @@ def get_compile_args_for_file(filename):
     else:
         # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
         if sys.platform == 'darwin':
-            include_dir, lib_dir = get_homebrew_libomp_paths()
             compile_args = ["-O3", "-ffast-math"]
-            if include_dir and lib_dir:
-                compile_args += [f"-I{include_dir}", f"-L{lib_dir}"]
-            else:
-                print("[SETUP] Warning: libomp not found in standard Homebrew paths.")
+            if has_openmp_support():
+                omp_compile_flags, _ = get_macos_openmp_config()
+                compile_args.extend(omp_compile_flags)
         else:
             compile_args = ["-O3", "-march=native", "-ffast-math"]
 
@@ -297,13 +332,8 @@ def get_link_args():
     """获取平台特定的链接参数"""
     if has_openmp_support():
         if sys.platform == 'darwin':
-            include_dir, lib_dir = get_homebrew_libomp_paths()
-            if lib_dir:
-                static_lib = os.path.join(lib_dir, 'libomp.a')
-                if os.path.exists(static_lib):
-                    print(f"[SETUP] Linking statically with {static_lib}")
-                    return [static_lib]
-            return ['-lomp']
+            _, omp_link_flags = get_macos_openmp_config()
+            return omp_link_flags
         elif sys.platform == 'win32':
             return []  # Windows MSVC自动链接
         else:
