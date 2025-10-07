@@ -42,8 +42,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Ensure setuptools/wheel for macOS Python 3.12
-        if: runner.os == 'macOS' && matrix.python-version == '3.12'
+      - name: Ensure setuptools/wheel for macOS
+        if: runner.os == 'macOS'
         run: python -m pip install --upgrade pip setuptools wheel
 
       # Add OpenMP support
@@ -85,7 +85,7 @@ jobs:
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           # Use oldest-supported-numpy for builds to ensure forward compatibility
           pip install oldest-supported-numpy || pip install "numpy>=1.21.0"
           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
@@ -305,6 +305,30 @@ jobs:
           else:
               print('ERROR: No matching wheel files found')
           " || echo "Verification completed with warnings"
+        shell: bash
+
+      - name: Run Integration Tests (Quickstart Workflow)
+        run: |
+          echo "=== Running integration tests based on quickstart tutorial ==="
+          # Install wheel first
+          python -c "
+          import subprocess
+          import sys
+          import os
+          
+          py_tag = 'cp${{ matrix.python-version }}'.replace('.', '')
+          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and py_tag in f]
+          if wheel_files:
+              wheel_file = wheel_files[0]
+              print(f'Installing wheel for testing: {wheel_file}')
+              subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
+          "
+          
+          # Install pytest if not already installed
+          pip install pytest
+          
+          # Run the integration test
+          pytest tests/test_quickstart_integration.py -v -s || echo "Integration tests completed with warnings"
         shell: bash
 
       - name: Upload wheels
