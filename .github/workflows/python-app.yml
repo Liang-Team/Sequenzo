@@ -108,7 +108,7 @@ jobs:
         env:
           CIBW_BUILD: "cp${{ matrix.python-version-nodot }}-*"  # 只构建当前 Python 版本的轮子 (e.g., cp39-*, cp310-*)
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
-          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_ARCHS_WINDOWS: "AMD64 ARM64"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "universal2"  # Build universal2 wheels that work on both architectures
           CIBW_BUILD_VERBOSITY: "1"
