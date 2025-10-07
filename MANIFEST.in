@@ -1,18 +1,17 @@
 # Include all Python files
 recursive-include sequenzo *.py
-recursive-include sequenzo *.pyx
-recursive-include sequenzo *.pxd
 
-# Include all C++ source files for extensions
+# Note: .pyx, .pxd files are only needed for source distribution (sdist)
+# For wheel distribution, only the compiled .so/.pyd files are needed
+# These files are excluded from wheel by setup.py configuration
+
+# Include all C++ source files for extensions (needed for sdist builds)
 recursive-include sequenzo/dissimilarity_measures/src *.cpp
 recursive-include sequenzo/dissimilarity_measures/src *.h
 recursive-include sequenzo/dissimilarity_measures/src *.hpp
 recursive-include sequenzo/clustering/src *.cpp
 recursive-include sequenzo/clustering/src *.h
 recursive-include sequenzo/clustering/src *.hpp
-
-# Note: .c files are auto-generated from .pyx during build, so we don't include them here
-# Only .pyx source files are needed for distribution
 
 # Include all header files and external libraries
 recursive-include sequenzo/dissimilarity_measures/src/xsimd/include *.hpp
@@ -29,13 +28,13 @@ include LICENSE
 include pyproject.toml
 include requirements-*.txt
 
-# Exclude unwanted files that slow down Windows builds
+# Exclude unwanted files
 global-exclude *.pyc
 global-exclude *.pyo
-global-exclude *.so
 global-exclude __pycache__
 global-exclude .DS_Store
 global-exclude *.egg-info
+# Note: *.so, *.c exclusion is handled by setup.py for wheel builds
 # Exclude test/benchmark files from external libraries to speed up Windows builds
 prune sequenzo/dissimilarity_measures/src/eigen/bench
 prune sequenzo/dissimilarity_measures/src/eigen/test
