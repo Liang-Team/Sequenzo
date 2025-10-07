@@ -41,25 +41,27 @@ else:
 if not files:
     raise FileNotFoundError("No compiled library found")
 lib_file = files[0]
-try:
-    # 重定向 stderr 来抑制 cffi 的错误信息输出
-    import io
-    old_stderr = sys.stderr
-    sys.stderr = io.StringIO()
-    try:
-        lib = ffi.dlopen(lib_file)
-    finally:
-        # 恢复 stderr
-        sys.stderr = old_stderr
-except ImportError as e:
-    if sys.platform.startswith("win") and 'cffi mode "ANY" is only "ABI"' in str(e):
-        # Windows 降级到 ABI 模式，同样抑制错误信息
-        old_stderr = sys.stderr
-        sys.stderr = io.StringIO()
+class _suppress_fd_stderr:
+    def __enter__(self):
+        self._null = open(os.devnull, 'w')
+        self._stderr_fd = sys.stderr.fileno()
+        self._saved_fd = os.dup(self._stderr_fd)
+        os.dup2(self._null.fileno(), self._stderr_fd)
+        return self
+    def __exit__(self, exc_type, exc, tb):
         try:
-            lib = ffi.dlopen(lib_file)
+            os.dup2(self._saved_fd, self._stderr_fd)
         finally:
-            sys.stderr = old_stderr
+            os.close(self._saved_fd)
+            self._null.close()
+
+try:
+    with _suppress_fd_stderr():
+        lib = ffi.dlopen(lib_file)
+except Exception as e:
+    if sys.platform.startswith("win"):
+        with _suppress_fd_stderr():
+            lib = ffi.dlopen(lib_file)
     else:
         raise
 
