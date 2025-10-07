@@ -146,55 +146,55 @@ _WARD_WARNING_SHOWN = False
 def _ensure_r_environment_and_fastcluster():
     """
     Ensure R runtime is discoverable and R package 'fastcluster' is installed.
-    - Optionally set R_HOME if common paths exist and env var is missing
+    - If R is not available, raise with platform-specific installation instructions
     - Choose CRAN mirror
     - Auto-install 'fastcluster' if not present
     """
     print('  - Checking R runtime environment and fastcluster.')
-
-    # Best-effort: set R_HOME if not set and common locations exist (Linux, macOS, Windows)
-    if not os.environ.get('R_HOME'):
-        candidates = []
-        if sys.platform.startswith('linux'):
-            candidates.extend([
-                '/usr/lib/R',
-                '/usr/local/lib/R'
-            ])
-        elif sys.platform == 'darwin':
-            candidates.extend([
-                '/Library/Frameworks/R.framework/Resources',  # CRAN pkg for macOS
-                '/usr/local/lib/R',
-                '/usr/lib/R'
-            ])
+    # Try to load R runtime via rpy2. If this fails, provide installation instructions.
+    try:
+        utils = importr('utils')
+    except Exception as e:
+        # Build platform-specific guidance
+        if sys.platform == 'darwin':
+            guide = (
+                "No available R runtime environment detected.\n"
+                "Please install and configure R first:\n"
+                "1) Installation: Install R from CRAN (recommended macOS package): https://cloud.r-project.org \n"
+                "   Or use Homebrew: brew install r\n"
+                "2) Verification: Run `R --version` in the terminal to check the version information.\n"
+                "3) If the error persists, you can set the environment variable manually:\n"
+                "   export R_HOME=/Library/Frameworks/R.framework/Resources\n"
+                "   and ensure that `which R` can locate the R executable."
+            )
+        elif sys.platform.startswith('linux'):
+            guide = (
+                "No available R runtime environment detected.\n"
+                "Please install and configure R first:\n"
+                "1) Installation: Use your distribution's package manager "
+                "(e.g., Ubuntu: sudo apt-get install -y r-base; CentOS/RHEL: sudo yum install -y R)\n"
+                "   or download from CRAN: https://cloud.r-project.org \n"
+                "2) Verification: Run `R --version` in the terminal.\n"
+                "3) If necessary, set R_HOME to point to the R installation directory (e.g., /usr/lib/R)."
+            )
         elif sys.platform == 'win32':
-            # Probe common Windows locations; pick highest version folder if multiple
-            win_globs = [
-                r'C:\\Program Files\\R\\R-*',
-                r'C:\\Program Files (x86)\\R\\R-*',
-                r'C:\\R\\R-*'
-            ]
-            for pattern in win_globs:
-                versions = sorted(glob.glob(pattern))
-                if versions:
-                    # Use the last (lexicographically highest) as latest
-                    candidates.append(versions[-1])
-        # Set first existing candidate
-        for path in candidates:
-            if os.path.isdir(path):
-                os.environ['R_HOME'] = path
-                break
+            guide = (
+                "No available R runtime environment detected.\n"
+                "Please install and configure R first:\n"
+                "1) Installation: Download and install R for Windows from CRAN: https://cloud.r-project.org \n"
+                "2) Verification: Run `R --version` in PowerShell.\n"
+                "3) If the error persists, add the R bin directory to your system PATH environment variable,\n"
+                "   e.g., C:\\Program Files\\R\\R-x.y.z\\bin; if needed, set R_HOME to that R directory."
+            )
+        else:
+            guide = (
+                "No available R runtime environment detected. "
+                "Please install R and ensure that `R --version` can be executed from the command line.\n"
+                "CRAN: https://cloud.r-project.org"
+            )
+        raise RuntimeError(f"{guide}\nOriginal error: {e}")
 
-    # On Windows, ensure PATH includes R bin directory so rpy2 can load R dlls
-    if sys.platform == 'win32' and os.environ.get('R_HOME'):
-        r_bin64 = os.path.join(os.environ['R_HOME'], 'bin', 'x64')
-        r_bin = os.path.join(os.environ['R_HOME'], 'bin')
-        current_path = os.environ.get('PATH', '')
-        for p in (r_bin64, r_bin):
-            if os.path.isdir(p) and p not in current_path:
-                os.environ['PATH'] = p + os.pathsep + current_path
-
-    # Ensure utils and mirror
-    utils = importr('utils')
+    # Ensure mirror
     try:
         # If a mirror is not chosen, choose the first (may be reset by user later)
         utils.chooseCRANmirror(ind=1)
