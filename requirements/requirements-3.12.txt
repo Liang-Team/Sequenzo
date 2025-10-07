@@ -13,3 +13,4 @@ docutils>=0.17
 missingno>=0.5.2,<0.6.0
 tqdm>=4.62.3,<5.0.0
 rpy2==3.5.12
+cffi>=1.15.0  # Required for C extensions and FFI functionality
