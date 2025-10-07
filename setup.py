@@ -42,6 +42,7 @@ import sys
 import subprocess
 from glob import glob
 import tempfile
+import importlib.util
 
 def ensure_xsimd_exists():
     xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
@@ -119,11 +120,15 @@ def install_libomp_on_apple_silicon():
     This function is called during setup to ensure OpenMP is available.
     """
     try:
-        # Import the OpenMP setup module
-        from sequenzo.openmp_setup import ensure_openmp_support
-        return ensure_openmp_support()
-    except ImportError:
-        # Fallback to basic check if the module is not available
+        # Import the OpenMP setup module without importing sequenzo __init__
+        project_root = Path(__file__).parent.resolve()
+        openmp_setup_path = project_root / 'sequenzo' / 'openmp_setup.py'
+        spec = importlib.util.spec_from_file_location('sequenzo_openmp_setup', str(openmp_setup_path))
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return getattr(module, 'ensure_openmp_support')()
+        # Fallback to basic check if the module cannot be loaded
         import platform
         
         # Only run on macOS Apple Silicon
@@ -142,7 +147,7 @@ def install_libomp_on_apple_silicon():
                           check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("""
-⚠️  OpenMP Dependency Detection
+OpenMP Dependency Detection
 
 On Apple Silicon Mac, Sequenzo requires OpenMP support for parallel computation.
 
@@ -159,40 +164,72 @@ If you don't have Homebrew installed, please visit https://brew.sh to install Ho
                           stdout=subprocess.DEVNULL, 
                           stderr=subprocess.DEVNULL, 
                           check=True)
-            print("[SETUP] ✅ libomp is already installed")
-            return True
+            print("[SETUP] libomp is already installed")
         except subprocess.CalledProcessError:
-            pass  # libomp not installed, continue with installation
+            # Attempt to install libomp automatically
+            print("[SETUP] Detected Apple Silicon Mac, auto-installing OpenMP support...")
+            try:
+                result = subprocess.run(['brew', 'install', 'libomp'], 
+                                      check=True, 
+                                      stdout=subprocess.PIPE, 
+                                      stderr=subprocess.PIPE)
+                print("[SETUP] OpenMP support installed successfully!")
+            except subprocess.CalledProcessError as e:
+                print(f"""
+[SETUP] Automatic OpenMP installation failed: {e}
+
+Please manually run the following command:
+    brew install libomp
+
+After installation, please re-run the installation command.
+                """)
+                return False
         
-        # Attempt to install libomp automatically
-        print("[SETUP] 🔧 Detected Apple Silicon Mac, auto-installing OpenMP support...")
+        # 关键修复：自动设置编译器环境变量
+        print("[SETUP] Setting up compiler environment for OpenMP...")
         try:
-            result = subprocess.run(['brew', 'install', 'libomp'], 
-                                  check=True, 
-                                  stdout=subprocess.PIPE, 
-                                  stderr=subprocess.PIPE)
-            print("[SETUP] ✅ OpenMP support installed successfully!")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"""
-[SETUP] ❌ Automatic OpenMP installation failed: {e}
-
-Please manually run the following command:
-    brew install libomp
-
-After installation, please re-run the installation command.
-            """)
-            return False
+            # 获取 Homebrew 路径
+            brew_prefix = subprocess.check_output(['brew', '--prefix'], text=True).strip()
+            llvm_path = f"{brew_prefix}/opt/llvm"
+            
+            # 检查 LLVM 是否已安装
+            if os.path.exists(f"{llvm_path}/bin/clang"):
+                # 设置编译器环境变量
+                os.environ['CC'] = f"{llvm_path}/bin/clang"
+                os.environ['CXX'] = f"{llvm_path}/bin/clang++"
+                os.environ['LDFLAGS'] = f"-L{llvm_path}/lib -L{brew_prefix}/lib {os.environ.get('LDFLAGS', '')}"
+                os.environ['CPPFLAGS'] = f"-I{llvm_path}/include -I{brew_prefix}/include {os.environ.get('CPPFLAGS', '')}"
+                os.environ['DYLD_LIBRARY_PATH'] = f"{llvm_path}/lib:{brew_prefix}/lib:{os.environ.get('DYLD_LIBRARY_PATH', '')}"
+                
+                print(f"[SETUP] Compiler environment configured:")
+                print(f"   - CC: {os.environ['CC']}")
+                print(f"   - CXX: {os.environ['CXX']}")
+                return True
+            else:
+                print("[SETUP] LLVM not found via Homebrew, trying to install...")
+                try:
+                    subprocess.run(['brew', 'install', 'llvm'], check=True)
+                    # 重新尝试设置环境变量
+                    if os.path.exists(f"{llvm_path}/bin/clang"):
+                        os.environ['CC'] = f"{llvm_path}/bin/clang"
+                        os.environ['CXX'] = f"{llvm_path}/bin/clang++"
+                        os.environ['LDFLAGS'] = f"-L{llvm_path}/lib -L{brew_prefix}/lib {os.environ.get('LDFLAGS', '')}"
+                        os.environ['CPPFLAGS'] = f"-I{llvm_path}/include -I{brew_prefix}/include {os.environ.get('CPPFLAGS', '')}"
+                        os.environ['DYLD_LIBRARY_PATH'] = f"{llvm_path}/lib:{brew_prefix}/lib:{os.environ.get('DYLD_LIBRARY_PATH', '')}"
+                        print("[SETUP] LLVM installed and environment configured!")
+                        return True
+                except subprocess.CalledProcessError:
+                    print("[SETUP] Could not install LLVM, will use system clang (may not support OpenMP)")
+                    return True
         except Exception as e:
-            print(f"""
-[SETUP] ❌ Error during installation: {e}
-
-Please manually run the following command:
-    brew install libomp
-
-After installation, please re-run the installation command.
-            """)
-            return False
+            print(f"[SETUP] Could not configure compiler environment: {e}")
+            print("[SETUP] Will attempt to build with system compiler (may not support OpenMP)")
+            return True
+        
+        return True
+    except Exception:
+        # As a last resort, don't block configuration here
+        return True
 
 
 def has_openmp_support():
@@ -211,7 +248,7 @@ def has_openmp_support():
     import platform
     if sys.platform == 'darwin' and platform.machine() == 'arm64':
         if not install_libomp_on_apple_silicon():
-            print("[SETUP] ⚠️  OpenMP dependency installation failed, will use serial version")
+            print("[SETUP] OpenMP dependency installation failed, will use serial version")
             return False
     
     if getattr(has_openmp_support, "_checked", False):
@@ -501,14 +538,14 @@ class InstallCommand(install):
             script_path = Path(__file__).parent / "scripts" / "post_install.py"
             
             if script_path.exists():
-                print("\n🔧 Running post-installation setup...")
+                print("\nRunning post-installation setup...")
                 subprocess.run([sys.executable, str(script_path)], check=True)
             else:
-                print("⚠️  Post-installation script not found, skipping...")
+                print("Post-installation script not found, skipping...")
                 
         except Exception as e:
-            print(f"⚠️  Post-installation setup failed: {e}")
-            print("💡 You can manually run: python -m sequenzo.openmp_setup")
+            print(f"Post-installation setup failed: {e}")
+            print("You can manually run: python -m sequenzo.openmp_setup")
 
 
 # Run the actual setup process
