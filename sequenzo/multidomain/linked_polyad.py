@@ -158,7 +158,7 @@ def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
 
     print("[Step 3] Computing all pairwise dissimilarities using method:", method)
     alldist = np.asarray(get_distance_matrix(merged_seqdata, method=method, **distance_parameters))
-    print("         → Dissimilarity matrix shape:", alldist.shape)
+    print("         -> Dissimilarity matrix shape:", alldist.shape)
 
     cj = np.array([n * p for p in range(P)])
 
@@ -199,7 +199,7 @@ def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
         else:
             raise ValueError("Invalid randomization type 'a'. Should be 1 or 2.")
 
-    iterator = tqdm(range(T), desc="→ Randomizing polyads") if verbose else range(T)
+    iterator = tqdm(range(T), desc="-> Randomizing polyads") if verbose else range(T)
     random_dists = Parallel(n_jobs=n_jobs)(delayed(random_sample_once)(i) for i in iterator)
     random_dists = np.array(random_dists)
 
@@ -231,7 +231,7 @@ def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
 
     print(
         f"[Step 7] Final summary: mean observed = {np.mean(observed_dists):.2f}, mean randomized = {mean_rand_dist:.2f}")
-    print(f"         → Significant polyads (V > 0.95): {np.sum(V_95)} / {n}")
+    print(f"         -> Significant polyads (V > 0.95): {np.sum(V_95)} / {n}")
 
     result = {
         "mean.dist": {"Obs": np.mean(observed_dists), "Rand": mean_rand_dist},

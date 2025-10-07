@@ -94,7 +94,7 @@ def compare_ward_methods():
         print(f"  Merge {i+1}: {linkage_d2[i, 2]:.6f}")
     
     print(f"\nDistance ratio (Ward D2 / Ward D): {linkage_d2[0, 2] / linkage_d[0, 2]:.2f}")
-    print("(Ward D2 distances should be approximately 2× Ward D distances)")
+    print("(Ward D2 distances should be approximately 2x Ward D distances)")
     
     # Test cluster assignments
     print("\n" + "=" * 40)
@@ -110,9 +110,9 @@ def compare_ward_methods():
     print(f"Cluster assignments identical: {assignments_identical}")
     
     if assignments_identical:
-        print("✓ Both methods produce the same cluster assignments")
+        print("OK - Both methods produce the same cluster assignments")
     else:
-        print("✗ Different cluster assignments detected")
+        print("[X] Different cluster assignments detected")
         
     return cluster_ward_d, cluster_ward_d2, data
 
@@ -183,10 +183,10 @@ def main():
         print("\n" + "=" * 60)
         print("SUMMARY")
         print("=" * 60)
-        print("✓ Ward D and Ward D2 methods successfully implemented")
-        print("✓ Both methods produce identical cluster assignments")
-        print("✓ Ward D2 distances are approximately 2× Ward D distances")
-        print("✓ Choice between methods affects dendrogram visualization only")
+        print("OK - Ward D and Ward D2 methods successfully implemented")
+        print("OK - Both methods produce identical cluster assignments")
+        print("OK - Ward D2 distances are approximately 2x Ward D distances")
+        print("OK - Choice between methods affects dendrogram visualization only")
         print("\nRecommendation:")
         print("- Use 'ward_d' for classic Ward method (most common)")
         print("- Use 'ward_d2' when you need distances equal to variance increase")

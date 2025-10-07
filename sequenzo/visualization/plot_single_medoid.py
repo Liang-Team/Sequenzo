@@ -102,7 +102,7 @@ def compute_medoids_from_distance_matrix(distance_matrix: np.ndarray, seqdata: S
     :return: Tuple containing the medoid sequences and their indices.
     """
     if not isinstance(seqdata, SequenceData):
-        raise TypeError("❌ seqdata must be a SequenceData object.")
+        raise TypeError("[X] seqdata must be a SequenceData object.")
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -131,7 +131,7 @@ def compute_medoids_from_distance_matrix(distance_matrix: np.ndarray, seqdata: S
     medoid_indices = medoid_indices.tolist()
 
     if not all(isinstance(idx, int) for idx in medoid_indices):
-        raise ValueError("❌ medoid_indices must be a list of integers.")
+        raise ValueError("[X] medoid_indices must be a list of integers.")
 
     return medoid_sequences, medoid_indices
 

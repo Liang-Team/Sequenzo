@@ -44,8 +44,8 @@ def test_sequence_data_creation():
     )
     
     assert sequence_data is not None
-    assert sequence_data.num_sequences > 0
-    assert sequence_data.num_time_points > 0
+    assert sequence_data.n_sequences > 0
+    assert sequence_data.n_time_points > 0
     assert len(sequence_data.states) >= len(states)  # May include 'Missing'
 
 
@@ -105,7 +105,7 @@ def test_distance_matrix_computation():
     assert om is not None
     assert isinstance(om, (np.ndarray, pd.DataFrame))
     assert om.shape[0] == om.shape[1]  # Should be square matrix
-    assert om.shape[0] == sequence_data.num_sequences
+    assert om.shape[0] == sequence_data.n_sequences
 
 
 def test_clustering_workflow():
@@ -119,8 +119,8 @@ def test_clustering_workflow():
     # Compute distance matrix
     om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
     
-    # Create cluster object
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    # Create cluster object (using ward_d2 for CI compatibility)
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
     assert cluster is not None
     
     # Test dendrogram plotting (without saving)
@@ -139,7 +139,7 @@ def test_cluster_quality_evaluation():
     
     sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
     om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
     
     # Create ClusterQuality object
     cluster_quality = ClusterQuality(cluster)
@@ -167,7 +167,7 @@ def test_cluster_results_and_membership():
     
     sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
     om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
     
     # Create ClusterResults object
     cluster_results = ClusterResults(cluster)
@@ -176,7 +176,7 @@ def test_cluster_results_and_membership():
     membership_table = cluster_results.get_cluster_memberships(num_clusters=5)
     assert membership_table is not None
     assert isinstance(membership_table, pd.DataFrame)
-    assert len(membership_table) == sequence_data.num_sequences
+    assert len(membership_table) == sequence_data.n_sequences
     assert 'Cluster' in membership_table.columns
     
     # Get cluster distribution
@@ -201,7 +201,7 @@ def test_grouped_visualizations():
     
     sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
     om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
     cluster_results = ClusterResults(cluster)
     membership_table = cluster_results.get_cluster_memberships(num_clusters=5)
     
@@ -261,8 +261,8 @@ def test_complete_workflow():
     om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
     assert om is not None
     
-    # Step 5: Cluster analysis
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    # Step 5: Cluster analysis (using ward_d2 for CI compatibility)
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
     assert cluster is not None
     
     # Step 6: Evaluate cluster quality
@@ -274,7 +274,7 @@ def test_complete_workflow():
     # Step 7: Extract cluster memberships
     cluster_results = ClusterResults(cluster)
     membership_table = cluster_results.get_cluster_memberships(num_clusters=5)
-    assert len(membership_table) == sequence_data.num_sequences
+    assert len(membership_table) == sequence_data.n_sequences
     
     # Step 8: Grouped visualizations
     cluster_labels = {1: 'Cluster 1', 2: 'Cluster 2', 3: 'Cluster 3', 4: 'Cluster 4', 5: 'Cluster 5'}
@@ -282,7 +282,7 @@ def test_complete_workflow():
                        group_column_name="Cluster", group_labels=cluster_labels)
     
     # If we reach here, the complete workflow works!
-    print("✓ Complete workflow test passed successfully!")
+    print("OK - Complete workflow test passed successfully!")
     assert True
 
 

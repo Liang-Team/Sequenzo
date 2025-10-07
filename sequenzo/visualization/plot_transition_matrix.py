@@ -112,7 +112,7 @@ def print_transition_matrix(seqdata: SequenceData, transition_rates: np.ndarray)
     # Print each row
     for i, from_state in enumerate(state_labels):
         # Print row label
-        print(f"{from_state:>{max_label_width}} →", end=" ")
+        print(f"{from_state:>{max_label_width}} ->", end=" ")
 
         # Print transition rates
         for prob in transition_rates[i]:

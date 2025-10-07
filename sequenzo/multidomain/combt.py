@@ -253,7 +253,7 @@ def merge_sparse_combt_types(distance_matrix,
         distance_matrix = distance_matrix.values
 
     if distance_matrix.shape[0] != distance_matrix.shape[1]:
-        raise ValueError("distance_matrix must be square (n × n)")
+        raise ValueError("distance_matrix must be square (n x n)")
 
     labels = np.array(labels)
     if len(labels) != distance_matrix.shape[0]:
@@ -323,7 +323,7 @@ def merge_sparse_combt_types(distance_matrix,
                         best_target = target
                 except Exception as e:
                     if verbose:
-                        print(f"[!] Error computing silhouette for merge {small} → {target}: {e}")
+                        print(f"[!] Error computing silhouette for merge {small} -> {target}: {e}")
                     continue
 
             # Execute merge if it maintains quality threshold
@@ -346,7 +346,7 @@ def merge_sparse_combt_types(distance_matrix,
 
                 if verbose:
                     print(
-                        f"[+] Merged {small} ({reverse_map[small]}, size={old_count}) → {best_target} ({reverse_map[best_target]}) | New ASW: {current_score:.4f}")
+                        f"[+] Merged {small} ({reverse_map[small]}, size={old_count}) -> {best_target} ({reverse_map[best_target]}) | New ASW: {current_score:.4f}")
 
                 merged = True
                 break
@@ -380,7 +380,7 @@ def merge_sparse_combt_types(distance_matrix,
         print("\n[>] Merge History Details:")
         for i, merge in enumerate(merge_info["merge_history"]):
             print(
-                f"  Merge {i + 1}: {merge['source']} (size={merge['source_size']}) → {merge['target']} | ASW: {merge['new_asw']:.4f}")
+                f"  Merge {i + 1}: {merge['source']} (size={merge['source_size']}) -> {merge['target']} | ASW: {merge['new_asw']:.4f}")
 
     # Visualize merge process if requested
     if visualize_process and merge_info["merge_history"]:

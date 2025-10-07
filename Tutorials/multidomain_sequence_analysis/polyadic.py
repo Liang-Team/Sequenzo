@@ -31,9 +31,9 @@
 
         This polyad has:
         1. An observed average distance of 18.0
-        2. U is negative → its sequences are less similar than expected
-        3. V is 0.43 → 43% of random pairings are more dissimilar → not statistically significant
-        4. V>0.95 = 0 → no strong linked life pattern
+        2. U is negative -> its sequences are less similar than expected
+        3. V is 0.43 -> 43% of random pairings are more dissimilar -> not statistically significant
+        4. V>0.95 = 0 -> no strong linked life pattern
 
     # TODO: Last row of the result_df is null in gender.
 """

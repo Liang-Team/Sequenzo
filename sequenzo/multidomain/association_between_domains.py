@@ -307,5 +307,5 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
     print("  - v        : Cramer's V statistic (0 to 1, measures association strength).")
     print("  - p(v)     : p-value for Cramer's V (based on chi-squared test) + significance stars: * (p<.05), ** (p<.01), *** (p<.001)")
     print("  - strength : Qualitative label for association strength based on Cramer's V:")
-    print("               0.00–0.09 → None, 0.10–0.29 → Weak, 0.30–0.49 → Moderate, ≥0.50 → Strong")
+    print("               0.00-0.09 -> None, 0.10-0.29 -> Weak, 0.30-0.49 -> Moderate, >=0.50 -> Strong")
 

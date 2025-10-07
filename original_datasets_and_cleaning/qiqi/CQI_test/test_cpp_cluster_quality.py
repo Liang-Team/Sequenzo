@@ -102,7 +102,7 @@ def test_cpp_vs_python():
             cpp_val = cpp_scores[metric]
             py_val = python_scores[metric]
             diff = abs(cpp_val - py_val) if not (np.isnan(cpp_val) or np.isnan(py_val)) else 0
-            status = "✓" if diff < 0.01 else "✗"
+            status = "OK" if diff < 0.01 else "FAIL"
             print(f"  {metric:4s}: C++={cpp_val:8.4f}, Python={py_val:8.4f}, diff={diff:8.4f} {status}")
 
 def test_individual_cpp_functions():

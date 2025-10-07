@@ -100,7 +100,7 @@ def clean_build_artifacts(project_root=None):
                     print(f"[WARN] Could not remove {dir_path}: {e}")
     
     print("=" * 70)
-    print(f"[CLEAN] ✓ Cleanup complete! Removed {total_removed} items.")
+    print(f"[CLEAN] OK - Cleanup complete! Removed {total_removed} items.")
     print()
     print("Next steps:")
     print("  1. Reinstall Sequenzo:")

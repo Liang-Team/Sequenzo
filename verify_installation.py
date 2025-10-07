@@ -20,36 +20,36 @@ def verify_installation():
     print("\n[1/7] 测试基本导入...")
     try:
         import sequenzo
-        print(f"    ✓ Sequenzo 版本: {sequenzo.__version__}")
+        print(f"    OK - Sequenzo 版本: {sequenzo.__version__}")
     except Exception as e:
-        print(f"    ✗ 导入失败: {e}")
+        print(f"    [X] 导入失败: {e}")
         return False
     
     # 2. 测试 C++ 扩展
     print("\n[2/7] 测试 C++ 扩展...")
     try:
         import sequenzo.clustering.clustering_c_code as cc
-        print("    ✓ 聚类 C++ 扩展加载成功")
+        print("    OK - 聚类 C++ 扩展加载成功")
     except Exception as e:
-        print(f"    ⚠ 聚类 C++ 扩展加载失败: {e}")
+        print(f"    [!] 聚类 C++ 扩展加载失败: {e}")
     
     try:
         from sequenzo.dissimilarity_measures import c_code
-        print("    ✓ 距离计算 C++ 扩展加载成功")
+        print("    OK - 距离计算 C++ 扩展加载成功")
     except Exception as e:
-        print(f"    ⚠ 距离计算 C++ 扩展加载失败: {e}")
+        print(f"    [!] 距离计算 C++ 扩展加载失败: {e}")
     
     # 3. 测试数据加载
     print("\n[3/7] 测试数据加载...")
     try:
         from sequenzo import list_datasets, load_dataset
         datasets = list_datasets()
-        print(f"    ✓ 找到 {len(datasets)} 个数据集")
+        print(f"    OK - 找到 {len(datasets)} 个数据集")
         
         df = load_dataset('country_co2_emissions_global_deciles')
-        print(f"    ✓ 成功加载测试数据集 (形状: {df.shape})")
+        print(f"    OK - 成功加载测试数据集 (形状: {df.shape})")
     except Exception as e:
-        print(f"    ✗ 数据加载失败: {e}")
+        print(f"    [X] 数据加载失败: {e}")
         return False
     
     # 4. 测试 SequenceData 创建
@@ -66,9 +66,9 @@ def verify_installation():
             states=states,
             labels=states
         )
-        print(f"    ✓ 创建成功 ({sequence_data.num_sequences} 个序列, {sequence_data.num_time_points} 个时间点)")
+        print(f"    OK - 创建成功 ({sequence_data.num_sequences} 个序列, {sequence_data.num_time_points} 个时间点)")
     except Exception as e:
-        print(f"    ✗ SequenceData 创建失败: {e}")
+        print(f"    [X] SequenceData 创建失败: {e}")
         return False
     
     # 5. 测试可视化（不保存文件）
@@ -86,9 +86,9 @@ def verify_installation():
             plot_sequence_index(sequence_data)
             plot_state_distribution(sequence_data)
         
-        print("    ✓ 可视化功能正常")
+        print("    OK - 可视化功能正常")
     except Exception as e:
-        print(f"    ⚠ 可视化测试失败: {e}")
+        print(f"    [!] 可视化测试失败: {e}")
     
     # 6. 测试距离矩阵计算
     print("\n[6/7] 测试距离矩阵计算...")
@@ -101,9 +101,9 @@ def verify_installation():
             sm="TRATE",
             indel="auto"
         )
-        print(f"    ✓ 距离矩阵计算成功 (形状: {om.shape})")
+        print(f"    OK - 距离矩阵计算成功 (形状: {om.shape})")
     except Exception as e:
-        print(f"    ✗ 距离矩阵计算失败: {e}")
+        print(f"    [X] 距离矩阵计算失败: {e}")
         return False
     
     # 7. 测试聚类分析
@@ -112,22 +112,22 @@ def verify_installation():
         from sequenzo import Cluster, ClusterQuality, ClusterResults
         
         cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
-        print("    ✓ 聚类对象创建成功")
+        print("    OK - 聚类对象创建成功")
         
         cluster_quality = ClusterQuality(cluster)
         cluster_quality.compute_cluster_quality_scores()
         summary = cluster_quality.get_cqi_table()
-        print(f"    ✓ 聚类质量评估完成 ({len(summary)} 个指标)")
+        print(f"    OK - 聚类质量评估完成 ({len(summary)} 个指标)")
         
         cluster_results = ClusterResults(cluster)
         membership = cluster_results.get_cluster_memberships(num_clusters=5)
-        print(f"    ✓ 聚类成员提取成功 ({len(membership)} 个序列)")
+        print(f"    OK - 聚类成员提取成功 ({len(membership)} 个序列)")
     except Exception as e:
-        print(f"    ✗ 聚类分析失败: {e}")
+        print(f"    [X] 聚类分析失败: {e}")
         return False
     
     print("\n" + "="*60)
-    print("✓ 所有核心功能验证通过！")
+    print("OK - 所有核心功能验证通过！")
     print("  Sequenzo 已正确安装并可以正常使用。")
     print("="*60)
     

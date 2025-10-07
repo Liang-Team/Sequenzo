@@ -31,7 +31,7 @@ def get_cross_sectional_entropy(
         ...
 
     Additional metrics:
-        - per_time_entropy_norm: If norm=True, normalized by maximum entropy (|S|), range 0–1
+        - per_time_entropy_norm: If norm=True, normalized by maximum entropy (|S|), range 0-1
         - effective_states (H_effective): exp(H), equivalent "effective number of states"
         - summary: Key interpretation points (entropy peaks/valleys, dominant state intervals, average entropy, etc.)
 
@@ -199,7 +199,7 @@ def get_cross_sectional_entropy(
         if eff_s is not None:
             out["Effective States"] = eff_s
         return out
-    else:  # "dict" —— try to be more readable too
+    else:  # "dict" -- try to be more readable too
         res = {
             "Frequencies": freq_df_wide,
             "ValidStates": valid_s,

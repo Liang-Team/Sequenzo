@@ -56,7 +56,7 @@ def check_python_environment():
     in_venv = hasattr(sys, 'real_prefix') or (
         hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
     )
-    print(f"Virtual environment: {'Yes ✓' if in_venv else 'No ✗ (Warning: You should use a virtual environment!)'}")
+    print(f"Virtual environment: {'Yes (OK)' if in_venv else 'No (X) - Warning: You should use a virtual environment!'}")
     
     # Check for conda
     conda_env = os.environ.get('CONDA_DEFAULT_ENV')
@@ -82,7 +82,7 @@ def check_sequenzo_installation():
                 print(f"Installed package: {line}")
                 break
     else:
-        print("❌ Sequenzo is NOT installed")
+        print("[X] Sequenzo is NOT installed")
         print("\nTo install: pip install sequenzo")
         return False
     
@@ -90,7 +90,7 @@ def check_sequenzo_installation():
     print("\nTrying to import sequenzo...")
     try:
         import sequenzo
-        print(f"✓ Import successful!")
+        print(f"OK - Import successful!")
         
         # Try to get version
         try:
@@ -103,11 +103,11 @@ def check_sequenzo_installation():
         print(f"  Location: {sequenzo.__file__}")
         return True
     except ImportError as e:
-        print(f"❌ Import FAILED with error:")
+        print(f"[X] Import FAILED with error:")
         print(f"  {type(e).__name__}: {e}")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error during import:")
+        print(f"[X] Unexpected error during import:")
         print(f"  {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
@@ -130,19 +130,19 @@ def check_dependencies():
             if dep == 'numpy' and version != 'unknown':
                 major_version = int(version.split('.')[0])
                 if major_version < 2:
-                    print(f"❌ {dep}: {version} (TOO OLD - Need 2.x)")
+                    print(f"[X] {dep}: {version} (TOO OLD - Need 2.x)")
                     numpy_version_issue = True
                 else:
-                    print(f"✓ {dep}: {version}")
+                    print(f"OK - {dep}: {version}")
             else:
-                print(f"✓ {dep}: {version}")
+                print(f"OK - {dep}: {version}")
         except ImportError:
-            print(f"❌ {dep}: NOT FOUND")
+            print(f"[X] {dep}: NOT FOUND")
         except Exception as e:
-            print(f"⚠️  {dep}: Error checking ({e})")
+            print(f"[!] {dep}: Error checking ({e})")
     
     if numpy_version_issue:
-        print("\n⚠️  WARNING: NumPy 1.x detected!")
+        print("\n[!] WARNING: NumPy 1.x detected!")
         print("   Sequenzo requires NumPy 2.x for compatibility.")
         print("   This is likely the cause of your import errors.")
     
@@ -161,16 +161,16 @@ def check_compilers():
         # Check for Homebrew
         brew = run_command('brew --version', silent_fail=True)
         if brew:
-            print(f"Homebrew: Installed ✓")
+            print(f"Homebrew: Installed (OK)")
             
             # Check for libomp on Apple Silicon
             if platform.machine() == 'arm64':
                 libomp = run_command('brew list libomp', silent_fail=True)
-                print(f"libomp (OpenMP): {'Installed ✓' if libomp else 'Not installed'}")
+                print(f"libomp (OpenMP): {'Installed (OK)' if libomp else 'Not installed'}")
     
     elif sys.platform == 'win32':
         msvc = run_command('cl', silent_fail=True)
-        print(f"MSVC: {'Available ✓' if msvc else 'Not detected'}")
+        print(f"MSVC: {'Available (OK)' if msvc else 'Not detected'}")
     
     else:  # Linux
         gcc = run_command('gcc --version', silent_fail=True)
@@ -187,7 +187,7 @@ def provide_recommendations(sequenzo_works, numpy_ok):
         print("\nIf you're experiencing issues in specific scenarios,")
         print("please report them at: https://github.com/Liang-Team/Sequenzo/issues")
     else:
-        print("\n❌ Sequenzo is not working. Try these fixes:\n")
+        print("\n[X] Sequenzo is not working. Try these fixes:\n")
         
         if not numpy_ok:
             print("Fix 1: Upgrade NumPy to 2.x (RECOMMENDED - likely fixes your issue)")
@@ -240,10 +240,10 @@ def save_diagnostic_report():
                     check_dependencies()
                     check_compilers()
             
-            print(f"✓ Diagnostic report saved to: {filename}")
+            print(f"OK - Diagnostic report saved to: {filename}")
             print("  You can share this file when reporting issues on GitHub.")
         except Exception as e:
-            print(f"✗ Failed to save report: {e}")
+            print(f"[X] Failed to save report: {e}")
 
 
 def main():

@@ -706,7 +706,7 @@ class IndividualConvergence:
         across individuals with sample standard deviation (ddof=1):
             z_{i,t} = (x_{i,t} - mean_t) / std_t
         
-        The standardized scores can be used with a threshold (e.g., z ≤ -1.5) to classify 
+        The standardized scores can be used with a threshold (e.g., z <= -1.5) to classify 
         individuals as converged/not converged, and are particularly useful for visualization.
         
         Note: For convergence (suffix tree), we look for LOW rarity (more typical patterns),
@@ -725,7 +725,7 @@ class IndividualConvergence:
         Returns:
         --------
         List[float]
-            Standardized rarity scores for each individual. Values ≤ -z_threshold indicate convergence.
+            Standardized rarity scores for each individual. Values <= -z_threshold indicate convergence.
             
         Notes:
         ------
@@ -1539,7 +1539,7 @@ def compute_quantile_thresholds_by_group(scores, group_labels, quantiles=None):
 
 def compute_quantile_thresholds_by_group_year(scores, group_labels, year_labels, quantiles=None, min_group_year_size=30):
     """
-    Compute quantile thresholds by group × year for time-drifting distributions.
+    Compute quantile thresholds by group x year for time-drifting distributions.
 
     Parameters
     ----------

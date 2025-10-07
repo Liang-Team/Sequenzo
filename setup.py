@@ -104,7 +104,7 @@ def get_mac_arch():
             if part == '-arch' and i + 1 < len(parts):
                 archs.append(parts[i + 1])
         if archs:
-            print(f"[SETUP] ✓ Using ARCHFLAGS architectures: {archs}")
+            print(f"[SETUP] OK - Using ARCHFLAGS architectures: {archs}")
             get_mac_arch._cached_result = archs
             return archs
         else:
@@ -113,14 +113,14 @@ def get_mac_arch():
     # Check for project-specific override
     project_arch = os.environ.get('SEQUENZO_ARCH', '').strip()
     if project_arch:
-        print(f"[SETUP] ✓ Using SEQUENZO_ARCH: {project_arch}")
+        print(f"[SETUP] OK - Using SEQUENZO_ARCH: {project_arch}")
         get_mac_arch._cached_result = project_arch
         return project_arch
     
     # Default: detect current hardware
     try:
         hardware_arch = subprocess.check_output(['uname', '-m']).decode().strip()
-        print(f"[SETUP] ✓ Using hardware architecture: {hardware_arch}")
+        print(f"[SETUP] OK - Using hardware architecture: {hardware_arch}")
         get_mac_arch._cached_result = hardware_arch
         return hardware_arch
     except Exception:
@@ -426,7 +426,27 @@ def get_link_args():
     
     if has_openmp_support():
         if sys.platform == 'darwin':
+            # macOS: Link against libomp and set rpath
             link_args.append('-lomp')
+            
+            # Add library path from environment or Homebrew default
+            ldflags = os.environ.get('LDFLAGS', '')
+            if ldflags:
+                # Parse LDFLAGS for -L and -Wl,-rpath options
+                for flag in ldflags.split():
+                    if flag.startswith('-L') or flag.startswith('-Wl,'):
+                        link_args.append(flag)
+            else:
+                # Fallback: try to detect Homebrew libomp location
+                try:
+                    brew_prefix = subprocess.check_output(['brew', '--prefix', 'libomp'], 
+                                                         text=True).strip()
+                    lib_path = f"{brew_prefix}/lib"
+                    link_args.append(f'-L{lib_path}')
+                    link_args.append(f'-Wl,-rpath,{lib_path}')
+                    print(f"[SETUP] Auto-detected libomp at: {lib_path}")
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    print("[SETUP] Warning: Could not auto-detect libomp location")
         elif sys.platform == 'win32':
             pass  # Windows MSVC自动链接
         else:

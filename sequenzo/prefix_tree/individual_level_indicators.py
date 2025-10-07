@@ -609,7 +609,7 @@ class IndividualDivergence:
         Where z_{i,t} are the year-wise standardized prefix rarity scores using column-wise 
         standardization with sample standard deviation (ddof=1, as computed by pandas).
         
-        The standardized scores can be used with a threshold (e.g., z ≥ 1.5) to classify 
+        The standardized scores can be used with a threshold (e.g., z >= 1.5) to classify 
         individuals as diverged/not diverged, and are particularly useful for visualization.
         
         Parameters:
@@ -622,7 +622,7 @@ class IndividualDivergence:
         Returns:
         --------
         List[float]
-            Standardized rarity scores for each individual. Values ≥ z_threshold indicate divergence.
+            Standardized rarity scores for each individual. Values >= z_threshold indicate divergence.
             
         Notes:
         ------

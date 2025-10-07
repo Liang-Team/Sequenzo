@@ -117,7 +117,7 @@ def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, c
     **What is person-period data?**
     Instead of having one row per person with all their time points as columns,
     person-period data has one row for each person-time combination. For example,
-    if we track 3 people over 5 time periods, we get 15 rows (3 × 5).
+    if we track 3 people over 5 time periods, we get 15 rows (3 x 5).
     
     **What are subsequences?**
     At each time point, we look ahead and record what happens in the next few time periods.

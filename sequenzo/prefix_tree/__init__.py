@@ -3,7 +3,7 @@
 @File    : __init__.py
 @Time    : 02/05/2025 11:05
 @Desc    :
-    Prefix Tree Framework – exposes core indicators and utilities for sequence divergence analysis.
+    Prefix Tree Framework - exposes core indicators and utilities for sequence divergence analysis.
 """
 from .system_level_indicators import (
     build_prefix_tree,

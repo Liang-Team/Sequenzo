@@ -91,7 +91,7 @@ def get_subsequences_all_sequences(seqdata, dss: bool = True, with_missing: bool
     Args:
         seqdata: SequenceData object or pandas DataFrame containing your sequence data
         dss (bool): Whether to apply distinct state sequence preprocessing. 
-                   If True, consecutive identical states are compressed (e.g., [1,1,2,2] → [1,2])
+                   If True, consecutive identical states are compressed (e.g., [1,1,2,2] -> [1,2])
         with_missing (bool): Whether to include missing values in the calculation
         
     Returns:
@@ -266,7 +266,7 @@ def get_number_of_transitions(seqdata, norm=False, pwight=False) -> pd.DataFrame
         seq_3            2
         
         >>> # Example: sequence [1, 1, 2, 2, 1, 3] has 3 transitions:
-        >>> # 1→2 (position 3), 2→1 (position 5), 1→3 (position 6)
+        >>> # 1->2 (position 3), 2->1 (position 5), 1->3 (position 6)
         
     Note:
         Missing values are automatically ignored. Only counts actual state changes

@@ -35,10 +35,10 @@ def set_up_time_labels_for_x_axis(seqdata: SequenceData,
         # If 10 or fewer time points, show all labels
         xtick_positions = np.arange(num_time_steps)
     elif num_time_steps <= 20:
-        # If 10–20 time points, show every 2nd label
+        # If 10-20 time points, show every 2nd label
         xtick_positions = np.arange(0, num_time_steps, step=2)
     else:
-        # More than 20 time points → Pick 10 evenly spaced tick positions
+        # More than 20 time points -> Pick 10 evenly spaced tick positions
         xtick_positions = np.linspace(0, num_time_steps - 1, num=10, dtype=int)
 
     # Set x-ticks and labels dynamically

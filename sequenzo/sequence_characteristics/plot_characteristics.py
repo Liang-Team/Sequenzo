@@ -360,7 +360,7 @@ def plot_cross_sectional_characteristics(seqdata,
                                           title="Cross-sectional entropy over time",
                                           show_title=True,
                                           xlabel="Time",
-                                          ylabel="Entropy (0–1)",
+                                          ylabel="Entropy (0-1)",
                                           line_color="#74C9B4",
                                           save_as=None,
                                           dpi=200,
@@ -396,7 +396,7 @@ def plot_cross_sectional_characteristics(seqdata,
     xlabel : str, optional (default="Time")
         Label for the x-axis.
         
-    ylabel : str, optional (default="Entropy (0–1)")
+    ylabel : str, optional (default="Entropy (0-1)")
         Label for the y-axis (main entropy axis).
         
     line_color : str, optional (default="#74C9B4")

@@ -281,7 +281,7 @@ def _warn_ward_usage_once(matrix, method):
     if not _WARD_WARNING_SHOWN and method.lower() in ["ward", "ward_d", "ward_d2"]:
         if not _check_euclidean_compatibility(matrix, method):
             warnings.warn(
-                "\n⚠️  Ward linkage method detected with potentially non-Euclidean distance matrix!\n"
+                "\n[!] Ward linkage method detected with potentially non-Euclidean distance matrix!\n"
                 "   Ward clustering (both Ward D and Ward D2) assumes Euclidean distances for theoretical validity.\n"
                 "   \n"
                 "   Ward method variants:\n"

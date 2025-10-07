@@ -3,7 +3,7 @@
 @File    : __init__.py
 @Time    : 08/08/2025 15:50
 @Desc    :
-    Suffix Tree Framework – exposes core indicators and utilities for sequence convergence analysis.
+    Suffix Tree Framework - exposes core indicators and utilities for sequence convergence analysis.
 """
 from .system_level_indicators import (
     build_suffix_tree,

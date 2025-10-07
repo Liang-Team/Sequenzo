@@ -13,7 +13,7 @@
 
     However, in this implementation, we require the user to explicitly provide the set of `states`. This explicit control
     is essential for ensuring consistent ordering of states, reproducibility of visualizations, and compatibility across
-    sequence datasets — especially when certain states may not appear in a given subset of the data.
+    sequence datasets - especially when certain states may not appear in a given subset of the data.
 
     As a result, `alphabet` is automatically set to `states` upon initialization, and kept as a semantic alias for clarity
     and potential compatibility. Users should treat `states` as the definitive state space and are not required to provide
@@ -170,7 +170,7 @@ class SequenceData:
             raise ValueError(
                 f"[!] You must specify a valid `id_col` parameter that exists in your dataset.\n"
                 f"    ID is required to uniquely identify each sequence (e.g., individuals).\n"
-                f"    → Hint: If your data does not have an ID column yet, you can use the helper function:\n\n"
+                f"    -> Hint: If your data does not have an ID column yet, you can use the helper function:\n\n"
                 f"        from sequenzo.utils import assign_unique_ids\n"
                 f"        df = assign_unique_ids(df, id_col_name='Entity ID')\n"
                 f"        df.to_csv('your_dataset_with_ids.csv', index=False)\n\n"
@@ -245,7 +245,7 @@ class SequenceData:
 
                 print(
                     "[!] Detected missing values (empty cells) in the sequence data.\n"
-                    f"    → Automatically added {example_missing} to `states` and `labels` for compatibility.\n"
+                    f"    -> Automatically added {example_missing} to `states` and `labels` for compatibility.\n"
                     "    However, it's strongly recommended to manually include it when defining `states` and `labels`.\n"
                     "    For example:\n\n"
                     f"        states = [{quote}At Home{quote}, {quote}Left Home{quote}, {example_missing}]\n"
@@ -519,7 +519,7 @@ class SequenceData:
     def flatten_weights(self) -> np.ndarray:
         """
         Repeat weights across sequence length for 1D alignment with flatten().
-        E.g., 5 sequences × 10 steps → repeat each weight 10 times.
+        E.g., 5 sequences x 10 steps -> repeat each weight 10 times.
         """
         return np.repeat(self.weights, self.n_steps)
 
