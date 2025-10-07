@@ -1,17 +1,17 @@
-# Apple Silicon 安装指南
+# Apple Silicon 的用户安装指南
 
-## 🍎 自动 OpenMP 支持
+## 自动 OpenMP 支持
 
 从 Sequenzo 0.1.18 开始，我们为 Apple Silicon Mac 用户提供了**自动 OpenMP 依赖管理**功能。
 
-### ✨ 新功能
+### 新功能
 
 - **自动检测**: 安装时自动检测 Apple Silicon Mac
 - **自动安装**: 自动通过 Homebrew 安装 `libomp`
 - **智能回退**: 如果自动安装失败，提供清晰的指导
 - **环境兼容**: 自动识别 Conda 环境，避免冲突
 
-### 🚀 安装步骤
+### 安装步骤
 
 #### 方法 1: 直接安装（推荐）
 
@@ -40,7 +40,7 @@ brew install libomp
 pip install sequenzo
 ```
 
-### 🔍 验证安装
+### 验证安装
 
 安装完成后，您可以验证 OpenMP 支持：
 
@@ -52,7 +52,7 @@ python -m sequenzo.openmp_setup
 python developer/test_openmp.py
 ```
 
-### 📊 性能提升
+### 性能提升
 
 启用 OpenMP 支持后，您将获得：
 
@@ -62,7 +62,7 @@ python developer/test_openmp.py
 | 聚类分析 | 基准 | 1.5-3x | 1.5-3x |
 | 大数据处理 | 基准 | 2-8x | 2-8x |
 
-### 🛠️ 故障排除
+### 故障排除
 
 #### 问题 1: 自动安装失败
 
@@ -110,7 +110,7 @@ conda install -c conda-forge libomp
 pip install sequenzo
 ```
 
-### 🔧 高级配置
+### 高级配置
 
 #### 环境变量
 
@@ -136,7 +136,7 @@ export HOMEBREW_PREFIX=/custom/path/to/homebrew
 pip install --force-reinstall sequenzo
 ```
 
-### 📝 技术细节
+### 技术细节
 
 #### 自动检测逻辑
 
@@ -161,7 +161,7 @@ scripts/
 setup.py                     # 构建配置（已更新）
 ```
 
-### 🆘 获取帮助
+### 获取帮助
 
 如果遇到问题，请：
 
@@ -170,7 +170,7 @@ setup.py                     # 构建配置（已更新）
 3. 提交 Issue：在 GitHub 上报告问题
 4. 查看文档：https://sequenzo.yuqi-liang.tech
 
-### 🎉 享受并行计算！
+### 享受并行计算！
 
 安装完成后，您就可以享受 Sequenzo 的并行计算能力了！
 
