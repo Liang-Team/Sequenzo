@@ -111,6 +111,34 @@ If you have some issues with the installation, it might because you have both Py
 pip3 install sequenzo
 ```
 
+### ⚠️ Having Installation or Import Issues?
+
+**Error:** `ImportError: numpy.core.multiarray failed to import`
+
+**Most likely cause:** NumPy version mismatch (you have NumPy 1.x, but need 2.x)
+
+**Quick Fix** (copy-paste these commands):
+```bash
+# Check your NumPy version first
+python -c "import numpy; print(f'NumPy: {numpy.__version__}')"
+
+# If you see 1.x.x, upgrade to 2.x:
+pip install --upgrade "numpy>=2.0.0"
+pip uninstall sequenzo -y
+pip install --no-cache-dir sequenzo
+```
+
+📖 **Still having issues?** 
+1. Run our diagnostic tool to identify the problem:
+   ```bash
+   curl -O https://raw.githubusercontent.com/Liang-Team/Sequenzo/main/diagnose.py
+   python diagnose.py
+   ```
+2. See our detailed guides:
+   - **[QUICK_FIX.md](QUICK_FIX.md)** - Simple step-by-step solutions
+   - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Comprehensive troubleshooting
+   - **[docs/WHY_IMPORT_FAILS.md](docs/WHY_IMPORT_FAILS.md)** - Technical explanation
+
 ### Optional R Integration
 
 Sequenzo now checks the system environment variables before running ward.D hierarchical clustering.

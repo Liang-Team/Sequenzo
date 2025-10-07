@@ -29,15 +29,15 @@ unit_test/
 *.o
 *.a
 
-# 但是我们保留 Cython 编译生成的 .c 文件（用于 CI 构建）
-!sequenzo/dissimilarity_measures/utils/*.c
-!sequenzo/clustering/utils/*.c
+# ⚠️ IMPORTANT: Do NOT commit Cython-generated .c files!
+# They contain hardcoded paths from the build machine.
+# Cython will regenerate them during setup.py build_ext
+# sequenzo/dissimilarity_measures/utils/*.c  # <- Should be ignored
+# sequenzo/clustering/utils/*.c              # <- Should be ignored
 
-# 如果你有 cpp 源码用于 Pybind11
+# 如果你有 cpp 源码用于 Pybind11（这些是手写的源码，应该保留）
 !sequenzo/dissimilarity_measures/src/*.cpp
 !sequenzo/clustering/src/*.cpp
-
-
 
 # Python wheels
 *.whl

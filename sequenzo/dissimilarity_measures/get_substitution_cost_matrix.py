@@ -231,7 +231,7 @@ if __name__ == "__main__":
 
     states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 
-    sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", states=states)
+    sequence_data = SequenceData(df, time=time, id_col="country", states=states)
 
     sm = get_substitution_cost_matrix(sequence_data,
                                       method="CONSTANT",

@@ -1,3 +1,11 @@
+'''
+Author: Yuqi Liang dawson1900@live.com
+Date: 2025-09-25 08:46:49
+LastEditors: Yuqi Liang dawson1900@live.com
+LastEditTime: 2025-10-07 20:38:10
+FilePath: /Sequenzo-main/sequenzo/multidomain/dat.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : dat.py
@@ -60,11 +68,11 @@ if __name__ == '__main__':
 
     time_cols = [col for col in children_df.columns if col.startswith("age_")]
 
-    seq_left = SequenceData(data=left_df, time_type="age", time=time_cols, states=[0, 1],
+    seq_left = SequenceData(data=left_df, time=time_cols, states=[0, 1],
                             labels=["At home", "Left home"])
-    seq_child = SequenceData(data=children_df, time_type="age", time=time_cols, states=[0, 1],
+    seq_child = SequenceData(data=children_df, time=time_cols, states=[0, 1],
                              labels=["No child", "Child"])
-    seq_marr = SequenceData(data=married_df, time_type="age", time=time_cols, states=[0, 1],
+    seq_marr = SequenceData(data=married_df, time=time_cols, states=[0, 1],
                             labels=["Not married", "Married"])
 
     domains_seq_list = [seq_left, seq_child, seq_marr]

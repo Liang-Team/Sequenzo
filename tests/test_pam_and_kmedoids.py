@@ -15,7 +15,6 @@ time_list = list(df.columns)[1:]
 states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
 sequence_data = SequenceData(df,
                              time=time_list,
-                             time_type="year",
                              id_col="country",
                              states=states,
                              labels=states)

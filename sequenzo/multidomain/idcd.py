@@ -75,7 +75,6 @@ def _generate_combined_sequence_from_csv(csv_paths: List[str],
 def create_idcd_sequence_from_csvs(
     csv_paths: List[str],
     time_cols: List[str],
-    time_type: str = "year",
     id_col: str = "id",
     domain_state_labels: List[Dict] = None
 ) -> SequenceData:
@@ -86,7 +85,6 @@ def create_idcd_sequence_from_csvs(
     Parameters:
     - csv_paths: List of paths to domain CSVs
     - time_cols: List of time column names to use
-    - time_type: 'year' or 'age'
     - id_col: ID column name
     - domain_state_labels: List of dictionaries mapping raw state values to labels for each domain
 

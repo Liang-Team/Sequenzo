@@ -1,0 +1,61 @@
+Fix: Remove Cython .c files and add comprehensive user support docs
+
+## 问题修复
+
+### 修复 1: 移除 Cython 生成的 .c 文件
+- 从 git 移除 `sequenzo/dissimilarity_measures/utils/*.c`
+- 这些文件包含硬编码的本地路径，导致用户编译失败
+- 错误信息: `ImportError: dynamic module does not define module export function`
+- CI 会在构建时自动重新生成这些文件
+
+### 修复 2: 更新 .gitignore
+- 移除 `!sequenzo/dissimilarity_measures/utils/*.c` 规则
+- 确保 Cython 生成的 .c 文件不再被 track
+- 保留手写的 C++ 源码 (src/*.cpp)
+
+### 修复 3: 添加 NumPy 兼容性说明
+- 说明 NumPy 2.0 ABI 兼容性要求
+- 提供用户快速修复指南
+
+## 新增文档
+
+### 用户支持文档
+- `QUICK_FIX.md` - 简单易懂的快速修复指南（新手友好）
+- `TROUBLESHOOTING.md` - 全面的故障排除指南
+- `docs/WHY_IMPORT_FAILS.md` - 技术深度解释（NumPy ABI + Cython）
+
+### 诊断和清理工具
+- `diagnose.py` - 自动诊断工具，检测 Python/NumPy/Sequenzo 状态
+- `scripts/clean_build.py` - 跨平台清理脚本
+- `scripts/clean_build.sh` - Unix/macOS 清理脚本
+- `scripts/clean_build.bat` - Windows 清理脚本
+- `scripts/README.md` - 脚本使用说明
+
+### 开发者文档
+- `developer/WHAT_FILES_TO_COMMIT.md` - 详细说明哪些文件应该 commit
+- `QUICK_ANSWER.md` - 快速解答常见问题
+- `FIXES_SUMMARY.md` - 完整的修复总结
+
+## 修改的文件
+- `README.md` - 添加突出的故障排除部分，NumPy 版本检查
+
+## 影响
+
+### 用户
+- 下个版本将不再出现 "dynamic module does not define" 错误
+- 提供清晰的文档帮助当前用户解决 NumPy 版本问题
+- 诊断工具帮助快速定位问题
+
+### 开发者  
+- 清晰的指南说明哪些文件应该 commit
+- 自动化清理脚本简化开发流程
+
+## 相关 Issue
+- 修复用户报告的导入错误（NumPy 版本不兼容 + Cython .c 文件问题）
+
+## 测试
+- [ ] 在新 conda 环境测试安装
+- [ ] 在 NumPy 1.x 环境测试（应提示升级）
+- [ ] 运行 diagnose.py 验证诊断功能
+- [ ] GitHub Actions 构建新 wheel
+

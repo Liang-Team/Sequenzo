@@ -1350,7 +1350,7 @@ if __name__ == '__main__':
     labels = ['further education', 'higher education', 'employment', 'joblessness', 'school', 'training']
 
     # TODO: write a try and error: if no such a parameter, then ask to pass the right ones
-    # sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", ids=df['country'].values, states=states)
+    # sequence_data = SequenceData(df, time=time, id_col="country", ids=df['country'].values, states=states)
 
     sequence_data = SequenceData(df,
                                  time=time_list,

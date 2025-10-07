@@ -641,7 +641,7 @@ if __name__ == '__main__':
     # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    # sequence_data = SequenceData(df, time=time_list, time_type="age", states=states, labels=labels, id_col="PID")
+    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
     # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)

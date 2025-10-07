@@ -190,7 +190,6 @@ def linked_polyadic_sequence_analysis(seqlist: List[SequenceData],
             seq_shuffled = SequenceData(
                 data=shuffled,
                 time=merged_seqdata.time,
-                time_type=merged_seqdata.time_type,
                 states=merged_seqdata.states,
                 labels=merged_seqdata.labels,
                 id_col="__id__"

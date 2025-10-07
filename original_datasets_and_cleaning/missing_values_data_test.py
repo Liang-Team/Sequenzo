@@ -28,11 +28,10 @@ time_list = list(df.columns)[1:]
 states = ['D1 (Very Low)', 'D10 (Very High)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9']
 
 # TODO: write a try and error: if no such a parameter, then ask to pass the right ones
-# sequence_data = SequenceData(df, time=time, time_type="year", id_col="country", ids=df['country'].values, states=states)
+# sequence_data = SequenceData(df, time=time, id_col="country", ids=df['country'].values, states=states)
 
 sequence_data = SequenceData(df,
                              time=time_list,
-                             time_type="year",
                              id_col="country",
                              states=states,
                              labels=states)
