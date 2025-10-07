@@ -32,6 +32,7 @@ Suggested command lines for developers:
 """
 from pathlib import Path
 from setuptools import setup, Extension
+from setuptools.command.install import install
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from Cython.Build import cythonize
 import pybind11
@@ -112,6 +113,88 @@ def get_mac_arch():
         return 'x86_64'
 
 
+def install_libomp_on_apple_silicon():
+    """
+    Automatically install libomp on Apple Silicon Macs if needed.
+    This function is called during setup to ensure OpenMP is available.
+    """
+    try:
+        # Import the OpenMP setup module
+        from sequenzo.openmp_setup import ensure_openmp_support
+        return ensure_openmp_support()
+    except ImportError:
+        # Fallback to basic check if the module is not available
+        import platform
+        
+        # Only run on macOS Apple Silicon
+        if sys.platform != 'darwin' or platform.machine() != 'arm64':
+            return True
+        
+        # Check if we're in a conda environment (don't interfere)
+        if os.environ.get('CONDA_DEFAULT_ENV'):
+            return True
+        
+        # Check if Homebrew is available
+        try:
+            subprocess.run(['brew', '--version'], 
+                          stdout=subprocess.DEVNULL, 
+                          stderr=subprocess.DEVNULL, 
+                          check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("""
+⚠️  OpenMP Dependency Detection
+
+On Apple Silicon Mac, Sequenzo requires OpenMP support for parallel computation.
+
+Please run the following command to install OpenMP support:
+    brew install libomp
+
+If you don't have Homebrew installed, please visit https://brew.sh to install Homebrew first.
+            """)
+            return False
+        
+        # Check if libomp is already installed
+        try:
+            subprocess.run(['brew', 'list', 'libomp'], 
+                          stdout=subprocess.DEVNULL, 
+                          stderr=subprocess.DEVNULL, 
+                          check=True)
+            print("[SETUP] ✅ libomp is already installed")
+            return True
+        except subprocess.CalledProcessError:
+            pass  # libomp not installed, continue with installation
+        
+        # Attempt to install libomp automatically
+        print("[SETUP] 🔧 Detected Apple Silicon Mac, auto-installing OpenMP support...")
+        try:
+            result = subprocess.run(['brew', 'install', 'libomp'], 
+                                  check=True, 
+                                  stdout=subprocess.PIPE, 
+                                  stderr=subprocess.PIPE)
+            print("[SETUP] ✅ OpenMP support installed successfully!")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"""
+[SETUP] ❌ Automatic OpenMP installation failed: {e}
+
+Please manually run the following command:
+    brew install libomp
+
+After installation, please re-run the installation command.
+            """)
+            return False
+        except Exception as e:
+            print(f"""
+[SETUP] ❌ Error during installation: {e}
+
+Please manually run the following command:
+    brew install libomp
+
+After installation, please re-run the installation command.
+            """)
+            return False
+
+
 def has_openmp_support():
     """
     Check if the current compiler supports OpenMP.
@@ -123,6 +206,13 @@ def has_openmp_support():
     if os.environ.get('SEQUENZO_ENABLE_OPENMP', '').strip().lower() in ('1', 'true', 'on', 'yes'):
         print("[SETUP] OpenMP force-enabled via SEQUENZO_ENABLE_OPENMP")
         return True
+    
+    # Auto-install libomp on Apple Silicon if needed
+    import platform
+    if sys.platform == 'darwin' and platform.machine() == 'arm64':
+        if not install_libomp_on_apple_silicon():
+            print("[SETUP] ⚠️  OpenMP dependency installation failed, will use serial version")
+            return False
     
     if getattr(has_openmp_support, "_checked", False):
         return has_openmp_support._result
@@ -393,8 +483,39 @@ os.makedirs("sequenzo/dissimilarity_measures/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/utils", exist_ok=True)
 
+# Custom install command to run post-installation setup
+class InstallCommand(install):
+    """Custom install command that runs post-installation setup."""
+    
+    def run(self):
+        # Run the standard install
+        super().run()
+        
+        # Run post-installation setup
+        try:
+            import subprocess
+            import sys
+            from pathlib import Path
+            
+            # Get the post-install script path
+            script_path = Path(__file__).parent / "scripts" / "post_install.py"
+            
+            if script_path.exists():
+                print("\n🔧 Running post-installation setup...")
+                subprocess.run([sys.executable, str(script_path)], check=True)
+            else:
+                print("⚠️  Post-installation script not found, skipping...")
+                
+        except Exception as e:
+            print(f"⚠️  Post-installation setup failed: {e}")
+            print("💡 You can manually run: python -m sequenzo.openmp_setup")
+
+
 # Run the actual setup process
 setup(
     ext_modules=configure_cpp_extension() + configure_cython_extensions(),
-    cmdclass={"build_ext": BuildExt},
+    cmdclass={
+        "build_ext": BuildExt,
+        "install": InstallCommand,
+    },
 )

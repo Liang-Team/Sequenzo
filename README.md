@@ -160,7 +160,7 @@ Check out our [contribution guide]() for more details (work in progress).
 If you're contributing or debugging, use:
 
 ```bash
-pip install -r requirements-3.10.txt  # Or matching your Python version
+pip install -r requirements/requirements-3.10.txt  # Or matching your Python version
 ```
     
 For standard installation, use:

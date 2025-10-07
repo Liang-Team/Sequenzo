@@ -4,13 +4,6 @@
 @Time    : 11/02/2025 16:41
 @Desc    : 
 """
-# sequenzo/sequenzo/__init__.py (Inside the inner sequenzo package)
-# This file is now needed for making the submodules accessible.
-
-# You *don't* need to handle the Rust extension here.
-# You can have package level docstring here.
-# No need for __all__ here, use relative import in the top-level __init__.py
-
 from .datasets import load_dataset, list_datasets
 
 # Import the core functions that should be directly available from the sequenzo package
@@ -209,3 +202,42 @@ __all__ = [
     # Keep old names for backward compatibility
     "seqsamm"
 ]
+
+# Auto-setup OpenMP on Apple Silicon (runs on import)
+def _setup_openmp_if_needed():
+    """
+    Automatically setup OpenMP dependencies on Apple Silicon Macs.
+    This function runs on import to ensure OpenMP is available.
+    """
+    import sys
+    import os
+    import platform
+    
+    # Only run on macOS
+    if sys.platform != 'darwin':
+        return
+    
+    # Only run on Apple Silicon
+    if platform.machine() != 'arm64':
+        return
+    
+    # Check if we're in a conda environment (don't interfere)
+    if os.environ.get('CONDA_DEFAULT_ENV'):
+        return
+    
+    # Try to import and run the OpenMP setup
+    try:
+        from .openmp_setup import ensure_openmp_support
+        ensure_openmp_support()
+    except ImportError:
+        # OpenMP setup module not available, skip
+        pass
+    except Exception:
+        # Any other error, skip silently
+        pass
+
+# Run the setup function
+_setup_openmp_if_needed()
+
+# Clean up the setup function from the module namespace
+del _setup_openmp_if_needed
