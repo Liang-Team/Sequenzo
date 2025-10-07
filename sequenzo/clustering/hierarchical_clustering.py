@@ -84,14 +84,16 @@ try:
     import rpy2.robjects as ro
     from rpy2.robjects.packages import importr, PackageNotInstalledError
     _RPY2_AVAILABLE = True
-except ImportError:
-    # Catch ImportError during rpy2 import/initialization
-    pass
+except Exception:
+    # Catch any error during rpy2 import/initialization (e.g., R not installed / R_HOME missing on Windows)
+    _RPY2_AVAILABLE = False
 
 if not _RPY2_AVAILABLE:
     print("[!] Warning: rpy2 not available or R not properly configured. Ward D clustering method will not be supported.")
-    print("    To use Ward D clustering, ensure R is installed and rpy2 is properly configured.")
-    print("    Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods.")
+    print("    To use Ward D: please install R and properly configure rpy2 (make sure `R --version` works).")
+    print("    use 'ward_d2', 'average', 'complete', or 'single' methods.")
+    print("    See CRAN: https://cloud.r-project.org.")
+    print("    Alternatively, use the 'ward_d2', 'average', 'complete', or 'single' method instead.")
 
 # Import C++ cluster quality functions
 try:
