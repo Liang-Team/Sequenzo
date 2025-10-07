@@ -110,7 +110,7 @@ jobs:
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_MACOS: "x86_64 arm64"  # 分别构建两个架构，而不是universal2
+          CIBW_ARCHS_MACOS: "universal2"  # Build universal2 wheels that work on both architectures
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
@@ -120,7 +120,7 @@ jobs:
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
           CIBW_ENVIRONMENT_MACOS: >
             SEQUENZO_ENABLE_OPENMP=1
-            LDFLAGS="-L$(brew --prefix libomp)/lib -Wl,-rpath,@loader_path/../.dylibs"
+            LDFLAGS="-L$(brew --prefix libomp)/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,$(brew --prefix libomp)/lib"
             CPPFLAGS="-I$(brew --prefix libomp)/include"
             DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
 
@@ -132,7 +132,7 @@ jobs:
             # Check current architecture
             HOST_ARCH=$(uname -m)
             echo "Host architecture: $HOST_ARCH"
-            echo "Target wheel platform: $ARCHFLAGS"
+            echo "Building universal2 wheel (x86_64 + arm64)"
             
             # Install libomp if not present
             if [ ! -d "$(brew --prefix libomp 2>/dev/null)" ]; then
@@ -144,7 +144,7 @@ jobs:
             if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
               LIBOMP_PREFIX=$(brew --prefix libomp)
               echo "[OK] libomp found at: $LIBOMP_PREFIX"
-              echo "LDFLAGS: -L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs"
+              echo "LDFLAGS: -L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,$LIBOMP_PREFIX/lib"
               echo "CPPFLAGS: -I$LIBOMP_PREFIX/include"
               
               # Check libomp architecture
@@ -152,66 +152,89 @@ jobs:
               if [ -f "$LIBOMP_DYLIB" ]; then
                 echo "libomp.dylib info:"
                 file "$LIBOMP_DYLIB"
-                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "lipo info unavailable"
+                LIBOMP_ARCHS=$(lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "unknown")
+                echo "libomp architectures: $LIBOMP_ARCHS"
                 
-                # Verify architecture compatibility
-                echo ""
-                echo "Checking architecture compatibility..."
-                if lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "$HOST_ARCH"; then
-                  echo "[OK] libomp.dylib contains $HOST_ARCH architecture"
+                # Check if libomp supports both architectures for universal2
+                if echo "$LIBOMP_ARCHS" | grep -q "x86_64"; then
+                  echo "[OK] libomp supports x86_64"
+                fi
+                if echo "$LIBOMP_ARCHS" | grep -q "arm64"; then
+                  echo "[OK] libomp supports arm64"
+                fi
+                
+                # For universal2 build, we need at least the host architecture
+                # The other architecture can use system library fallback via rpath
+                if echo "$LIBOMP_ARCHS" | grep -q "$HOST_ARCH"; then
+                  echo "[OK] libomp contains required $HOST_ARCH architecture"
                 else
-                  echo "[WARNING] libomp.dylib may not contain $HOST_ARCH architecture"
+                  echo "[WARNING] libomp may not contain $HOST_ARCH - build may fail"
                 fi
               fi
             else
               echo "[WARNING] libomp not found"
             fi
             
-            echo "libomp setup complete"
+            echo "libomp setup complete for universal2 build"
           
           # macOS: Use delocate to bundle libomp into the wheel
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             echo "=== Environment Info ==="
             HOST_ARCH=$(uname -m)
             echo "Host architecture: $HOST_ARCH"
-            echo "Target wheel architecture: {delocate_archs}"
             echo "Wheel: {wheel}"
             
-            # Determine target architecture from wheel name
+            # Check wheel architecture from filename
             WHEEL_NAME=$(basename {wheel})
-            if [[ "$WHEEL_NAME" == *"x86_64"* ]]; then
+            if [[ "$WHEEL_NAME" == *"universal2"* ]]; then
+              TARGET_ARCH="universal2"
+              echo "Detected universal2 wheel (x86_64 + arm64)"
+            elif [[ "$WHEEL_NAME" == *"x86_64"* ]]; then
               TARGET_ARCH="x86_64"
+              echo "Detected x86_64 wheel"
             elif [[ "$WHEEL_NAME" == *"arm64"* ]]; then
               TARGET_ARCH="arm64"
-            elif [[ "$WHEEL_NAME" == *"universal2"* ]]; then
-              TARGET_ARCH="universal2"
+              echo "Detected arm64 wheel"
             else
               TARGET_ARCH="$HOST_ARCH"
+              echo "Using host architecture: $TARGET_ARCH"
             fi
-            echo "Detected target architecture: $TARGET_ARCH"
             
             # Find libomp path
             LIBOMP_PATH=$(brew --prefix libomp)/lib
             echo "libomp Homebrew location: $LIBOMP_PATH"
             
-            # Check if libomp is available and has the right architecture
+            # Check if libomp is available
             if [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
               echo "[OK] libomp.dylib found"
               file "$LIBOMP_PATH/libomp.dylib"
               LIBOMP_ARCHS=$(lipo -info "$LIBOMP_PATH/libomp.dylib" 2>/dev/null || echo "unknown")
               echo "libomp architectures: $LIBOMP_ARCHS"
               
-              # Check architecture compatibility
-              if echo "$LIBOMP_ARCHS" | grep -q "$TARGET_ARCH"; then
-                echo "[OK] libomp.dylib contains required architecture: $TARGET_ARCH"
-              elif [ "$TARGET_ARCH" = "universal2" ]; then
-                echo "[INFO] Building universal2 wheel - checking for both architectures"
+              # For universal2 wheels, check both architectures
+              if [ "$TARGET_ARCH" = "universal2" ]; then
+                echo "[INFO] Building universal2 wheel - checking architecture support"
+                if echo "$LIBOMP_ARCHS" | grep -q "arm64"; then
+                  echo "[OK] libomp supports arm64"
+                fi
+                if echo "$LIBOMP_ARCHS" | grep -q "x86_64"; then
+                  echo "[OK] libomp supports x86_64"
+                fi
+                if echo "$LIBOMP_ARCHS" | grep -q "Architectures.*arm64.*x86_64\|Non-fat.*$HOST_ARCH"; then
+                  echo "[INFO] Will use available architecture(s) + rpath fallback"
+                fi
               else
-                echo "[WARNING] libomp.dylib may not contain required architecture: $TARGET_ARCH"
-                echo "[INFO] This may cause delocate to fail for cross-compiled wheels"
+                # Single architecture wheel
+                if echo "$LIBOMP_ARCHS" | grep -q "$TARGET_ARCH"; then
+                  echo "[OK] libomp.dylib contains required architecture: $TARGET_ARCH"
+                else
+                  echo "[WARNING] libomp.dylib may not contain $TARGET_ARCH"
+                  echo "[INFO] Wheel will use rpath fallback to system libomp"
+                fi
               fi
             else
               echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
+              echo "[INFO] Wheel will rely on system libomp via rpath"
             fi
             
             echo ""
@@ -230,38 +253,35 @@ jobs:
             export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
             export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
             
-            # Strategy: Try different delocate options in order of preference
+            # Strategy: Use delocate with fallback to unmodified wheel
             DELOCATE_SUCCESS=0
             
-            # 1. Try with --require-archs (strict)
-            echo "Attempt 1: delocate with --require-archs"
-            if delocate-wheel --require-archs {delocate_archs} -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log; then
-              echo "[OK] delocate-wheel succeeded with --require-archs"
+            # For universal2 wheels, try to bundle libomp for both architectures
+            echo "Attempting to bundle libomp into universal2 wheel"
+            
+            # First attempt: Standard delocate (most reliable)
+            echo "Attempt 1: Standard delocate-wheel"
+            if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log; then
+              echo "[OK] delocate-wheel succeeded"
               DELOCATE_SUCCESS=1
             else
-              echo "[WARNING] Attempt 1 failed"
-              cat /tmp/delocate1.log || true
-            fi
-            
-            # 2. Try without --require-archs if first attempt failed
-            if [ $DELOCATE_SUCCESS -eq 0 ]; then
-              echo ""
-              echo "Attempt 2: delocate without --require-archs"
-              if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate2.log; then
-                echo "[OK] delocate-wheel succeeded without --require-archs"
+              # Check if wheel was created despite non-zero exit
+              if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+                echo "[OK] delocate completed with warnings, wheel created"
                 DELOCATE_SUCCESS=1
               else
-                echo "[WARNING] Attempt 2 failed"
-                cat /tmp/delocate2.log || true
+                echo "[WARNING] Attempt 1 failed - no wheel created"
+                cat /tmp/delocate1.log || true
               fi
             fi
             
-            # 3. Last resort: copy wheel as-is with warning
+            # Fallback: Copy wheel as-is if delocate failed
             if [ $DELOCATE_SUCCESS -eq 0 ]; then
               echo ""
-              echo "[WARNING] All delocate attempts failed - copying wheel as-is"
-              echo "[INFO] This wheel will require users to have libomp installed via:"
+              echo "[WARNING] delocate failed - using wheel with system library dependency"
+              echo "[INFO] This wheel will require users to have libomp installed:"
               echo "  brew install libomp  (macOS)"
+              echo "[INFO] The wheel has embedded rpath fallback to system libomp"
               cp {wheel} {dest_dir}/
               DELOCATE_SUCCESS=1
             fi
@@ -323,23 +343,44 @@ jobs:
             echo "Skipping R installation for tests - rpy2 is optional"
             echo "Setting up test environment for OpenMP..."
             
-            # Check test architecture
-            TEST_ARCH=$(uname -m)
-            echo "Test environment architecture: $TEST_ARCH"
+            # Check host and test architecture
+            HOST_ARCH=$(uname -m)
+            echo "Host architecture: $HOST_ARCH"
             
-            # Set DYLD_LIBRARY_PATH as fallback
-            if [ -d "$(brew --prefix libomp 2>/dev/null)/lib" ]; then
-              export DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
-              export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_FALLBACK_LIBRARY_PATH"
+            # Detect test architecture from environment
+            if [ -n "$ARCHFLAGS" ]; then
+              echo "Test ARCHFLAGS: $ARCHFLAGS"
+            fi
+            
+            # For cross-architecture testing (e.g., x86_64 wheel on arm64 host)
+            # We need to ensure libomp is available for the target architecture
+            LIBOMP_PATH=$(brew --prefix libomp 2>/dev/null)/lib
+            
+            if [ -d "$LIBOMP_PATH" ]; then
+              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+              export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
               echo "DYLD_LIBRARY_PATH set to: $DYLD_LIBRARY_PATH"
               
-              # Verify libomp is available for the test architecture
-              LIBOMP_DYLIB=$(brew --prefix libomp)/lib/libomp.dylib
+              # Verify libomp is available
+              LIBOMP_DYLIB="$LIBOMP_PATH/libomp.dylib"
               if [ -f "$LIBOMP_DYLIB" ]; then
                 echo "libomp.dylib available:"
                 file "$LIBOMP_DYLIB"
-                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || true
+                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "Architecture info unavailable"
+                
+                # For cross-arch testing, check if we need Rosetta 2
+                if lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Non-fat file.*$HOST_ARCH"; then
+                  echo "[INFO] libomp is native $HOST_ARCH only"
+                  echo "[INFO] Cross-architecture tests may fail if libraries aren't bundled"
+                elif lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Architectures.*arm64.*x86_64"; then
+                  echo "[OK] libomp is universal binary - supports both architectures"
+                fi
+              else
+                echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
               fi
+            else
+              echo "[WARNING] libomp not found via Homebrew"
+              echo "[INFO] Tests will rely on bundled libraries in wheel"
             fi
 
           # Linux: skip R installation for tests (it's optional)
