@@ -1,8 +1,6 @@
+# cython: np_import_array=True
 import numpy as np
 cimport numpy as cnp
-
-# Initialize NumPy C API
-cnp.import_array()
 
 from libc.stdint cimport int32_t
 from libc.string cimport strcmp

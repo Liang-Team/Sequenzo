@@ -1,9 +1,6 @@
-# cython: boundscheck=False, wraparound=False
+# cython: boundscheck=False, wraparound=False, np_import_array=True
 import numpy as np
 cimport numpy as cnp
-
-# Initialize NumPy C API
-cnp.import_array()
 
 import pandas as pd
 from libc.math cimport isnan

@@ -1,8 +1,6 @@
+# cython: np_import_array=True
 import numpy as np
 cimport numpy as cnp
-
-# Initialize NumPy C API
-cnp.import_array()
 
 from sequenzo.define_sequence_data import SequenceData
 from libc.stdint cimport int32_t

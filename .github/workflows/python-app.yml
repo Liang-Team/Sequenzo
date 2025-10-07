@@ -115,17 +115,39 @@ jobs:
 
           # Environment variables
           CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
-          CIBW_ENVIRONMENT_MACOS: SEQUENZO_ENABLE_OPENMP=1
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
+          
+          # macOS: Set OpenMP environment with proper library paths
+          CIBW_ENVIRONMENT_MACOS: >
+            SEQUENZO_ENABLE_OPENMP=1
+            LDFLAGS="-L$(brew --prefix libomp)/lib -Wl,-rpath,$(brew --prefix libomp)/lib"
+            CPPFLAGS="-I$(brew --prefix libomp)/include"
+            DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
 
-          # macOS: ensure libomp is available for current architecture
+          # macOS: ensure libomp is available and properly linked
           CIBW_BEFORE_BUILD_MACOS: |
             echo "Installing build dependencies for macOS"
             python -m pip install --upgrade pip
             # Check current architecture
             CURRENT_ARCH=$(uname -m)
             echo "Current architecture: $CURRENT_ARCH"
+            
+            # Verify libomp is installed (should be from host)
+            if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
+              echo "✓ libomp found at: $(brew --prefix libomp)"
+              echo "LDFLAGS: -L$(brew --prefix libomp)/lib"
+              echo "CPPFLAGS: -I$(brew --prefix libomp)/include"
+            else
+              echo "⚠ Warning: libomp not found, attempting to install..."
+              brew install libomp || echo "Failed to install libomp"
+            fi
+            
             echo "libomp setup complete"
+          
+          # macOS: Use delocate to bundle libomp into the wheel
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
+            DYLD_LIBRARY_PATH=$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH
+            delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
           CIBW_BEFORE_BUILD_LINUX: |

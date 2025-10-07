@@ -1,8 +1,6 @@
+# cython: np_import_array=True
 import numpy as np
 cimport numpy as cnp
-
-# Initialize NumPy C API
-np.import_array()
 
 def get_weighted_diss(cnp.ndarray[double, ndim=2] diss,
                       cnp.ndarray[double, ndim=1] weights):
