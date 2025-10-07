@@ -183,6 +183,10 @@ jobs:
             HOST_ARCH=$(uname -m)
             echo "Host architecture: $HOST_ARCH"
             echo "Wheel: {wheel}"
+            echo "Destination: {dest_dir}"
+            
+            # Ensure destination directory exists
+            mkdir -p {dest_dir}
             
             # Check wheel architecture from filename
             WHEEL_NAME=$(basename {wheel})
@@ -253,24 +257,43 @@ jobs:
             export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
             export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
             
+            # Verify wheel exists
+            if [ ! -f {wheel} ]; then
+              echo "[ERROR] Source wheel not found: {wheel}"
+              exit 1
+            fi
+            
+            echo "[OK] Source wheel exists: {wheel}"
+            ls -lh {wheel}
+            
             # Strategy: Use delocate with fallback to unmodified wheel
             DELOCATE_SUCCESS=0
             
             # For universal2 wheels, try to bundle libomp for both architectures
-            echo "Attempting to bundle libomp into universal2 wheel"
+            echo "Attempting to bundle libomp into wheel"
+            echo "Command: delocate-wheel -L $LIBOMP_PATH -w {dest_dir} -v {wheel}"
             
             # First attempt: Standard delocate (most reliable)
             echo "Attempt 1: Standard delocate-wheel"
-            if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log; then
+            set +e  # Don't exit on error
+            delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log
+            DELOCATE_EXIT=$?
+            set -e  # Re-enable exit on error
+            
+            echo "delocate-wheel exit code: $DELOCATE_EXIT"
+            
+            if [ $DELOCATE_EXIT -eq 0 ]; then
               echo "[OK] delocate-wheel succeeded"
               DELOCATE_SUCCESS=1
             else
+              echo "[WARNING] delocate-wheel returned non-zero exit code: $DELOCATE_EXIT"
               # Check if wheel was created despite non-zero exit
               if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-                echo "[OK] delocate completed with warnings, wheel created"
+                echo "[OK] Wheel was created despite non-zero exit code"
                 DELOCATE_SUCCESS=1
               else
-                echo "[WARNING] Attempt 1 failed - no wheel created"
+                echo "[WARNING] No wheel found in {dest_dir}/"
+                echo "delocate-wheel output:"
                 cat /tmp/delocate1.log || true
               fi
             fi
@@ -282,8 +305,18 @@ jobs:
               echo "[INFO] This wheel will require users to have libomp installed:"
               echo "  brew install libomp  (macOS)"
               echo "[INFO] The wheel has embedded rpath fallback to system libomp"
-              cp {wheel} {dest_dir}/
-              DELOCATE_SUCCESS=1
+              
+              # Ensure destination directory exists
+              mkdir -p {dest_dir}
+              
+              # Copy with verbose output
+              if cp -v {wheel} {dest_dir}/; then
+                echo "[OK] Wheel copied successfully to {dest_dir}/"
+                DELOCATE_SUCCESS=1
+              else
+                echo "[ERROR] Failed to copy wheel to {dest_dir}/"
+                exit 1
+              fi
             fi
             
             echo ""
