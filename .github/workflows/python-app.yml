@@ -21,6 +21,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.9', '3.10', '3.11', '3.12']
+        include:
+          - python-version: '3.9'
+            python-version-nodot: '39'
+          - python-version: '3.10'
+            python-version-nodot: '310'
+          - python-version: '3.11'
+            python-version-nodot: '311'
+          - python-version: '3.12'
+            python-version-nodot: '312'
 
     steps:
       - name: Checkout source with submodules
@@ -101,7 +110,7 @@ jobs:
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
-          CIBW_BUILD: "cp${{ matrix.python-version | replace('.', '') }}-*"  # 只构建当前 Python 版本的轮子 (e.g., cp39-*, cp310-*)
+          CIBW_BUILD: "cp${{ matrix.python-version-nodot }}-*"  # 只构建当前 Python 版本的轮子 (e.g., cp39-*, cp310-*)
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
