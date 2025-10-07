@@ -4,10 +4,9 @@ requires = [
     "wheel>=0.40.0",
     "pybind11>=2.10.0",
     "cython>=0.29.21",
-    # Use oldest-supported-numpy for build to ensure forward compatibility
-    # This avoids the "numpy.core.multiarray failed to import" error
-    "oldest-supported-numpy; python_version < '3.12'",
-    "numpy>=1.26.0; python_version >= '3.12'"
+    # Use NumPy 2.x for building to ensure ABI compatibility with runtime
+    # NumPy 2.x is backward compatible with code written for NumPy 1.x
+    "numpy>=2.0.0"
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
@@ -34,9 +33,9 @@ classifiers = [
 ]
 version = "0.1.21"
 dependencies = [
-    # Runtime numpy - allow broad version range for compatibility
-    # Users can use any numpy version compatible with their Python
-    "numpy>=1.21.0",
+    # Runtime numpy - using 2.x for ABI compatibility with built extensions
+    # NumPy 2.x is backward compatible with code written for NumPy 1.x
+    "numpy>=2.0.0",
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
@@ -46,12 +45,6 @@ dependencies = [
     "scipy>=1.6.3",
     "scikit-learn>=0.24.2",
     "fastcluster>=1.2.6",
-    # rpy2 is required at runtime for Ward D via R fastcluster.
-    # Use PEP 508 markers to select versions per Python runtime.
-    "rpy2>=3.5.12; python_version >= '3.12'",
-    "rpy2>=3.5.6; python_version == '3.11'",
-    "rpy2>=3.5.6; python_version == '3.10'",
-    "rpy2>=3.5.6; python_version == '3.9'",
     "joblib>=1.0.1",
     "docutils>=0.17",
     "tqdm>=4.62.3,<5.0.0",
@@ -60,6 +53,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# R integration - optional for hierarchical clustering with R's fastcluster
+r = [
+    "rpy2>=3.5.12; python_version >= '3.12'",
+    "rpy2>=3.5.6; python_version == '3.11'",
+    "rpy2>=3.5.6; python_version == '3.10'",
+    "rpy2>=3.5.6; python_version == '3.9'",
+]
 dev = [
     "pytest>=6.2.5",
     "flake8>=3.9.2"

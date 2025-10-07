@@ -113,9 +113,9 @@ pip3 install sequenzo
 
 ### ⚠️ Having Installation or Import Issues?
 
-**Error:** `ImportError: numpy.core.multiarray failed to import`
+**Error:** `ImportError: numpy.core.multiarray failed to import` or `ValueError: numpy.dtype size changed`
 
-**Most likely cause:** NumPy version mismatch (you have NumPy 1.x, but need 2.x)
+**Cause:** NumPy version incompatibility. Sequenzo 0.1.21+ requires NumPy 2.x.
 
 **Quick Fix** (copy-paste these commands):
 ```bash
@@ -127,6 +127,8 @@ pip install --upgrade "numpy>=2.0.0"
 pip uninstall sequenzo -y
 pip install --no-cache-dir sequenzo
 ```
+
+**Note:** NumPy 2.x is backward compatible with code written for NumPy 1.x, so upgrading is safe.
 
 📖 **Still having issues?** 
 1. Run our diagnostic tool to identify the problem:

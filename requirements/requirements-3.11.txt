@@ -1,4 +1,4 @@
-numpy>=1.23.0,<2.0.0  # Python 3.11 requires numpy >= 1.23, compatible with extensions
+numpy>=2.0.0  # NumPy 2.x required for ABI compatibility with compiled extensions
 pandas==1.5.3  # Compatible with Python 3.11
 scipy==1.10.1  # Compatible with fastcluster 1.2.x
 matplotlib==3.6.3  # Version compatible with Python 3.11
@@ -12,5 +12,6 @@ cython>=0.29.21
 docutils>=0.17
 missingno>=0.5.2,<0.6.0
 tqdm>=4.62.3,<5.0.0
-rpy2==3.5.6
+# rpy2 is now optional - install with: pip install sequenzo[r]
+# rpy2==3.5.6
 cffi>=1.15.0  # Required for C extensions and FFI functionality

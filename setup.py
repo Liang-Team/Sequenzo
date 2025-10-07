@@ -86,8 +86,16 @@ def get_mac_arch():
     Returns:
         str or list: Architecture string(s) for compilation
     """
+    # Cache the result to avoid repeated detection
+    if hasattr(get_mac_arch, '_cached_result'):
+        return get_mac_arch._cached_result
+    
+    print("[SETUP] === Detecting macOS architecture ===")
+    
     # Check for user-specified architecture flags
     archflags = os.environ.get('ARCHFLAGS', '').strip()
+    print(f"[SETUP] ARCHFLAGS environment variable: '{archflags}'")
+    
     if archflags:
         # Parse ARCHFLAGS like "-arch x86_64 -arch arm64"
         archs = []
@@ -96,22 +104,28 @@ def get_mac_arch():
             if part == '-arch' and i + 1 < len(parts):
                 archs.append(parts[i + 1])
         if archs:
-            print(f"[SETUP] Using ARCHFLAGS architectures: {archs}")
+            print(f"[SETUP] ✓ Using ARCHFLAGS architectures: {archs}")
+            get_mac_arch._cached_result = archs
             return archs
+        else:
+            print(f"[SETUP] Warning: ARCHFLAGS set but no architectures found")
     
     # Check for project-specific override
     project_arch = os.environ.get('SEQUENZO_ARCH', '').strip()
     if project_arch:
-        print(f"[SETUP] Using SEQUENZO_ARCH: {project_arch}")
+        print(f"[SETUP] ✓ Using SEQUENZO_ARCH: {project_arch}")
+        get_mac_arch._cached_result = project_arch
         return project_arch
     
     # Default: detect current hardware
     try:
         hardware_arch = subprocess.check_output(['uname', '-m']).decode().strip()
-        print(f"[SETUP] Using hardware architecture: {hardware_arch}")
+        print(f"[SETUP] ✓ Using hardware architecture: {hardware_arch}")
+        get_mac_arch._cached_result = hardware_arch
         return hardware_arch
     except Exception:
         print("[SETUP] Warning: Could not detect architecture, defaulting to x86_64")
+        get_mac_arch._cached_result = 'x86_64'
         return 'x86_64'
 
 
@@ -356,9 +370,12 @@ def get_compile_args_for_file(filename):
             for a in arch:
                 if a in ('x86_64', 'arm64'):
                     arch_flags.extend(['-arch', a])
+            print(f"[SETUP] Compiling for universal2: {arch}")
+            print(f"[SETUP] Architecture flags: {arch_flags}")
         elif isinstance(arch, str) and arch in ('x86_64', 'arm64'):
             # Single architecture
             arch_flags = ['-arch', arch]
+            print(f"[SETUP] Compiling for single architecture: {arch}")
         else:
             # Unknown or unsupported architecture
             arch_flags = []
@@ -405,14 +422,31 @@ def get_clustering_include_dirs():
 
 def get_link_args():
     """获取平台特定的链接参数"""
+    link_args = []
+    
     if has_openmp_support():
         if sys.platform == 'darwin':
-            return ['-lomp']
+            link_args.append('-lomp')
         elif sys.platform == 'win32':
-            return []  # Windows MSVC自动链接
+            pass  # Windows MSVC自动链接
         else:
-            return ['-lgomp']
-    return []
+            link_args.append('-lgomp')
+    
+    # Add architecture flags for macOS universal2 builds
+    if sys.platform == 'darwin':
+        arch = get_mac_arch()
+        if isinstance(arch, list):
+            # Multiple architectures (Universal Binary)
+            for a in arch:
+                if a in ('x86_64', 'arm64'):
+                    link_args.extend(['-arch', a])
+            print(f"[SETUP] Link args for universal2: {link_args}")
+        elif isinstance(arch, str) and arch in ('x86_64', 'arm64'):
+            # Single architecture
+            link_args.extend(['-arch', arch])
+            print(f"[SETUP] Link args for {arch}: {link_args}")
+    
+    return link_args
 
 def configure_cpp_extension():
     """
@@ -475,6 +509,9 @@ def configure_cython_extensions():
             Path("sequenzo/big_data/clara/utils/get_weighted_diss.pyx").as_posix(),
         ]
 
+        # Get link args for architecture support
+        link_args = get_link_args()
+
         extensions = []
         for path in pyx_paths:
             extra_args = get_compile_args_for_file(path)
@@ -483,6 +520,7 @@ def configure_cython_extensions():
                 sources=[path],
                 include_dirs=get_dissimilarity_measures_include_dirs(),
                 extra_compile_args=extra_args,
+                extra_link_args=link_args,
                 define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
             )
             extensions.append(extension)
