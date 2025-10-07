@@ -77,7 +77,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --only-binary=all "numpy<2.5" || pip install "numpy<2.5"
+          # Use oldest-supported-numpy for builds to ensure forward compatibility
+          pip install oldest-supported-numpy || pip install "numpy>=1.21.0"
           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
           pip install --prefer-binary Cython pybind11 build "cibuildwheel==2.23.3" twine
           pip install --prefer-binary rpy2 || echo "rpy2 fallback attempted"
@@ -100,6 +101,7 @@ jobs:
         if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
+          CIBW_BUILD: "cp${{ matrix.python-version | replace('.', '') }}-*"  # 只构建当前 Python 版本的轮子 (e.g., cp39-*, cp310-*)
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
@@ -275,10 +277,12 @@ jobs:
           import sys
           import os
           
-          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and 'cp${{ matrix.python-version }}' in f.replace('.', '')]
+          # 精确匹配当前 Python 版本的轮子 (e.g., cp39, cp310)
+          py_tag = 'cp${{ matrix.python-version }}'.replace('.', '')
+          wheel_files = [f for f in os.listdir('dist') if f.endswith('.whl') and py_tag in f]
           if wheel_files:
               wheel_file = wheel_files[0]
-              print(f'Installing wheel: {wheel_file}')
+              print(f'Installing wheel: {wheel_file} (Python tag: {py_tag})')
               subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', f'dist/{wheel_file}'], check=True)
               
               import sequenzo

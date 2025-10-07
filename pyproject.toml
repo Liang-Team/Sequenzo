@@ -4,7 +4,10 @@ requires = [
     "wheel>=0.40.0",
     "pybind11>=2.10.0",
     "cython>=0.29.21",
-    "numpy>=1.19.5,<2.5"
+    # Use oldest-supported-numpy for build to ensure forward compatibility
+    # This avoids the "numpy.core.multiarray failed to import" error
+    "oldest-supported-numpy; python_version < '3.12'",
+    "numpy>=1.26.0; python_version >= '3.12'"
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
@@ -29,9 +32,11 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
-    "numpy>=1.19.5,<2.5",
+    # Runtime numpy - allow broad version range for compatibility
+    # Users can use any numpy version compatible with their Python
+    "numpy>=1.21.0",
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",

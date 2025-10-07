@@ -432,8 +432,8 @@ def configure_cpp_extension():
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,
             language='c++',
-            define_macros=[('VERSION_INFO', '"0.0.1"'),
-                           ('NPY_NO_DEPRECATED_API', 'NPY_1_23_API_VERSION')],
+            define_macros=[('VERSION_INFO', '"0.1.21"'),
+                           ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
@@ -445,8 +445,8 @@ def configure_cpp_extension():
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,
             language='c++',
-            define_macros=[('VERSION_INFO', '"0.0.1"'),
-                           ('NPY_NO_DEPRECATED_API', 'NPY_1_23_API_VERSION')],
+            define_macros=[('VERSION_INFO', '"0.1.21"'),
+                           ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
         )
         print("  - Clustering C++ extension configured successfully.")
 
@@ -483,7 +483,7 @@ def configure_cython_extensions():
                 sources=[path],
                 include_dirs=get_dissimilarity_measures_include_dirs(),
                 extra_compile_args=extra_args,
-                define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_23_API_VERSION')]
+                define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
             )
             extensions.append(extension)
         print(f"Found {len(extensions)} Cython modules.")

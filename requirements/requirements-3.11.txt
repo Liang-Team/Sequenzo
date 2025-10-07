@@ -1,4 +1,4 @@
-numpy==1.26.4  # Python 3.11 requires numpy >= 1.23
+numpy>=1.23.0,<2.0.0  # Python 3.11 requires numpy >= 1.23, compatible with extensions
 pandas==1.5.3  # Compatible with Python 3.11
 scipy==1.10.1  # Compatible with fastcluster 1.2.x
 matplotlib==3.6.3  # Version compatible with Python 3.11

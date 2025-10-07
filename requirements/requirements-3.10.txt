@@ -1,4 +1,4 @@
-numpy==1.22.4
+numpy>=1.21.0,<2.0.0  # Compatible with compiled extensions
 pandas==1.4.2
 scipy==1.8.0
 matplotlib==3.5.2
