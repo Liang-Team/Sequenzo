@@ -462,8 +462,17 @@ class SequenceData:
 
     def plot_legend(self, save_as=None, dpi=200):
         """Displays the saved legend for sequence state colors."""
+        # Ensure legend handles exist even if get_legend() wasn't called
+        legend_handles = getattr(self, "legend_handles", None)
+        if not legend_handles:
+            legend_handles = [
+                plt.Rectangle((0, 0), 1, 1, color=self.color_map[i + 1], label=self.labels[i]
+                              ) for i in range(len(self.states))
+            ]
+            self.legend_handles = legend_handles
+
         fig, ax = plt.subplots(figsize=(2, 2))
-        ax.legend(handles=self.legend_handles, loc='center', title="States", fontsize=10)
+        ax.legend(handles=legend_handles, loc='center', title="States", fontsize=10)
         ax.axis('off')
 
         if save_as:
