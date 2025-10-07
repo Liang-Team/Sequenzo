@@ -64,46 +64,6 @@ import pandas as pd
 
 from sequenzo.define_sequence_data import SequenceData
 
-# 兼容 Windows 对 API 和 ABI 模式
-import glob
-import os
-import sys
-import cffi
-
-ffi = cffi.FFI()
-if sys.platform.startswith("win"):
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
-else:
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
-if not files:
-    raise FileNotFoundError("No compiled library found")
-lib_file = files[0]
-class _suppress_fd_stderr:
-    def __enter__(self):
-        self._null = open(os.devnull, 'w')
-        self._stderr_fd = sys.stderr.fileno()
-        self._saved_fd = os.dup(self._stderr_fd)
-        os.dup2(self._null.fileno(), self._stderr_fd)
-        return self
-    def __exit__(self, exc_type, exc, tb):
-        try:
-            os.dup2(self._saved_fd, self._stderr_fd)
-        finally:
-            os.close(self._saved_fd)
-            self._null.close()
-
-try:
-    # 使用 FD 级别重定向，抑制底层 loader/cffi 的 stderr 输出
-    with _suppress_fd_stderr():
-        lib = ffi.dlopen(lib_file)
-except Exception as e:
-    # Windows 下某些情况下仅打印信息而不抛 ImportError，这里放宽捕获并在静默环境下重试
-    if sys.platform.startswith("win"):
-        with _suppress_fd_stderr():
-            lib = ffi.dlopen(lib_file)
-    else:
-        raise
-
 with_missing_warned = False
 
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,

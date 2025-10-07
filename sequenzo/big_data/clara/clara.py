@@ -23,48 +23,6 @@ from sequenzo.big_data.clara.utils.get_weighted_diss import *
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
-# 兼容 Windows 对 API 和 ABI 模式
-import glob
-import os
-import sys
-import cffi
-
-ffi = cffi.FFI()
-if sys.platform.startswith("win"):
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
-    # Also check utils subdirectory
-    files.extend(glob.glob(os.path.join(os.path.dirname(__file__), "utils", "*.pyd")))
-else:
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
-    # Also check utils subdirectory
-    files.extend(glob.glob(os.path.join(os.path.dirname(__file__), "utils", "*.so")))
-if not files:
-    raise FileNotFoundError("No compiled library found")
-lib_file = files[0]
-class _suppress_fd_stderr:
-    def __enter__(self):
-        self._null = open(os.devnull, 'w')
-        self._stderr_fd = sys.stderr.fileno()
-        self._saved_fd = os.dup(self._stderr_fd)
-        os.dup2(self._null.fileno(), self._stderr_fd)
-        return self
-    def __exit__(self, exc_type, exc, tb):
-        try:
-            os.dup2(self._saved_fd, self._stderr_fd)
-        finally:
-            os.close(self._saved_fd)
-            self._null.close()
-
-try:
-    with _suppress_fd_stderr():
-        lib = ffi.dlopen(lib_file)
-except Exception as e:
-    if sys.platform.startswith("win"):
-        with _suppress_fd_stderr():
-            lib = ffi.dlopen(lib_file)
-    else:
-        raise
-
 
 def adjustedRandIndex(x, y=None):
     if isinstance(x, np.ndarray):

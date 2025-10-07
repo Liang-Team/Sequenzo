@@ -101,9 +101,6 @@ from .with_event_history_analysis import (
     seqsamm
 )
 
-import warnings
-warnings.filterwarnings("ignore", message='On Windows, cffi mode "ANY" is only "ABI".')
-
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
