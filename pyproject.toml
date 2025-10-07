@@ -29,7 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
     "numpy>=1.19.5,<2.5",
     "pandas>=1.2.5",
@@ -72,17 +72,13 @@ include-package-data = true
 "sequenzo.dissimilarity_measures" = [
   "src/**/*.cpp",
   "src/**/*.h", 
-  "src/**/*.hpp",
-  "utils/*.c"
+  "src/**/*.hpp"
 ]
 "sequenzo.clustering" = [
   "src/**/*.cpp",
-  "src/**/*.h",
-  "utils/*.c"
+  "src/**/*.h"
 ]
-"sequenzo.big_data.clara" = [
-  "utils/*.c"
-]
+# Note: .c files are auto-generated from .pyx during build via Cython
 
 
 [tool.setuptools.packages.find]

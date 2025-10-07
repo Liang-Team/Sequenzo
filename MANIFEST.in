@@ -11,10 +11,8 @@ recursive-include sequenzo/clustering/src *.cpp
 recursive-include sequenzo/clustering/src *.h
 recursive-include sequenzo/clustering/src *.hpp
 
-# Include all C source files
-recursive-include sequenzo/dissimilarity_measures/utils *.c
-recursive-include sequenzo/clustering/utils *.c
-recursive-include sequenzo/big_data/clara/utils *.c
+# Note: .c files are auto-generated from .pyx during build, so we don't include them here
+# Only .pyx source files are needed for distribution
 
 # Include all header files and external libraries
 recursive-include sequenzo/dissimilarity_measures/src/xsimd/include *.hpp
