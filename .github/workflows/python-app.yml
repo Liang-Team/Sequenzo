@@ -118,9 +118,10 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
           
           # macOS: Set OpenMP environment with proper library paths
+          # Note: Don't set -Wl,-rpath here; let delocate handle it
           CIBW_ENVIRONMENT_MACOS: >
             SEQUENZO_ENABLE_OPENMP=1
-            LDFLAGS="-L$(brew --prefix libomp)/lib -Wl,-rpath,$(brew --prefix libomp)/lib"
+            LDFLAGS="-L$(brew --prefix libomp)/lib"
             CPPFLAGS="-I$(brew --prefix libomp)/include"
             DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
 
@@ -140,7 +141,7 @@ jobs:
             
             # Verify libomp is installed
             if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
-              echo "✓ libomp found at: $(brew --prefix libomp)"
+              echo "[OK] libomp found at: $(brew --prefix libomp)"
               echo "LDFLAGS: -L$(brew --prefix libomp)/lib"
               echo "CPPFLAGS: -I$(brew --prefix libomp)/include"
               
@@ -152,7 +153,7 @@ jobs:
                 lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "lipo failed"
               fi
             else
-              echo "⚠ Warning: libomp not found"
+              echo "[WARNING] libomp not found"
             fi
             
             echo "libomp setup complete"
@@ -170,12 +171,20 @@ jobs:
             echo "libomp location: $LIBOMP_PATH"
             
             if [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
+              echo "[OK] libomp.dylib found"
               file "$LIBOMP_PATH/libomp.dylib"
-              LIBOMP_ARCH=$(lipo -info "$LIBOMP_PATH/libomp.dylib" 2>/dev/null | grep -o "x86_64\|arm64" || echo "unknown")
-              echo "libomp architecture: $LIBOMP_ARCH"
+              lipo -info "$LIBOMP_PATH/libomp.dylib" 2>/dev/null || echo "lipo failed"
             else
-              echo "Warning: libomp.dylib not found"
+              echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
             fi
+            
+            echo ""
+            echo "=== Inspecting wheel .so files before repair ==="
+            # Extract and check .so files
+            TEMP_EXTRACT=$(mktemp -d)
+            unzip -q {wheel} -d "$TEMP_EXTRACT"
+            find "$TEMP_EXTRACT" -name "*.so" -exec echo "Checking {{}}" \; -exec otool -L {{}} \;
+            rm -rf "$TEMP_EXTRACT"
             
             echo ""
             echo "=== Checking wheel dependencies before repair ==="
@@ -183,28 +192,58 @@ jobs:
             
             echo ""
             echo "=== Running delocate-wheel ==="
-            # Use -L to specify additional library search path
-            # Use --require-archs to specify target architecture(s)
-            if delocate-wheel --require-archs {delocate_archs} -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}; then
-              echo "✓ delocate-wheel succeeded"
+            # Set DYLD_LIBRARY_PATH so delocate can find libomp
+            export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+            export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
+            
+            # Try repair with architecture requirement and explicit library path
+            if delocate-wheel --require-archs {delocate_archs} -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate.log; then
+              echo "[OK] delocate-wheel succeeded with --require-archs"
             else
-              echo "⚠ delocate-wheel failed, trying without --require-archs..."
-              # Fallback: try without strict architecture requirements
-              if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}; then
-                echo "✓ delocate-wheel succeeded without --require-archs"
+              echo "[WARNING] delocate-wheel with --require-archs failed, checking error..."
+              cat /tmp/delocate.log
+              
+              # Check if it's an architecture mismatch issue
+              if grep -q "architecture" /tmp/delocate.log; then
+                echo "Architecture mismatch detected, trying without --require-archs..."
+              fi
+              
+              # Fallback: try without strict architecture requirements but keep -L
+              if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate2.log; then
+                echo "[OK] delocate-wheel succeeded without --require-archs"
               else
-                echo "⚠ delocate-wheel failed again, copying wheel without repair..."
-                # Last resort: copy the wheel as-is
+                echo "[WARNING] delocate-wheel failed again, checking error..."
+                cat /tmp/delocate2.log
+                
+                # Last resort: use dylibbundler or copy wheel as-is
+                echo "[WARNING] Copying wheel without delocate repair"
+                echo "This wheel will require libomp to be installed on the user's system"
                 cp {wheel} {dest_dir}/
               fi
             fi
             
             echo ""
-            echo "=== Checking repaired wheel ==="
+            echo "=== Verifying repaired wheel ==="
             if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-              ls -lh {dest_dir}/*.whl
-              delocate-listdeps {dest_dir}/*.whl || echo "delocate-listdeps check failed"
-              echo "✓ Wheel repair completed"
+              REPAIRED_WHEEL=$(ls {dest_dir}/*.whl)
+              echo "Repaired wheel: $REPAIRED_WHEEL"
+              ls -lh "$REPAIRED_WHEEL"
+              
+              echo ""
+              echo "=== Checking bundled dependencies ==="
+              delocate-listdeps "$REPAIRED_WHEEL" || echo "delocate-listdeps check failed"
+              
+              echo ""
+              echo "=== Inspecting repaired .so files ==="
+              TEMP_EXTRACT2=$(mktemp -d)
+              unzip -q "$REPAIRED_WHEEL" -d "$TEMP_EXTRACT2"
+              echo "Looking for .dylibs directory:"
+              find "$TEMP_EXTRACT2" -name "*.dylibs" -o -name ".dylibs" | head -5
+              echo "Checking .so files in repaired wheel:"
+              find "$TEMP_EXTRACT2" -name "*.so" -exec echo "File: {{}}" \; -exec otool -L {{}} \; | head -50
+              rm -rf "$TEMP_EXTRACT2"
+              
+              echo "[OK] Wheel repair completed"
             else
               echo "ERROR: No wheel found in {dest_dir}"
               exit 1
@@ -232,12 +271,94 @@ jobs:
           # macOS: skip R installation for tests (it's optional)
           CIBW_BEFORE_TEST_MACOS: |
             echo "Skipping R installation for tests - rpy2 is optional"
+            echo "Setting up test environment for OpenMP..."
+            if [ -d "$(brew --prefix libomp 2>/dev/null)/lib" ]; then
+              export DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
+              echo "DYLD_LIBRARY_PATH set to: $DYLD_LIBRARY_PATH"
+            fi
 
           # Linux: skip R installation for tests (it's optional)
           CIBW_BEFORE_TEST_LINUX: |
             echo "Skipping R installation for tests - rpy2 is optional"
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
+          CIBW_TEST_COMMAND_MACOS: |
+            # Set DYLD_LIBRARY_PATH to find libomp (fallback if not bundled)
+            if [ -d "$(brew --prefix libomp 2>/dev/null)/lib" ]; then
+              export DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
+              echo "DYLD_LIBRARY_PATH for test: $DYLD_LIBRARY_PATH"
+            fi
+            python - <<'PY'
+            import importlib
+            import sys
+            import numpy as np
+
+            import sequenzo
+            print('Sequenzo import successful')
+
+            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
+            print('Clustering C++ extensions loaded' if mod else 'WARNING: Clustering C++ extensions not found')
+
+            try:
+                from sequenzo.dissimilarity_measures import c_code
+                print('Dissimilarity measures C++ extensions (c_code) loaded successfully')
+                
+                # Test specific C++ classes
+                try:
+                    # Test if classes are available (don't instantiate to avoid errors)
+                    if hasattr(c_code, 'OMdistance'):
+                        print('[OK] OMdistance class available')
+                    if hasattr(c_code, 'OMspellDistance'):
+                        print('[OK] OMspellDistance class available')
+                    if hasattr(c_code, 'DHDdistance'):
+                        print('[OK] DHDdistance class available')
+                    if hasattr(c_code, 'LCPdistance'):
+                        print('[OK] LCPdistance class available')
+                    if hasattr(c_code, 'dist2matrix'):
+                        print('[OK] dist2matrix class available')
+                except Exception as e:
+                    print(f'WARNING: Some C++ classes may not be available: {e}')
+                    
+            except ImportError as e:
+                print(f'ERROR: Dissimilarity measures C++ extensions (c_code) failed to load: {e}')
+
+            cython_modules = [
+                'get_sm_trate_substitution_cost_matrix',
+                'seqconc', 
+                'seqdss',
+                'seqdur',
+                'seqlength'
+            ]
+            
+            for module_name in cython_modules:
+                try:
+                    module = __import__(f'sequenzo.dissimilarity_measures.utils.{module_name}', fromlist=[module_name])
+                    print(f'[OK] Cython module {module_name} loaded successfully')
+                except ImportError as e:
+                    print(f'ERROR: Cython module {module_name} failed to load: {e}')
+
+            try:
+                from sequenzo.dissimilarity_measures.utils import (
+                    get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength
+                )
+                print('[OK] All utility functions imported successfully')
+            except ImportError as e:
+                print(f'ERROR: Utility functions failed to load: {e}')
+
+            try:
+                import rpy2.robjects as ro
+                from rpy2.robjects.packages import importr
+                print('R environment (rpy2) loaded successfully')
+                try:
+                    fastcluster_r = importr('fastcluster')
+                    print('R fastcluster package available')
+                except Exception as e:
+                    print(f'WARNING: R fastcluster package not available: {e}')
+            except ImportError as e:
+                print(f'WARNING: R environment (rpy2) not available: {e}')
+            PY
+          
+          # Linux/other platforms test command (original)
           CIBW_TEST_COMMAND: |
             python - <<'PY'
             import importlib
@@ -258,15 +379,15 @@ jobs:
                 try:
                     # Test if classes are available (don't instantiate to avoid errors)
                     if hasattr(c_code, 'OMdistance'):
-                        print('✓ OMdistance class available')
+                        print('[OK] OMdistance class available')
                     if hasattr(c_code, 'OMspellDistance'):
-                        print('✓ OMspellDistance class available')
+                        print('[OK] OMspellDistance class available')
                     if hasattr(c_code, 'DHDdistance'):
-                        print('✓ DHDdistance class available')
+                        print('[OK] DHDdistance class available')
                     if hasattr(c_code, 'LCPdistance'):
-                        print('✓ LCPdistance class available')
+                        print('[OK] LCPdistance class available')
                     if hasattr(c_code, 'dist2matrix'):
-                        print('✓ dist2matrix class available')
+                        print('[OK] dist2matrix class available')
                 except Exception as e:
                     print(f'WARNING: Some C++ classes may not be available: {e}')
                     
@@ -284,7 +405,7 @@ jobs:
             for module_name in cython_modules:
                 try:
                     module = __import__(f'sequenzo.dissimilarity_measures.utils.{module_name}', fromlist=[module_name])
-                    print(f'✓ Cython module {module_name} loaded successfully')
+                    print(f'[OK] Cython module {module_name} loaded successfully')
                 except ImportError as e:
                     print(f'ERROR: Cython module {module_name} failed to load: {e}')
 
@@ -292,7 +413,7 @@ jobs:
                 from sequenzo.dissimilarity_measures.utils import (
                     get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength
                 )
-                print('✓ All utility functions imported successfully')
+                print('[OK] All utility functions imported successfully')
             except ImportError as e:
                 print(f'ERROR: Utility functions failed to load: {e}')
 
@@ -324,10 +445,10 @@ jobs:
           
             try:
                 from sequenzo.dissimilarity_measures import c_code
-                print('✓ Dissimilarity measures C++ extensions (c_code) loaded successfully')
+                print('[OK] Dissimilarity measures C++ extensions (c_code) loaded successfully')
                 for name in ['OMdistance', 'OMspellDistance', 'DHDdistance', 'LCPdistance', 'dist2matrix']:
                     if hasattr(c_code, name):
-                        print(f'✓ {name} class available')
+                        print(f'[OK] {name} class available')
             except ImportError as e:
                 print(f'ERROR: Failed to import c_code: {e}')
           

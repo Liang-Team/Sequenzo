@@ -426,16 +426,18 @@ def get_link_args():
     
     if has_openmp_support():
         if sys.platform == 'darwin':
-            # macOS: Link against libomp and set rpath
+            # macOS: Link against libomp
             link_args.append('-lomp')
             
             # Add library path from environment or Homebrew default
             ldflags = os.environ.get('LDFLAGS', '')
             if ldflags:
-                # Parse LDFLAGS for -L and -Wl,-rpath options
+                # Parse LDFLAGS for -L options only (no -Wl,-rpath)
+                # Let delocate-wheel handle rpath when building wheels
                 for flag in ldflags.split():
-                    if flag.startswith('-L') or flag.startswith('-Wl,'):
+                    if flag.startswith('-L'):
                         link_args.append(flag)
+                    # Skip -Wl,-rpath flags - delocate will handle this
             else:
                 # Fallback: try to detect Homebrew libomp location
                 try:
@@ -443,7 +445,6 @@ def get_link_args():
                                                          text=True).strip()
                     lib_path = f"{brew_prefix}/lib"
                     link_args.append(f'-L{lib_path}')
-                    link_args.append(f'-Wl,-rpath,{lib_path}')
                     print(f"[SETUP] Auto-detected libomp at: {lib_path}")
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     print("[SETUP] Warning: Could not auto-detect libomp location")
