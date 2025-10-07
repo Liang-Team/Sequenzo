@@ -110,30 +110,21 @@ jobs:
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_MACOS: "universal2"
+          CIBW_ARCHS_MACOS: "x86_64 arm64"  # 分别构建两个架构，而不是universal2
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
           CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
-          CIBW_ENVIRONMENT_MACOS: SEQUENZO_ENABLE_OPENMP=1 ARCHFLAGS="-arch x86_64 -arch arm64" _PYTHON_HOST_PLATFORM="macosx-10.9-universal2" CMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          CIBW_ENVIRONMENT_MACOS: SEQUENZO_ENABLE_OPENMP=1
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
 
-          # macOS: ensure libomp is available and set ARCHFLAGS for universal2
+          # macOS: ensure libomp is available for current architecture
           CIBW_BEFORE_BUILD_MACOS: |
             echo "Installing build dependencies for macOS"
             python -m pip install --upgrade pip
             # Check current architecture
             CURRENT_ARCH=$(uname -m)
             echo "Current architecture: $CURRENT_ARCH"
-            # Ensure both architectures of libomp are available for universal2 build
-            if [ "$CURRENT_ARCH" = "arm64" ]; then
-              echo "On ARM64, checking for universal libomp..."
-              # Check if x86_64 brew is available for cross-arch dependencies
-              if [ -f /usr/local/bin/brew ]; then
-                echo "x86_64 Homebrew found at /usr/local/bin/brew"
-                arch -x86_64 /usr/local/bin/brew list libomp || arch -x86_64 /usr/local/bin/brew install libomp
-              fi
-            fi
             echo "libomp setup complete"
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
