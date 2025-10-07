@@ -45,7 +45,7 @@ def test_sequence_data_creation():
     
     assert sequence_data is not None
     assert sequence_data.n_sequences > 0
-    assert sequence_data.n_time_points > 0
+    assert sequence_data.n_steps > 0
     assert len(sequence_data.states) >= len(states)  # May include 'Missing'
 
 

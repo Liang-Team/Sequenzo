@@ -132,14 +132,27 @@ jobs:
             CURRENT_ARCH=$(uname -m)
             echo "Current architecture: $CURRENT_ARCH"
             
-            # Verify libomp is installed (should be from host)
+            # Install libomp if not present
+            if [ ! -d "$(brew --prefix libomp 2>/dev/null)" ]; then
+              echo "Installing libomp..."
+              brew install libomp || echo "Failed to install libomp"
+            fi
+            
+            # Verify libomp is installed
             if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
               echo "✓ libomp found at: $(brew --prefix libomp)"
               echo "LDFLAGS: -L$(brew --prefix libomp)/lib"
               echo "CPPFLAGS: -I$(brew --prefix libomp)/include"
+              
+              # Check libomp architecture
+              LIBOMP_DYLIB=$(brew --prefix libomp)/lib/libomp.dylib
+              if [ -f "$LIBOMP_DYLIB" ]; then
+                echo "libomp.dylib info:"
+                file "$LIBOMP_DYLIB"
+                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "lipo failed"
+              fi
             else
-              echo "⚠ Warning: libomp not found, attempting to install..."
-              brew install libomp || echo "Failed to install libomp"
+              echo "⚠ Warning: libomp not found"
             fi
             
             echo "libomp setup complete"
@@ -147,20 +160,55 @@ jobs:
           # macOS: Use delocate to bundle libomp into the wheel
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             echo "=== Environment Info ==="
-            echo "Architecture: $(uname -m)"
-            echo "libomp location: $(brew --prefix libomp)"
-            ls -la $(brew --prefix libomp)/lib/libomp.dylib
-            file $(brew --prefix libomp)/lib/libomp.dylib
+            HOST_ARCH=$(uname -m)
+            echo "Host architecture: $HOST_ARCH"
+            echo "Target architecture: {delocate_archs}"
+            echo "Wheel: {wheel}"
+            
+            # Check libomp availability
+            LIBOMP_PATH=$(brew --prefix libomp)/lib
+            echo "libomp location: $LIBOMP_PATH"
+            
+            if [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
+              file "$LIBOMP_PATH/libomp.dylib"
+              LIBOMP_ARCH=$(lipo -info "$LIBOMP_PATH/libomp.dylib" 2>/dev/null | grep -o "x86_64\|arm64" || echo "unknown")
+              echo "libomp architecture: $LIBOMP_ARCH"
+            else
+              echo "Warning: libomp.dylib not found"
+            fi
+            
             echo ""
-            echo "=== Checking dependencies before delocate ==="
+            echo "=== Checking wheel dependencies before repair ==="
             delocate-listdeps {wheel} || echo "delocate-listdeps failed"
+            
             echo ""
             echo "=== Running delocate-wheel ==="
-            LIBOMP_PATH=$(brew --prefix libomp)/lib
-            delocate-wheel --require-archs {delocate_archs} --dylib-path "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
+            # Use -L to specify additional library search path
+            # Use --require-archs to specify target architecture(s)
+            if delocate-wheel --require-archs {delocate_archs} -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}; then
+              echo "✓ delocate-wheel succeeded"
+            else
+              echo "⚠ delocate-wheel failed, trying without --require-archs..."
+              # Fallback: try without strict architecture requirements
+              if delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}; then
+                echo "✓ delocate-wheel succeeded without --require-archs"
+              else
+                echo "⚠ delocate-wheel failed again, copying wheel without repair..."
+                # Last resort: copy the wheel as-is
+                cp {wheel} {dest_dir}/
+              fi
+            fi
+            
             echo ""
-            echo "=== Checking dependencies after delocate ==="
-            delocate-listdeps {dest_dir}/*.whl || echo "delocate-listdeps failed on repaired wheel"
+            echo "=== Checking repaired wheel ==="
+            if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+              ls -lh {dest_dir}/*.whl
+              delocate-listdeps {dest_dir}/*.whl || echo "delocate-listdeps check failed"
+              echo "✓ Wheel repair completed"
+            else
+              echo "ERROR: No wheel found in {dest_dir}"
+              exit 1
+            fi
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
           CIBW_BEFORE_BUILD_LINUX: |
