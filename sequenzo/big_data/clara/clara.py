@@ -32,8 +32,12 @@ import cffi
 ffi = cffi.FFI()
 if sys.platform.startswith("win"):
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
+    # Also check utils subdirectory
+    files.extend(glob.glob(os.path.join(os.path.dirname(__file__), "utils", "*.pyd")))
 else:
     files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
+    # Also check utils subdirectory
+    files.extend(glob.glob(os.path.join(os.path.dirname(__file__), "utils", "*.so")))
 if not files:
     raise FileNotFoundError("No compiled library found")
 lib_file = files[0]
