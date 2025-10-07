@@ -1,9 +1,9 @@
 # cython: boundscheck=False, wraparound=False
 import numpy as np
-cimport numpy as np
+cimport numpy as cnp
 
 # Initialize NumPy C API
-np.import_array()
+cnp.import_array()
 
 import pandas as pd
 from libc.math cimport isnan
@@ -23,7 +23,7 @@ def get_sm_trate_substitution_cost_matrix(
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[x] Seqdata must be a pandas DataFrame wrapped in a SequenceData object.")
 
-    cdef np.ndarray[np.float64_t, ndim=1] weights
+    cdef cnp.ndarray[cnp.float64_t, ndim=1] weights
     if weighted:
         weights = np.asarray(seqdata.weights, dtype=np.float64)
     else:
@@ -48,7 +48,7 @@ def get_sm_trate_substitution_cost_matrix(
 
     # convert df to NumPy 2D array of ints
     seq_mat = df.to_numpy(dtype=np.float64)
-    cdef np.ndarray[np.float64_t, ndim=2] seq_mat_mv = seq_mat
+    cdef cnp.ndarray[cnp.float64_t, ndim=2] seq_mat_mv = seq_mat
 
     if time_varying:
         tmat = np.zeros((num_transition, _size, _size), dtype=np.float64)
