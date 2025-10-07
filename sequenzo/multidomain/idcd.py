@@ -130,7 +130,6 @@ def create_idcd_sequence_from_csvs(
 
     return SequenceData(
         data=combined_df,
-        time_type=time_type,
         time=time_cols,
         states=observed_states.index.tolist(),
         labels=pretty_labels,

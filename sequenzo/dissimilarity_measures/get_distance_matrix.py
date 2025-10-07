@@ -312,7 +312,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # OM, OMspell, HAM, DHD
     if method in om_methods + ["HAM", "DHD"]:
         if sm_type == "matrix":
-            if method in [om_methods, "TWED"]:
+            if method in om_methods + ["TWED"]:
                 # TODO : checkcost()
                 pass
             elif method == "HAM":
