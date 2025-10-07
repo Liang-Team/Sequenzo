@@ -585,15 +585,47 @@ class BdistWheel(bdist_wheel):
                     
                     # Find and remove .c and .pyx files
                     removed_count = 0
+                    removed_files = []
                     for pattern in ['**/*.c', '**/*.pyx', '**/*.pxd']:
                         for file_to_remove in temp_path.glob(pattern):
                             # Only remove if it's a Cython-generated file
                             if '/sequenzo/' in str(file_to_remove):
+                                removed_files.append(str(file_to_remove.relative_to(temp_path)))
                                 file_to_remove.unlink()
                                 removed_count += 1
                                 print(f"[WHEEL]   Removed: {file_to_remove.relative_to(temp_path)}")
                     
                     if removed_count > 0:
+                        # Update RECORD file to remove deleted entries
+                        record_files = list(temp_path.glob('**/*.dist-info/RECORD'))
+                        if record_files:
+                            record_path = record_files[0]
+                            print(f"[WHEEL] Updating RECORD file")
+                            
+                            # Read existing RECORD
+                            with open(record_path, 'r') as f:
+                                record_lines = f.readlines()
+                            
+                            # Normalize removed file paths for comparison (handle both / and \)
+                            removed_set = set()
+                            for rf in removed_files:
+                                removed_set.add(rf.replace('\\', '/'))
+                            
+                            # Filter out removed files
+                            new_record_lines = []
+                            for line in record_lines:
+                                if line.strip():  # Skip empty lines
+                                    file_path = line.split(',')[0].replace('\\', '/')
+                                    # Keep the line if it's not in removed files
+                                    if not any(file_path.endswith(rf) or rf in file_path for rf in removed_set):
+                                        new_record_lines.append(line)
+                            
+                            # Write updated RECORD
+                            with open(record_path, 'w') as f:
+                                f.writelines(new_record_lines)
+                            
+                            print(f"[WHEEL] Updated RECORD file: removed {removed_count} entries")
+                        
                         # Repack the wheel
                         wheel_path.unlink()
                         with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:

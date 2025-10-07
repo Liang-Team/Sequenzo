@@ -97,32 +97,32 @@ jobs:
           fi
         shell: bash
 
-      - name: Build Cython wheels on macOS
-        if: runner.os == 'macOS'
-        run: |
-          python setup.py build_ext --inplace
-          python -m build
-
       - name: Clean previous build outputs
-        if: runner.os != 'macOS'
         run: |
           rm -rf build/ dist/ *.egg-info
           find . -name "*.so" -delete
         shell: bash
 
       - name: Build wheels with cibuildwheel
-        if: runner.os != 'macOS'
         run: python -m cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: "cp${{ matrix.python-version-nodot }}-*"  # 只构建当前 Python 版本的轮子 (e.g., cp39-*, cp310-*)
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_ARCHS_MACOS: "universal2"
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
           CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
+          CIBW_ENVIRONMENT_MACOS: SEQUENZO_ENABLE_OPENMP=1
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
+
+          # macOS: ensure libomp is available
+          CIBW_BEFORE_BUILD_MACOS: |
+            echo "Installing build dependencies for macOS"
+            python -m pip install --upgrade pip
+            echo "libomp already installed in CI environment"
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
           CIBW_BEFORE_BUILD_LINUX: |
@@ -142,6 +142,10 @@ jobs:
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
             echo "Using setup.py dependencies only"
+
+          # macOS: skip R installation for tests (it's optional)
+          CIBW_BEFORE_TEST_MACOS: |
+            echo "Skipping R installation for tests - rpy2 is optional"
 
           # Linux: skip R installation for tests (it's optional)
           CIBW_BEFORE_TEST_LINUX: |

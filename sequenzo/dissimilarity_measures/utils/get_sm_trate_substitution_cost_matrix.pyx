@@ -2,6 +2,9 @@
 import numpy as np
 cimport numpy as np
 
+# Initialize NumPy C API
+np.import_array()
+
 import pandas as pd
 from libc.math cimport isnan
 
