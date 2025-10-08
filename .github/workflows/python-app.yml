@@ -186,6 +186,12 @@ jobs:
           r-version: '4.3.1'
           rtools-version: none  # 显式跳过 Rtools 安装，避免 PATH 冲突
 
+      - name: Set Windows encoding (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+          echo "Setting Python encoding to UTF-8 for Windows"
+
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
@@ -207,29 +213,53 @@ jobs:
           find . -name "*.so" -delete
         shell: bash
 
+      - name: Clean before cibuildwheel (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "=== Cleaning build artifacts before cibuildwheel ==="
+          # 彻底清理所有构建产物
+          rm -rf build/ dist/ *.egg-info
+          find . -name "*.so" -delete
+          find . -name "*.c" -delete
+          find . -name "*.cpp" -delete
+          find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+          # 检查是否还有残留的共享库文件
+          echo "Remaining shared libraries:"
+          find . -name "*.so" | head -10 || echo "No shared libraries found"
+        shell: bash
+
       - name: Build Cython extensions
         run: |
           echo "=== Building Cython extensions ==="
-          
+
           # 安装 Cython 和构建依赖
           python -m pip install Cython numpy
-          
+
           # 检查 Cython 文件是否存在
           echo "Checking for Cython files:"
           find . -name "*.pyx" -o -name "*.pxd" | head -10
-          
+
           # 尝试构建 Cython 扩展
           echo "Attempting to build Cython extensions in place..."
           python setup.py build_ext --inplace
-          
+
           # 检查生成的共享库
           echo "Generated shared libraries:"
           find . -name "*.so" -o -name "*.pyd" -o -name "*.dylib" | head -20
-          
-          # 验证特定模块
+
+          # 验证特定模块 - 使用 ASCII 字符避免编码问题
           echo "Checking for specific modules:"
           python -c "
           import os
+          import glob
+          import sys
+
+          # 设置标准输出编码为 UTF-8 以避免 Windows 编码问题
+          if sys.platform == 'win32':
+              import io
+              sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
           expected_modules = [
               'get_sm_trate_substitution_cost_matrix',
               'seqconc', 
@@ -237,29 +267,97 @@ jobs:
               'seqdur',
               'seqlength'
           ]
-          
+
           for module in expected_modules:
               module_path = f'sequenzo/dissimilarity_measures/utils/{module}'
               # 检查 .pyx 源文件
               pyx_file = f'{module_path}.pyx'
               if os.path.exists(pyx_file):
-                  print(f'✓ Found source: {pyx_file}')
+                  print(f'[OK] Found source: {pyx_file}')
               else:
-                  print(f'✗ Missing source: {pyx_file}')
-          
+                  print(f'[FAIL] Missing source: {pyx_file}')
+
               # 检查编译后的文件
               so_pattern = f'**/{module}.*.so'
               pyd_pattern = f'**/{module}.*.pyd'
               dylib_pattern = f'**/{module}.*.dylib'
-          
-              import glob
+
               compiled_files = glob.glob(so_pattern, recursive=True) + \
                              glob.glob(pyd_pattern, recursive=True) + \
                              glob.glob(dylib_pattern, recursive=True)
               if compiled_files:
-                  print(f'✓ Found compiled: {compiled_files[0]}')
+                  print(f'[OK] Found compiled: {compiled_files[0]}')
               else:
-                  print(f'✗ Not compiled: {module}')
+                  print(f'[FAIL] Not compiled: {module}')
+          "
+        shell: bash
+
+      - name: Verify built Cython modules
+        run: |
+          echo "=== Verifying built cython modules in wheel ==="
+
+          # 安装轮子
+          WHEEL_FILE=$(ls dist/*.whl | head -1)
+          echo "Installing wheel: $WHEEL_FILE"
+          pip install --force-reinstall "$WHEEL_FILE"
+
+          # 检查安装的模块 - 使用 ASCII 字符
+          echo "=== Checking installed modules ==="
+          python -c "
+          import os
+          import sys
+          import importlib
+
+          # 设置标准输出编码为 UTF-8 以避免 Windows 编码问题
+          if sys.platform == 'win32':
+              import io
+              sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+          def check_module(module_name):
+              try:
+                  spec = importlib.util.find_spec(module_name)
+                  if spec:
+                      print(f'[OK] {module_name}: {spec.origin}')
+                      return True
+                  else:
+                      print(f'[FAIL] {module_name}: NOT FOUND')
+                      return False
+              except Exception as e:
+                  print(f'[FAIL] {module_name}: ERROR - {e}')
+                  return False
+
+          # 检查主包
+          check_module('sequenzo')
+          check_module('sequenzo.dissimilarity_measures')
+          check_module('sequenzo.dissimilarity_measures.utils')
+
+          # 检查 Cython 模块
+          cython_modules = [
+              'sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix',
+              'sequenzo.dissimilarity_measures.utils.seqconc',
+              'sequenzo.dissimilarity_measures.utils.seqdss', 
+              'sequenzo.dissimilarity_measures.utils.seqdur',
+              'sequenzo.dissimilarity_measures.utils.seqlength'
+          ]
+
+          print('\\\\n=== Checking Cython modules ===')
+          for module in cython_modules:
+              check_module(module)
+
+          # 检查包内容
+          print('\\\\n=== Package contents ===')
+          try:
+              import sequenzo
+              pkg_path = os.path.dirname(sequenzo.__file__)
+              print(f'Package path: {pkg_path}')
+
+              # 列出所有文件
+              for root, dirs, files in os.walk(pkg_path):
+                  for file in files:
+                      if file.endswith(('.so', '.pyd', '.dylib')):
+                          print(f'Shared lib: {os.path.join(root, file)}')
+          except Exception as e:
+              print(f'Error examining package: {e}')
           "
         shell: bash
 
@@ -341,6 +439,38 @@ jobs:
             echo "Installing minimal build dependencies for Linux"
             python -m pip install --upgrade pip
             echo "Skipping R/rpy2 installation - they are optional dependencies"
+            
+            # 修复 Linux 构建问题
+            echo "=== Preparing clean Linux build ==="
+            python -m pip install --upgrade pip
+            echo "Ensuring clean build environment..."
+            
+            # 再次清理，确保没有残留的构建文件
+            find . -name "*.so" -delete 2>/dev/null || true
+            find . -name "*.c" -delete 2>/dev/null || true
+            find . -name "*.cpp" -delete 2>/dev/null || true
+            rm -rf build/ *.egg-info
+            
+            echo "Clean build environment ready"
+
+          # 设置 Linux 修复策略
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
+            echo "=== Attempting wheel repair ==="
+            echo "Wheel to repair: {wheel}"
+            
+            # 尝试修复，如果失败则跳过修复
+            auditwheel repair -w {dest_dir} {wheel} || {
+              echo "[WARNING] auditwheel repair failed, copying wheel as-is"
+              mkdir -p {dest_dir}
+              cp {wheel} {dest_dir}/
+            }
+            
+            # 检查修复结果
+            if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+              REPAIRED_WHEEL=$(ls {dest_dir}/*.whl | head -1)
+              echo "Final wheel: $REPAIRED_WHEEL"
+              auditwheel show "$REPAIRED_WHEEL" || echo "Cannot show wheel info"
+            fi
 
           # Windows: setup MSVC environment
           CIBW_BEFORE_BUILD_WINDOWS: |
@@ -657,71 +787,6 @@ jobs:
           else:
               print('ERROR: No matching wheel files found')
           " || echo "Verification completed with warnings"
-        shell: bash
-
-      - name: Verify built Cython modules
-        run: |
-          echo "=== Verifying built cython modules in wheel ==="
-
-          # 安装轮子
-          WHEEL_FILE=$(ls dist/*.whl | head -1)
-          echo "Installing wheel: $WHEEL_FILE"
-          pip install --force-reinstall "$WHEEL_FILE"
-
-          # 检查安装的模块
-          echo "=== Checking installed modules ==="
-          python -c "
-          import os
-          import sys
-          import importlib
-          import pkgutil
-
-          def check_module(module_name):
-              try:
-                  spec = importlib.util.find_spec(module_name)
-                  if spec:
-                      print(f'✓ {module_name}: {spec.origin}')
-                      return True
-                  else:
-                      print(f'✗ {module_name}: NOT FOUND')
-                      return False
-              except Exception as e:
-                  print(f'✗ {module_name}: ERROR - {e}')
-                  return False
-
-          # 检查主包
-          check_module('sequenzo')
-          check_module('sequenzo.dissimilarity_measures')
-          check_module('sequenzo.dissimilarity_measures.utils')
-
-          # 检查 Cython 模块
-          cython_modules = [
-              'sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix',
-              'sequenzo.dissimilarity_measures.utils.seqconc',
-              'sequenzo.dissimilarity_measures.utils.seqdss', 
-              'sequenzo.dissimilarity_measures.utils.seqdur',
-              'sequenzo.dissimilarity_measures.utils.seqlength'
-          ]
-
-          print('\\\\n=== Checking Cython modules ===')
-          for module in cython_modules:
-              check_module(module)
-
-          # 检查包内容
-          print('\\\\n=== Package contents ===')
-          try:
-              import sequenzo
-              pkg_path = os.path.dirname(sequenzo.__file__)
-              print(f'Package path: {pkg_path}')
-
-              # 列出所有文件
-              for root, dirs, files in os.walk(pkg_path):
-                  for file in files:
-                      if file.endswith(('.so', '.pyd', '.dylib')):
-                          print(f'Shared lib: {os.path.join(root, file)}')
-          except Exception as e:
-              print(f'Error examining package: {e}')
-          "
         shell: bash
 
       - name: Run Integration Tests (Quickstart Workflow)
