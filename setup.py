@@ -402,8 +402,6 @@ def get_dissimilarity_measures_include_dirs():
         pybind11.get_include(user=True),
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
-        str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
-        'sequenzo/clustering/src/',
     ]
 
 def get_clustering_include_dirs():
