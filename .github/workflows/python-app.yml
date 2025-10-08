@@ -229,21 +229,60 @@ jobs:
           find . -name "*.so" | head -10 || echo "No shared libraries found"
         shell: bash
 
-      - name: Debug Linux source structure
+      # 修复 NumPy 2.0 和 pybind11 兼容性问题
+      - name: Install dependencies with NumPy 2.0 compatibility
+        run: |
+           python -m pip install --upgrade pip setuptools wheel
+           
+           # 为 Python 3.12 特别处理 NumPy 兼容性
+           if [ "${{ matrix.python-version }}" == "3.12" ]; then
+             echo "Installing NumPy 2.0 compatible dependencies for Python 3.12"
+             pip install "numpy>=2.0.0" "pybind11>=2.12.0"
+           
+           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
+           pip install --prefer-binary Cython build "cibuildwheel==2.23.3" twine
+         shell: bash
+
+      - name: Fix Linux source
         if: runner.os == 'Linux'
         run: |
-          echo "=== Debugging Linux source structure ==="
-          echo "Current directory: $(pwd)"
-          echo "Directory structure:"
-          ls -la
-          echo "sequenzo directory:"
-          ls -la sequenzo/ || echo "sequenzo directory not found"
-          echo "dissimilarity_measures directory:"
-          ls -la sequenzo/dissimilarity_measures/ || echo "dissimilarity_measures directory not found"
-          echo "src directory:"
-          ls -la sequenzo/dissimilarity_measures/src/ || echo "src directory not found"
-          echo "Looking for module.cpp:"
-          find . -name "module.cpp" -type f | head -10
+          echo "=== Linux 源文件修复 ==="
+          
+          # 1. 确保在正确目录
+          cd "$GITHUB_WORKSPACE"
+          echo "工作区目录: $(pwd)"
+          
+          # 2. 重新检查子模块
+          echo "检查子模块..."
+          git submodule status || echo "无子模块或子模块已初始化"
+          git submodule update --init --recursive || echo "子模块更新完成或无需更新"
+          
+          # 3. 详细文件查找
+          echo "详细查找 module.cpp:"
+          find . -name "module.cpp" -type f > found_files.txt 2>/dev/null || true
+          if [ -s found_files.txt ]; then
+            echo "找到的 module.cpp 文件:"
+            cat found_files.txt
+            # 使用第一个找到的文件创建符号链接
+            FIRST_FILE=$(head -1 found_files.txt)
+            echo "使用第一个文件: $FIRST_FILE"
+            mkdir -p sequenzo/dissimilarity_measures/src/
+            cp "$FIRST_FILE" sequenzo/dissimilarity_measures/src/module.cpp
+          else
+            echo "未找到任何 module.cpp 文件"
+            echo "当前目录结构:"
+            find . -type d -name "*sequenzo*" | head -10
+            exit 1
+          fi
+          
+          # 4. 最终验证
+          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
+            echo "✅ 成功确保 module.cpp 在预期位置"
+            ls -la "sequenzo/dissimilarity_measures/src/module.cpp"
+          else
+            echo "❌ 无法准备 module.cpp"
+            exit 1
+          fi
         shell: bash
 
       - name: Build Cython extensions
@@ -709,6 +748,14 @@ jobs:
                     print(f'WARNING: R fastcluster package not available: {e}')
             except ImportError as e:
                 print(f'WARNING: R environment (rpy2) not available: {e}')
+            
+            # 为 NumPy 2.0 设置兼容性
+            if sys.version_info >= (3, 12):
+                try:
+                    np._import_array()
+                    print('[OK] NumPy array imported for NumPy 2.0 compatibility')
+                except Exception as e:
+                    print(f'[INFO] NumPy array import: {e}')
             "@
             python test_sequenzo_ci.py
 
