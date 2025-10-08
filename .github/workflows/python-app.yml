@@ -217,6 +217,9 @@ jobs:
           CIBW_ARCHS_MACOS: "${{ matrix.macos-arch }}"
           # Alternative: Use separate architecture wheels if universal2 causes issues
           # CIBW_ARCHS_MACOS: "x86_64 arm64"  # Build separate wheels for each architecture
+            # 或者根据架构设置不同的目标
+          CIBW_TARGET_OSX_x86_64: "10.15"
+          CIBW_TARGET_OSX_arm64: "11.0"
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
