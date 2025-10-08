@@ -207,6 +207,62 @@ jobs:
           find . -name "*.so" -delete
         shell: bash
 
+      - name: Build Cython extensions
+        run: |
+          echo "=== Building Cython extensions ==="
+          
+          # 安装 Cython 和构建依赖
+          python -m pip install Cython numpy
+          
+          # 检查 Cython 文件是否存在
+          echo "Checking for Cython files:"
+          find . -name "*.pyx" -o -name "*.pxd" | head -10
+          
+          # 尝试构建 Cython 扩展
+          echo "Attempting to build Cython extensions in place..."
+          python setup.py build_ext --inplace
+          
+          # 检查生成的共享库
+          echo "Generated shared libraries:"
+          find . -name "*.so" -o -name "*.pyd" -o -name "*.dylib" | head -20
+          
+          # 验证特定模块
+          echo "Checking for specific modules:"
+          python -c "
+          import os
+          expected_modules = [
+              'get_sm_trate_substitution_cost_matrix',
+              'seqconc', 
+              'seqdss',
+              'seqdur',
+              'seqlength'
+          ]
+          
+          for module in expected_modules:
+              module_path = f'sequenzo/dissimilarity_measures/utils/{module}'
+              # 检查 .pyx 源文件
+              pyx_file = f'{module_path}.pyx'
+              if os.path.exists(pyx_file):
+                  print(f'✓ Found source: {pyx_file}')
+              else:
+                  print(f'✗ Missing source: {pyx_file}')
+          
+              # 检查编译后的文件
+              so_pattern = f'**/{module}.*.so'
+              pyd_pattern = f'**/{module}.*.pyd'
+              dylib_pattern = f'**/{module}.*.dylib'
+          
+              import glob
+              compiled_files = glob.glob(so_pattern, recursive=True) + \
+                             glob.glob(pyd_pattern, recursive=True) + \
+                             glob.glob(dylib_pattern, recursive=True)
+              if compiled_files:
+                  print(f'✓ Found compiled: {compiled_files[0]}')
+              else:
+                  print(f'✗ Not compiled: {module}')
+          "
+        shell: bash
+
       - name: Build wheels with cibuildwheel
         run: python -m cibuildwheel --output-dir dist
         env:
@@ -298,51 +354,6 @@ jobs:
           # Universal dependency installation (fallback)
           CIBW_BEFORE_BUILD: >
             echo "Using setup.py dependencies only"
-
-          # macOS: skip R installation for tests (it's optional)
-#          CIBW_BEFORE_TEST_MACOS: |
-#            echo "Skipping R installation for tests - rpy2 is optional"
-#            echo "Setting up test environment for OpenMP..."
-#
-#            # Check host and test architecture
-#            HOST_ARCH=$(uname -m)
-#            echo "Host architecture: $HOST_ARCH"
-#
-#            # Detect test architecture from environment
-#            if [ -n "$ARCHFLAGS" ]; then
-#              echo "Test ARCHFLAGS: $ARCHFLAGS"
-#            fi
-#
-#            # For cross-architecture testing (e.g., x86_64 wheel on arm64 host)
-#            # We need to ensure libomp is available for the target architecture
-#            LIBOMP_PATH=$(brew --prefix libomp 2>/dev/null)/lib
-#
-#            if [ -d "$LIBOMP_PATH" ]; then
-#              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-#              export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
-#              echo "DYLD_LIBRARY_PATH set to: $DYLD_LIBRARY_PATH"
-#
-#              # Verify libomp is available
-#              LIBOMP_DYLIB="$LIBOMP_PATH/libomp.dylib"
-#              if [ -f "$LIBOMP_DYLIB" ]; then
-#                echo "libomp.dylib available:"
-#                file "$LIBOMP_DYLIB"
-#                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "Architecture info unavailable"
-#
-#                # For cross-arch testing, check if we need Rosetta 2
-#                if lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Non-fat file.*$HOST_ARCH"; then
-#                  echo "[INFO] libomp is native $HOST_ARCH only"
-#                  echo "[INFO] Cross-architecture tests may fail if libraries aren't bundled"
-#                elif lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Architectures.*arm64.*x86_64"; then
-#                  echo "[OK] libomp is universal binary - supports both architectures"
-#                fi
-#              else
-#                echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
-#              fi
-#            else
-#              echo "[WARNING] libomp not found via Homebrew"
-#              echo "[INFO] Tests will rely on bundled libraries in wheel"
-#            fi
 
           # Linux: skip R installation for tests (it's optional)
           CIBW_BEFORE_TEST_LINUX: |
@@ -648,6 +659,71 @@ jobs:
           " || echo "Verification completed with warnings"
         shell: bash
 
+      - name: Verify built Cython modules
+        run: |
+          echo "=== Verifying built cython modules in wheel ==="
+
+          # 安装轮子
+          WHEEL_FILE=$(ls dist/*.whl | head -1)
+          echo "Installing wheel: $WHEEL_FILE"
+          pip install --force-reinstall "$WHEEL_FILE"
+
+          # 检查安装的模块
+          echo "=== Checking installed modules ==="
+          python -c "
+          import os
+          import sys
+          import importlib
+          import pkgutil
+
+          def check_module(module_name):
+              try:
+                  spec = importlib.util.find_spec(module_name)
+                  if spec:
+                      print(f'✓ {module_name}: {spec.origin}')
+                      return True
+                  else:
+                      print(f'✗ {module_name}: NOT FOUND')
+                      return False
+              except Exception as e:
+                  print(f'✗ {module_name}: ERROR - {e}')
+                  return False
+
+          # 检查主包
+          check_module('sequenzo')
+          check_module('sequenzo.dissimilarity_measures')
+          check_module('sequenzo.dissimilarity_measures.utils')
+
+          # 检查 Cython 模块
+          cython_modules = [
+              'sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix',
+              'sequenzo.dissimilarity_measures.utils.seqconc',
+              'sequenzo.dissimilarity_measures.utils.seqdss', 
+              'sequenzo.dissimilarity_measures.utils.seqdur',
+              'sequenzo.dissimilarity_measures.utils.seqlength'
+          ]
+
+          print('\\\\n=== Checking Cython modules ===')
+          for module in cython_modules:
+              check_module(module)
+
+          # 检查包内容
+          print('\\\\n=== Package contents ===')
+          try:
+              import sequenzo
+              pkg_path = os.path.dirname(sequenzo.__file__)
+              print(f'Package path: {pkg_path}')
+
+              # 列出所有文件
+              for root, dirs, files in os.walk(pkg_path):
+                  for file in files:
+                      if file.endswith(('.so', '.pyd', '.dylib')):
+                          print(f'Shared lib: {os.path.join(root, file)}')
+          except Exception as e:
+              print(f'Error examining package: {e}')
+          "
+        shell: bash
+
       - name: Run Integration Tests (Quickstart Workflow)
         run: |
           echo "=== Running integration tests based on quickstart tutorial ==="
@@ -811,24 +887,24 @@ jobs:
                   echo "Test file not found, creating a simple test..."
                   # 创建一个简单的测试文件
                   cat > test_basic.py << 'EOF'
-              import sequenzo
-              import numpy as np
-        
-              def test_import():
-                  """Test basic import functionality"""
-                  assert sequenzo is not None
-                  print("✓ Basic import test passed")
-        
-              def test_version():
-                  """Test version attribute"""
-                  version = getattr(sequenzo, '__version__', 'unknown')
-                  print(f"✓ Version: {version}")
-              
-              if __name__ == "__main__":
-                  test_import()
-                  test_version()
-                  print("✓ All basic tests passed")
-              EOF
+                  import sequenzo
+                  import numpy as np
+            
+                  def test_import():
+                      """Test basic import functionality"""
+                      assert sequenzo is not None
+                      print("✓ Basic import test passed")
+            
+                  def test_version():
+                      """Test version attribute"""
+                      version = getattr(sequenzo, '__version__', 'unknown')
+                      print(f"✓ Version: {version}")
+                  
+                  if __name__ == "__main__":
+                      test_import()
+                      test_version()
+                      print("✓ All basic tests passed")
+                  EOF
                   python test_basic.py || echo "Basic tests failed"
               fi
           else
