@@ -293,7 +293,7 @@ jobs:
 
             # 检查是否在其他位置
             echo "在其他位置查找 module.cpp:"
-            find /home/runner/work -name "module.cpp" -type f 2>/dev/null | head -10
+            find /home/runner/work -name "module.cpp" -type f 2>/dev/null | head -10}
         shell: bash
 
       - name: Build Cython extensions
