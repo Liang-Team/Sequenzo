@@ -111,40 +111,55 @@ jobs:
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
-          # 检测架构并设置正确的 Homebrew 路径
+          # 检测架构并设置正确的 Homebrew 命令
           if [ "${{ matrix.macos-arch }}" == "x86_64" ]; then
-            # Intel macOS - Homebrew 在 /usr/local
-            brew_cmd="brew"
-            libomp_prefix="/usr/local/opt/libomp"
+            # Intel macOS - 强制使用 x86_64 架构安装
+            echo "Installing x86_64 libomp on Intel macOS"
+            # 使用 arch 命令强制 x86_64 架构
+            arch -x86_64 /bin/bash -c "
+              # 安装或更新 x86_64 Homebrew
+              if [ ! -f /usr/local/bin/brew ]; then
+                echo 'Installing x86_64 Homebrew...'
+                /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
+              else
+                echo 'x86_64 Homebrew already installed'
+              fi
+          
+              # 使用 x86_64 Homebrew 安装 libomp
+              /usr/local/bin/brew install libomp
+          
+              # 获取 libomp 路径
+              LIBOMP_PREFIX=\$(/usr/local/bin/brew --prefix libomp)
+              echo \"x86_64 libomp installed at: \$LIBOMP_PREFIX\"
+              echo \"LIBOMP_PREFIX=\$LIBOMP_PREFIX\" > /tmp/libomp_prefix.txt
+            "
+            # 读取 x86_64 libomp 路径
+            LIBOMP_PREFIX=$(cat /tmp/libomp_prefix.txt | grep LIBOMP_PREFIX | cut -d= -f2)
+            echo "Final LIBOMP_PREFIX for x86_64: $LIBOMP_PREFIX"
           else
-            # Apple Silicon macOS - Homebrew 在 /opt/homebrew  
-            brew_cmd="brew"
-            libomp_prefix="/opt/homebrew/opt/libomp"
+            # Apple Silicon macOS - 使用原生架构
+            echo "Installing native libomp on Apple Silicon macOS"
+            brew install libomp
+            LIBOMP_PREFIX=$(brew --prefix libomp)
+            echo "Final LIBOMP_PREFIX for arm64: $LIBOMP_PREFIX"
           fi
           
-          # 安装 libomp
-          $brew_cmd install libomp
-          
-          # 验证 libomp 安装
-          if [ -d "$libomp_prefix" ]; then
-            echo "libomp found at: $libomp_prefix"
-            echo "libomp contents:"
-            ls -la "$libomp_prefix/lib/" || echo "lib directory not found"
-          else
-            echo "WARNING: libomp not found at expected path: $libomp_prefix"
-            # 尝试通过 brew --prefix 获取路径
-            libomp_prefix=$($brew_cmd --prefix libomp)
-            echo "Using brew --prefix path: $libomp_prefix"
+          # 验证 libomp 架构
+          echo "libomp prefix: $LIBOMP_PREFIX"
+          if [ -f "$LIBOMP_PREFIX/lib/libomp.dylib" ]; then
+            echo "libomp.dylib architecture:"
+            file "$LIBOMP_PREFIX/lib/libomp.dylib" || echo "Cannot check architecture"
           fi
           
-          LIBOMP_PATH="$libomp_prefix/lib"
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$LIBOMP_PATH -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$libomp_prefix/include" >> $GITHUB_ENV
-          echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "LIBOMP_PATH=$LIBOMP_PATH" >> $GITHUB_ENV
-          echo "Final LIBOMP_PATH: $LIBOMP_PATH" >> $GITHUB_ENV
+          # 设置环境变量 - 使用正确的格式
+          {
+            echo "CC=clang"
+            echo "CXX=clang++" 
+            echo "LDFLAGS=-L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs"
+            echo "CPPFLAGS=-I$LIBOMP_PREFIX/include"
+            echo "SEQUENZO_ENABLE_OPENMP=1"
+            echo "LIBOMP_PATH=$LIBOMP_PREFIX/lib"
+          } >> "$GITHUB_ENV"
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
