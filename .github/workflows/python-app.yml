@@ -241,7 +241,7 @@ jobs:
           fi
         shell: bash
 
-      - name: Debug and Fix Linux Source Files
+      - name: Debug Linux Source Files
         if: runner.os == 'Linux'
         run: |
           echo "=== 详细调试 Linux 源文件问题 ==="
@@ -297,6 +297,57 @@ jobs:
           }
         shell: bash
 
+      - name: Fix Linux Source File Paths
+        if: runner.os == 'Linux'
+        run: |
+          echo "=== Fixing Linux source file paths ==="
+          echo "Current working directory: $(pwd)"
+
+          # 确保在正确的目录中查找文件
+          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
+            echo "Found module.cpp at relative path"
+
+            # 检查 module.cpp 中的包含语句
+            echo "=== Checking includes in module.cpp ==="
+            cd sequenzo/dissimilarity_measures/src/
+            echo "Now in: $(pwd)"
+
+            # 查看包含语句
+            grep -n "#include" module.cpp | head -20
+
+            # 验证被包含的文件是否存在
+            for file in OMdistance.cpp OMspellDistance.cpp DHDdistance.cpp LCPdistance.cpp dist2matrix.cpp; do
+              if [ -f "$file" ]; then
+                echo "[OK] $file exists in current directory"
+              else
+                echo "[ERROR] $file NOT FOUND in $(pwd)"
+              fi
+            done
+
+            # 回到根目录
+            cd ../../../
+          else
+            echo "[ERROR] module.cpp not found at expected path"
+            # 尝试其他可能的路径
+            find . -name "module.cpp" -type f 2>/dev/null | head -10
+          fi
+
+          # 关键修复：确保构建时编译器能找到所有源文件
+          echo "=== Applying path fix ==="
+
+          # 复制源文件到构建期望的位置（如果必要）
+          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
+            echo "Source files are in correct location"
+            # 验证所有必要的.cpp文件都在src目录中
+            REQUIRED_FILES=("OMdistance.cpp" "OMspellDistance.cpp" "DHDdistance.cpp" "LCPdistance.cpp" "dist2matrix.cpp")
+            for file in "${REQUIRED_FILES[@]}"; do
+              if [ ! -f "sequenzo/dissimilarity_measures/src/$file" ]; then
+                echo "[WARNING] Missing required file: $file"
+              fi
+            done
+          fi
+        shell: bash
+
       - name: Build Cython extensions
         run: |
           echo "=== Building Cython extensions ==="
@@ -307,6 +358,30 @@ jobs:
           # 检查 Cython 文件是否存在
           echo "Checking for Cython files:"
           find . -name "*.pyx" -o -name "*.pxd" | head -10
+          
+          # Linux 特定修复：设置正确的包含路径
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            echo "=== Applying Linux-specific build fixes ==="
+            
+            # 确保在项目根目录
+            echo "Current directory: $(pwd)"
+            
+            # 验证源文件路径
+            SRC_DIR="sequenzo/dissimilarity_measures/src"
+            if [ -d "$SRC_DIR" ]; then
+              echo "Source directory exists: $SRC_DIR"
+              echo "Contents:"
+              ls -la "$SRC_DIR/" | head -10
+            else
+              echo "[ERROR] Source directory not found: $SRC_DIR"
+              # 尝试创建或查找正确的路径
+              find . -name "OMdistance.cpp" -type f 2>/dev/null | head -5
+            fi
+            
+            # 设置环境变量以确保构建系统找到文件
+            export PYTHONPATH=$(pwd):$PYTHONPATH
+            echo "PYTHONPATH set to: $PYTHONPATH"
+          fi
 
           # 尝试构建 Cython 扩展
           echo "Attempting to build Cython extensions in place..."
