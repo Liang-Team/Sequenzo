@@ -21,14 +21,6 @@ unit_test/
 # Jupyter Notebooks
 .ipynb_checkpoints/
 
-# 通常忽略所有 .c 和 .so 文件
-*.c
-*.cpp
-*.so
-*.dylib
-*.o
-*.a
-
 # ⚠️ IMPORTANT: Do NOT commit Cython-generated .c files!
 # They contain hardcoded paths from the build machine.
 # Cython will regenerate them during setup.py build_ext
@@ -38,6 +30,14 @@ unit_test/
 # 如果你有 cpp 源码用于 Pybind11（这些是手写的源码，应该保留）
 !sequenzo/dissimilarity_measures/src/*.cpp
 !sequenzo/clustering/src/*.cpp
+
+# 通常忽略所有 .c 和 .so 文件
+*.c
+*.cpp
+*.so
+*.dylib
+*.o
+*.a
 
 # Python wheels
 *.whl
