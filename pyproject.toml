@@ -6,7 +6,7 @@ requires = [
     "cython>=0.29.21",
     # Use NumPy 2.x for building to ensure ABI compatibility with runtime
     # NumPy 2.x is backward compatible with code written for NumPy 1.x
-    "numpy>=2.0.0"
+    "numpy>=1.21.0"
 ]
 build-backend = "setuptools.build_meta"  # Use setuptools as the build backend
 
@@ -31,7 +31,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
     # Runtime numpy - using 2.x for ABI compatibility with built extensions
     # NumPy 2.x is backward compatible with code written for NumPy 1.x
