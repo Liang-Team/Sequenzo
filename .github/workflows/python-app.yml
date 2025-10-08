@@ -348,6 +348,38 @@ jobs:
           fi
         shell: bash
 
+      - name: Restore deleted source files
+        if: runner.os == 'Linux'
+        run: |
+          echo "=== Restoring deleted source files ==="
+          echo "Git status before restoration:"
+          git status --porcelain
+
+          # 恢复所有被删除的 .cpp 文件
+          echo "Restoring deleted .cpp files..."
+          git checkout HEAD -- sequenzo/dissimilarity_measures/src/*.cpp
+          git checkout HEAD -- sequenzo/clustering/src/*.cpp
+
+          echo "Git status after restoration:"
+          git status --porcelain
+
+          # 验证文件是否恢复
+          echo "=== Verifying restored files ==="
+          if [ -f "sequenzo/dissimilarity_measures/src/OMdistance.cpp" ]; then
+            echo "[OK] OMdistance.cpp restored"
+          else
+            echo "[ERROR] OMdistance.cpp still missing"
+          fi
+
+          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
+            echo "[OK] module.cpp restored"
+            echo "Checking module.cpp includes:"
+            head -10 sequenzo/dissimilarity_measures/src/module.cpp
+          else
+            echo "[ERROR] module.cpp still missing"
+          fi
+        shell: bash
+
       - name: Build Cython extensions
         run: |
           echo "=== Building Cython extensions ==="
