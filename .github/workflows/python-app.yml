@@ -292,75 +292,6 @@ jobs:
           "
         shell: bash
 
-      - name: Verify built Cython modules
-        run: |
-          echo "=== Verifying built cython modules in wheel ==="
-
-          # 安装轮子
-          WHEEL_FILE=$(ls dist/*.whl | head -1)
-          echo "Installing wheel: $WHEEL_FILE"
-          pip install --force-reinstall "$WHEEL_FILE"
-
-          # 检查安装的模块 - 使用 ASCII 字符
-          echo "=== Checking installed modules ==="
-          python -c "
-          import os
-          import sys
-          import importlib
-
-          # 设置标准输出编码为 UTF-8 以避免 Windows 编码问题
-          if sys.platform == 'win32':
-              import io
-              sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-
-          def check_module(module_name):
-              try:
-                  spec = importlib.util.find_spec(module_name)
-                  if spec:
-                      print(f'[OK] {module_name}: {spec.origin}')
-                      return True
-                  else:
-                      print(f'[FAIL] {module_name}: NOT FOUND')
-                      return False
-              except Exception as e:
-                  print(f'[FAIL] {module_name}: ERROR - {e}')
-                  return False
-
-          # 检查主包
-          check_module('sequenzo')
-          check_module('sequenzo.dissimilarity_measures')
-          check_module('sequenzo.dissimilarity_measures.utils')
-
-          # 检查 Cython 模块
-          cython_modules = [
-              'sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix',
-              'sequenzo.dissimilarity_measures.utils.seqconc',
-              'sequenzo.dissimilarity_measures.utils.seqdss', 
-              'sequenzo.dissimilarity_measures.utils.seqdur',
-              'sequenzo.dissimilarity_measures.utils.seqlength'
-          ]
-
-          print('\\\\n=== Checking Cython modules ===')
-          for module in cython_modules:
-              check_module(module)
-
-          # 检查包内容
-          print('\\\\n=== Package contents ===')
-          try:
-              import sequenzo
-              pkg_path = os.path.dirname(sequenzo.__file__)
-              print(f'Package path: {pkg_path}')
-
-              # 列出所有文件
-              for root, dirs, files in os.walk(pkg_path):
-                  for file in files:
-                      if file.endswith(('.so', '.pyd', '.dylib')):
-                          print(f'Shared lib: {os.path.join(root, file)}')
-          except Exception as e:
-              print(f'Error examining package: {e}')
-          "
-        shell: bash
-
       - name: Build wheels with cibuildwheel
         run: python -m cibuildwheel --output-dir dist
         env:
@@ -787,6 +718,75 @@ jobs:
           else:
               print('ERROR: No matching wheel files found')
           " || echo "Verification completed with warnings"
+        shell: bash
+
+      - name: Verify built Cython modules
+        run: |
+          echo "=== Verifying built cython modules in wheel ==="
+
+          # 安装轮子
+          WHEEL_FILE=$(ls dist/*.whl | head -1)
+          echo "Installing wheel: $WHEEL_FILE"
+          pip install --force-reinstall "$WHEEL_FILE"
+
+          # 检查安装的模块 - 使用 ASCII 字符
+          echo "=== Checking installed modules ==="
+          python -c "
+          import os
+          import sys
+          import importlib
+
+          # 设置标准输出编码为 UTF-8 以避免 Windows 编码问题
+          if sys.platform == 'win32':
+              import io
+              sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+          def check_module(module_name):
+              try:
+                  spec = importlib.util.find_spec(module_name)
+                  if spec:
+                      print(f'[OK] {module_name}: {spec.origin}')
+                      return True
+                  else:
+                      print(f'[FAIL] {module_name}: NOT FOUND')
+                      return False
+              except Exception as e:
+                  print(f'[FAIL] {module_name}: ERROR - {e}')
+                  return False
+
+          # 检查主包
+          check_module('sequenzo')
+          check_module('sequenzo.dissimilarity_measures')
+          check_module('sequenzo.dissimilarity_measures.utils')
+
+          # 检查 Cython 模块
+          cython_modules = [
+              'sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix',
+              'sequenzo.dissimilarity_measures.utils.seqconc',
+              'sequenzo.dissimilarity_measures.utils.seqdss', 
+              'sequenzo.dissimilarity_measures.utils.seqdur',
+              'sequenzo.dissimilarity_measures.utils.seqlength'
+          ]
+
+          print('\\\\n=== Checking Cython modules ===')
+          for module in cython_modules:
+              check_module(module)
+
+          # 检查包内容
+          print('\\\\n=== Package contents ===')
+          try:
+              import sequenzo
+              pkg_path = os.path.dirname(sequenzo.__file__)
+              print(f'Package path: {pkg_path}')
+
+              # 列出所有文件
+              for root, dirs, files in os.walk(pkg_path):
+                  for file in files:
+                      if file.endswith(('.so', '.pyd', '.dylib')):
+                          print(f'Shared lib: {os.path.join(root, file)}')
+          except Exception as e:
+              print(f'Error examining package: {e}')
+          "
         shell: bash
 
       - name: Run Integration Tests (Quickstart Workflow)
