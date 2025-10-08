@@ -608,107 +608,11 @@ class InstallCommand(install):
             print(f"Post-installation setup failed: {e}")
             print("You can manually run: python -m sequenzo.openmp_setup")
 
-
-class BdistWheel(bdist_wheel):
-    """Custom bdist_wheel command to exclude source files from wheel."""
-    
-    def run(self):
-        # Run the standard bdist_wheel
-        super().run()
-        
-        # Clean up .c and .pyx files from the wheel
-        print("\n[WHEEL] Cleaning up source files from wheel distribution...")
-        try:
-            import zipfile
-            import tempfile
-            import shutil
-            from pathlib import Path
-            
-            # Find the generated wheel file
-            dist_dir = Path(self.dist_dir)
-            wheel_files = list(dist_dir.glob('*.whl'))
-            
-            if not wheel_files:
-                print("[WHEEL] No wheel files found to clean")
-                return
-            
-            for wheel_path in wheel_files:
-                print(f"[WHEEL] Processing: {wheel_path.name}")
-                
-                # Create a temporary directory
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    temp_path = Path(temp_dir)
-                    
-                    # Extract the wheel
-                    with zipfile.ZipFile(wheel_path, 'r') as zip_ref:
-                        zip_ref.extractall(temp_path)
-                    
-                    # Find and remove .c and .pyx files
-                    removed_count = 0
-                    removed_files = []
-                    for pattern in ['**/*.c', '**/*.pyx', '**/*.pxd']:
-                        for file_to_remove in temp_path.glob(pattern):
-                            # Only remove if it's a Cython-generated file
-                            if '/sequenzo/' in str(file_to_remove):
-                                removed_files.append(str(file_to_remove.relative_to(temp_path)))
-                                file_to_remove.unlink()
-                                removed_count += 1
-                                print(f"[WHEEL]   Removed: {file_to_remove.relative_to(temp_path)}")
-                    
-                    if removed_count > 0:
-                        # Update RECORD file to remove deleted entries
-                        record_files = list(temp_path.glob('**/*.dist-info/RECORD'))
-                        if record_files:
-                            record_path = record_files[0]
-                            print(f"[WHEEL] Updating RECORD file")
-                            
-                            # Read existing RECORD
-                            with open(record_path, 'r') as f:
-                                record_lines = f.readlines()
-                            
-                            # Normalize removed file paths for comparison (handle both / and \)
-                            removed_set = set()
-                            for rf in removed_files:
-                                removed_set.add(rf.replace('\\', '/'))
-                            
-                            # Filter out removed files
-                            new_record_lines = []
-                            for line in record_lines:
-                                if line.strip():  # Skip empty lines
-                                    file_path = line.split(',')[0].replace('\\', '/')
-                                    # Keep the line if it's not in removed files
-                                    if not any(file_path.endswith(rf) or rf in file_path for rf in removed_set):
-                                        new_record_lines.append(line)
-                            
-                            # Write updated RECORD
-                            with open(record_path, 'w') as f:
-                                f.writelines(new_record_lines)
-                            
-                            print(f"[WHEEL] Updated RECORD file: removed {removed_count} entries")
-                        
-                        # Repack the wheel
-                        wheel_path.unlink()
-                        with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
-                            for file_path in temp_path.rglob('*'):
-                                if file_path.is_file():
-                                    arcname = file_path.relative_to(temp_path)
-                                    zip_ref.write(file_path, arcname)
-                        
-                        print(f"[WHEEL] Cleaned wheel: removed {removed_count} source files")
-                    else:
-                        print("[WHEEL] No source files found to remove")
-                        
-        except Exception as e:
-            print(f"[WHEEL] Warning: Failed to clean source files from wheel: {e}")
-            print("[WHEEL] The wheel is still usable, but may contain unnecessary source files")
-
-
 # Run the actual setup process
 setup(
     ext_modules=configure_cpp_extension() + configure_cython_extensions(),
     cmdclass={
         "build_ext": BuildExt,
         "install": InstallCommand,
-        "bdist_wheel": BdistWheel,
     },
 )

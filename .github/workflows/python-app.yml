@@ -105,7 +105,7 @@ jobs:
 
       - name: Ensure setuptools/wheel for macOS
         if: runner.os == 'macOS'
-        run: python -m pip install --upgrade pip setuptools wheel
+        run: python -m pip install --upgrade pip setuptools wheel cibuildwheel
 
       # Add OpenMP support
       - name: Install OpenMP (macOS)
@@ -195,7 +195,7 @@ jobs:
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip setuptools wheel cibuildwheel
           # Use oldest-supported-numpy for builds to ensure forward compatibility
           pip install oldest-supported-numpy || pip install "numpy>=1.21.0"
           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
@@ -333,7 +333,7 @@ jobs:
             # 或者根据架构设置不同的目标
           CIBW_TARGET_OSX_x86_64: "10.15"
           CIBW_TARGET_OSX_arm64: "11.0"
-          CIBW_BUILD_VERBOSITY: "1"
+          CIBW_BUILD_VERBOSITY: "3"
 
           # Environment variables
           CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
@@ -736,6 +736,38 @@ jobs:
 
       - name: Check wheels
         run: twine check dist/*
+
+      # 验证轮子 RECORD
+      - name: Verify Wheel RECORD Integrity
+        run: |
+          echo "=== Verifying wheel RECORD integrity ==="
+          for wheel in dist/*.whl; do
+            echo "Checking $wheel"
+            # 解压并比较 RECORD 与实际文件
+            unzip -q $wheel -d temp_wheel
+            cd temp_wheel
+            # 提取 RECORD
+            record_file=$(find . -name RECORD)
+            if [ -f "$record_file" ]; then
+              # 检查每个 RECORD 条目是否存在
+              awk -F, '{print $1}' $record_file | while read file; do
+                if [ ! -f "$file" ]; then
+                  echo "[ERROR] Missing file in wheel: $file"
+                fi
+              done
+              # 检查多余文件（可选）
+              find . -type f | grep -v '.dist-info/' | while read extra; do
+                if ! grep -q "^${extra#./}," $record_file; then
+                  echo "[WARNING] Extra file not in RECORD: $extra"
+                fi
+              done
+            else
+              echo "[ERROR] No RECORD file found"
+            fi
+            cd ..
+            rm -rf temp_wheel
+          done
+        shell: bash
 
       - name: Verify OpenMP Support
         run: |
