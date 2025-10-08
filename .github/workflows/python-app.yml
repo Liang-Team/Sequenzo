@@ -884,28 +884,7 @@ jobs:
               if [ -f "tests/test_quickstart_integration.py" ]; then
                   pytest tests/test_quickstart_integration.py -v -s || echo "Integration tests completed with warnings"
               else
-                  echo "Test file not found, creating a simple test..."
-                  # 创建一个简单的测试文件
-                  cat > test_basic.py << 'EOF'
-                  import sequenzo
-                  import numpy as np
-            
-                  def test_import():
-                      """Test basic import functionality"""
-                      assert sequenzo is not None
-                      print("✓ Basic import test passed")
-            
-                  def test_version():
-                      """Test version attribute"""
-                      version = getattr(sequenzo, '__version__', 'unknown')
-                      print(f"✓ Version: {version}")
-                  
-                  if __name__ == "__main__":
-                      test_import()
-                      test_version()
-                      print("✓ All basic tests passed")
-                  EOF
-                  python test_basic.py || echo "Basic tests failed"
+                  echo "Test file not found"
               fi
           else
               echo "ERROR: Cannot import sequenzo, skipping integration tests"
