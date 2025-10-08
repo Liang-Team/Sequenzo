@@ -506,7 +506,7 @@ def configure_cpp_extension():
         clustering_ext_module = Pybind11Extension(
             'sequenzo.clustering.clustering_c_code',
             sources=['sequenzo/clustering/src/module.cpp'],
-            include_dirs=get_clustering_include_dirs(),
+            include_dirs=get_clustering_include_dirs() + include_dirs,
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,
             language='c++',
@@ -543,13 +543,20 @@ def configure_cython_extensions():
         # Get link args for architecture support
         link_args = get_link_args()
 
+        include_dirs = []
+        library_dirs = []
+        if sys.platform == "darwin":  # macOS
+            brew_prefix = os.popen("brew --prefix libomp").read().strip()
+            include_dirs.append(os.path.join(brew_prefix, "include"))
+            library_dirs.append(os.path.join(brew_prefix, "lib"))
+
         extensions = []
         for path in pyx_paths:
             extra_args = get_compile_args_for_file(path)
             extension = Extension(
                 name=str(Path(path).with_suffix("")).replace("/", ".").replace("\\", "."),
                 sources=[path],
-                include_dirs=get_dissimilarity_measures_include_dirs(),
+                include_dirs=get_dissimilarity_measures_include_dirs() + include_dirs,
                 extra_compile_args=extra_args,
                 extra_link_args=link_args,
                 define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]

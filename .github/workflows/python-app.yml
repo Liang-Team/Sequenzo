@@ -51,11 +51,13 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install libomp
+          LIBOMP_PREFIX=$(brew --prefix libomp)
           echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$(brew --prefix libomp)/lib" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$(brew --prefix libomp)/include" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV  
+          echo "LDFLAGS=-L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$LIBOMP_PREFIX/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
+          echo "LIBOMP_PATH=$LIBOMP_PREFIX/lib" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -122,9 +124,8 @@ jobs:
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
           CIBW_ENVIRONMENT_MACOS: >
             SEQUENZO_ENABLE_OPENMP=1
-            LDFLAGS="-L/opt/homebrew/opt/libomp/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,/opt/homebrew/opt/libomp/lib"
-            CPPFLAGS="-I/opt/homebrew/opt/libomp/include"
-            DYLD_LIBRARY_PATH="/opt/homebrew/opt/libomp/lib:$DYLD_LIBRARY_PATH"
+            LDFLAGS="-L$LIBOMP_PATH -Wl,-rpath,@loader_path/../.dylibs"
+            CPPFLAGS="-I$LIBOMP_PATH/../include"
 
           # macOS: ensure libomp is available and properly linked
           CIBW_BEFORE_BUILD_MACOS: |
@@ -194,192 +195,38 @@ jobs:
           
           # macOS: Use delocate to bundle libomp into the wheel
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
-            echo "=== Environment Info ==="
-            HOST_ARCH=$(uname -m)
-            echo "Host architecture: $HOST_ARCH"
-            echo "Wheel: {wheel}"
-            echo "Destination: {dest_dir}"
-            
-            # Ensure destination directory exists
-            mkdir -p {dest_dir}
-            
-            # Check wheel architecture from filename
-            WHEEL_NAME=$(basename {wheel})
-            if [[ "$WHEEL_NAME" == *"universal2"* ]]; then
-              TARGET_ARCH="universal2"
-              echo "Detected universal2 wheel (x86_64 + arm64)"
-            elif [[ "$WHEEL_NAME" == *"x86_64"* ]]; then
-              TARGET_ARCH="x86_64"
-              echo "Detected x86_64 wheel"
-            elif [[ "$WHEEL_NAME" == *"arm64"* ]]; then
-              TARGET_ARCH="arm64"
-              echo "Detected arm64 wheel"
-            else
-              TARGET_ARCH="$HOST_ARCH"
-              echo "Using host architecture: $TARGET_ARCH"
-            fi
-            
-            # Find libomp path
-            LIBOMP_PATH=$(brew --prefix libomp)/lib
-            echo "libomp Homebrew location: $LIBOMP_PATH"
-            
-            # Check if libomp is available
-            if [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
-              echo "[OK] libomp.dylib found"
-              file "$LIBOMP_PATH/libomp.dylib"
-              LIBOMP_ARCHS=$(lipo -info "$LIBOMP_PATH/libomp.dylib" 2>/dev/null || echo "unknown")
-              echo "libomp architectures: $LIBOMP_ARCHS"
+            echo "=== Repairing macOS wheel ==="
+  
+            # 确保 libomp 路径存在
+            if [ -d "$LIBOMP_PATH" ] && [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
+              echo "Found libomp at: $LIBOMP_PATH"
               
-              # For universal2 wheels, check both architectures
-              if [ "$TARGET_ARCH" = "universal2" ]; then
-                echo "[INFO] Building universal2 wheel - checking architecture support"
-                if echo "$LIBOMP_ARCHS" | grep -q "arm64"; then
-                  echo "[OK] libomp supports arm64"
-                fi
-                if echo "$LIBOMP_ARCHS" | grep -q "x86_64"; then
-                  echo "[OK] libomp supports x86_64"
-                fi
-                if echo "$LIBOMP_ARCHS" | grep -q "Architectures.*arm64.*x86_64\|Non-fat.*$HOST_ARCH"; then
-                  echo "[INFO] Will use available architecture(s) + rpath fallback"
-                fi
+              # 使用 delocate-wheel 修复，强制包含 libomp
+              echo "Running delocate-wheel to bundle libomp..."
+              delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
+              
+              if [ $? -eq 0 ] && [ -f {dest_dir}/*.whl ]; then
+                echo "[SUCCESS] Wheel repaired successfully with libomp"
               else
-                # Single architecture wheel
-                if echo "$LIBOMP_ARCHS" | grep -q "$TARGET_ARCH"; then
-                  echo "[OK] libomp.dylib contains required architecture: $TARGET_ARCH"
-                else
-                  echo "[WARNING] libomp.dylib may not contain $TARGET_ARCH"
-                  echo "[INFO] Wheel will use rpath fallback to system libomp"
-                fi
+                echo "[WARNING] Standard delocate failed, trying alternative method"
+                # 备选方案：手动复制库文件
+                mkdir -p {dest_dir}
+                cp {wheel} {dest_dir}/
+                echo "[INFO] Using wheel without bundled libomp - will rely on system installation"
               fi
             else
-              echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
-              echo "[INFO] Wheel will rely on system libomp via rpath"
-            fi
-            
-            echo ""
-            echo "=== Inspecting wheel .so files before repair ==="
-            TEMP_EXTRACT=$(mktemp -d)
-            unzip -q {wheel} -d "$TEMP_EXTRACT"
-            find "$TEMP_EXTRACT" -name "*.so" -exec sh -c 'echo "=== {} ==="; file "{}"; otool -L "{}"' \;
-            rm -rf "$TEMP_EXTRACT"
-            
-            echo ""
-            echo "=== Checking wheel dependencies before repair ==="
-            delocate-listdeps {wheel} || echo "delocate-listdeps failed"
-            
-            echo ""
-            echo "=== Running delocate-wheel with improved strategy ==="
-            export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-            export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
-            
-            # Verify wheel exists
-            if [ ! -f {wheel} ]; then
-              echo "[ERROR] Source wheel not found: {wheel}"
-              exit 1
-            fi
-            
-            echo "[OK] Source wheel exists: {wheel}"
-            ls -lh {wheel}
-            
-            # Strategy: Multiple attempts with different delocate options
-            DELOCATE_SUCCESS=0
-            
-            # Attempt 1: Standard delocate with library path
-            echo "Attempt 1: Standard delocate-wheel with -L option"
-            set +e  # Don't exit on error
-            delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log
-            DELOCATE_EXIT=$?
-            set -e
-            
-            if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-              echo "[OK] Attempt 1 succeeded"
-              DELOCATE_SUCCESS=1
-            else
-              echo "[WARNING] Attempt 1 failed (exit code: $DELOCATE_EXIT)"
-              
-              # Attempt 2: Try with --ignore-missing-dependencies
-              echo "Attempt 2: delocate-wheel with --ignore-missing-dependencies"
-              rm -rf {dest_dir}/*.whl 2>/dev/null || true
-              set +e
-              delocate-wheel --ignore-missing-dependencies -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate2.log
-              DELOCATE_EXIT=$?
-              set -e
-              
-              if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-                echo "[OK] Attempt 2 succeeded"
-                DELOCATE_SUCCESS=1
-              else
-                echo "[WARNING] Attempt 2 failed (exit code: $DELOCATE_EXIT)"
-                
-                # Attempt 3: Try without -L option (let delocate auto-detect)
-                echo "Attempt 3: delocate-wheel without -L option"
-                rm -rf {dest_dir}/*.whl 2>/dev/null || true
-                set +e
-                delocate-wheel -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate3.log
-                DELOCATE_EXIT=$?
-                set -e
-                
-                if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-                  echo "[OK] Attempt 3 succeeded"
-                  DELOCATE_SUCCESS=1
-                else
-                  echo "[WARNING] Attempt 3 failed (exit code: $DELOCATE_EXIT)"
-                fi
-              fi
-            fi
-            
-            # Final fallback: Copy wheel as-is if all delocate attempts failed
-            if [ $DELOCATE_SUCCESS -eq 0 ]; then
-              echo ""
-              echo "[WARNING] All delocate attempts failed - using wheel with system library dependency"
-              echo "[INFO] This wheel will require users to have libomp installed:"
-              echo "  brew install libomp  (macOS)"
-              echo "[INFO] The wheel has embedded rpath fallback to system libomp"
-              
-              # Ensure destination directory exists
+              echo "[WARNING] libomp not found at $LIBOMP_PATH"
+              echo "[INFO] Copying wheel as-is, users will need to install libomp"
               mkdir -p {dest_dir}
-              
-              # Copy with verbose output
-              if cp -v {wheel} {dest_dir}/; then
-                echo "[OK] Wheel copied successfully to {dest_dir}/"
-                DELOCATE_SUCCESS=1
-              else
-                echo "[ERROR] Failed to copy wheel to {dest_dir}/"
-                exit 1
-              fi
+              cp {wheel} {dest_dir}/
             fi
-            
-            echo ""
-            echo "=== Verifying repaired wheel ==="
+          
+            # 验证修复后的 wheel
             if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+              echo "=== Verifying repaired wheel ==="
               REPAIRED_WHEEL=$(ls {dest_dir}/*.whl | head -1)
-              echo "Repaired wheel: $REPAIRED_WHEEL"
-              ls -lh "$REPAIRED_WHEEL"
-              
-              echo ""
-              echo "=== Checking bundled dependencies ==="
-              delocate-listdeps "$REPAIRED_WHEEL" 2>&1 || echo "[INFO] delocate-listdeps check completed"
-              
-              echo ""
-              echo "=== Inspecting repaired .so files ==="
-              TEMP_EXTRACT2=$(mktemp -d)
-              unzip -q "$REPAIRED_WHEEL" -d "$TEMP_EXTRACT2"
-              echo "Checking for .dylibs directory:"
-              if find "$TEMP_EXTRACT2" -type d -name ".dylibs" | head -1 | grep -q .; then
-                find "$TEMP_EXTRACT2" -type d -name ".dylibs" -exec echo "[OK] Found: {}" \; -exec ls -la {} \;
-              else
-                echo "[INFO] No .dylibs directory found (wheel may require system libomp)"
-              fi
-              echo ""
-              echo "Checking .so files in repaired wheel:"
-              find "$TEMP_EXTRACT2" -name "*.so" -exec sh -c 'echo "=== {} ==="; otool -L "{}"' \; | head -100
-              rm -rf "$TEMP_EXTRACT2"
-              
-              echo ""
-              echo "[OK] Wheel repair process completed"
-            else
-              echo "[ERROR] No wheel found in {dest_dir}"
-              exit 1
+              echo "Final wheel: $REPAIRED_WHEEL"
+              delocate-listdeps "$REPAIRED_WHEEL" 2>&1 || echo "Dependency check completed"
             fi
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
