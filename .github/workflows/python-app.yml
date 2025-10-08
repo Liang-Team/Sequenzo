@@ -241,46 +241,59 @@ jobs:
           fi
         shell: bash
 
-      - name: Fix Linux source
+      - name: Debug and Fix Linux Source Files
         if: runner.os == 'Linux'
         run: |
-          echo "=== Linux 源文件修复 ==="
-          
-          # 1. 确保在正确目录
-          cd "$GITHUB_WORKSPACE"
-          echo "工作区目录: $(pwd)"
-          
-          # 2. 重新检查子模块
-          echo "检查子模块..."
-          git submodule status || echo "无子模块或子模块已初始化"
-          git submodule update --init --recursive || echo "子模块更新完成或无需更新"
-          
-          # 3. 详细文件查找
-          echo "详细查找 module.cpp:"
-          find . -name "module.cpp" -type f > found_files.txt 2>/dev/null || true
-          if [ -s found_files.txt ]; then
-            echo "找到的 module.cpp 文件:"
-            cat found_files.txt
-            # 使用第一个找到的文件创建符号链接
-            FIRST_FILE=$(head -1 found_files.txt)
-            echo "使用第一个文件: $FIRST_FILE"
-            mkdir -p sequenzo/dissimilarity_measures/src/
-            cp "$FIRST_FILE" sequenzo/dissimilarity_measures/src/module.cpp
-          else
-            echo "未找到任何 module.cpp 文件"
-            echo "当前目录结构:"
-            find . -type d -name "*sequenzo*" | head -10
-            exit 1
+          echo "=== 详细调试 Linux 源文件问题 ==="
+          echo "当前工作目录: $(pwd)"
+          echo "Git 工作目录状态:"
+          git status --porcelain || echo "无法获取 git 状态"
+
+          echo "=== 检查 Git 子模块状态 ==="
+          git submodule status --recursive
+
+          echo "=== 详细目录结构 ==="
+          echo "根目录:"
+          ls -la
+          echo "sequenzo 目录:"
+          ls -la sequenzo/ 2>/dev/null || echo "sequenzo 目录不存在"
+          echo "sequenzo/dissimilarity_measures 目录:"
+          ls -la sequenzo/dissimilarity_measures/ 2>/dev/null || echo "dissimilarity_measures 目录不存在"
+          echo "sequenzo/dissimilarity_measures/src 目录:"
+          ls -la sequenzo/dissimilarity_measures/src/ 2>/dev/null || echo "src 目录不存在"
+
+          echo "=== 使用不同方法查找 module.cpp ==="
+          echo "方法1: find 命令"
+          find . -name "module.cpp" -type f 2>/dev/null | head -10
+          echo "方法2: locate 命令"
+          locate module.cpp 2>/dev/null | head -10 || echo "locate 不可用"
+          echo "方法3: 递归查找所有 .cpp 文件"
+          find . -name "*.cpp" -type f 2>/dev/null | head -20
+
+          echo "=== 检查 Git 仓库中的文件 ==="
+          echo "Git 中的 module.cpp:"
+          git ls-files | grep module.cpp || echo "Git 中没有 module.cpp"
+          echo "Git 中的所有 .cpp 文件:"
+          git ls-files | grep "\.cpp$" | head -20
+
+          echo "=== 检查子模块内容 ==="
+          if [ -d "sequenzo/dissimilarity_measures/src/xsimd" ]; then
+            echo "xsimd 子模块内容:"
+            ls -la sequenzo/dissimilarity_measures/src/xsimd/ | head -10
           fi
-          
-          # 4. 最终验证
-          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
-            echo "✅ 成功确保 module.cpp 在预期位置"
-            ls -la "sequenzo/dissimilarity_measures/src/module.cpp"
-          else
-            echo "❌ 无法准备 module.cpp"
-            exit 1
-          fi
+
+          echo "=== 手动创建缺失的文件结构 ==="
+          # 检查并创建必要的目录结构
+          mkdir -p sequenzo/dissimilarity_measures/src/
+
+          echo "=== 检查是否可以从 Git 检出缺失的文件 ==="
+          # 尝试从 Git 检出文件
+          git checkout HEAD -- sequenzo/dissimilarity_measures/src/module.cpp 2>/dev/null || {
+            echo "无法从 Git 检出 module.cpp，尝试其他方法..."
+
+            # 检查是否在其他位置
+            echo "在其他位置查找 module.cpp:"
+            find /home/runner/work -name "module.cpp" -type f 2>/dev/null | head -10
         shell: bash
 
       - name: Build Cython extensions
