@@ -207,21 +207,13 @@ jobs:
           fi
         shell: bash
 
-      - name: Clean previous build outputs
-        run: |
-          rm -rf build/ dist/ *.egg-info
-          find . -name "*.so" -delete
-        shell: bash
-
-      - name: Clean before cibuildwheel (Linux)
-        if: runner.os == 'Linux'
+      - name: Clean before cibuildwheel
         run: |
           echo "=== Cleaning build artifacts before cibuildwheel ==="
           # 彻底清理所有构建产物
           rm -rf build/ dist/ *.egg-info
           find . -name "*.so" -delete
           find . -name "*.c" -delete
-          find . -name "*.cpp" -delete
           find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
           # 检查是否还有残留的共享库文件
@@ -238,145 +230,6 @@ jobs:
           if [ "${{ matrix.python-version }}" == "3.12" ]; then
             echo "Installing NumPy 2.0 compatible dependencies for Python 3.12"
             pip install "numpy>=2.0.0" "pybind11>=2.12.0"
-          fi
-        shell: bash
-
-      - name: Debug Linux Source Files
-        if: runner.os == 'Linux'
-        run: |
-          echo "=== 详细调试 Linux 源文件问题 ==="
-          echo "当前工作目录: $(pwd)"
-          echo "Git 工作目录状态:"
-          git status --porcelain || echo "无法获取 git 状态"
-
-          echo "=== 检查 Git 子模块状态 ==="
-          git submodule status --recursive
-
-          echo "=== 详细目录结构 ==="
-          echo "根目录:"
-          ls -la
-          echo "sequenzo 目录:"
-          ls -la sequenzo/ 2>/dev/null || echo "sequenzo 目录不存在"
-          echo "sequenzo/dissimilarity_measures 目录:"
-          ls -la sequenzo/dissimilarity_measures/ 2>/dev/null || echo "dissimilarity_measures 目录不存在"
-          echo "sequenzo/dissimilarity_measures/src 目录:"
-          ls -la sequenzo/dissimilarity_measures/src/ 2>/dev/null || echo "src 目录不存在"
-
-          echo "=== 使用不同方法查找 module.cpp ==="
-          echo "方法1: find 命令"
-          find . -name "module.cpp" -type f 2>/dev/null | head -10
-          echo "方法2: locate 命令"
-          locate module.cpp 2>/dev/null | head -10 || echo "locate 不可用"
-          echo "方法3: 递归查找所有 .cpp 文件"
-          find . -name "*.cpp" -type f 2>/dev/null | head -20
-
-          echo "=== 检查 Git 仓库中的文件 ==="
-          echo "Git 中的 module.cpp:"
-          git ls-files | grep module.cpp || echo "Git 中没有 module.cpp"
-          echo "Git 中的所有 .cpp 文件:"
-          git ls-files | grep "\.cpp$" | head -20
-
-          echo "=== 检查子模块内容 ==="
-          if [ -d "sequenzo/dissimilarity_measures/src/xsimd" ]; then
-            echo "xsimd 子模块内容:"
-            ls -la sequenzo/dissimilarity_measures/src/xsimd/ | head -10
-          fi
-
-          echo "=== 手动创建缺失的文件结构 ==="
-          # 检查并创建必要的目录结构
-          mkdir -p sequenzo/dissimilarity_measures/src/
-
-          echo "=== 检查是否可以从 Git 检出缺失的文件 ==="
-          # 尝试从 Git 检出文件
-          git checkout HEAD -- sequenzo/dissimilarity_measures/src/module.cpp 2>/dev/null || {
-            echo "无法从 Git 检出 module.cpp，尝试其他方法..."
-
-            # 检查是否在其他位置
-            echo "在其他位置查找 module.cpp:"
-            find /home/runner/work -name "module.cpp" -type f 2>/dev/null | head -10
-          }
-        shell: bash
-
-      - name: Fix Linux Source File Paths
-        if: runner.os == 'Linux'
-        run: |
-          echo "=== Fixing Linux source file paths ==="
-          echo "Current working directory: $(pwd)"
-
-          # 确保在正确的目录中查找文件
-          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
-            echo "Found module.cpp at relative path"
-
-            # 检查 module.cpp 中的包含语句
-            echo "=== Checking includes in module.cpp ==="
-            cd sequenzo/dissimilarity_measures/src/
-            echo "Now in: $(pwd)"
-
-            # 查看包含语句
-            grep -n "#include" module.cpp | head -20
-
-            # 验证被包含的文件是否存在
-            for file in OMdistance.cpp OMspellDistance.cpp DHDdistance.cpp LCPdistance.cpp dist2matrix.cpp; do
-              if [ -f "$file" ]; then
-                echo "[OK] $file exists in current directory"
-              else
-                echo "[ERROR] $file NOT FOUND in $(pwd)"
-              fi
-            done
-
-            # 回到根目录
-            cd ../../../
-          else
-            echo "[ERROR] module.cpp not found at expected path"
-            # 尝试其他可能的路径
-            find . -name "module.cpp" -type f 2>/dev/null | head -10
-          fi
-
-          # 关键修复：确保构建时编译器能找到所有源文件
-          echo "=== Applying path fix ==="
-
-          # 复制源文件到构建期望的位置（如果必要）
-          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
-            echo "Source files are in correct location"
-            # 验证所有必要的.cpp文件都在src目录中
-            REQUIRED_FILES=("OMdistance.cpp" "OMspellDistance.cpp" "DHDdistance.cpp" "LCPdistance.cpp" "dist2matrix.cpp")
-            for file in "${REQUIRED_FILES[@]}"; do
-              if [ ! -f "sequenzo/dissimilarity_measures/src/$file" ]; then
-                echo "[WARNING] Missing required file: $file"
-              fi
-            done
-          fi
-        shell: bash
-
-      - name: Restore deleted source files
-        if: runner.os == 'Linux'
-        run: |
-          echo "=== Restoring deleted source files ==="
-          echo "Git status before restoration:"
-          git status --porcelain
-
-          # 恢复所有被删除的 .cpp 文件
-          echo "Restoring deleted .cpp files..."
-          git checkout HEAD -- sequenzo/dissimilarity_measures/src/*.cpp
-          git checkout HEAD -- sequenzo/clustering/src/*.cpp
-
-          echo "Git status after restoration:"
-          git status --porcelain
-
-          # 验证文件是否恢复
-          echo "=== Verifying restored files ==="
-          if [ -f "sequenzo/dissimilarity_measures/src/OMdistance.cpp" ]; then
-            echo "[OK] OMdistance.cpp restored"
-          else
-            echo "[ERROR] OMdistance.cpp still missing"
-          fi
-
-          if [ -f "sequenzo/dissimilarity_measures/src/module.cpp" ]; then
-            echo "[OK] module.cpp restored"
-            echo "Checking module.cpp includes:"
-            head -10 sequenzo/dissimilarity_measures/src/module.cpp
-          else
-            echo "[ERROR] module.cpp still missing"
           fi
         shell: bash
 
@@ -554,8 +407,7 @@ jobs:
             # 再次清理，确保没有残留的构建文件
             find . -name "*.so" -delete 2>/dev/null || true
             find . -name "*.c" -delete 2>/dev/null || true
-            find . -name "*.cpp" -delete 2>/dev/null || true
-            rm -rf build/ *.egg-info
+            rm -rf build/ dist/ *.egg-info
             
             echo "Clean build environment ready"
             
