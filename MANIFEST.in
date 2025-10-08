@@ -35,6 +35,12 @@ global-exclude __pycache__
 global-exclude .DS_Store
 global-exclude *.egg-info
 # Note: *.so, *.c exclusion is handled by setup.py for wheel builds
+
+# 添加这些行：明确排除 Cython 生成的文件和源文件（防止它们进入轮子）
+exclude sequenzo/**/*.pyx  # 排除 Cython 源文件
+exclude sequenzo/**/*.pxd
+exclude sequenzo/**/*.c    # 排除 Cython 生成的 C 文件
+
 # Exclude test/benchmark files from external libraries to speed up Windows builds
 prune sequenzo/dissimilarity_measures/src/eigen/bench
 prune sequenzo/dissimilarity_measures/src/eigen/test
