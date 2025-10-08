@@ -111,6 +111,8 @@ jobs:
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "universal2"  # Build universal2 wheels that work on both architectures
+          # Alternative: Use separate architecture wheels if universal2 causes issues
+          # CIBW_ARCHS_MACOS: "x86_64 arm64"  # Build separate wheels for each architecture
           CIBW_BUILD_VERBOSITY: "1"
 
           # Environment variables
@@ -139,6 +141,10 @@ jobs:
               echo "Installing libomp..."
               brew install libomp || echo "Failed to install libomp"
             fi
+            
+            # Install delocate for wheel repair
+            echo "Installing delocate for wheel repair..."
+            pip install delocate
             
             # Verify libomp is installed
             if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
@@ -169,6 +175,13 @@ jobs:
                   echo "[OK] libomp contains required $HOST_ARCH architecture"
                 else
                   echo "[WARNING] libomp may not contain $HOST_ARCH - build may fail"
+                fi
+                
+                # Check if we need to create a universal libomp for delocate
+                if echo "$LIBOMP_ARCHS" | grep -q "Non-fat"; then
+                  echo "[INFO] libomp is single-architecture, delocate will handle cross-arch dependencies"
+                elif echo "$LIBOMP_ARCHS" | grep -q "Architectures.*arm64.*x86_64"; then
+                  echo "[OK] libomp is universal binary - optimal for delocate"
                 fi
               fi
             else
@@ -253,7 +266,7 @@ jobs:
             delocate-listdeps {wheel} || echo "delocate-listdeps failed"
             
             echo ""
-            echo "=== Running delocate-wheel ==="
+            echo "=== Running delocate-wheel with improved strategy ==="
             export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
             export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
             
@@ -266,42 +279,57 @@ jobs:
             echo "[OK] Source wheel exists: {wheel}"
             ls -lh {wheel}
             
-            # Strategy: Use delocate with fallback to unmodified wheel
+            # Strategy: Multiple attempts with different delocate options
             DELOCATE_SUCCESS=0
             
-            # For universal2 wheels, try to bundle libomp for both architectures
-            echo "Attempting to bundle libomp into wheel"
-            echo "Command: delocate-wheel -L $LIBOMP_PATH -w {dest_dir} -v {wheel}"
-            
-            # First attempt: Standard delocate (most reliable)
-            echo "Attempt 1: Standard delocate-wheel"
+            # Attempt 1: Standard delocate with library path
+            echo "Attempt 1: Standard delocate-wheel with -L option"
             set +e  # Don't exit on error
             delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate1.log
             DELOCATE_EXIT=$?
-            set -e  # Re-enable exit on error
+            set -e
             
-            echo "delocate-wheel exit code: $DELOCATE_EXIT"
-            
-            if [ $DELOCATE_EXIT -eq 0 ]; then
-              echo "[OK] delocate-wheel succeeded"
+            if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+              echo "[OK] Attempt 1 succeeded"
               DELOCATE_SUCCESS=1
             else
-              echo "[WARNING] delocate-wheel returned non-zero exit code: $DELOCATE_EXIT"
-              # Check if wheel was created despite non-zero exit
-              if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-                echo "[OK] Wheel was created despite non-zero exit code"
+              echo "[WARNING] Attempt 1 failed (exit code: $DELOCATE_EXIT)"
+              
+              # Attempt 2: Try with --ignore-missing-dependencies
+              echo "Attempt 2: delocate-wheel with --ignore-missing-dependencies"
+              rm -rf {dest_dir}/*.whl 2>/dev/null || true
+              set +e
+              delocate-wheel --ignore-missing-dependencies -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate2.log
+              DELOCATE_EXIT=$?
+              set -e
+              
+              if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+                echo "[OK] Attempt 2 succeeded"
                 DELOCATE_SUCCESS=1
               else
-                echo "[WARNING] No wheel found in {dest_dir}/"
-                echo "delocate-wheel output:"
-                cat /tmp/delocate1.log || true
+                echo "[WARNING] Attempt 2 failed (exit code: $DELOCATE_EXIT)"
+                
+                # Attempt 3: Try without -L option (let delocate auto-detect)
+                echo "Attempt 3: delocate-wheel without -L option"
+                rm -rf {dest_dir}/*.whl 2>/dev/null || true
+                set +e
+                delocate-wheel -w {dest_dir} -v {wheel} 2>&1 | tee /tmp/delocate3.log
+                DELOCATE_EXIT=$?
+                set -e
+                
+                if [ $DELOCATE_EXIT -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+                  echo "[OK] Attempt 3 succeeded"
+                  DELOCATE_SUCCESS=1
+                else
+                  echo "[WARNING] Attempt 3 failed (exit code: $DELOCATE_EXIT)"
+                fi
               fi
             fi
             
-            # Fallback: Copy wheel as-is if delocate failed
+            # Final fallback: Copy wheel as-is if all delocate attempts failed
             if [ $DELOCATE_SUCCESS -eq 0 ]; then
               echo ""
-              echo "[WARNING] delocate failed - using wheel with system library dependency"
+              echo "[WARNING] All delocate attempts failed - using wheel with system library dependency"
               echo "[INFO] This wheel will require users to have libomp installed:"
               echo "  brew install libomp  (macOS)"
               echo "[INFO] The wheel has embedded rpath fallback to system libomp"
