@@ -19,17 +19,69 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
         include:
-          - python-version: '3.9'
+          # Linux 配置
+          - os: ubuntu-latest
+            python-version: '3.9'
             python-version-nodot: '39'
-          - python-version: '3.10'
+          - os: ubuntu-latest
+            python-version: '3.10'
             python-version-nodot: '310'
-          - python-version: '3.11'
+          - os: ubuntu-latest
+            python-version: '3.11'
             python-version-nodot: '311'
-          - python-version: '3.12'
+          - os: ubuntu-latest
+            python-version: '3.12'
             python-version-nodot: '312'
+
+          # Windows 配置
+          - os: windows-latest
+            python-version: '3.9'
+            python-version-nodot: '39'
+          - os: windows-latest
+            python-version: '3.10'
+            python-version-nodot: '310'
+          - os: windows-latest
+            python-version: '3.11'
+            python-version-nodot: '311'
+          - os: windows-latest
+            python-version: '3.12'
+            python-version-nodot: '312'
+
+          # macOS x86_64
+          - os: macos-12  # 使用 Intel Mac 运行器
+            python-version: '3.9'
+            python-version-nodot: '39'
+            macos-arch: 'x86_64'
+          - os: macos-12
+            python-version: '3.10'
+            python-version-nodot: '310'
+            macos-arch: 'x86_64'
+          - os: macos-12
+            python-version: '3.11'
+            python-version-nodot: '311'
+            macos-arch: 'x86_64'
+          - os: macos-12
+            python-version: '3.12'
+            python-version-nodot: '312'
+            macos-arch: 'x86_64'
+          # macOS arm64
+          - os: macos-latest  # 使用 Apple Silicon Mac 运行器
+            python-version: '3.9'
+            python-version-nodot: '39'
+            macos-arch: 'arm64'
+          - os: macos-latest
+            python-version: '3.10'
+            python-version-nodot: '310'
+            macos-arch: 'arm64'
+          - os: macos-latest
+            python-version: '3.11'
+            python-version-nodot: '311'
+            macos-arch: 'arm64'
+          - os: macos-latest
+            python-version: '3.12'
+            python-version-nodot: '312'
+            macos-arch: 'arm64'
 
     steps:
       - name: Checkout source with submodules
@@ -47,31 +99,17 @@ jobs:
         run: python -m pip install --upgrade pip setuptools wheel
 
       # Add OpenMP support
-      - name: Install OpenMP for both architectures (macOS)
+      - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
-          # 安装 arm64 libomp
           brew install libomp
-
-          # 安装 x86_64 libomp
-          echo "Installing x86_64 libomp..."
-          arch -x86_64 /bin/bash -c '
-            export PATH="/usr/local/bin:$PATH"
-            if ! command -v brew &> /dev/null; then
-              echo "Installing Homebrew for x86_64..."
-              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            fi
-            brew install libomp
-          ' || echo "x86_64 libomp installation may have failed, continuing..."
-
-          # 设置环境变量指向 arm64 libomp（主要）
-          LIBOMP_ARM64=$(brew --prefix libomp)
+          LIBOMP_PREFIX=$(brew --prefix libomp)
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$LIBOMP_ARM64/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$LIBOMP_ARM64/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$LIBOMP_PREFIX/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "LIBOMP_PATH=$LIBOMP_ARM64/lib" >> $GITHUB_ENV
+          echo "LIBOMP_PATH=$LIBOMP_PREFIX/lib" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -126,7 +164,7 @@ jobs:
           CIBW_SKIP: "*-musllinux* pp*"  # 跳过 musllinux 和 PyPy
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_MACOS: "universal2"  # Build universal2 wheels that work on both architectures
+          CIBW_ARCHS_MACOS: "${{ matrix.macos-arch }}"
           # Alternative: Use separate architecture wheels if universal2 causes issues
           # CIBW_ARCHS_MACOS: "x86_64 arm64"  # Build separate wheels for each architecture
           CIBW_BUILD_VERBOSITY: "1"
@@ -146,90 +184,48 @@ jobs:
             echo "Installing build dependencies for macOS"
             python -m pip install --upgrade pip
             
-            # Check current architecture
-            HOST_ARCH=$(uname -m)
-            echo "Host architecture: $HOST_ARCH"
-            echo "Building universal2 wheel (x86_64 + arm64)"
+            CURRENT_ARCH=$(uname -m)
+            echo "Building for architecture: $CURRENT_ARCH"
             
-            # Install libomp if not present
-            if [ ! -d "$(brew --prefix libomp 2>/dev/null)" ]; then
-              echo "Installing libomp..."
-              brew install libomp || echo "Failed to install libomp"
-            fi
-            
-            # Install delocate for wheel repair
+            # 安装 delocate
             echo "Installing delocate for wheel repair..."
             pip install delocate
-            delocate-listdeps dist/*.whl
-            delocate-wheel -w wheelhouse -v dist/*.whl
             
-            # Verify libomp is installed
-            if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
-              LIBOMP_PREFIX=$(brew --prefix libomp)
-              echo "[OK] libomp found at: $LIBOMP_PREFIX"
-              echo "LDFLAGS: -L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,$LIBOMP_PREFIX/lib"
-              echo "CPPFLAGS: -I$LIBOMP_PREFIX/include"
-              
-              # Check libomp architecture
-              LIBOMP_DYLIB="$LIBOMP_PREFIX/lib/libomp.dylib"
-              if [ -f "$LIBOMP_DYLIB" ]; then
-                echo "libomp.dylib info:"
-                file "$LIBOMP_DYLIB"
-                LIBOMP_ARCHS=$(lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "unknown")
-                echo "libomp architectures: $LIBOMP_ARCHS"
-                
-                # Check if libomp supports both architectures for universal2
-                if echo "$LIBOMP_ARCHS" | grep -q "x86_64"; then
-                  echo "[OK] libomp supports x86_64"
-                fi
-                if echo "$LIBOMP_ARCHS" | grep -q "arm64"; then
-                  echo "[OK] libomp supports arm64"
-                fi
-                
-                # For universal2 build, we need at least the host architecture
-                # The other architecture can use system library fallback via rpath
-                if echo "$LIBOMP_ARCHS" | grep -q "$HOST_ARCH"; then
-                  echo "[OK] libomp contains required $HOST_ARCH architecture"
-                else
-                  echo "[WARNING] libomp may not contain $HOST_ARCH - build may fail"
-                fi
-                
-                # Check if we need to create a universal libomp for delocate
-                if echo "$LIBOMP_ARCHS" | grep -q "Non-fat"; then
-                  echo "[INFO] libomp is single-architecture, delocate will handle cross-arch dependencies"
-                elif echo "$LIBOMP_ARCHS" | grep -q "Architectures.*arm64.*x86_64"; then
-                  echo "[OK] libomp is universal binary - optimal for delocate"
-                fi
+            # 验证 libomp
+            if [ -d "$LIBOMP_PATH" ]; then
+              echo "[OK] libomp found at: $LIBOMP_PATH"
+              if [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
+                echo "libomp.dylib architecture:"
+                file "$LIBOMP_PATH/libomp.dylib"
               fi
             else
-              echo "[WARNING] libomp not found"
+              echo "[WARNING] libomp not found at $LIBOMP_PATH"
             fi
-            
-            echo "libomp setup complete for universal2 build"
           
           # macOS: Use delocate to bundle libomp into the wheel
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
-            echo "=== Repairing macOS universal2 wheel ==="
-  
-            # 使用 delocate-wheel 修复，它会自动处理多架构
-            echo "Running delocate-wheel for universal2..."
+            echo "=== Repairing macOS wheel ==="
+            echo "Current architecture: $(uname -m)"
+            echo "Wheel to repair: {wheel}"
+            
+            # 使用 delocate 修复
             delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
             
-            if [ $? -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+            if [ $? -eq 0 ]; then
               echo "[SUCCESS] Wheel repaired successfully"
             else
               echo "[WARNING] delocate failed, copying wheel as-is"
               mkdir -p {dest_dir}
               cp {wheel} {dest_dir}/
             fi
-          
-            # 验证修复后的 wheel
+            
+            # 验证修复结果
             if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-              echo "=== Verifying repaired wheel ==="
               REPAIRED_WHEEL=$(ls {dest_dir}/*.whl | head -1)
-              echo "Final wheel: $REPAIRED_WHEEL"
+              echo "Repaired wheel: $REPAIRED_WHEEL"
               delocate-listdeps "$REPAIRED_WHEEL" 2>&1 || echo "Dependency check completed"
             fi
+
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
           CIBW_BEFORE_BUILD_LINUX: |
@@ -301,24 +297,14 @@ jobs:
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
           CIBW_TEST_COMMAND_MACOS: |
-            # 设置库路径 - 只使用当前架构的库
+            # 设置库路径
+            export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+            export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
+            
             CURRENT_ARCH=$(uname -m)
-            if [ "$CURRENT_ARCH" = "x86_64" ]; then
-              # x86_64 架构 - 使用 x86_64 的 libomp
-              X86_LIBOMP_PATH="/usr/local/opt/libomp/lib"
-              if [ -d "$X86_LIBOMP_PATH" ]; then
-                export DYLD_LIBRARY_PATH="$X86_LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-                echo "Using x86_64 libomp at: $X86_LIBOMP_PATH"
-              else
-                # 回退到 arm64 libomp（可能不工作，但尝试）
-                export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-                echo "Using arm64 libomp as fallback"
-              fi
-            else
-              # arm64 架构 - 使用 arm64 的 libomp
-              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-              echo "Using arm64 libomp at: $LIBOMP_PATH"
-            fi
+            echo "=== Testing on $CURRENT_ARCH ==="
+            echo "Python version: $(python --version)"
+            echo "DYLD_LIBRARY_PATH: $DYLD_LIBRARY_PATH"
             
             # Check test environment
             echo "Test architecture: $(uname -m)"
