@@ -229,6 +229,23 @@ jobs:
           find . -name "*.so" | head -10 || echo "No shared libraries found"
         shell: bash
 
+      - name: Debug Linux source structure
+        if: runner.os == 'Linux'
+        run: |
+          echo "=== Debugging Linux source structure ==="
+          echo "Current directory: $(pwd)"
+          echo "Directory structure:"
+          ls -la
+          echo "sequenzo directory:"
+          ls -la sequenzo/ || echo "sequenzo directory not found"
+          echo "dissimilarity_measures directory:"
+          ls -la sequenzo/dissimilarity_measures/ || echo "dissimilarity_measures directory not found"
+          echo "src directory:"
+          ls -la sequenzo/dissimilarity_measures/src/ || echo "src directory not found"
+          echo "Looking for module.cpp:"
+          find . -name "module.cpp" -type f | head -10
+        shell: bash
+
       - name: Build Cython extensions
         run: |
           echo "=== Building Cython extensions ==="
@@ -383,6 +400,17 @@ jobs:
             rm -rf build/ *.egg-info
             
             echo "Clean build environment ready"
+            
+            # 使用绝对路径验证源文件
+            echo "Current working directory: $(pwd)"
+            echo "Absolute path verification:"
+            if [ -f "$(pwd)/sequenzo/dissimilarity_measures/src/module.cpp" ]; then
+              echo "[SUCCESS] module.cpp found at absolute path: $(pwd)/sequenzo/dissimilarity_measures/src/module.cpp"
+            else
+              echo "[ERROR] module.cpp NOT FOUND at absolute path: $(pwd)/sequenzo/dissimilarity_measures/src/module.cpp"
+              echo "Available files in src directory:"
+              ls -la "$(pwd)/sequenzo/dissimilarity_measures/src/" 2>/dev/null || echo "Cannot list src directory"
+            fi
 
           # 设置 Linux 修复策略
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
