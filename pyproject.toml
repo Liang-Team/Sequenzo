@@ -35,7 +35,7 @@ version = "0.1.21"
 dependencies = [
     # Runtime numpy - using 2.x for ABI compatibility with built extensions
     # NumPy 2.x is backward compatible with code written for NumPy 1.x
-    "numpy>=2.0.0",
+    "numpy>=1.21.0",
     "pandas>=1.2.5",
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
