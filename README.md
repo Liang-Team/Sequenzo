@@ -63,17 +63,18 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 Sequenzo provides pre-built Python wheels for maximum compatibility — no need to compile from source.
 
-| Platform         | Architecture                  | Python Versions       | Status            |
-|------------------|-------------------------------|-----------------------|-------------------|
-| **macOS**        | `universal2` (Intel + Apple Silicon) | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Windows**      | `AMD64` (64-bit)              | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (glibc)**| `x86_64` (standard Linux)     | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (musl)** | `x86_64` (Alpine Linux)       | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| Platform         | Architecture                    | Python Versions       | Status            |
+|------------------|---------------------------------|-----------------------|-------------------|
+| **macOS**        | Intel && Apple Silicon (64-bit) | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Windows**      | `AMD64` (64-bit)                | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (glibc)**| `x86_64` (standard Linux)       | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (musl)** | `x86_64` (Alpine Linux)         | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
 
 
 What do these terms mean?
-- **universal2 (macOS)**: One wheel supports both Intel (x86_64) and Apple Silicon (arm64) Macs.
-- **manylinux2014 (glibc-based Linux)**: Compatible with most mainstream Linux distributions (e.g., Ubuntu, Debian, CentOS).
+- **macosx_arm64 (macOS)**: One wheel supports Apple Silicon Macs.
+- **macosx_x86_64 (macOS)**: One wheel supports Intel Macs.
+- **manylinux2014_x86_64 (glibc-based Linux)**: Compatible with most mainstream Linux distributions (e.g., Ubuntu, Debian, CentOS).
 - **musllinux_1_2 (musl-based Linux)**: For lightweight Alpine Linux environments, common in Docker containers.
 - **AMD64 (Windows)**: Standard 64-bit Windows system architecture.
 
@@ -110,36 +111,6 @@ If you have some issues with the installation, it might because you have both Py
 ```
 pip3 install sequenzo
 ```
-
-### ⚠️ Having Installation or Import Issues?
-
-**Error:** `ImportError: numpy.core.multiarray failed to import` or `ValueError: numpy.dtype size changed`
-
-**Cause:** NumPy version incompatibility. Sequenzo 0.1.21+ requires NumPy 2.x.
-
-**Quick Fix** (copy-paste these commands):
-```bash
-# Check your NumPy version first
-python -c "import numpy; print(f'NumPy: {numpy.__version__}')"
-
-# If you see 1.x.x, upgrade to 2.x:
-pip install --upgrade "numpy>=2.0.0"
-pip uninstall sequenzo -y
-pip install --no-cache-dir sequenzo
-```
-
-**Note:** NumPy 2.x is backward compatible with code written for NumPy 1.x, so upgrading is safe.
-
-📖 **Still having issues?** 
-1. Run our diagnostic tool to identify the problem:
-   ```bash
-   curl -O https://raw.githubusercontent.com/Liang-Team/Sequenzo/main/diagnose.py
-   python diagnose.py
-   ```
-2. See our detailed guides:
-   - **[QUICK_FIX.md](QUICK_FIX.md)** - Simple step-by-step solutions
-   - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Comprehensive troubleshooting
-   - **[docs/WHY_IMPORT_FAILS.md](docs/WHY_IMPORT_FAILS.md)** - Technical explanation
 
 ### Optional R Integration
 
