@@ -238,9 +238,6 @@ jobs:
           if [ "${{ matrix.python-version }}" == "3.12" ]; then
             echo "Installing NumPy 2.0 compatible dependencies for Python 3.12"
             pip install "numpy>=2.0.0" "pybind11>=2.12.0"
-           
-          pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
-          pip install --prefer-binary Cython build "cibuildwheel==2.23.3" twine
         shell: bash
 
       - name: Fix Linux source
