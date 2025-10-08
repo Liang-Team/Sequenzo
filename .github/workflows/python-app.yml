@@ -47,17 +47,31 @@ jobs:
         run: python -m pip install --upgrade pip setuptools wheel
 
       # Add OpenMP support
-      - name: Install OpenMP (macOS)
+      - name: Install OpenMP for both architectures (macOS)
         if: runner.os == 'macOS'
         run: |
+          # 安装 arm64 libomp
           brew install libomp
-          LIBOMP_PREFIX=$(brew --prefix libomp)
+
+          # 安装 x86_64 libomp
+          echo "Installing x86_64 libomp..."
+          arch -x86_64 /bin/bash -c '
+            export PATH="/usr/local/bin:$PATH"
+            if ! command -v brew &> /dev/null; then
+              echo "Installing Homebrew for x86_64..."
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            brew install libomp
+          ' || echo "x86_64 libomp installation may have failed, continuing..."
+
+          # 设置环境变量指向 arm64 libomp（主要）
+          LIBOMP_ARM64=$(brew --prefix libomp)
           echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV  
-          echo "LDFLAGS=-L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$LIBOMP_PREFIX/include" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$LIBOMP_ARM64/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$LIBOMP_ARM64/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "LIBOMP_PATH=$LIBOMP_PREFIX/lib" >> $GITHUB_ENV
+          echo "LIBOMP_PATH=$LIBOMP_ARM64/lib" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -195,28 +209,16 @@ jobs:
           
           # macOS: Use delocate to bundle libomp into the wheel
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
-            echo "=== Repairing macOS wheel ==="
+            echo "=== Repairing macOS universal2 wheel ==="
   
-            # 确保 libomp 路径存在
-            if [ -d "$LIBOMP_PATH" ] && [ -f "$LIBOMP_PATH/libomp.dylib" ]; then
-              echo "Found libomp at: $LIBOMP_PATH"
-              
-              # 使用 delocate-wheel 修复，强制包含 libomp
-              echo "Running delocate-wheel to bundle libomp..."
-              delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
-              
-              if [ $? -eq 0 ] && [ -f {dest_dir}/*.whl ]; then
-                echo "[SUCCESS] Wheel repaired successfully with libomp"
-              else
-                echo "[WARNING] Standard delocate failed, trying alternative method"
-                # 备选方案：手动复制库文件
-                mkdir -p {dest_dir}
-                cp {wheel} {dest_dir}/
-                echo "[INFO] Using wheel without bundled libomp - will rely on system installation"
-              fi
+            # 使用 delocate-wheel 修复，它会自动处理多架构
+            echo "Running delocate-wheel for universal2..."
+            delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
+            
+            if [ $? -eq 0 ] && ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
+              echo "[SUCCESS] Wheel repaired successfully"
             else
-              echo "[WARNING] libomp not found at $LIBOMP_PATH"
-              echo "[INFO] Copying wheel as-is, users will need to install libomp"
+              echo "[WARNING] delocate failed, copying wheel as-is"
               mkdir -p {dest_dir}
               cp {wheel} {dest_dir}/
             fi
@@ -299,11 +301,23 @@ jobs:
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
           CIBW_TEST_COMMAND_MACOS: |
-            # Set DYLD_LIBRARY_PATH to find libomp (fallback if not bundled)
-            if [ -d "$(brew --prefix libomp 2>/dev/null)/lib" ]; then
-              export DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
-              export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_FALLBACK_LIBRARY_PATH"
-              echo "DYLD_LIBRARY_PATH for test: $DYLD_LIBRARY_PATH"
+            # 设置库路径 - 只使用当前架构的库
+            CURRENT_ARCH=$(uname -m)
+            if [ "$CURRENT_ARCH" = "x86_64" ]; then
+              # x86_64 架构 - 使用 x86_64 的 libomp
+              X86_LIBOMP_PATH="/usr/local/opt/libomp/lib"
+              if [ -d "$X86_LIBOMP_PATH" ]; then
+                export DYLD_LIBRARY_PATH="$X86_LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+                echo "Using x86_64 libomp at: $X86_LIBOMP_PATH"
+              else
+                # 回退到 arm64 libomp（可能不工作，但尝试）
+                export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+                echo "Using arm64 libomp as fallback"
+              fi
+            else
+              # arm64 架构 - 使用 arm64 的 libomp
+              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+              echo "Using arm64 libomp at: $LIBOMP_PATH"
             fi
             
             # Check test environment
