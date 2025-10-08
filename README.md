@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Liang-Team/Sequenzo/main/assets/logo/FullLogo_NoBuffer.jpg" alt="Sequenzo Logo" width="400">
+  <img src="https://raw.githubusercontent.com/Liang-Team/Sequenzo/main/assets/logo/FullLogo_NoBuffer.jpg" alt="Sequenzo Logo" width="300">
 </p>
 
 <p align="center">
