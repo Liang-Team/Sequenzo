@@ -262,7 +262,7 @@ jobs:
             echo "Wheel to repair: {wheel}"
             
             # 使用 delocate 修复
-            delocate-wheel -L "$LIBOMP_PATH" -w {dest_dir} -v {wheel}
+            delocate-wheel -w {dest_dir} -v {wheel}
             
             if [ $? -eq 0 ]; then
               echo "[SUCCESS] Wheel repaired successfully"
