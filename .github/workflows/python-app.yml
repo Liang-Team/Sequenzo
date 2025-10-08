@@ -111,14 +111,40 @@ jobs:
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libomp
-          LIBOMP_PREFIX=$(brew --prefix libomp)
+          # 检测架构并设置正确的 Homebrew 路径
+          if [ "${{ matrix.macos-arch }}" == "x86_64" ]; then
+            # Intel macOS - Homebrew 在 /usr/local
+            brew_cmd="brew"
+            libomp_prefix="/usr/local/opt/libomp"
+          else
+            # Apple Silicon macOS - Homebrew 在 /opt/homebrew  
+            brew_cmd="brew"
+            libomp_prefix="/opt/homebrew/opt/libomp"
+          fi
+          
+          # 安装 libomp
+          $brew_cmd install libomp
+          
+          # 验证 libomp 安装
+          if [ -d "$libomp_prefix" ]; then
+            echo "libomp found at: $libomp_prefix"
+            echo "libomp contents:"
+            ls -la "$libomp_prefix/lib/" || echo "lib directory not found"
+          else
+            echo "WARNING: libomp not found at expected path: $libomp_prefix"
+            # 尝试通过 brew --prefix 获取路径
+            libomp_prefix=$($brew_cmd --prefix libomp)
+            echo "Using brew --prefix path: $libomp_prefix"
+          fi
+          
+          LIBOMP_PATH="$libomp_prefix/lib"
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
-          echo "LDFLAGS=-L$LIBOMP_PREFIX/lib -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
-          echo "CPPFLAGS=-I$LIBOMP_PREFIX/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$LIBOMP_PATH -Wl,-rpath,@loader_path/../.dylibs" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$libomp_prefix/include" >> $GITHUB_ENV
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $GITHUB_ENV
-          echo "LIBOMP_PATH=$LIBOMP_PREFIX/lib" >> $GITHUB_ENV
+          echo "LIBOMP_PATH=$LIBOMP_PATH" >> $GITHUB_ENV
+          echo "Final LIBOMP_PATH: $LIBOMP_PATH" >> $GITHUB_ENV
 
       - name: Install OpenMP (Linux)
         if: runner.os == 'Linux'
@@ -256,49 +282,49 @@ jobs:
             echo "Using setup.py dependencies only"
 
           # macOS: skip R installation for tests (it's optional)
-          CIBW_BEFORE_TEST_MACOS: |
-            echo "Skipping R installation for tests - rpy2 is optional"
-            echo "Setting up test environment for OpenMP..."
-            
-            # Check host and test architecture
-            HOST_ARCH=$(uname -m)
-            echo "Host architecture: $HOST_ARCH"
-            
-            # Detect test architecture from environment
-            if [ -n "$ARCHFLAGS" ]; then
-              echo "Test ARCHFLAGS: $ARCHFLAGS"
-            fi
-            
-            # For cross-architecture testing (e.g., x86_64 wheel on arm64 host)
-            # We need to ensure libomp is available for the target architecture
-            LIBOMP_PATH=$(brew --prefix libomp 2>/dev/null)/lib
-            
-            if [ -d "$LIBOMP_PATH" ]; then
-              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-              export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
-              echo "DYLD_LIBRARY_PATH set to: $DYLD_LIBRARY_PATH"
-              
-              # Verify libomp is available
-              LIBOMP_DYLIB="$LIBOMP_PATH/libomp.dylib"
-              if [ -f "$LIBOMP_DYLIB" ]; then
-                echo "libomp.dylib available:"
-                file "$LIBOMP_DYLIB"
-                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "Architecture info unavailable"
-                
-                # For cross-arch testing, check if we need Rosetta 2
-                if lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Non-fat file.*$HOST_ARCH"; then
-                  echo "[INFO] libomp is native $HOST_ARCH only"
-                  echo "[INFO] Cross-architecture tests may fail if libraries aren't bundled"
-                elif lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Architectures.*arm64.*x86_64"; then
-                  echo "[OK] libomp is universal binary - supports both architectures"
-                fi
-              else
-                echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
-              fi
-            else
-              echo "[WARNING] libomp not found via Homebrew"
-              echo "[INFO] Tests will rely on bundled libraries in wheel"
-            fi
+#          CIBW_BEFORE_TEST_MACOS: |
+#            echo "Skipping R installation for tests - rpy2 is optional"
+#            echo "Setting up test environment for OpenMP..."
+#
+#            # Check host and test architecture
+#            HOST_ARCH=$(uname -m)
+#            echo "Host architecture: $HOST_ARCH"
+#
+#            # Detect test architecture from environment
+#            if [ -n "$ARCHFLAGS" ]; then
+#              echo "Test ARCHFLAGS: $ARCHFLAGS"
+#            fi
+#
+#            # For cross-architecture testing (e.g., x86_64 wheel on arm64 host)
+#            # We need to ensure libomp is available for the target architecture
+#            LIBOMP_PATH=$(brew --prefix libomp 2>/dev/null)/lib
+#
+#            if [ -d "$LIBOMP_PATH" ]; then
+#              export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+#              export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
+#              echo "DYLD_LIBRARY_PATH set to: $DYLD_LIBRARY_PATH"
+#
+#              # Verify libomp is available
+#              LIBOMP_DYLIB="$LIBOMP_PATH/libomp.dylib"
+#              if [ -f "$LIBOMP_DYLIB" ]; then
+#                echo "libomp.dylib available:"
+#                file "$LIBOMP_DYLIB"
+#                lipo -info "$LIBOMP_DYLIB" 2>/dev/null || echo "Architecture info unavailable"
+#
+#                # For cross-arch testing, check if we need Rosetta 2
+#                if lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Non-fat file.*$HOST_ARCH"; then
+#                  echo "[INFO] libomp is native $HOST_ARCH only"
+#                  echo "[INFO] Cross-architecture tests may fail if libraries aren't bundled"
+#                elif lipo -info "$LIBOMP_DYLIB" 2>/dev/null | grep -q "Architectures.*arm64.*x86_64"; then
+#                  echo "[OK] libomp is universal binary - supports both architectures"
+#                fi
+#              else
+#                echo "[WARNING] libomp.dylib not found at $LIBOMP_PATH"
+#              fi
+#            else
+#              echo "[WARNING] libomp not found via Homebrew"
+#              echo "[INFO] Tests will rely on bundled libraries in wheel"
+#            fi
 
           # Linux: skip R installation for tests (it's optional)
           CIBW_BEFORE_TEST_LINUX: |
@@ -306,14 +332,49 @@ jobs:
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
           CIBW_TEST_COMMAND_MACOS: |
-            # 设置库路径
-            export DYLD_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-            export DYLD_FALLBACK_LIBRARY_PATH="$LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
-            
+            # 根据架构设置正确的库路径
             CURRENT_ARCH=$(uname -m)
             echo "=== Testing on $CURRENT_ARCH ==="
+            
+            # 检测架构并设置正确的 libomp 路径
+            if [ "$CURRENT_ARCH" == "x86_64" ]; then
+              # Intel macOS
+              EXPECTED_LIBOMP_PATH="/usr/local/opt/libomp/lib"
+            else
+              # Apple Silicon macOS  
+              EXPECTED_LIBOMP_PATH="/opt/homebrew/opt/libomp/lib"
+            fi
+            
+            # 如果预期路径存在，使用它；否则使用环境变量中的路径
+            if [ -d "$EXPECTED_LIBOMP_PATH" ]; then
+              ACTUAL_LIBOMP_PATH="$EXPECTED_LIBOMP_PATH"
+              echo "Using architecture-specific libomp path: $ACTUAL_LIBOMP_PATH"
+            else
+              ACTUAL_LIBOMP_PATH="$LIBOMP_PATH"
+              echo "Using environment LIBOMP_PATH: $ACTUAL_LIBOMP_PATH"
+            fi
+            
+            # 设置库路径
+            export DYLD_LIBRARY_PATH="$ACTUAL_LIBOMP_PATH:$DYLD_LIBRARY_PATH"
+            export DYLD_FALLBACK_LIBRARY_PATH="$ACTUAL_LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
+            
             echo "Python version: $(python --version)"
-            echo "DYLD_LIBRARY_PATH: $DYLD_LIBRARY_PATH"
+            echo "Final DYLD_LIBRARY_PATH: $DYLD_LIBRARY_PATH"
+            
+            # 验证 libomp 文件
+            if [ -d "$ACTUAL_LIBOMP_PATH" ]; then
+              echo "libomp directory contents:"
+              ls -la "$ACTUAL_LIBOMP_PATH" || echo "Cannot list libomp directory"
+              
+              if [ -f "$ACTUAL_LIBOMP_PATH/libomp.dylib" ]; then
+                echo "libomp.dylib architecture:"
+                file "$ACTUAL_LIBOMP_PATH/libomp.dylib" || echo "Cannot check libomp architecture"
+              else
+                echo "WARNING: libomp.dylib not found at $ACTUAL_LIBOMP_PATH/libomp.dylib"
+              fi
+            else
+              echo "ERROR: libomp directory not found: $ACTUAL_LIBOMP_PATH"
+            fi
             
             # Check test environment
             echo "Test architecture: $(uname -m)"
