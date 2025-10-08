@@ -479,18 +479,26 @@ def configure_cpp_extension():
     """
     try:
         link_args = get_link_args()
+
+        include_dirs = []
+        library_dirs = []
+        if sys.platform == "darwin":  # macOS
+            brew_prefix = os.popen("brew --prefix libomp").read().strip()
+            include_dirs.append(os.path.join(brew_prefix, "include"))
+            library_dirs.append(os.path.join(brew_prefix, "lib"))
         
         # Compile only the binding translation unit to avoid duplicate symbols.
         # The binding TU `module.cpp` includes the other implementation .cpp files.
         diss_ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
             sources=['sequenzo/dissimilarity_measures/src/module.cpp'],
-            include_dirs=get_dissimilarity_measures_include_dirs(),
+            include_dirs=get_dissimilarity_measures_include_dirs() + include_dirs,
             extra_compile_args=get_compile_args_for_file("dummy.cpp"),
             extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.1.21"'),
                            ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
+            library_dirs=library_dirs,
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 

@@ -122,9 +122,9 @@ jobs:
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
           CIBW_ENVIRONMENT_MACOS: >
             SEQUENZO_ENABLE_OPENMP=1
-            LDFLAGS="-L$(brew --prefix libomp)/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,$(brew --prefix libomp)/lib"
-            CPPFLAGS="-I$(brew --prefix libomp)/include"
-            DYLD_LIBRARY_PATH="$(brew --prefix libomp)/lib:$DYLD_LIBRARY_PATH"
+            LDFLAGS="-L/opt/homebrew/opt/libomp/lib -Wl,-rpath,@loader_path/../.dylibs -Wl,-rpath,/opt/homebrew/opt/libomp/lib"
+            CPPFLAGS="-I/opt/homebrew/opt/libomp/include"
+            DYLD_LIBRARY_PATH="/opt/homebrew/opt/libomp/lib:$DYLD_LIBRARY_PATH"
 
           # macOS: ensure libomp is available and properly linked
           CIBW_BEFORE_BUILD_MACOS: |
@@ -145,6 +145,8 @@ jobs:
             # Install delocate for wheel repair
             echo "Installing delocate for wheel repair..."
             pip install delocate
+            delocate-listdeps dist/*.whl
+            delocate-wheel -w wheelhouse -v dist/*.whl
             
             # Verify libomp is installed
             if [ -d "$(brew --prefix libomp 2>/dev/null)" ]; then
