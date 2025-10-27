@@ -470,6 +470,18 @@ def get_link_args():
     
     return link_args
 
+def get_fastcluster_include_dirs():
+    """
+    Collects all required include directories for compiling sequenzo_fastcluster.
+    Returns:
+        list: Paths to include directories.
+    """
+    return [
+        numpy.get_include(),
+        'sequenzo/clustering/sequenzo_fastcluster/src/',
+    ]
+
+
 def configure_cpp_extension():
     """
     Configures the Pybind11 C++ extension module.
@@ -506,8 +518,38 @@ def configure_cpp_extension():
         )
         print("  - Clustering C++ extension configured successfully.")
 
+        # Configure sequenzo_fastcluster as a traditional Extension (not Pybind11)
+        fastcluster_sources = [
+            'sequenzo/clustering/sequenzo_fastcluster/src/fastcluster_python.cpp',
+            'sequenzo/clustering/sequenzo_fastcluster/src/fastcluster.cpp',
+        ]
+        
+        # Platform-specific defines
+        fastcluster_defines = [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
+        
+        # The C++ code will automatically detect aligned allocation support via:
+        # 1. __cpp_aligned_new feature test (for C++17)
+        # 2. __MAC_OS_X_VERSION_MIN_REQUIRED (for macOS version)
+        # No need to manually set defines - let the compiler decide
+        if sys.platform == 'darwin':
+            deploy_target = os.environ.get('MACOSX_DEPLOYMENT_TARGET', '10.9')
+            print(f"  - Sequenzo fastcluster will auto-detect alignment support (target: {deploy_target})")
+        else:
+            print("  - Sequenzo fastcluster will auto-detect alignment support (Linux/Windows)")
+        
+        fastcluster_ext_module = Extension(
+            '_sequenzo_fastcluster',
+            sources=fastcluster_sources,
+            include_dirs=get_fastcluster_include_dirs(),
+            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_link_args=link_args,
+            language='c++',
+            define_macros=fastcluster_defines,
+        )
+        print("  - Sequenzo fastcluster C++ extension configured successfully.")
+
         print("C++ extension configured successfully.")
-        return [diss_ext_module, clustering_ext_module]
+        return [diss_ext_module, clustering_ext_module, fastcluster_ext_module]
     except Exception as e:
         print(f"Failed to configure C++ extension: {e}")
         print("Fallback: Python-only functionality will be used.")
