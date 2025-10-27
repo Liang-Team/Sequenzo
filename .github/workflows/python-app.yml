@@ -610,6 +610,41 @@ jobs:
             except ImportError as e:
                 print(f'[INFO] R environment (rpy2) not available: {e}')
             
+            # Check sequenzo_fastcluster module
+            print('')
+            print('=== Testing sequenzo_fastcluster module ===')
+            try:
+                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector, single, complete, average
+                print('[OK] sequenzo_fastcluster wrapper imported successfully')
+                
+                # Test linkage function with small dataset
+                from scipy.spatial.distance import pdist
+                test_data = np.array([[1, 2], [1, 4], [1, 0], [4, 2], [4, 4], [4, 0]])
+                dist_matrix = pdist(test_data)
+                
+                # Test different linkage methods
+                for method in ['single', 'complete', 'average']:
+                    try:
+                        Z = linkage(dist_matrix, method=method)
+                        assert Z.shape == (len(test_data) - 1, 4)
+                        assert np.all(np.isfinite(Z))
+                        print(f'[OK] linkage({method}) works correctly')
+                    except Exception as e:
+                        print(f'[WARNING] linkage({method}) failed: {e}')
+                
+                # Test linkage_vector
+                try:
+                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                    assert Z_vec.shape == (len(test_data) - 1, 4)
+                    assert np.all(np.isfinite(Z_vec))
+                    print('[OK] linkage_vector works correctly')
+                except Exception as e:
+                    print(f'[WARNING] linkage_vector failed: {e}')
+                
+            except ImportError as e:
+                print(f'[WARNING] sequenzo_fastcluster module not available: {e}')
+                print('[INFO] This module provides optimized hierarchical clustering')
+            
             print('')
             print('[INFO] Test completed - some warnings are expected for optional dependencies')
             PY
@@ -684,6 +719,43 @@ jobs:
                     print(f'WARNING: R fastcluster package not available: {e}')
             except ImportError as e:
                 print(f'WARNING: R environment (rpy2) not available: {e}')
+            
+            # Check sequenzo_fastcluster module
+            print('')
+            print('=== Testing sequenzo_fastcluster module ===')
+            try:
+                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector, single, complete, average
+                print('[OK] sequenzo_fastcluster wrapper imported successfully')
+                
+                # Test linkage function with small dataset
+                from scipy.spatial.distance import pdist
+                test_data = np.array([[1, 2], [1, 4], [1, 0], [4, 2], [4, 4], [4, 0]])
+                dist_matrix = pdist(test_data)
+                
+                # Test different linkage methods
+                for method in ['single', 'complete', 'average']:
+                    try:
+                        Z = linkage(dist_matrix, method=method)
+                        assert Z.shape == (len(test_data) - 1, 4)
+                        assert np.all(np.isfinite(Z))
+                        print(f'[OK] linkage({method}) works correctly')
+                    except Exception as e:
+                        print(f'[WARNING] linkage({method}) failed: {e}')
+                
+                # Test linkage_vector
+                try:
+                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                    assert Z_vec.shape == (len(test_data) - 1, 4)
+                    assert np.all(np.isfinite(Z_vec))
+                    print('[OK] linkage_vector works correctly')
+                except Exception as e:
+                    print(f'[WARNING] linkage_vector failed: {e}')
+                
+            except ImportError as e:
+                print(f'[WARNING] sequenzo_fastcluster module not available: {e}')
+                print('[INFO] This module provides optimized hierarchical clustering')
+            
+            print('[INFO] All tests completed')
             PY
 
           # Windows test command using python -c with exec for multiline code
@@ -720,6 +792,41 @@ jobs:
             except ImportError as e:
                 print(f'WARNING: R environment (rpy2) not available: {e}')
             
+            # Check sequenzo_fastcluster module
+            print('')
+            print('=== Testing sequenzo_fastcluster module ===')
+            try:
+                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector, single, complete, average
+                print('[OK] sequenzo_fastcluster wrapper imported successfully')
+                
+                # Test linkage function with small dataset
+                from scipy.spatial.distance import pdist
+                test_data = np.array([[1, 2], [1, 4], [1, 0], [4, 2], [4, 4], [4, 0]])
+                dist_matrix = pdist(test_data)
+                
+                # Test different linkage methods
+                for method in ['single', 'complete', 'average']:
+                    try:
+                        Z = linkage(dist_matrix, method=method)
+                        assert Z.shape == (len(test_data) - 1, 4)
+                        assert np.all(np.isfinite(Z))
+                        print(f'[OK] linkage({method}) works correctly')
+                    except Exception as e:
+                        print(f'[WARNING] linkage({method}) failed: {e}')
+                
+                # Test linkage_vector
+                try:
+                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                    assert Z_vec.shape == (len(test_data) - 1, 4)
+                    assert np.all(np.isfinite(Z_vec))
+                    print('[OK] linkage_vector works correctly')
+                except Exception as e:
+                    print(f'[WARNING] linkage_vector failed: {e}')
+                
+            except ImportError as e:
+                print(f'[WARNING] sequenzo_fastcluster module not available: {e}')
+                print('[INFO] This module provides optimized hierarchical clustering')
+            
             # 为 NumPy 2.0 设置兼容性
             if sys.version_info >= (3, 12):
                 try:
@@ -727,6 +834,7 @@ jobs:
                     print('[OK] NumPy array imported for NumPy 2.0 compatibility')
                 except Exception as e:
                     print(f'[INFO] NumPy array import: {e}')
+            print('[INFO] All tests completed')
             "@
             python test_sequenzo_ci.py
 

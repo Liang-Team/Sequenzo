@@ -17,7 +17,7 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
 U_files = [
-    'synthetic_detailed_U5_N500.csv',
+    # 'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -35,7 +35,7 @@ U_files = [
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
-    # 'synthetic_detailed_U5_N50000.csv',
+    'synthetic_detailed_U5_N50000.csv',
 
     # 'synthetic_detailed_U25_N500.csv',
     # 'synthetic_detailed_U25_N1000.csv',
@@ -136,13 +136,15 @@ for filename in U_files:
 
     diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
 
-    # Cluster(diss, data.ids, clustering_method='ward_d2')
+    start = time.time()
+    Cluster(diss, data.ids, clustering_method='ward_d2')
+    end = time.time()
     # diss = pdist(diss, metric='euclidean')
     # diss = squareform(diss, checks=False)
 
-    start = time.time()
-    linkage_matrix = fastcluster.linkage(diss, method='ward')
-    end = time.time()
+    # start = time.time()
+    # linkage_matrix = fastcluster.linkage(diss, method='ward')
+    # end = time.time()
 
     runtime = end - start
     runtimes.append(runtime)
@@ -152,12 +154,3 @@ for filename in U_files:
 
 print(runtimes)
 
-# 绘制折线图
-# plt.figure(figsize=(10, 6))
-# sns.lineplot(x=filenames, y=runtimes, marker='o')
-# plt.xticks(rotation=45, ha='right')  # 旋转 x 轴标签以避免重叠
-# plt.xlabel("CSV Filename")
-# plt.ylabel("Runtime (seconds)")
-# plt.title("Runtime vs CSV Filename")
-# plt.tight_layout()
-# plt.show()
