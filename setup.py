@@ -476,9 +476,12 @@ def get_fastcluster_include_dirs():
     Returns:
         list: Paths to include directories.
     """
+    # 改成绝对路径，避免构建时路径偏移问题
+    src_dir = os.path.join(os.path.dirname(__file__), 'sequenzo', 'clustering', 'sequenzo_fastcluster', 'src')
+    print(f"[SETUP] Fastcluster include dir: {src_dir} (exists={os.path.exists(src_dir)})")
     return [
         numpy.get_include(),
-        'sequenzo/clustering/sequenzo_fastcluster/src/',
+        src_dir,
     ]
 
 
@@ -519,9 +522,10 @@ def configure_cpp_extension():
         print("  - Clustering C++ extension configured successfully.")
 
         # Configure sequenzo_fastcluster as a traditional Extension (not Pybind11)
+        src_dir = "sequenzo/clustering/sequenzo_fastcluster/src"
         fastcluster_sources = [
-            'sequenzo/clustering/sequenzo_fastcluster/src/fastcluster_python.cpp',
-            'sequenzo/clustering/sequenzo_fastcluster/src/fastcluster.cpp',
+            f"{src_dir}/fastcluster_python.cpp",
+            f"{src_dir}/fastcluster.cpp",
         ]
         
         # Platform-specific defines

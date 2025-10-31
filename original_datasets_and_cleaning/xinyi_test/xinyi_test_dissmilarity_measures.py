@@ -17,7 +17,7 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
 U_files = [
-    # 'synthetic_detailed_U5_N500.csv',
+    'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
