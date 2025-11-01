@@ -523,10 +523,9 @@ def configure_cpp_extension():
         print("  - Clustering C++ extension configured successfully.")
 
         # Configure sequenzo_fastcluster as a traditional Extension (not Pybind11)
-        src_dir = BASE_DIR / "sequenzo" / "clustering" / "sequenzo_fastcluster" / "src"
         fastcluster_sources = [
-            str(src_dir / "fastcluster_python.cpp"),
-            str(src_dir / "fastcluster.cpp"),
+            "sequenzo/clustering/sequenzo_fastcluster/src/fastcluster_python.cpp",
+            "sequenzo/clustering/sequenzo_fastcluster/src/fastcluster.cpp",
         ]
         
         # Platform-specific defines

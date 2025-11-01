@@ -31,11 +31,11 @@ U_files = [
     # 'synthetic_detailed_U5_N15000.csv',
     # 'synthetic_detailed_U5_N20000.csv',
     # 'synthetic_detailed_U5_N25000.csv',
-    # 'synthetic_detailed_U5_N30000.csv',
+    'synthetic_detailed_U5_N30000.csv',
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
-    'synthetic_detailed_U5_N50000.csv',
+    # 'synthetic_detailed_U5_N50000.csv',
 
     # 'synthetic_detailed_U25_N500.csv',
     # 'synthetic_detailed_U25_N1000.csv',

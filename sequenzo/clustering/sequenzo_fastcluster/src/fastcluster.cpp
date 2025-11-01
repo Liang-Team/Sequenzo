@@ -1173,14 +1173,14 @@ static void generic_linkage(const t_index N, t_float * const D, t_members * cons
   // Initialize the minimal distances:
   // Find the nearest neighbor of each point.
   // n_nghbr[i] = argmin_{j>i} D(i,j) for i in range(N-1)
-  
+
 #ifdef _OPENMP
   // Parallel initialization of nearest neighbors
   #pragma omp parallel for schedule(dynamic)
   for (i=0; i<N_1; ++i) {
     t_float min_val = std::numeric_limits<t_float>::infinity();
     t_index min_idx = i+1;
-    
+
     // Use SIMD-optimized minimum search when possible
     t_float const * DD = D + (static_cast<std::ptrdiff_t>(2*N-3-i)*i>>1);
     for (t_index j=i+1; j<N; ++j, ++DD) {
@@ -1336,7 +1336,7 @@ static void generic_linkage(const t_index N, t_float * const D, t_members * cons
           n_nghbr[j] = idx2;
       }
 #endif
-      
+
       // Update the distance matrix in the range (idx1, idx2).
       for (; j<idx2; j=active_nodes.succ[j]) {
         f_single(&D_(j, idx2), D_(idx1, j));
@@ -1347,7 +1347,7 @@ static void generic_linkage(const t_index N, t_float * const D, t_members * cons
           n_nghbr[j] = idx2;
         }
       }
-      
+
       // Update the distance matrix in the range (idx2, N).
       // Recompute the minimum mindist[idx2] and n_nghbr[idx2].
       if (idx2<N_1) {
