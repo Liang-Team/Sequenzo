@@ -45,6 +45,8 @@ from glob import glob
 import tempfile
 import importlib.util
 
+BASE_DIR = Path(__file__).parent.resolve()
+
 def ensure_xsimd_exists():
     xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
 
@@ -396,13 +398,12 @@ def get_dissimilarity_measures_include_dirs():
     Returns:
         list: Paths to include directories in dissimilarity measures.
     """
-    base_dir = Path(__file__).parent.resolve()
     return [
         pybind11.get_include(),
         pybind11.get_include(user=True),
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
-        str(base_dir / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
+        str(BASE_DIR / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
     ]
 
 def get_clustering_include_dirs():
@@ -477,7 +478,7 @@ def get_fastcluster_include_dirs():
         list: Paths to include directories.
     """
     # 改成绝对路径，避免构建时路径偏移问题
-    src_dir = os.path.join(os.path.dirname(__file__), 'sequenzo', 'clustering', 'sequenzo_fastcluster', 'src')
+    src_dir = str(BASE_DIR / "sequenzo" / "clustering" / "sequenzo_fastcluster" / "src")
     print(f"[SETUP] Fastcluster include dir: {src_dir} (exists={os.path.exists(src_dir)})")
     return [
         numpy.get_include(),
@@ -522,7 +523,7 @@ def configure_cpp_extension():
         print("  - Clustering C++ extension configured successfully.")
 
         # Configure sequenzo_fastcluster as a traditional Extension (not Pybind11)
-        src_dir = Path(__file__).parent / "sequenzo" / "clustering" / "sequenzo_fastcluster" / "src"
+        src_dir = BASE_DIR / "sequenzo" / "clustering" / "sequenzo_fastcluster" / "src"
         fastcluster_sources = [
             str(src_dir / "fastcluster_python.cpp"),
             str(src_dir / "fastcluster.cpp"),
