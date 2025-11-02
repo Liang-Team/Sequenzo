@@ -17,7 +17,7 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 
 U_files = [
-    'synthetic_detailed_U5_N500.csv',
+    # 'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -31,11 +31,17 @@ U_files = [
     # 'synthetic_detailed_U5_N15000.csv',
     # 'synthetic_detailed_U5_N20000.csv',
     # 'synthetic_detailed_U5_N25000.csv',
-    'synthetic_detailed_U5_N30000.csv',
+    # 'synthetic_detailed_U5_N30000.csv',
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
-    # 'synthetic_detailed_U5_N50000.csv',
+    'synthetic_detailed_U5_N50000.csv',
+    # 'synthetic_detailed_U5_N55000.csv',
+    # 'synthetic_detailed_U5_N60000.csv',
+    # 'synthetic_detailed_U5_N65000.csv',
+    # 'synthetic_detailed_U5_N70000.csv',
+    # 'synthetic_detailed_U5_N75000.csv',
+    # 'synthetic_detailed_U5_N80000.csv',
 
     # 'synthetic_detailed_U25_N500.csv',
     # 'synthetic_detailed_U25_N1000.csv',
@@ -56,6 +62,10 @@ U_files = [
     # 'synthetic_detailed_U25_N40000.csv',
     # 'synthetic_detailed_U25_N45000.csv',
     # 'synthetic_detailed_U25_N50000.csv',
+    # 'synthetic_detailed_U25_N65000.csv',
+    # 'synthetic_detailed_U25_N70000.csv',
+    # 'synthetic_detailed_U25_N75000.csv',
+    # 'synthetic_detailed_U25_N80000.csv',
 
     # 'synthetic_detailed_U50_N500.csv',
     # 'synthetic_detailed_U50_N1000.csv',
@@ -76,6 +86,10 @@ U_files = [
     # 'synthetic_detailed_U50_N40000.csv',
     # 'synthetic_detailed_U50_N45000.csv',
     # 'synthetic_detailed_U50_N50000.csv',
+    # 'synthetic_detailed_U50_N55000.csv',
+    # 'synthetic_detailed_U50_N60000.csv',
+    # 'synthetic_detailed_U50_N65000.csv',
+    # 'synthetic_detailed_U50_N70000.csv',
 
     # 'synthetic_detailed_U85_N500.csv',
     # 'synthetic_detailed_U85_N1000.csv',
@@ -96,6 +110,10 @@ U_files = [
     # 'synthetic_detailed_U85_N40000.csv',
     # 'synthetic_detailed_U85_N45000.csv',
     # 'synthetic_detailed_U85_N50000.csv',
+    # 'synthetic_detailed_U85_N55000.csv',
+    # 'synthetic_detailed_U85_N60000.csv',
+    # 'synthetic_detailed_U85_N65000.csv',
+    # 'synthetic_detailed_U85_N70000.csv',
 ]
 
 # data_dir = '/home/xinyi_test/data/detailed_data'
