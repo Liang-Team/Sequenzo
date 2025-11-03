@@ -231,6 +231,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     #                         ac=ac)
     #     results.append(res)
 
+    print("  - Done.")
     print("[>] Aggregating iterations for each k values...")
 
     # output example :
@@ -397,6 +398,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     else:
 
         ret = claraObj(kretlines=range(len(kvalscriteria)), method=method, kvals=kvals, kret=kret, seqdata=seqdata)
+
+    print("  - Done.")
 
     return ret
 

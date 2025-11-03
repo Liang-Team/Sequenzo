@@ -14,45 +14,6 @@ clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_co
 
 from sequenzo.clustering.utils.disscenter import disscentertrim
 
-import glob
-import os
-import sys
-import cffi
-
-ffi = cffi.FFI()
-
-if sys.platform.startswith("win"):
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.pyd"))
-else:
-    files = glob.glob(os.path.join(os.path.dirname(__file__), "*.so"))
-
-if not files:
-    raise FileNotFoundError("No compiled library found")
-
-lib_file = files[0]
-
-try:
-    # 重定向 stderr 来抑制 cffi 的错误信息输出
-    import io
-    old_stderr = sys.stderr
-    sys.stderr = io.StringIO()
-    try:
-        lib = ffi.dlopen(lib_file)
-    finally:
-        # 恢复 stderr
-        sys.stderr = old_stderr
-except ImportError as e:
-    if sys.platform.startswith("win") and 'cffi mode "ANY" is only "ABI"' in str(e):
-        # Windows 降级到 ABI 模式，同样抑制错误信息
-        old_stderr = sys.stderr
-        sys.stderr = io.StringIO()
-        try:
-            lib = ffi.dlopen(lib_file)
-        finally:
-            sys.stderr = old_stderr
-    else:
-        raise
-
 def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
 
     # Lazily import the c_code module to avoid circular dependencies during installation
@@ -133,7 +94,7 @@ def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce'
 
     memb_matrix = memb.runclusterloop()
 
-    print("[>] Computed successfully.")
+    # print("[>] Computed successfully.")
 
     return memb_matrix
 

@@ -39,7 +39,8 @@ public:
           npass(npass),
           weights(weights),
           nclusters(static_cast<int>(centroids.size())) {
-        py::print("[>] Starting KMedoids...");
+        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
+        // py::print("[>] Starting KMedoids...");
 
         tclusterid.resize(nelements);
         saved.resize(nelements);

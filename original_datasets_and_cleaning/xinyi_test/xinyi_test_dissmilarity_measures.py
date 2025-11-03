@@ -35,7 +35,7 @@ U_files = [
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
-    'synthetic_detailed_U5_N50000.csv',
+    # 'synthetic_detailed_U5_N50000.csv',
     # 'synthetic_detailed_U5_N55000.csv',
     # 'synthetic_detailed_U5_N60000.csv',
     # 'synthetic_detailed_U5_N65000.csv',

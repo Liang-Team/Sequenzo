@@ -13,8 +13,9 @@ namespace py = pybind11;
 class PAMonce {
 public:
     PAMonce(int nelement, py::array_t<double> diss, py::array_t<int> centroids, int npass, py::array_t<double> weights){
-        py::print("[>] Starting Partitioning Around Medoids with a Once-Only Swap Pass (PAMonce)...");
-        std::cout << std::flush;
+        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
+        // py::print("[>] Starting Partitioning Around Medoids with a Once-Only Swap Pass (PAMonce)...");
+        // std::cout << std::flush;
 
         try {
             this->nelement = nelement;

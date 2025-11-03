@@ -17,7 +17,8 @@ public:
     // Constructor: Initializes the PAM algorithm with required parameters.
     PAM(int nelements, py::array_t<double> diss,
         py::array_t<int> centroids, int npass, py::array_t<double> weights) {
-        py::print("[>] Starting Partitioning Around Medoids (PAM)...");
+        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
+        // py::print("[>] Starting Partitioning Around Medoids (PAM)...");
 
         try {
             this->nelements = nelements;
