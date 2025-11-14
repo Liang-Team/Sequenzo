@@ -7,6 +7,7 @@
 #define WEIGHTED_CLUST_TOL -1e-10
 #include <cfloat>
 #include <cmath>
+#include <limits>
 
 namespace py = pybind11;
 
@@ -71,7 +72,11 @@ public:
             #pragma omp for nowait
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    thread_max = std::max(thread_max, ptr(i, j));
+                    double val = ptr(i, j);
+                    if (!std::isfinite(val)) {
+                        continue;
+                    }
+                    thread_max = std::max(thread_max, val);
                 }
             }
 
@@ -79,6 +84,10 @@ public:
             {
                 max_val = std::max(max_val, thread_max);
             }
+        }
+
+        if (!std::isfinite(max_val) || max_val <= 0.0) {
+            max_val = 1.0;
         }
 
         return max_val;
@@ -100,25 +109,33 @@ public:
 
         do {
             // 为每个点寻找距离它最近和次近的中心点
-            for (int i = 0; i < nelement; i++) {
-                dysma[i] = maxdist;
-                dysmb[i] = maxdist;
-                for (int k = 0; k < nclusters; k++) {
-                    int i_cluster = ptr_centroids[k];
-                    double dist = ptr_diss(i, i_cluster);
+        for (int i = 0; i < nelement; i++) {
+            dysma[i] = maxdist;
+            dysmb[i] = maxdist;
+            for (int k = 0; k < nclusters; k++) {
+                int i_cluster = ptr_centroids[k];
+                double dist = ptr_diss(i, i_cluster);
+                if (!std::isfinite(dist)) {
+                    dist = maxdist;
+                }
 
-                    if (dysma[i] >= dist) {
-                        // 原码是‘>’，现改为‘>=’。
-                        // 因为如果当前点 i 与所有 medoids 的距离都是 maxdist，那么将无法进入这个分支
-                        dysmb[i] = dysma[i];
-                        dysma[i] = dist;
+                if (dysma[i] >= dist) {
+                    // 原码是‘>’，现改为‘>=’。
+                    // 因为如果当前点 i 与所有 medoids 的距离都是 maxdist，那么将无法进入这个分支
+                    dysmb[i] = dysma[i];
+                    dysma[i] = dist;
 
-                        tclusterid[i] = k;  // tclusterid 是中间变量，如果没有进入这个分支，那么将采用初始值-1
-                    } else if (dysmb[i] > dist) {
-                        dysmb[i] = dist;
-                    }
+                    tclusterid[i] = k;  // tclusterid 是中间变量，如果没有进入这个分支，那么将采用初始值-1
+                } else if (dysmb[i] > dist) {
+                    dysmb[i] = dist;
                 }
             }
+
+            if (tclusterid[i] < 0) {
+                tclusterid[i] = 0;
+                dysma[i] = maxdist;
+            }
+        }
 
             if (total < 0) {
                 total = 0;
@@ -156,11 +173,19 @@ public:
 
                     #pragma omp for schedule(static)
                     for (int h = 0; h < nelement; h++) {
-                        if (ptr_diss(h, i) > 0) {
+                        double dist_hi = ptr_diss(h, i);
+                        if (!std::isfinite(dist_hi) || dist_hi <= 0) {
+                            continue;
+                        }
+                        if (dist_hi > 0) {
                             double addGain = removeCost;
                             for (int j = 0; j < nelement; j++) {
-                                if (ptr_diss(h, j) < fvect[j]) {
-                                    addGain += ptr_weights(j) * (ptr_diss(h, j) - fvect[j]);
+                                double dist_hj = ptr_diss(h, j);
+                                if (!std::isfinite(dist_hj)) {
+                                    continue;
+                                }
+                                if (dist_hj < fvect[j]) {
+                                    addGain += ptr_weights(j) * (dist_hj - fvect[j]);
                                 }
                             }
 
@@ -211,6 +236,11 @@ public:
         for (int j = 0; j < nelement; j++) {
             ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
         }
+
+//        {
+//            std::vector<int> centroids_vec(ptr_clusterid, ptr_clusterid + nelement);
+//            debug_print_vec("ptr_clusterid", centroids_vec);
+//        }
 
         return clusterid;
     }

@@ -119,35 +119,45 @@ if __name__ == '__main__':
     # TODO : sequenzo 0.1.14 里找不到 KMeodis 模块（这是 init 的问题，现已修正）
 
     from sequenzo import *
+    import pandas as pd
 
-    df = load_dataset('country_co2_emissions')
+    # =====
+    #  CO2
+    # =====
+    # df = load_dataset('country_co2_emissions')
+    # time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time=time, id_col="country", states=states)
 
-    time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-
-    sequence_data = SequenceData(df, time_type="age", time=time, id_col="country", states=states)
+    # =========
+    # synthetic
+    # =========
+    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/not_real_detailed_data/synthetic_detailed_U5_N10000.csv")
+    _time = list(df.columns)[2:]
+    states = ["Data", "Data science", "Hardware", "Research", "Software", "Support & test", "Systems & infrastructure"]
+    df = df[['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
+    sequence_data = SequenceData(df, time=_time, id_col="id", states=states)
 
     om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
-
     centroid_indices = [0, 50, 100, 150, 190]
-    n_pass = 10
+    n_pass = 1
 
     weights = np.ones(len(om))
 
     # Example 1: KMedoids algorithm without specifying the center point
-    clustering = KMedoids(diss=om,
-                          k=5,
-                          method='KMedoids',
-                          npass=n_pass,
-                          weights=weights)
-
-    # Example 2: PAM algorithm with a specified center point
-    clustering = KMedoids(diss=om,
-                          k=5,
-                          method='PAM',
-                          initialclust=centroid_indices,
-                          npass=n_pass,
-                          weights=weights)
+    # clustering = KMedoids(diss=om,
+    #                       k=5,
+    #                       method='KMedoids',
+    #                       npass=n_pass,
+    #                       weights=weights)
+    #
+    # # Example 2: PAM algorithm with a specified center point
+    # clustering = KMedoids(diss=om,
+    #                       k=5,
+    #                       method='PAM',
+    #                       initialclust=centroid_indices,
+    #                       npass=n_pass,
+    #                       weights=weights)
 
     # Example 3: PAMonce algorithm with default parameters
     clustering = KMedoids(diss=om,
@@ -155,3 +165,6 @@ if __name__ == '__main__':
                           method='PAMonce',
                           npass=n_pass,
                           weights=weights)
+    print(clustering)
+    uniq = np.unique(clustering)
+    print(uniq.min(), uniq.max())

@@ -114,7 +114,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
     # Memory cleanup before parallel computation
     gc.collect()
-    print("[>] Starting iterations...\n")
+    print("[>] Starting iterations...")
 
     def calc_pam_iter(circle, agseqdata, sample_size, kvals, ac):
         # Sampling with replacement allows the process to proceed normally
@@ -138,8 +138,6 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         diss = diss.values
         _diss = diss.copy()
         _diss = get_weighted_diss(_diss, ac2['aggWeights'])
-        # TODO : fastcluster 里是否还有其他函数，可以放这个权重矩阵在里面？如果没有，可能我们自己就要写了（C++）。
-        # TODO : 找到 fastcluster 的源码
         hc = fastcluster.linkage(_diss, method='ward')
         del _diss
 
@@ -442,11 +440,11 @@ if __name__ == '__main__':
     # ===============================
     #            detailed
     # ===============================
-    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    time = list(df.columns)[4:]
-    states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-                                 time=time, id_col="worker_id", states=states)
+    # df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
+    # time = list(df.columns)[4:]
+    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
+    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
+    #                              time=time, id_col="worker_id", states=states)
 
     # ===============================
     #             broad
@@ -457,14 +455,21 @@ if __name__ == '__main__':
     # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
     #                              time_type="age", time=time, id_col="worker_id", states=states)
 
+    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/not_real_detailed_data/synthetic_detailed_U5_N1000.csv")
+    _time = list(df.columns)[2:]
+    states = ["Data", "Data science", "Hardware", "Research", "Software", "Support & test", "Systems & infrastructure"]
+    df = df[['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
+    sequence_data = SequenceData(df, time=_time, id_col="id", states=states)
+
     result = clara(sequence_data,
-                   R=2,
-                   sample_size=3000,
+                   R=5,
+                   sample_size=500,
                    kvals=range(2, 6),
                    criteria=['distance'],
-                   dist_args={"method": "OMspell", "sm": "INDELS", "indel": 1},
+                   dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},
                    parallel=True,
                    stability=True)
 
+    # print(result['stats'])
     print(result['clustering'])
 

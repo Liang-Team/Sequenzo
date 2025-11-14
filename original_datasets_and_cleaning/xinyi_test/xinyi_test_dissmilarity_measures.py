@@ -12,9 +12,7 @@ from scipy.spatial.distance import pdist
 from scipy.cluster.hierarchy import dendrogram
 from scipy.spatial.distance import squareform
 
-from sequenzo import Cluster
-from sequenzo.define_sequence_data import SequenceData
-from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+from sequenzo import *
 
 U_files = [
     # 'synthetic_detailed_U5_N500.csv',
@@ -27,6 +25,7 @@ U_files = [
     # 'synthetic_detailed_U5_N4000.csv',
     # 'synthetic_detailed_U5_N4500.csv',
     # 'synthetic_detailed_U5_N5000.csv',
+    # 'synthetic_detailed_U5_N8000.csv',
     # 'synthetic_detailed_U5_N10000.csv',
     # 'synthetic_detailed_U5_N15000.csv',
     # 'synthetic_detailed_U5_N20000.csv',
@@ -53,6 +52,7 @@ U_files = [
     # 'synthetic_detailed_U25_N4000.csv',
     # 'synthetic_detailed_U25_N4500.csv',
     # 'synthetic_detailed_U25_N5000.csv',
+    # 'synthetic_detailed_U25_N8000.csv',
     # 'synthetic_detailed_U25_N10000.csv',
     # 'synthetic_detailed_U25_N15000.csv',
     # 'synthetic_detailed_U25_N20000.csv',
@@ -77,6 +77,7 @@ U_files = [
     # 'synthetic_detailed_U50_N4000.csv',
     # 'synthetic_detailed_U50_N4500.csv',
     # 'synthetic_detailed_U50_N5000.csv',
+    # 'synthetic_detailed_U50_N8000.csv',
     # 'synthetic_detailed_U50_N10000.csv',
     # 'synthetic_detailed_U50_N15000.csv',
     # 'synthetic_detailed_U50_N20000.csv',
@@ -101,13 +102,14 @@ U_files = [
     # 'synthetic_detailed_U85_N4000.csv',
     # 'synthetic_detailed_U85_N4500.csv',
     # 'synthetic_detailed_U85_N5000.csv',
+    # 'synthetic_detailed_U85_N8000.csv',
     # 'synthetic_detailed_U85_N10000.csv',
     # 'synthetic_detailed_U85_N15000.csv',
     # 'synthetic_detailed_U85_N20000.csv',
     # 'synthetic_detailed_U85_N25000.csv',
     # 'synthetic_detailed_U85_N30000.csv',
     # 'synthetic_detailed_U85_N35000.csv',
-    # 'synthetic_detailed_U85_N40000.csv',
+    'synthetic_detailed_U85_N40000.csv',
     # 'synthetic_detailed_U85_N45000.csv',
     # 'synthetic_detailed_U85_N50000.csv',
     # 'synthetic_detailed_U85_N55000.csv',
@@ -152,13 +154,17 @@ for filename in U_files:
     data = SequenceData(df, time=_time, id_col="id", states=states)
     # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
 
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
 
+    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
+    # Cluster(diss, data.ids, clustering_method='ward_d2')
     start = time.time()
-    Cluster(diss, data.ids, clustering_method='ward_d2')
+    clustering = KMedoids(diss=diss,
+                          k=8,
+                          method='KMedoids',
+                          # initialclust=centroid_indices,
+                          npass=10,
+                          )
     end = time.time()
-    # diss = pdist(diss, metric='euclidean')
-    # diss = squareform(diss, checks=False)
 
     # start = time.time()
     # linkage_matrix = fastcluster.linkage(diss, method='ward')
