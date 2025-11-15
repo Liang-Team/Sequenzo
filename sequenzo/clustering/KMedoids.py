@@ -14,12 +14,14 @@ clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_co
 
 from sequenzo.clustering.utils.disscenter import disscentertrim
 
-def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False):
+def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce', cluster_only=False, verbose=True):
 
     # Lazily import the c_code module to avoid circular dependencies during installation
     # from .__init__ import _import_c_code
     # c_code = _import_c_code()
 
+    # Convert method to integer if it's a string
+    method_original = method
     if isinstance(method, str):
         method = method.lower()
         method_map = ["kmedoids", "pam", "pamonce"]
@@ -27,7 +29,12 @@ def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce'
             method = method_map.index(method) + 1  # 1-based index
 
     if not (isinstance(method, int) and method in {1, 2, 3}):
-        raise ValueError(f"[!] Unknown clustering method: {method}.")
+        raise ValueError(f"[!] Unknown clustering method: {method_original}.")
+
+    if verbose:
+        method_names = ["KMedoids", "PAM", "PAMonce"]
+        method_name = method_names[method - 1]
+        print(f"[>] Starting KMedoids clustering (method: {method_name}, k={k})...")
 
     nelements = diss.shape[0]
     if nelements != diss.shape[1]:
@@ -94,7 +101,8 @@ def KMedoids(diss, k, weights=None, npass=1, initialclust=None, method='PAMonce'
 
     memb_matrix = memb.runclusterloop()
 
-    # print("[>] Computed successfully.")
+    if verbose:
+        print("[>] Computed Successfully.")
 
     return memb_matrix
 

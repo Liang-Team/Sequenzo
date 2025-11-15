@@ -61,7 +61,7 @@ def jaccardCoef(tab):
 
 
 def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_args=None,
-          criteria=["distance"], stability=False, parallel=False, max_dist=None):
+          criteria=["distance"], stability=False, max_dist=None):
 
     # ==================
     # Parameter checking
@@ -128,7 +128,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
-                states = np.arange(1, len(seqdata.states) + 1).tolist()
+                states = np.arange(1, len(seqdata.states)).tolist()
                 data_subset = SequenceData(data_subset,
                                            time=seqdata.time,
                                            states=states)
@@ -148,7 +148,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             # Weighted PAM clustering on subsample
             # TODO : hc 已经是选好的中心点了，为什么初始化 clusterid 的时候要用 -1 呢？
             #  因为没有必要啊，直接用原来的不好吗？尤其在没有进入 if 分支的情况下，这样处理也能避免 -1 的数据访问越界。所以为什么要初始化为-1呢？
-            clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'])
+            clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'], verbose=False)
             medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
             medoids = medoids.to_numpy().flatten()
 
@@ -160,7 +160,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             refseq = [list(range(0, len(agseqdata))), medoids.tolist()]
             with open(os.devnull, 'w') as fnull:
                 with redirect_stdout(fnull):
-                    states = np.arange(1, len(seqdata.states) + 1).tolist()
+                    states = np.arange(1, len(seqdata.states)).tolist()
                     agseqdata = SequenceData(agseqdata,
                                              time=seqdata.time,
                                              states=states)
@@ -467,7 +467,6 @@ if __name__ == '__main__':
                    kvals=range(2, 6),
                    criteria=['distance'],
                    dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},
-                   parallel=True,
                    stability=True)
 
     # print(result['stats'])

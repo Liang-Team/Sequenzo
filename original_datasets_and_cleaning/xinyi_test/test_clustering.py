@@ -8,11 +8,10 @@ import pandas as pd
 import time
 import os
 
-from sequenzo.define_sequence_data import SequenceData
-from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+from sequenzo import *
 
 U_files = [
-    'synthetic_detailed_U5_N500.csv',
+    # 'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -30,7 +29,7 @@ U_files = [
     # 'synthetic_detailed_U5_N35000.csv',
     # 'synthetic_detailed_U5_N40000.csv',
     # 'synthetic_detailed_U5_N45000.csv',
-    # 'synthetic_detailed_U5_N50000.csv',
+    'synthetic_detailed_U5_N50000.csv',
     
     # 'synthetic_detailed_U25_N500.csv',
     # 'synthetic_detailed_U25_N1500.csv',
@@ -91,8 +90,7 @@ U_files = [
     # 'synthetic_detailed_U85_N50000.csv',
 ]
 
-# 这里是星云存放数据文件的路径
-data_dir = 'D:/college/research/QiQi/sequenzo/data_and_output/orignal data/not_real_detailed_data'
+data_dir = '/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/not_real_detailed_data'
 
 # 存储运行时间和文件名的列表
 runtimes = []
@@ -107,12 +105,12 @@ for filename in U_files:
     states = ["Data", "Data science", "Hardware", "Research", "Software", "Support & test", "Systems & infrastructure"]
     df = df[['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
 
-    data = SequenceData(df, time=_time, id_col="id", states=states)
+    sequence_data = SequenceData(df, time=_time, id_col="id", states=states)
     
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="CONSTANT", indel=1)
 
     start_time = time.time()
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward')
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
     end_time = time.time()
 
     runtime = end_time - start_time

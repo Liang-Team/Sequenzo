@@ -233,8 +233,8 @@ class SequenceData:
         self.ismissing = self.seqdata.isna().any().any()
 
         if self.ismissing:
-            # 判断 states 中是否已经含有 Missing（无论是字符串还是 np.nan）
-            # 兼容用户传进来的各种形式的"missing"
+            # 判断 states 中是否已经含有 "Missing" 或 np.nan
+            # 以及兼容用户传进来的各种形式的 "missing"
             has_missing_state = any(pd.isna(s) for s in self.states) or any(s.lower() == "missing" for s in self.states if isinstance(s, str))
             has_missing_label = any(label.lower() == "missing" for label in self.labels if isinstance(label, str))
             
