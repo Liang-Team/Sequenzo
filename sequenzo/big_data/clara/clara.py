@@ -469,6 +469,6 @@ if __name__ == '__main__':
                    dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},
                    stability=True)
 
-    # print(result['stats'])
+    print(result['stats'])
     print(result['clustering'])
 
