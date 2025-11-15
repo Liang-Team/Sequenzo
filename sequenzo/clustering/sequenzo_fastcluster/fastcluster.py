@@ -62,6 +62,9 @@ def ward(D):
 (alias). See the help on the “linkage” function for further information.'''
     return linkage(D, method='ward')
 
+def ward_d2(D):
+    return linkage(D, method='ward_d2')
+
 def centroid(D):
     '''Hierarchical clustering with the “centroid” distance update formula
 (alias). See the help on the “linkage” function for further information.'''
@@ -78,6 +81,7 @@ mthidx = {'single'   : 0,
           'average'  : 2,
           'weighted' : 3,
           'ward'     : 4,
+          'ward_d2'  : 7,
           'centroid' : 5,
           'median'   : 6 }
 

@@ -299,11 +299,13 @@ static PyObject *linkage_wrap(PyObject * const, PyObject * const args) {
     // data points in a cluster.
     if (method==METHOD_METR_AVERAGE ||
         method==METHOD_METR_WARD ||
+        method==METHOD_METR_WARD_D2 ||
         method==METHOD_METR_CENTROID) {
       members.init(N, 1);
     }
     // Operate on squared distances for these methods.
     if (method==METHOD_METR_WARD ||
+        method==METHOD_METR_WARD_D2 ||
         method==METHOD_METR_CENTROID ||
         method==METHOD_METR_MEDIAN) {
       for (t_float * DD = D_; DD!=D_+static_cast<std::ptrdiff_t>(N)*(N-1)/2;
@@ -327,6 +329,9 @@ static PyObject *linkage_wrap(PyObject * const, PyObject * const args) {
     case METHOD_METR_WARD:
       NN_chain_core<METHOD_METR_WARD, t_index>(N, D_, members, Z2);
       break;
+    case METHOD_METR_WARD_D2:
+      NN_chain_core<METHOD_METR_WARD_D2, t_index>(N, D_, members, Z2);
+      break;
     case METHOD_METR_CENTROID:
       generic_linkage<METHOD_METR_CENTROID, t_index>(N, D_, members, Z2);
       break;
@@ -337,7 +342,8 @@ static PyObject *linkage_wrap(PyObject * const, PyObject * const args) {
       throw std::runtime_error(std::string("Invalid method index."));
     }
 
-    if (method==METHOD_METR_CENTROID ||
+    if (method==METHOD_METR_WARD_D2 ||
+        method==METHOD_METR_CENTROID ||
         method==METHOD_METR_MEDIAN) {
       Z2.sqrt();
     }
@@ -629,6 +635,10 @@ public:
 
     case METHOD_METR_WARD:
       postprocessfn = &cluster_result::sqrtward;
+      break;
+    
+    case METHOD_METR_WARD_D2:
+      postprocessfn = &cluster_result::sqrtdouble;
       break;
 
     default:
@@ -1137,7 +1147,7 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
     cluster_result Z2(N-1);
 
     auto_array_ptr<t_index> members;
-    if (method==METHOD_METR_WARD || method==METHOD_METR_CENTROID) {
+    if (method==METHOD_METR_WARD || method==METHOD_METR_WARD_D2 || method==METHOD_METR_CENTROID) {
       members.init(2*N-1, 1);
     }
 
@@ -1177,6 +1187,7 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
 
     if (method!=METHOD_METR_SINGLE &&
         method!=METHOD_METR_WARD &&
+        method!=METHOD_METR_WARD_D2 &&
         method!=METHOD_METR_CENTROID &&
         method!=METHOD_METR_MEDIAN) {
       PyErr_SetString(PyExc_IndexError, "Invalid method index.");
@@ -1193,6 +1204,9 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
     case METHOD_METR_WARD:
       generic_linkage_vector<METHOD_VECTOR_WARD>(N, dist, Z2);
       break;
+    case METHOD_METR_WARD_D2:
+      generic_linkage_vector<METHOD_VECTOR_WARD_D2>(N, dist, Z2);
+      break;
     case METHOD_METR_CENTROID:
       generic_linkage_vector_alternative<METHOD_VECTOR_CENTROID>(N, dist, Z2);
       break;
@@ -1201,6 +1215,7 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
     }
 
     if (method==METHOD_METR_WARD ||
+        method==METHOD_METR_WARD_D2 ||
         method==METHOD_METR_CENTROID) {
       members.free();
     }

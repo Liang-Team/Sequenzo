@@ -73,27 +73,16 @@ import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
 from scipy.spatial.distance import squareform
 # sklearn metrics no longer needed - using C++ implementation
-from fastcluster import linkage
-
-# Optional R integration for Ward D method
-_RPY2_AVAILABLE = False
-ro = None
-importr = None
-
+# Import from sequenzo_fastcluster (our custom fastcluster with ward_d and ward_d2 support)
 try:
-    import rpy2.robjects as ro
-    from rpy2.robjects.packages import importr, PackageNotInstalledError
-    _RPY2_AVAILABLE = True
-except Exception:
-    # Catch any error during rpy2 import/initialization (e.g., R not installed / R_HOME missing on Windows)
-    _RPY2_AVAILABLE = False
-
-if not _RPY2_AVAILABLE:
-    print("[!] Warning: rpy2 not available or R not properly configured. Ward D clustering method will not be supported.")
-    print("    To use Ward D: please install R and properly configure rpy2 (make sure `R --version` works).")
-    print("    use 'ward_d2', 'average', 'complete', or 'single' methods.")
-    print("    See CRAN: https://cloud.r-project.org.")
-    print("    Alternatively, use the 'ward_d2', 'average', 'complete', or 'single' method instead.")
+    from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage
+except ImportError:
+    # Fallback: try absolute import
+    try:
+        from sequenzo_fastcluster.fastcluster import linkage
+    except ImportError:
+        # Last resort: try relative import
+        from .sequenzo_fastcluster.fastcluster import linkage
 
 # Import C++ cluster quality functions
 try:
@@ -109,85 +98,6 @@ from sequenzo.visualization.utils import save_and_show_results
 
 # Global flag to ensure Ward warning is only shown once per session
 _WARD_WARNING_SHOWN = False
-
-def _ensure_r_environment_and_fastcluster():
-    """
-    Ensure R runtime is discoverable and R package 'fastcluster' is installed.
-    - If R is not available, raise with platform-specific installation instructions
-    - Choose CRAN mirror
-    - Auto-install 'fastcluster' if not present
-    """
-    print('  - Checking R runtime environment and fastcluster.')
-    # Try to load R runtime via rpy2. If this fails, provide installation instructions.
-    try:
-        utils = importr('utils')
-    except Exception as e:
-        # Build platform-specific guidance
-        if sys.platform == 'darwin':
-            guide = (
-                "No available R runtime environment detected.\n"
-                "Please install and configure R first:\n"
-                "1) Installation: Install R from CRAN (recommended macOS package): https://cloud.r-project.org \n"
-                "   Or use Homebrew: brew install r\n"
-                "2) Verification: Run `R --version` in the terminal to check the version information.\n"
-                "3) If the error persists, you can set the environment variable manually:\n"
-                "   export R_HOME=/Library/Frameworks/R.framework/Resources\n"
-                "   and ensure that `which R` can locate the R executable."
-            )
-        elif sys.platform.startswith('linux'):
-            guide = (
-                "No available R runtime environment detected.\n"
-                "Please install and configure R first:\n"
-                "1) Installation: Use your distribution's package manager "
-                "(e.g., Ubuntu: sudo apt-get install -y r-base; CentOS/RHEL: sudo yum install -y R)\n"
-                "   or download from CRAN: https://cloud.r-project.org \n"
-                "2) Verification: Run `R --version` in the terminal.\n"
-                "3) If necessary, set R_HOME to point to the R installation directory (e.g., /usr/lib/R)."
-            )
-        elif sys.platform == 'win32':
-            guide = (
-                "No available R runtime environment detected.\n"
-                "Please install and configure R first:\n"
-                "1) Installation: Download and install R for Windows from CRAN: https://cloud.r-project.org \n"
-                "2) Verification: Run `R --version` in PowerShell.\n"
-                "3) If the error persists, add the R bin directory to your system PATH environment variable,\n"
-                "   e.g., C:\\Program Files\\R\\R-x.y.z\\bin; if needed, set R_HOME to that R directory."
-            )
-        else:
-            guide = (
-                "No available R runtime environment detected. "
-                "Please install R and ensure that `R --version` can be executed from the command line.\n"
-                "CRAN: https://cloud.r-project.org"
-            )
-        raise RuntimeError(f"{guide}\nOriginal error: {e}")
-
-    # Ensure mirror
-    try:
-        # If a mirror is not chosen, choose the first (may be reset by user later)
-        utils.chooseCRANmirror(ind=1)
-    except Exception:
-        # Fallback to cloud mirror
-        try:
-            ro.r('options(repos = c(CRAN = "https://cloud.r-project.org"))')
-        except Exception:
-            pass
-
-    # Ensure fastcluster installed
-    try:
-        importr('fastcluster')
-    except PackageNotInstalledError:
-        try:
-            # Try install with explicit repo and limited parallelism
-            utils.install_packages('fastcluster', repos='https://cloud.r-project.org', Ncpus=2)
-            importr('fastcluster')
-        except Exception as install_err:
-            raise RuntimeError(
-                "Failed to install R package 'fastcluster' automatically. "
-                "Please ensure internet access and a working R toolchain are available. "
-                f"Original error: {install_err}"
-            )
-
-
 
 def _check_euclidean_compatibility(matrix, method):
     """
@@ -527,46 +437,11 @@ class Cluster:
         # Convert square matrix to condensed form
         self.condensed_matrix = squareform(self.full_matrix)
 
-        try:
-            # Map our method names to fastcluster's expected method names
-            fastcluster_method = self._map_method_name(self.clustering_method)
+        # Map our method names to fastcluster's expected method names
+        fastcluster_method = self._map_method_name(self.clustering_method)
 
-            if self.clustering_method == "ward_d" or self.clustering_method == "ward":
-                if not _RPY2_AVAILABLE:
-                    raise ImportError(
-                        "rpy2 is required for Ward D clustering method but is not available or R is not properly configured.\n"
-                        "Install rpy2 and ensure R is properly set up, or install with: pip install sequenzo[r]\n"
-                        "Alternatively, use 'ward_d2', 'average', 'complete', or 'single' methods."
-                    )
-                # Ensure R and R package fastcluster are available (auto-install if needed)
-                _ensure_r_environment_and_fastcluster()
+        linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
 
-                fastcluster_r = importr("fastcluster")
-
-                # 将 full_matrix 转换为 R 矩阵（直接从 Python 数组创建），避免 rpy2 对大向量长度出错
-                # 用‘F’强制按列展开，符合 R 的内存布局（列优先）
-                full_matrix_r = ro.r.matrix(ro.FloatVector(self.full_matrix.flatten('F')),
-                                            nrow=self.full_matrix.shape[0], ncol=self.full_matrix.shape[1])
-                r_om = ro.r['as.dist'](full_matrix_r)
-
-                linkage_matrix = fastcluster_r.hclust(r_om, method="ward.D")
-
-                linkage_matrix = _hclust_to_linkage_matrix(linkage_matrix)
-
-            else:
-                linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
-
-            # Apply Ward D correction if needed (divide distances by 2 for classic Ward)
-            # if self.clustering_method == "ward_d":
-            #     linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
-
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to compute linkage with method '{self.clustering_method}'. "
-                "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
-                "For sequence distances, consider using 'average', 'complete', or 'single' instead of Ward methods. "
-                f"Original error: {e}"
-            )
         return linkage_matrix
 
     def _map_method_name(self, method):
@@ -574,8 +449,8 @@ class Cluster:
         Map our internal method names to fastcluster's expected method names.
         """
         method_mapping = {
-            "ward_d": "ward",    # Classic Ward (will be corrected later)
-            "ward_d2": "ward",   # Ward D2 (no correction needed)
+            "ward_d": "ward",    # Classic Ward (will be corrected later) (updated: it was solved on Nov.15, 2025 by Xinyi)
+            "ward_d2": "ward_d2",   # Ward D2 (no correction needed)
             "single": "single",
             "complete": "complete",
             "average": "average",
@@ -1299,7 +1174,8 @@ if __name__ == '__main__':
     # Load the data that we would like to explore in this tutorial
     # `df` is the short for `dataframe`, which is a common variable name for a dataset
     # df = load_dataset('country_co2_emissions')
-    df = load_dataset('mvad')
+    # df = load_dataset('mvad')
+    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/mvad.csv")
 
     # 时间列表
     time_list = ['Jul.93', 'Aug.93', 'Sep.93', 'Oct.93', 'Nov.93', 'Dec.93',

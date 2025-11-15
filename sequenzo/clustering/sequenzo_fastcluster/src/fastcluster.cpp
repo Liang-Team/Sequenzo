@@ -176,6 +176,7 @@ enum method_codes_vector {
   // Euclidean methods
   METHOD_VECTOR_SINGLE         = 0,
   METHOD_VECTOR_WARD           = 1,
+  METHOD_VECTOR_WARD_D2        = 4,
   METHOD_VECTOR_CENTROID       = 2,
   METHOD_VECTOR_MEDIAN         = 3,
 
@@ -669,7 +670,8 @@ static void NN_chain_core(const t_index N, t_float * const D, t_members * const 
     }
 
     if (method==METHOD_METR_AVERAGE ||
-        method==METHOD_METR_WARD) {
+        method==METHOD_METR_WARD ||
+        method==METHOD_METR_WARD_D2) {
       size1 = static_cast<t_float>(members[idx1]);
       size2 = static_cast<t_float>(members[idx2]);
       members[idx2] += members[idx1];
@@ -759,6 +761,28 @@ static void NN_chain_core(const t_index N, t_float * const D, t_members * const 
       */
       // Update the distance matrix in the range [start, idx1).
       //t_float v = static_cast<t_float>(members[i]);
+      for (i=active_nodes.start; i<idx1; i=active_nodes.succ[i])
+        f_ward(&D_(i, idx2), D_(i, idx1), min,
+               size1, size2, static_cast<t_float>(members[i]) );
+      // Update the distance matrix in the range (idx1, idx2).
+      for (; i<idx2; i=active_nodes.succ[i])
+        f_ward(&D_(i, idx2), D_(idx1, i), min,
+               size1, size2, static_cast<t_float>(members[i]) );
+      // Update the distance matrix in the range (idx2, N).
+      for (i=active_nodes.succ[idx2]; i<N; i=active_nodes.succ[i])
+        f_ward(&D_(idx2, i), D_(idx1, i), min,
+               size1, size2, static_cast<t_float>(members[i]) );
+      break;
+
+    case METHOD_METR_WARD_D2:
+      /*
+      Ward D2 linkage (with squared Euclidean distances).
+
+      Shorter and longer distances can occur, not smaller than min(d1,d2)
+      but maybe bigger than max(d1,d2).
+      Uses the same update formula as Ward, but with different post-processing.
+      */
+      // Update the distance matrix in the range [start, idx1).
       for (i=active_nodes.start; i<idx1; i=active_nodes.succ[i])
         f_ward(&D_(i, idx2), D_(i, idx1), min,
                size1, size2, static_cast<t_float>(members[i]) );
@@ -1068,6 +1092,7 @@ static void generic_linkage(const t_index N, t_float * const D, t_members * cons
 
     if (method==METHOD_METR_AVERAGE ||
         method==METHOD_METR_WARD ||
+        method==METHOD_METR_WARD_D2 ||
         method==METHOD_METR_CENTROID) {
       size1 = static_cast<t_float>(members[idx1]);
       size2 = static_cast<t_float>(members[idx2]);
@@ -1220,6 +1245,48 @@ static void generic_linkage(const t_index N, t_float * const D, t_members * cons
 
         Shorter and longer distances can occur, not smaller than min(d1,d2)
         but maybe bigger than max(d1,d2).
+      */
+      // Update the distance matrix in the range [start, idx1).
+      for (j=active_nodes.start; j<idx1; j=active_nodes.succ[j]) {
+        f_ward(&D_(j, idx2), D_(j, idx1), mindist[idx1],
+               size1, size2, static_cast<t_float>(members[j]) );
+        if (n_nghbr[j] == idx1)
+          n_nghbr[j] = idx2;
+      }
+      // Update the distance matrix in the range (idx1, idx2).
+      for (; j<idx2; j=active_nodes.succ[j]) {
+        f_ward(&D_(j, idx2), D_(idx1, j), mindist[idx1], size1, size2,
+               static_cast<t_float>(members[j]) );
+        if (D_(j, idx2) < mindist[j]) {
+          nn_distances.update_leq(j, D_(j, idx2));
+          n_nghbr[j] = idx2;
+        }
+      }
+      // Update the distance matrix in the range (idx2, N).
+      if (idx2<N_1) {
+        n_nghbr[idx2] = j = active_nodes.succ[idx2]; // exists, maximally N-1
+        f_ward(&D_(idx2, j), D_(idx1, j), mindist[idx1],
+               size1, size2, static_cast<t_float>(members[j]) );
+        min = D_(idx2,j);
+        for (j=active_nodes.succ[j]; j<N; j=active_nodes.succ[j]) {
+          f_ward(&D_(idx2, j), D_(idx1, j), mindist[idx1],
+                 size1, size2, static_cast<t_float>(members[j]) );
+          if (D_(idx2,j) < min) {
+            min = D_(idx2,j);
+            n_nghbr[idx2] = j;
+          }
+        }
+        nn_distances.update(idx2, min);
+      }
+      break;
+
+    case METHOD_METR_WARD_D2:
+      /*
+        Ward D2 linkage (with squared Euclidean distances).
+
+        Shorter and longer distances can occur, not smaller than min(d1,d2)
+        but maybe bigger than max(d1,d2).
+        Uses the same update formula as Ward, but with different post-processing.
       */
       // Update the distance matrix in the range [start, idx1).
       for (j=active_nodes.start; j<idx1; j=active_nodes.succ[j]) {

@@ -15,7 +15,7 @@ from scipy.spatial.distance import squareform
 from sequenzo import *
 
 U_files = [
-    # 'synthetic_detailed_U5_N500.csv',
+    'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -109,7 +109,7 @@ U_files = [
     # 'synthetic_detailed_U85_N25000.csv',
     # 'synthetic_detailed_U85_N30000.csv',
     # 'synthetic_detailed_U85_N35000.csv',
-    'synthetic_detailed_U85_N40000.csv',
+    # 'synthetic_detailed_U85_N40000.csv',
     # 'synthetic_detailed_U85_N45000.csv',
     # 'synthetic_detailed_U85_N50000.csv',
     # 'synthetic_detailed_U85_N55000.csv',
@@ -158,12 +158,12 @@ for filename in U_files:
     diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
     # Cluster(diss, data.ids, clustering_method='ward_d2')
     start = time.time()
-    clustering = KMedoids(diss=diss,
-                          k=8,
-                          method='KMedoids',
-                          # initialclust=centroid_indices,
-                          npass=10,
-                          )
+    # clustering = KMedoids(diss=diss,
+    #                       k=8,
+    #                       method='KMedoids',
+    #                       # initialclust=centroid_indices,
+    #                       npass=10,
+    #                       )
     end = time.time()
 
     # start = time.time()
