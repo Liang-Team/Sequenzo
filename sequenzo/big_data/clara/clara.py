@@ -11,7 +11,7 @@ from contextlib import redirect_stdout
 import warnings
 
 from joblib import Parallel, delayed
-import fastcluster
+from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage
 from scipy.special import comb
 from itertools import product
 
@@ -89,7 +89,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         raise ValueError("[!] You need to set max.dist when using representativeness method.")
 
     allcriteria = ["distance", "db", "xb", "pbm", "ams"]
-    if not all(c.lower() in [crit.lower() for crit in allcriteria] for c in criteria):
+    criteria = [c.lower() for c in criteria]
+    if not all(c in allcriteria for c in criteria):
         raise ValueError(
             f"[!] Unknown criteria among {', '.join(criteria)}. Please specify at least one among {', '.join(allcriteria)}.")
 
@@ -138,7 +139,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         diss = diss.values
         _diss = diss.copy()
         _diss = get_weighted_diss(_diss, ac2['aggWeights'])
-        hc = fastcluster.linkage(_diss, method='ward')
+        hc = linkage(_diss, method='ward')
         del _diss
 
         # For each number of clusters
@@ -215,7 +216,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         return allclust
 
     # Compute in parallel using joblib
-    # output example :
+    # the output example of `results`:
     #         results[0] = all iter1's = [{k=2's}, {k=3's}, ... , {k=10's}]
     #         results[1] = all iter2's = [{k=2's}, {k=3's}, ... , {k=10's}]
     results = Parallel(n_jobs=-1)(
@@ -232,7 +233,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     print("  - Done.")
     print("[>] Aggregating iterations for each k values...")
 
-    # output example :
+    # aggregated output example :
     #         data[0] = all k=2's = [{when iter1, k=2's}, {when iter2, k=2's}, ... , {when iter100, k=2's}]
     #         data[1] = all k=3's = [{when iter1, k=3's}, {when iter2, k=3's}, ... , {when iter100, k=3's}]
     collected_data = [[] for _ in kvals]
@@ -462,13 +463,12 @@ if __name__ == '__main__':
     sequence_data = SequenceData(df, time=_time, id_col="id", states=states)
 
     result = clara(sequence_data,
-                   R=5,
+                   R=250,
                    sample_size=500,
                    kvals=range(2, 6),
                    criteria=['distance'],
                    dist_args={"method": "OM", "sm": "CONSTANT", "indel": 1},
                    stability=True)
 
+    # print(result)
     print(result['stats'])
-    print(result['clustering'])
-
