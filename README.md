@@ -63,12 +63,12 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 Sequenzo provides pre-built Python wheels for maximum compatibility — no need to compile from source.
 
-| Platform         | Architecture                    | Python Versions       | Status            |
-|------------------|---------------------------------|-----------------------|-------------------|
+| Platform         | Architecture                   | Python Versions       | Status            |
+|------------------|--------------------------------|-----------------------|-------------------|
 | **macOS**        | Intel && Apple Silicon (64-bit) | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Windows**      | `AMD64` (64-bit)                | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (glibc)**| `x86_64` (standard Linux)       | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (musl)** | `x86_64` (Alpine Linux)         | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Windows**      | `AMD64`(64-bit)     | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (glibc)**| `x86_64` (standard Linux)      | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| **Linux (musl)** | `x86_64` (Alpine Linux)        | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
 
 
 What do these terms mean?
@@ -111,24 +111,6 @@ If you have some issues with the installation, it might because you have both Py
 ```
 pip3 install sequenzo
 ```
-
-### Optional R Integration
-
-Sequenzo now checks the system environment variables before running ward.D hierarchical clustering.
-
-If R is missing, a relevant prompt will be displayed along with specific installation instructions. If `fastcluster` is missing, Sequenzo will automatically download `fastcluster`.
-
-Before automatically downloading `fastcluster`, Sequenzo checks whether R is available; if R is not installed, sequenzo will not automatically download fastcluster.
-
-Sequenzo supports advanced Ward clustering methods that require R integration. If you need to use the `ward_d` clustering method, install with R support:
-
-```
-pip install sequenzo[r]
-```
-
-This will install the optional `rpy2` dependency, which provides Python-R interoperability. Note that R must also be installed on your system for `rpy2` to work.
-
-For more information about the latest stable release and required dependencies, please refer to [PyPI](https://pypi.org/project/sequenzo/). 
 
 ## Documentation
 
