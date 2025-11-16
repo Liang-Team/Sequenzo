@@ -5,13 +5,10 @@ matplotlib==3.6.3  # Version compatible with Python 3.11
 seaborn==0.12.2  # Compatible with matplotlib >= 3.6
 scikit-learn==1.2.2  # Compatible with Python 3.11
 joblib==1.5.2  # Version compatible with Python 3.11
-fastcluster==1.2.6  # Compatible with scipy >= 1.6.3
 pillow==9.4.0  # Compatible with Python 3.11
 pybind11>=2.10.0  # Python 3.11 requires >= 2.10.0
 cython>=0.29.21
 docutils>=0.17
 missingno>=0.5.2,<0.6.0
 tqdm>=4.62.3,<5.0.0
-# rpy2 is now optional - install with: pip install sequenzo[r]
-# rpy2==3.5.6
 cffi>=1.15.0  # Required for C extensions and FFI functionality

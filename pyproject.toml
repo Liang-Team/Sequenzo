@@ -44,7 +44,6 @@ dependencies = [
     "cython>=0.29.21",
     "scipy>=1.6.3",
     "scikit-learn>=0.24.2",
-    "fastcluster>=1.2.6",
     "joblib>=1.0.1",
     "docutils>=0.17",
     "tqdm>=4.62.3,<5.0.0",
@@ -53,13 +52,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# R integration - optional for hierarchical clustering with R's fastcluster
-r = [
-    "rpy2>=3.5.12; python_version >= '3.12'",
-    "rpy2>=3.5.6; python_version == '3.11'",
-    "rpy2>=3.5.6; python_version == '3.10'",
-    "rpy2>=3.5.6; python_version == '3.9'",
-]
 dev = [
     "pytest>=6.2.5",
     "flake8>=3.9.2"
@@ -80,6 +72,10 @@ include-package-data = true
   "src/**/*.hpp"
 ]
 "sequenzo.clustering" = [
+  "src/**/*.cpp",
+  "src/**/*.h"
+]
+"sequenzo.clustering.sequenzo_fastcluster" = [
   "src/**/*.cpp",
   "src/**/*.h"
 ]

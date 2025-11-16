@@ -179,13 +179,6 @@ jobs:
         run: |
           echo "SEQUENZO_ENABLE_OPENMP=1" >> $env:GITHUB_ENV
 
-      - name: Install R (Windows, without Rtools)
-        if: runner.os == 'Windows'
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: '4.3.1'
-          rtools-version: none  # 显式跳过 Rtools 安装，避免 PATH 冲突
-
       - name: Set Windows encoding (Windows only)
         if: runner.os == 'Windows'
         run: |
@@ -200,11 +193,6 @@ jobs:
           pip install oldest-supported-numpy || pip install "numpy>=1.21.0"
           pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
           pip install --prefer-binary Cython pybind11 build "cibuildwheel==2.23.3" twine
-          # Note: rpy2 and fastcluster are optional dependencies, only installed for macOS builds
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            pip install --prefer-binary rpy2 || echo "rpy2 installation skipped (optional dependency)"
-            pip install --prefer-binary fastcluster || echo "fastcluster installation skipped (optional dependency)"
-          fi
         shell: bash
 
       - name: Clean before cibuildwheel
@@ -454,10 +442,6 @@ jobs:
           CIBW_BEFORE_BUILD: >
             echo "Using setup.py dependencies only"
 
-          # Linux: skip R installation for tests (it's optional)
-          CIBW_BEFORE_TEST_LINUX: |
-            echo "Skipping R installation for tests - rpy2 is optional"
-
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
           CIBW_TEST_COMMAND_MACOS: |
             # 根据架构设置正确的库路径
@@ -545,7 +529,7 @@ jobs:
                 print(f'[ERROR] Failed to import sequenzo: {e}')
                 sys.exit(1)
 
-            # Check C++ clustering extensions
+            # Check C++ clustering extensions (clustering)
             mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
             if mod:
                 print('[OK] Clustering C++ extensions module spec found')
@@ -596,19 +580,6 @@ jobs:
                 print('[OK] All utility functions imported successfully')
             except ImportError as e:
                 print(f'[WARNING] Utility functions failed to load: {e}')
-
-            # Check R environment (optional)
-            try:
-                import rpy2.robjects as ro
-                from rpy2.robjects.packages import importr
-                print('[OK] R environment (rpy2) loaded successfully')
-                try:
-                    fastcluster_r = importr('fastcluster')
-                    print('[OK] R fastcluster package available')
-                except Exception as e:
-                    print(f'[INFO] R fastcluster package not available: {e}')
-            except ImportError as e:
-                print(f'[INFO] R environment (rpy2) not available: {e}')
             
             # Check sequenzo_fastcluster module
             print('')
@@ -707,18 +678,6 @@ jobs:
                 print('[OK] All utility functions imported successfully')
             except ImportError as e:
                 print(f'ERROR: Utility functions failed to load: {e}')
-
-            try:
-                import rpy2.robjects as ro
-                from rpy2.robjects.packages import importr
-                print('R environment (rpy2) loaded successfully')
-                try:
-                    fastcluster_r = importr('fastcluster')
-                    print('R fastcluster package available')
-                except Exception as e:
-                    print(f'WARNING: R fastcluster package not available: {e}')
-            except ImportError as e:
-                print(f'WARNING: R environment (rpy2) not available: {e}')
             
             # Check sequenzo_fastcluster module
             print('')
@@ -779,18 +738,6 @@ jobs:
                         print(f'[OK] {name} class available')
             except ImportError as e:
                 print(f'ERROR: Failed to import c_code: {e}')
-          
-            try:
-                import rpy2.robjects as ro
-                from rpy2.robjects.packages import importr
-                print('R environment (rpy2) loaded successfully')
-                try:
-                    importr('fastcluster')
-                    print('R fastcluster package available')
-                except Exception as e:
-                    print(f'WARNING: R fastcluster package not available: {e}')
-            except ImportError as e:
-                print(f'WARNING: R environment (rpy2) not available: {e}')
             
             # Check sequenzo_fastcluster module
             print('')
@@ -845,7 +792,7 @@ jobs:
       - name: Check wheels
         run: twine check dist/*
 
-      # 验证轮子 RECORD
+      # 验证轮子 RECORD 以适应 PyPI 最新要求
       - name: Verify Wheel RECORD Integrity
         run: |
           echo "=== Verifying wheel RECORD integrity ==="
