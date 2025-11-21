@@ -468,6 +468,20 @@ def plot_sequence_index(seqdata: SequenceData,
     # Ensure ID columns match (convert if needed)
     id_col_name = "Entity ID" if "Entity ID" in group_dataframe.columns else group_dataframe.columns[0]
 
+    # Apply group_labels if provided (for group_dataframe API)
+    if group_labels is not None and group_column_name in group_dataframe.columns:
+        # Validate that all values in the group column have labels
+        unique_values = group_dataframe[group_column_name].unique()
+        missing_keys = set(unique_values) - set(group_labels.keys())
+        if missing_keys:
+            raise ValueError(
+                f"group_labels missing mappings for values: {missing_keys}. "
+                f"Please provide labels for all unique values in '{group_column_name}': {sorted(unique_values)}"
+            )
+        # Apply the labels mapping
+        group_dataframe = group_dataframe.copy()  # Avoid modifying original
+        group_dataframe[group_column_name] = group_dataframe[group_column_name].map(group_labels)
+
     # Get unique groups and sort them based on user preference
     if group_order:
         # Use manually specified order, filter out non-existing groups
