@@ -15,7 +15,7 @@ from scipy.spatial.distance import squareform
 from sequenzo import *
 
 U_files = [
-    'synthetic_detailed_U5_N500.csv',
+    # 'synthetic_detailed_U5_N500.csv',
     # 'synthetic_detailed_U5_N1000.csv',
     # 'synthetic_detailed_U5_N1500.csv',
     # 'synthetic_detailed_U5_N2000.csv',
@@ -41,6 +41,10 @@ U_files = [
     # 'synthetic_detailed_U5_N70000.csv',
     # 'synthetic_detailed_U5_N75000.csv',
     # 'synthetic_detailed_U5_N80000.csv',
+    # 'synthetic_detailed_U5_N85000.csv',
+    # 'synthetic_detailed_U5_N90000.csv',
+    # 'synthetic_detailed_U5_N95000.csv',
+    # 'synthetic_detailed_U5_N100000.csv',
 
     # 'synthetic_detailed_U25_N500.csv',
     # 'synthetic_detailed_U25_N1000.csv',
@@ -62,10 +66,16 @@ U_files = [
     # 'synthetic_detailed_U25_N40000.csv',
     # 'synthetic_detailed_U25_N45000.csv',
     # 'synthetic_detailed_U25_N50000.csv',
+    # 'synthetic_detailed_U25_N55000.csv',
+    # 'synthetic_detailed_U25_N60000.csv',
     # 'synthetic_detailed_U25_N65000.csv',
     # 'synthetic_detailed_U25_N70000.csv',
     # 'synthetic_detailed_U25_N75000.csv',
     # 'synthetic_detailed_U25_N80000.csv',
+    # 'synthetic_detailed_U25_N85000.csv',
+    # 'synthetic_detailed_U25_N90000.csv',
+    # 'synthetic_detailed_U25_N95000.csv',
+    # 'synthetic_detailed_U25_N100000.csv',
 
     # 'synthetic_detailed_U50_N500.csv',
     # 'synthetic_detailed_U50_N1000.csv',
@@ -91,6 +101,12 @@ U_files = [
     # 'synthetic_detailed_U50_N60000.csv',
     # 'synthetic_detailed_U50_N65000.csv',
     # 'synthetic_detailed_U50_N70000.csv',
+    # 'synthetic_detailed_U50_N75000.csv',
+    # 'synthetic_detailed_U50_N80000.csv',
+    # 'synthetic_detailed_U50_N85000.csv',
+    # 'synthetic_detailed_U50_N90000.csv',
+    # 'synthetic_detailed_U50_N95000.csv',
+    # 'synthetic_detailed_U50_N100000.csv',
 
     # 'synthetic_detailed_U85_N500.csv',
     # 'synthetic_detailed_U85_N1000.csv',
@@ -116,6 +132,12 @@ U_files = [
     # 'synthetic_detailed_U85_N60000.csv',
     # 'synthetic_detailed_U85_N65000.csv',
     # 'synthetic_detailed_U85_N70000.csv',
+    # 'synthetic_detailed_U85_N75000.csv',
+    # 'synthetic_detailed_U85_N80000.csv',
+    # 'synthetic_detailed_U85_N85000.csv',
+    # 'synthetic_detailed_U85_N90000.csv',
+    # 'synthetic_detailed_U85_N95000.csv',
+    'synthetic_detailed_U85_N100000.csv',
 ]
 
 # data_dir = '/home/xinyi_test/data/detailed_data'
@@ -154,10 +176,10 @@ for filename in U_files:
     data = SequenceData(df, time=_time, id_col="id", states=states)
     # data = SequenceData(df, time=_time, time_type="year", id_col="country", states=states)
 
-
-    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1).to_numpy()
-    # Cluster(diss, data.ids, clustering_method='ward_d2')
     start = time.time()
+    diss = get_distance_matrix(seqdata=data, method="OM", sm="CONSTANT", indel=1)
+    # Cluster(diss, data.ids, clustering_method='ward_d2')
+
     # clustering = KMedoids(diss=diss,
     #                       k=8,
     #                       method='KMedoids',
