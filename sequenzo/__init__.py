@@ -101,6 +101,27 @@ from .with_event_history_analysis import (
     seqsamm
 )
 
+# Hidden Markov Models (HMM)
+from .seqhmm import (
+    HMM,
+    build_hmm,
+    fit_model,
+    predict,
+    posterior_probs,
+    plot_hmm,
+    # Mixture HMM
+    MHMM,
+    build_mhmm,
+    fit_mhmm,
+    predict_mhmm,
+    posterior_probs_mhmm,
+    plot_mhmm,
+    # Non-homogeneous HMM
+    NHMM,
+    build_nhmm,
+    fit_nhmm
+)
+
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
     # Datasets
@@ -197,7 +218,40 @@ __all__ = [
     "set_typology",
     "seqsammeha",
     # Keep old names for backward compatibility
-    "seqsamm"
+    "seqsamm",
+    
+    # Hidden Markov Models (HMM)
+    "HMM",
+    "build_hmm",
+    "fit_model",
+    "predict",
+    "posterior_probs",
+    "plot_hmm",
+    # Mixture HMM
+    "MHMM",
+    "build_mhmm",
+    "fit_mhmm",
+    "predict_mhmm",
+    "posterior_probs_mhmm",
+    "plot_mhmm",
+    # Non-homogeneous HMM
+    "NHMM",
+    "build_nhmm",
+    "fit_nhmm",
+    # Model comparison
+    "aic",
+    "bic",
+    "compare_models",
+    # Simulation
+    "simulate_hmm",
+    "simulate_mhmm",
+    # Bootstrap
+    "bootstrap_model",
+    # Advanced optimization
+    "fit_model_advanced",
+    # Formulas
+    "Formula",
+    "create_model_matrix"
 ]
 
 # Auto-setup OpenMP on Apple Silicon (runs on import)
@@ -238,3 +292,22 @@ _setup_openmp_if_needed()
 
 # Clean up the setup function from the module namespace
 del _setup_openmp_if_needed
+
+# Version check: Check for updates asynchronously (non-blocking)
+def _check_version_update():
+    """
+    Check if a newer version of Sequenzo is available.
+    This runs asynchronously to avoid blocking the import process.
+    """
+    try:
+        from .version_check import check_version_update_async
+        check_version_update_async()
+    except Exception:
+        # Silently fail - version checks should never break imports
+        pass
+
+# Run version check in background
+_check_version_update()
+
+# Clean up the version check function from the module namespace
+del _check_version_update

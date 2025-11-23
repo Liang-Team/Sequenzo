@@ -1,0 +1,21 @@
+^seqHMM\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^codecov\.yml$
+.Rproj.user
+.Rhistory
+*.Rproj
+# Extra source folders and compiled code
+vignettes/cache
+vignettes/figure
+*.o
+*.dll
+*.so
+*.sty
+*.log
+*.synctex.gz
+*.tex
+*.pdf
+*.bbl
+*.idx
+*.ilg
