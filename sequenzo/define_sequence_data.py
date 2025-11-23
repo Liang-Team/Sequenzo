@@ -555,7 +555,7 @@ class SequenceData:
 
         return table
 
-    def uniqueness_stats(self, weighted: bool = False):
+    def check_uniqueness_rate(self, weighted: bool = False):
         """
         Compute uniqueness statistics of the sequences.
 
