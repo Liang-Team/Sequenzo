@@ -30,6 +30,8 @@ Sequenzo outperforms traditional R-based tools in social sequence analysis, deli
 > with tutorials, practical examples, and API references to help you get started quickly.  
 >  
 > 📖 Available in **English and Chinese**, our docs are written to be approachable, practical, and easy to follow.
+>
+> ✍️ Regarding **how to cite us**, please see [here](https://sequenzo.yuqi-liang.tech/en/basics/how-to-cite).  
 
 ## ✨ Be part of the Sequenzo community
 Join our Discord channel to iscuss ideas, get help, and hear about upcoming Sequenzo versions, tutorials, and workshops first.
