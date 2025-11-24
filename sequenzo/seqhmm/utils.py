@@ -39,9 +39,12 @@ def sequence_data_to_hmmlearn_format(
     
     # Get the alphabet (state space)
     alphabet = seq_data.alphabet
+    n_symbols = len(alphabet)
     
-    # Create mapping from state symbols to integers (0-indexed for hmmlearn)
-    state_to_int = {state: idx for idx, state in enumerate(alphabet)}
+    # Check if sequences are already integer-coded (SequenceData uses 1-indexed integers)
+    # The sequences property returns integer-coded sequences (1, 2, 3, ...) not state symbols
+    # Missing values are coded as len(states) + 1 (which equals n_symbols + 1 if missing was added)
+    # We need to convert from 1-indexed to 0-indexed and filter out missing values
     
     # Convert sequences to integer format
     # Flatten all sequences into a single array
@@ -50,14 +53,35 @@ def sequence_data_to_hmmlearn_format(
     
     for seq_idx in range(len(sequences)):
         seq = sequences[seq_idx]
-        # Convert each state in the sequence to integer
-        seq_int = [state_to_int.get(state, -1) for state in seq]
-        # Filter out any invalid states (shouldn't happen, but safety check)
-        seq_int = [x for x in seq_int if x >= 0]
+        seq_int = []
         
+        for state in seq:
+            # Check if state is already an integer (SequenceData uses 1-indexed)
+            if isinstance(state, (int, np.integer)):
+                # Convert from 1-indexed to 0-indexed
+                # Valid states are 1 to n_symbols, missing is n_symbols + 1
+                if 1 <= state <= n_symbols:
+                    seq_int.append(state - 1)  # Convert to 0-indexed
+                # Skip missing values (state > n_symbols or state == 0)
+            else:
+                # If state is a symbol (string), map it to integer
+                # This shouldn't happen with SequenceData, but handle it for safety
+                state_to_int = {state: idx for idx, state in enumerate(alphabet)}
+                mapped_int = state_to_int.get(state, -1)
+                if mapped_int >= 0:
+                    seq_int.append(mapped_int)
+        
+        # Only add sequence if it has valid states
         if len(seq_int) > 0:
             X_list.extend(seq_int)
             lengths.append(len(seq_int))
+    
+    # Check if we have any data
+    if len(X_list) == 0:
+        raise ValueError(
+            "No valid sequences found. All sequences are empty or contain only missing/invalid states. "
+            f"Number of sequences: {len(sequences)}, Alphabet size: {n_symbols}"
+        )
     
     # Convert to numpy array with shape (n_samples, 1) for hmmlearn
     X = np.array(X_list, dtype=np.int32).reshape(-1, 1)

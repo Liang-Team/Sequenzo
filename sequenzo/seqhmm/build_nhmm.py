@@ -16,6 +16,7 @@ import pandas as pd
 from typing import Optional, List, Union
 from sequenzo.define_sequence_data import SequenceData
 from .nhmm import NHMM
+from .formulas import Formula
 
 
 def build_nhmm(

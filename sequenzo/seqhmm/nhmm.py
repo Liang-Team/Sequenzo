@@ -13,7 +13,7 @@ This is similar to seqHMM's nhmm class in R.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Tuple
 from scipy.optimize import minimize
 from sequenzo.define_sequence_data import SequenceData
 from .utils import sequence_data_to_hmmlearn_format

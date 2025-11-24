@@ -1,0 +1,649 @@
+---
+title: "Hidden Markov Models (HMM) Tutorial with seqHMM R Package - MVAD Dataset"
+subtitle: "Step-by-step guide for comparing with Sequenzo seqHMM implementation"
+author: "Sequenzo Tutorial"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    theme: cosmo
+---
+
+# Introduction
+
+This tutorial will guide you step-by-step through using Hidden Markov Models (HMM) for sequence analysis using the **seqHMM R package**. We'll use the `mvad` dataset to analyze education and employment sequences.
+
+This tutorial is designed to help you verify that the results from the R seqHMM package match the results from the Sequenzo Python implementation, step by step.
+
+## What are Hidden Markov Models?
+
+Hidden Markov Models (HMMs) are statistical models that help us understand sequences of observations by assuming there are **hidden underlying states** that generate these observations.
+
+### Key Concepts:
+
+-   **Hidden States**: The underlying states you can't directly observe (e.g., "stable career", "transitioning", "exploring")
+-   **Observations**: What you actually see in your data (e.g., "employed", "unemployed", "student")
+-   **Transitions**: How likely you are to move from one hidden state to another
+-   **Emissions**: How likely each hidden state is to produce each observation
+
+In this tutorial, we'll:
+
+1.  Load and prepare the mvad dataset
+2.  Build an HMM model
+3.  Fit the model to discover hidden patterns
+4.  Make predictions about hidden states
+5.  Visualize the model
+6.  Compare different models
+7.  Explore Mixture HMM (clustering sequences)
+
+# Step 1: Load Libraries and Data
+
+First, let's load the necessary R libraries and the mvad dataset.
+
+```{r}
+#| label: load-libraries
+#| echo: true
+#| message: false
+#| warning: false
+
+# Load required libraries
+library(seqHMM)      # For Hidden Markov Models
+library(TraMineR)    # For sequence data (mvad dataset)
+library(dplyr)       # For data manipulation
+
+# Set random seed for reproducibility
+# This ensures we get the same results every time we run the code
+set.seed(21)
+
+cat("Libraries loaded successfully!\n")
+```
+
+```{r}
+#| label: load-data
+#| echo: true
+
+# Load the mvad dataset from TraMineR package
+# This dataset contains education and employment sequences over 72 months
+data("mvad", package = "TraMineR")
+
+# Display basic information about the dataset
+cat("Dataset dimensions:", dim(mvad), "\n")
+cat("Number of sequences:", nrow(mvad), "\n")
+cat("Number of columns:", ncol(mvad), "\n")
+cat("\nFirst few rows:\n")
+head(mvad[, 1:10])
+```
+
+# Step 2: Prepare Sequence Data
+
+Now we need to prepare the sequence data. The mvad dataset has sequences in columns 15-86 (72 months). We'll create a sequence object using `seqdef()`.
+
+```{r}
+#| label: prepare-sequences
+#| echo: true
+
+# Define the alphabet (all possible states in the sequences)
+mvad_alphabet <- c(
+  "employment", "FE", "HE", "joblessness", "school", "training"
+)
+
+# Define human-readable labels for each state
+mvad_labels <- c(
+  "employment", "further education", "higher education",
+  "joblessness", "school", "training"
+)
+
+# Define short codes for states (used in sequence plots)
+mvad_scodes <- c("EM", "FE", "HE", "JL", "SC", "TR")
+
+# Create sequence object from columns 15:86
+# Note: We do NOT use weights (as requested - no weighted data)
+mvad_seq <- seqdef(
+  mvad, 
+  15:86,                    # Time columns (72 months)
+  alphabet = mvad_alphabet, # All possible states
+  states = mvad_scodes,     # Short codes for states
+  labels = mvad_labels,     # Human-readable labels
+  xtstep = 6,               # Step for x-axis labels (every 6 months)
+  cpal = colorpalette[[6]]  # Color palette for 6 states
+)
+
+# Display information about the sequence object
+cat("Sequence object created successfully!\n")
+cat("Number of sequences:", nrow(mvad_seq), "\n")
+cat("Sequence length:", ncol(mvad_seq), "\n")
+cat("Number of states:", length(alphabet(mvad_seq)), "\n")
+cat("\nStates:", alphabet(mvad_seq), "\n")
+
+# Display first few sequences
+cat("\nFirst 5 sequences (first 10 time points):\n")
+print(mvad_seq[1:5, 1:10])
+```
+
+# Step 3: Build an HMM Model
+
+Now we'll create an HMM model. We need to specify: - Number of hidden states (we'll use 5, matching the R example) - Initial state probabilities - Transition probabilities - Emission probabilities
+
+```{r}
+#| label: build-hmm
+#| echo: true
+
+# Define starting values for the emission matrix
+# This matrix shows which observed states each hidden state is likely to produce
+# Rows = hidden states (5 states), Columns = observed states (6 states)
+emiss <- matrix(
+  c(0.05, 0.05, 0.05, 0.05, 0.75, 0.05, # Hidden state 1: High prob for "school"
+    0.05, 0.75, 0.05, 0.05, 0.05, 0.05, # Hidden state 2: High prob for "FE"
+    0.05, 0.05, 0.05, 0.4,  0.05, 0.4,  # Hidden state 3: High prob for "joblessness" and "training"
+    0.05, 0.05, 0.75, 0.05, 0.05, 0.05, # Hidden state 4: High prob for "HE"
+    0.75, 0.05, 0.05, 0.05, 0.05, 0.05),# Hidden state 5: High prob for "employment"
+  nrow = 5, ncol = 6, byrow = TRUE)
+
+# Define starting values for the transition matrix
+# This matrix shows how likely transitions are between hidden states
+# We start with high diagonal values (0.9) and low off-diagonal values (0.025)
+trans <- matrix(0.025, 5, 5)  # Fill with 0.025
+diag(trans) <- 0.9            # Set diagonal to 0.9
+
+# Define starting values for initial state probabilities
+# All hidden states have equal probability at the start
+initial_probs <- c(0.2, 0.2, 0.2, 0.2, 0.2)
+
+# Build the hidden Markov model
+init_hmm_mvad <- build_hmm(
+  observations = mvad_seq,           # Our sequence data
+  transition_probs = trans,          # Transition matrix
+  emission_probs = emiss,            # Emission matrix
+  initial_probs = initial_probs     # Initial probabilities
+)
+
+cat("HMM model created successfully!\n")
+cat("Number of hidden states:", nrow(initial_probs), "\n")
+cat("Number of observed states:", ncol(emiss), "\n")
+cat("\nInitial state probabilities:\n")
+print(initial_probs)
+cat("\nTransition matrix (first 3 rows):\n")
+print(trans[1:3, ])
+```
+
+# Step 4: Fit the Model
+
+Now we'll fit the model to our data using the EM (Expectation-Maximization) algorithm. This will estimate the best parameters that explain our sequence data.
+
+```{r}
+#| label: fit-model
+#| echo: true
+
+# Fit the model using EM algorithm
+# control_em = list(restart = list(times = 100)) means we try 100 random restarts
+# to find the best solution (avoiding local optima)
+# NOTE: 100 restarts is slow but finds better solutions. For faster execution,
+#       reduce to 10-20 restarts (e.g., times = 10)
+fit_hmm_mvad <- fit_model(
+  init_hmm_mvad, 
+  control_em = list(restart = list(times = 10))  # Changed from 100 to 10 for faster execution
+)
+
+# Extract the fitted model
+hmm_mvad <- fit_hmm_mvad$model
+
+cat("Model fitting completed!\n")
+cat("Log-likelihood:", logLik(hmm_mvad), "\n")
+cat("Number of iterations:", attr(fit_hmm_mvad, "iterations"), "\n")
+cat("Converged:", attr(fit_hmm_mvad, "converged"), "\n")
+```
+
+# Step 5: Examine the Fitted Model Parameters
+
+Let's look at what the model learned about the hidden states. This helps us understand what patterns the model discovered.
+
+```{r}
+#| label: examine-parameters
+#| echo: true
+
+# Initial state probabilities
+# These tell us how likely each hidden state is at the start of a sequence
+# Note: Access model parameters using $ operator or getter functions
+cat("Initial State Probabilities:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+initial_probs_fitted <- hmm_mvad$initial_probs
+for (i in 1:length(initial_probs_fitted)) {
+  cat(sprintf("Hidden State %d: %.4f (%.2f%%)\n", 
+              i, initial_probs_fitted[i], initial_probs_fitted[i] * 100))
+}
+
+# Transition probabilities
+# These tell us how likely transitions are between hidden states
+cat("\nTransition Probabilities (rows = from, columns = to):\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+trans_probs <- hmm_mvad$transition_probs
+print(round(trans_probs, 3))
+
+# Emission probabilities
+# These tell us which observed states each hidden state is likely to produce
+cat("\nEmission Probabilities (rows = hidden states, columns = observed states):\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+emiss_probs <- hmm_mvad$emission_probs
+print(round(emiss_probs, 3))
+```
+
+# Step 6: Predict Hidden States
+
+Now let's use the fitted model to predict which hidden state each sequence is most likely in at each time point. This uses the Viterbi algorithm.
+
+```{r}
+#| label: predict-states
+#| echo: true
+
+# Predict the most likely hidden state sequence for each observed sequence
+# This uses the Viterbi algorithm to find the most likely path
+hidden_paths <- hidden_paths(hmm_mvad)
+
+cat("Predicted hidden states:\n")
+cat("Number of sequences:", nrow(hidden_paths), "\n")
+cat("Sequence length:", ncol(hidden_paths), "\n")
+
+# Display first few sequences
+cat("\nFirst 5 sequences, first 20 time points:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+for (i in 1:min(5, nrow(hidden_paths))) {
+  cat(sprintf("Sequence %d: ", i))
+  cat(paste(hidden_paths[i, 1:min(20, ncol(hidden_paths))], collapse=" "))
+  cat("\n")
+}
+
+# Count how many sequences are in each hidden state at the start
+cat("\nDistribution of initial hidden states:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+initial_states <- hidden_paths[, 1]
+initial_state_counts <- table(initial_states)
+for (state in names(initial_state_counts)) {
+  count <- initial_state_counts[state]
+  pct <- count / length(initial_states) * 100
+  cat(sprintf("Hidden State %s: %d sequences (%.1f%%)\n", 
+              state, count, pct))
+}
+```
+
+# Step 7: Get Posterior Probabilities
+
+Instead of just the most likely state, we can get the **probability** of each hidden state at each time point. This gives us more nuanced information about uncertainty.
+
+```{r}
+#| label: posterior-probs
+#| echo: true
+
+# Get posterior probabilities for all sequences
+# This gives us the probability of each hidden state at each time point
+posterior <- posterior_probs(hmm_mvad)
+
+cat("Posterior probabilities:\n")
+cat("Number of sequences:", length(posterior), "\n")
+cat("Example: First sequence has dimensions", dim(posterior[[1]]), "\n")
+cat("  - Rows:", nrow(posterior[[1]]), "time points\n")
+cat("  - Columns:", ncol(posterior[[1]]), "hidden states\n")
+
+# Look at posterior probabilities for the first sequence
+cat("\nPosterior probabilities for first sequence (first 10 time points):\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+posterior_df <- as.data.frame(posterior[[1]][1:10, ])
+colnames(posterior_df) <- paste0("State", 1:ncol(posterior_df))
+rownames(posterior_df) <- paste0("Time", 1:10)
+print(round(posterior_df, 3))
+
+# Visualize posterior probabilities for one sequence
+sequence_id <- 1  # First sequence
+plot_data <- data.frame(
+  Time = 1:nrow(posterior[[sequence_id]]),
+  posterior[[sequence_id]]
+)
+colnames(plot_data) <- c("Time", paste0("State", 1:(ncol(plot_data)-1)))
+
+# Reshape for plotting
+library(tidyr)
+plot_data_long <- pivot_longer(plot_data, 
+                                cols = starts_with("State"),
+                                names_to = "State",
+                                values_to = "Probability")
+
+library(ggplot2)
+ggplot(plot_data_long, aes(x = Time, y = Probability, color = State)) +
+  geom_line(alpha = 0.7, linewidth = 1) +
+  labs(
+    title = paste("Posterior Probabilities of Hidden States for Sequence", sequence_id),
+    x = "Time Point",
+    y = "Probability"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+# Step 8: Visualize the Model
+
+Let's create visualizations to better understand our HMM model.
+
+```{r}
+#| label: visualize-model
+#| echo: true
+#| fig-width: 15
+#| fig-height: 5
+
+# Plot the HMM model
+# This shows the transition probabilities and emission probabilities
+plot(hmm_mvad, 
+     vertex.size = 50,
+     vertex.label.dist = 1.5,
+     edge.curved = 0.5,
+     edge.label.cex = 0.8)
+```
+
+# Step 9: Model Comparison
+
+How do we know if 5 hidden states is the right number? Let's try different numbers of states and compare them using AIC and BIC. Lower values are better.
+
+```{r}
+#| label: model-comparison
+#| echo: true
+
+# Try different numbers of hidden states
+n_states_list <- c(3, 4, 5, 6)
+models <- list()
+aic_values <- numeric(length(n_states_list))
+bic_values <- numeric(length(n_states_list))
+loglik_values <- numeric(length(n_states_list))
+
+cat("Fitting models with different numbers of states...\n")
+cat(paste(rep("=", 60), collapse=""), "\n")
+
+for (i in seq_along(n_states_list)) {
+  n_states <- n_states_list[i]
+  cat(sprintf("\nFitting model with %d hidden states...\n", n_states))
+  
+  # Create random initial values for this number of states
+  # We'll use simpler initialization for speed
+  n_obs <- length(alphabet(mvad_seq))
+  
+  # Random emission matrix
+  emiss_temp <- matrix(runif(n_states * n_obs), nrow = n_states, ncol = n_obs)
+  emiss_temp <- emiss_temp / rowSums(emiss_temp)  # Normalize rows
+  
+  # Random transition matrix
+  trans_temp <- matrix(runif(n_states * n_states), nrow = n_states, ncol = n_states)
+  trans_temp <- trans_temp / rowSums(trans_temp)  # Normalize rows
+  
+  # Equal initial probabilities
+  init_temp <- rep(1/n_states, n_states)
+  
+  # Build and fit model
+  model_init <- build_hmm(
+    observations = mvad_seq,
+    transition_probs = trans_temp,
+    emission_probs = emiss_temp,
+    initial_probs = init_temp
+  )
+  
+  # Fit with fewer restarts for speed (you can increase this for better results)
+  model_fit <- fit_model(model_init, 
+                        control_em = list(restart = list(times = 10)))
+  model <- model_fit$model
+  
+  # Store model
+  models[[i]] <- model
+  
+  # Calculate AIC and BIC
+  loglik <- logLik(model)
+  n_params <- n_states * (n_states - 1) +  # Transition matrix (excluding last column)
+              n_states * (n_obs - 1) +      # Emission matrix (excluding last column)
+              (n_states - 1)                # Initial probabilities (excluding last)
+  n_obs_total <- nrow(mvad_seq) * ncol(mvad_seq)
+  
+  aic_val <- -2 * loglik + 2 * n_params
+  bic_val <- -2 * loglik + log(n_obs_total) * n_params
+  
+  aic_values[i] <- aic_val
+  bic_values[i] <- bic_val
+  loglik_values[i] <- loglik
+  
+  cat(sprintf("  Log-likelihood: %.2f\n", loglik))
+  cat(sprintf("  AIC: %.2f\n", aic_val))
+  cat(sprintf("  BIC: %.2f\n", bic_val))
+}
+
+cat("\n", paste(rep("=", 60), collapse=""), "\n")
+cat("Model Comparison Summary:\n")
+cat(paste(rep("=", 60), collapse=""), "\n")
+
+# Find best model according to BIC
+best_idx <- which.min(bic_values)
+cat(sprintf("\nBest model according to BIC: %d hidden states\n", n_states_list[best_idx]))
+
+cat("\nDetailed comparison:\n")
+comparison_df <- data.frame(
+  n_states = n_states_list,
+  AIC = aic_values,
+  BIC = bic_values,
+  LogLik = loglik_values
+)
+print(comparison_df)
+
+# Visualize comparison
+library(ggplot2)
+library(tidyr)
+
+comparison_long <- pivot_longer(comparison_df, 
+                                cols = c(AIC, BIC),
+                                names_to = "Criterion",
+                                values_to = "Value")
+
+ggplot(comparison_long, aes(x = n_states, y = Value, color = Criterion)) +
+  geom_line(linewidth = 1.5, alpha = 0.8) +
+  geom_point(size = 3) +
+  labs(
+    title = "Model Comparison: AIC and BIC by Number of States",
+    x = "Number of Hidden States",
+    y = "Criterion Value",
+    color = "Criterion"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+# Step 10: Mixture HMM (Clustering Sequences)
+
+A **Mixture HMM (MHMM)** extends the basic HMM by allowing different groups (clusters) of sequences, each with their own HMM pattern. This is useful when you suspect there are different types of sequences in your data.
+
+```{r}
+#| label: build-mhmm
+#| echo: true
+
+# Build a Mixture HMM with 3 clusters
+# Each cluster will have its own HMM with 5 hidden states
+cat("Building Mixture HMM...\n")
+
+# We'll use random initialization for simplicity
+# In practice, you might want to use more sophisticated initialization
+n_clusters <- 3
+n_states_per_cluster <- 5
+n_obs <- length(alphabet(mvad_seq))
+
+# Create initial values for each cluster
+cluster_models <- list()
+for (k in 1:n_clusters) {
+  # Random emission matrix
+  emiss_k <- matrix(runif(n_states_per_cluster * n_obs), 
+                    nrow = n_states_per_cluster, ncol = n_obs)
+  emiss_k <- emiss_k / rowSums(emiss_k)
+  
+  # Random transition matrix
+  trans_k <- matrix(runif(n_states_per_cluster * n_states_per_cluster), 
+                    nrow = n_states_per_cluster, ncol = n_states_per_cluster)
+  trans_k <- trans_k / rowSums(trans_k)
+  
+  # Equal initial probabilities
+  init_k <- rep(1/n_states_per_cluster, n_states_per_cluster)
+  
+  cluster_models[[k]] <- build_hmm(
+    observations = mvad_seq,
+    transition_probs = trans_k,
+    emission_probs = emiss_k,
+    initial_probs = init_k
+  )
+}
+
+# Build mixture HMM
+# Equal cluster probabilities to start
+# Note: Access model parameters using $ operator (e.g., model$transition_probs)
+init_mhmm_mvad <- build_mhmm(
+  observations = mvad_seq,
+  initial_probs = cluster_models,
+  transition_probs = lapply(cluster_models, function(m) m$transition_probs),
+  emission_probs = lapply(cluster_models, function(m) m$emission_probs)
+)
+
+cat(sprintf("MHMM created with %d clusters and %d states per cluster\n", 
+            n_clusters, n_states_per_cluster))
+```
+
+```{r}
+#| label: fit-mhmm
+#| echo: true
+
+# Fit the Mixture HMM
+# This may take longer than a basic HMM
+cat("Fitting Mixture HMM (this may take a few minutes)...\n")
+fit_mhmm_mvad <- fit_model(init_mhmm_mvad, 
+                           control_em = list(restart = list(times = 10)))
+mhmm_mvad <- fit_mhmm_mvad$model
+
+cat("\nMixture HMM fitting completed!\n")
+cat("Log-likelihood:", logLik(mhmm_mvad), "\n")
+cat("Number of iterations:", attr(fit_mhmm_mvad, "iterations"), "\n")
+```
+
+```{r}
+#| label: predict-clusters
+#| echo: true
+
+# Predict which cluster each sequence belongs to
+cluster_probs <- most_probable_cluster(mhmm_mvad)
+cluster_assignments <- apply(cluster_probs, 1, which.max)
+
+cat("Cluster assignments:\n")
+cat("Number of sequences:", length(cluster_assignments), "\n")
+cat("\nCluster distribution:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+cluster_counts <- table(cluster_assignments)
+for (cluster in names(cluster_counts)) {
+  count <- cluster_counts[cluster]
+  pct <- count / length(cluster_assignments) * 100
+  cat(sprintf("Cluster %s: %d sequences (%.1f%%)\n", cluster, count, pct))
+}
+
+# Add cluster assignments to original dataframe
+mvad_with_clusters <- cbind(mvad, cluster = cluster_assignments)
+cat("\nFirst few sequences with cluster assignments:\n")
+print(mvad_with_clusters[1:10, c("id", "cluster")])
+```
+
+```{r}
+#| label: visualize-mhmm
+#| echo: true
+#| fig-width: 18
+#| fig-height: 6
+
+# Visualize the Mixture HMM
+plot(mhmm_mvad,
+     vertex.size = 50,
+     vertex.label.dist = 1.5,
+     edge.curved = 0.5,
+     edge.label.cex = 0.8)
+```
+
+# Step 11: Understanding the Results
+
+Let's examine what each cluster represents by looking at the cluster probabilities and the HMM parameters for each cluster.
+
+```{r}
+#| label: examine-clusters
+#| echo: true
+
+# Cluster probabilities (how likely each sequence is to belong to each cluster)
+cat("Cluster Probabilities:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+# For MHMM, cluster_probs might be accessed directly or via get_cluster_probs()
+# Try direct access first, fallback to getter function if needed
+if (!is.null(mhmm_mvad$cluster_probs)) {
+  cluster_probs_overall <- mhmm_mvad$cluster_probs
+} else {
+  # Use getter function which returns a data.table
+  cluster_probs_dt <- get_cluster_probs(mhmm_mvad)
+  # Get overall probabilities (average across all sequences)
+  cluster_probs_overall <- cluster_probs_dt[, mean(probability), by = cluster]$V1
+}
+for (i in 1:length(cluster_probs_overall)) {
+  prob <- cluster_probs_overall[i]
+  cat(sprintf("Cluster %d: %.4f (%.2f%% of sequences)\n", i, prob, prob * 100))
+}
+
+# Look at emission probabilities for each cluster
+cat("\nEmission Probabilities by Cluster:\n")
+cat(paste(rep("=", 50), collapse=""), "\n")
+for (cluster_idx in 1:n_clusters) {
+  cat(sprintf("\nCluster %d:\n", cluster_idx))
+  # For MHMM, emission_probs is a list, one element per cluster
+  emission_probs_cluster <- mhmm_mvad$emission_probs[[cluster_idx]]
+  print(round(emission_probs_cluster, 3))
+  cat("\n")
+}
+```
+
+# Summary
+
+Congratulations! You've completed a comprehensive tutorial on Hidden Markov Models using the seqHMM R package.
+
+## What We Learned:
+
+1.  **Data Preparation**: How to load and prepare sequence data using `seqdef()`
+2.  **Basic HMM**: How to build and fit a basic Hidden Markov Model
+3.  **Model Fitting**: Using the EM algorithm to estimate model parameters
+4.  **Prediction**: Predicting hidden states using the Viterbi algorithm
+5.  **Posterior Probabilities**: Getting probability distributions over hidden states
+6.  **Visualization**: Creating plots to understand model parameters
+7.  **Model Comparison**: Using AIC and BIC to select the best model
+8.  **Mixture HMM**: Extending HMM to discover clusters of sequences
+
+## Key Takeaways:
+
+-   **Hidden States** represent underlying patterns in your sequences
+-   **Transition Probabilities** show how sequences move between hidden states
+-   **Emission Probabilities** show which observed states each hidden state produces
+-   **Model Selection** is important - try different numbers of states and compare
+-   **Mixture HMM** can discover different groups of sequences with distinct patterns
+
+## Comparison with Sequenzo Python Implementation:
+
+This tutorial follows the same methodology that should be replicated in the Sequenzo Python implementation:
+
+-   Uses the same dataset (mvad)
+-   Uses the same number of hidden states (5 for basic HMM)
+-   Uses the same random seed (21) for reproducibility
+-   Follows the same workflow: build → fit → predict → visualize
+-   Does NOT use weighted data (as requested)
+
+You can compare the results step-by-step with the Python Sequenzo implementation to verify consistency.
+
+## Next Steps:
+
+-   Try different numbers of hidden states and clusters
+-   Explore Non-homogeneous HMM (NHMM) if you have covariates
+-   Use bootstrap methods to get confidence intervals
+-   Apply these methods to your own sequence data!
+
+## Additional Resources:
+
+-   seqHMM R package documentation: https://cran.r-project.org/package=seqHMM
+-   TraMineR package documentation: https://cran.r-project.org/package=TraMineR
+-   See `sequenzo/seqhmm/README.md` for Python implementation details

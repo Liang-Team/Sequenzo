@@ -11,16 +11,37 @@ seqHMM's plot.hmm() and plot.mhmm() functions in R.
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from typing import Optional, List
+from matplotlib.patches import FancyArrowPatch, Circle, Wedge
+from matplotlib.collections import PatchCollection
+from typing import Optional, List, Union
 from .hmm import HMM
 from .mhmm import MHMM
+
+# Try to import networkx for network layout, but make it optional
+try:
+    import networkx as nx
+    HAS_NETWORKX = True
+except ImportError:
+    HAS_NETWORKX = False
 
 
 def plot_hmm(
     model: HMM,
     which: str = 'transition',
     figsize: Optional[tuple] = None,
-    ax: Optional[plt.Axes] = None
+    ax: Optional[plt.Axes] = None,
+    # Network plot parameters (similar to R's plot.hmm)
+    vertex_size: float = 50,
+    vertex_label_dist: float = 1.5,
+    edge_curved: Union[bool, float] = 0.5,
+    edge_label_cex: float = 0.8,
+    vertex_label: str = 'initial.probs',
+    loops: bool = False,
+    trim: float = 1e-15,
+    combine_slices: float = 0.05,
+    with_legend: Union[bool, str] = 'bottom',
+    layout: str = 'horizontal',
+    **kwargs
 ) -> plt.Figure:
     """
     Plot HMM model parameters.
@@ -29,6 +50,7 @@ def plot_hmm(
     - Transition probability matrix
     - Emission probability matrix
     - Initial state probabilities
+    - Network graph (similar to R's plot.hmm())
     
     It is similar to seqHMM's plot.hmm() function in R.
     
@@ -38,9 +60,23 @@ def plot_hmm(
             - 'transition': Transition probability matrix (default)
             - 'emission': Emission probability matrix
             - 'initial': Initial state probabilities
-            - 'all': All three plots
+            - 'network': Network graph with pie chart nodes (like R's plot.hmm)
+            - 'all': All three plots (transition, emission, initial)
         figsize: Figure size tuple (width, height). If None, uses default.
         ax: Optional matplotlib axes to plot on. If None, creates new figure.
+        
+        # Network plot parameters (only used when which='network'):
+        vertex_size: Size of vertices (nodes). Default 50.
+        vertex_label_dist: Distance of vertex labels from center. Default 1.5.
+        edge_curved: Whether to plot curved edges. Can be bool or float (curvature). Default 0.5.
+        edge_label_cex: Character expansion factor for edge labels. Default 0.8.
+        vertex_label: Labels for vertices. Options: 'initial.probs', 'names', or custom list. Default 'initial.probs'.
+        loops: Whether to plot self-loops (transitions back to same state). Default False.
+        trim: Minimum transition probability to plot. Default 1e-15.
+        combine_slices: Emission probabilities below this are combined into 'others'. Default 0.05.
+        with_legend: Whether and where to plot legend. Options: True, False, 'bottom', 'top', 'left', 'right'. Default 'bottom'.
+        layout: Layout of vertices. Options: 'horizontal', 'vertical'. Default 'horizontal'.
+        **kwargs: Additional arguments passed to network plot.
         
     Returns:
         matplotlib Figure: The figure object
@@ -57,22 +93,44 @@ def plot_hmm(
         >>> hmm = build_hmm(seq, n_states=4, random_state=42)
         >>> hmm = fit_model(hmm)
         >>> 
-        >>> # Plot transition matrix
-        >>> plot_hmm(hmm, which='transition')
+        >>> # Plot network graph (like R's plot.hmm)
+        >>> plot_hmm(hmm, which='network', vertex_size=50, edge_curved=0.5)
         >>> plt.show()
         >>> 
-        >>> # Plot emission matrix
-        >>> plot_hmm(hmm, which='emission')
+        >>> # Plot transition matrix
+        >>> plot_hmm(hmm, which='transition')
         >>> plt.show()
     """
     if model.log_likelihood is None:
         raise ValueError("Model must be fitted before plotting. Use fit_model() first.")
     
-    if which == 'all':
+    if which == 'network':
+        return _plot_hmm_network(
+            model, figsize=figsize, ax=ax,
+            vertex_size=vertex_size,
+            vertex_label_dist=vertex_label_dist,
+            edge_curved=edge_curved,
+            edge_label_cex=edge_label_cex,
+            vertex_label=vertex_label,
+            loops=loops,
+            trim=trim,
+            combine_slices=combine_slices,
+            with_legend=with_legend,
+            layout=layout,
+            **kwargs
+        )
+    elif which == 'all':
         # Create subplots for all three
         if figsize is None:
             figsize = (15, 5)
         fig, axes = plt.subplots(1, 3, figsize=figsize)
+        
+        # Remove outer borders for a cleaner look
+        for ax in axes:
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_color('#cccccc')
+            ax.spines['left'].set_color('#cccccc')
         
         # Plot each component
         _plot_transition_matrix(model, ax=axes[0])
@@ -89,7 +147,7 @@ def plot_hmm(
     elif which == 'initial':
         return _plot_initial_probs(model, figsize=figsize, ax=ax)
     else:
-        raise ValueError(f"Unknown 'which' option: {which}. Must be 'transition', 'emission', 'initial', or 'all'.")
+        raise ValueError(f"Unknown 'which' option: {which}. Must be 'transition', 'emission', 'initial', 'network', or 'all'.")
 
 
 def _plot_transition_matrix(
@@ -105,28 +163,37 @@ def _plot_transition_matrix(
     else:
         fig = ax.figure
     
-    # Create heatmap
+    # Create heatmap with a more elegant colormap
     im = ax.imshow(model.transition_probs, cmap='Blues', aspect='auto', vmin=0, vmax=1)
     
-    # Add colorbar
+    # Add colorbar with cleaner style
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Transition Probability', rotation=270, labelpad=20)
+    cbar.set_label('Transition Probability', rotation=270, labelpad=20, fontsize=10)
+    cbar.outline.set_visible(False)
     
     # Set ticks and labels
     ax.set_xticks(range(model.n_states))
     ax.set_yticks(range(model.n_states))
-    ax.set_xticklabels(model.state_names, rotation=45, ha='right')
-    ax.set_yticklabels(model.state_names)
+    ax.set_xticklabels(model.state_names, rotation=45, ha='right', fontsize=9)
+    ax.set_yticklabels(model.state_names, fontsize=9)
     
     # Add text annotations
     for i in range(model.n_states):
         for j in range(model.n_states):
             text = ax.text(j, i, f'{model.transition_probs[i, j]:.2f}',
-                          ha="center", va="center", color="black" if model.transition_probs[i, j] < 0.5 else "white")
+                          ha="center", va="center", 
+                          color="black" if model.transition_probs[i, j] < 0.5 else "white",
+                          fontsize=9, weight='medium')
     
-    ax.set_xlabel('To State')
-    ax.set_ylabel('From State')
-    ax.set_title('Transition Probability Matrix')
+    ax.set_xlabel('To State', fontsize=10)
+    ax.set_ylabel('From State', fontsize=10)
+    ax.set_title('Transition Probability Matrix', fontsize=11, pad=10, weight='medium')
+    
+    # Remove top and right spines for cleaner look
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('#cccccc')
+    ax.spines['left'].set_color('#cccccc')
     
     return fig
 
@@ -144,18 +211,19 @@ def _plot_emission_matrix(
     else:
         fig = ax.figure
     
-    # Create heatmap
+    # Create heatmap with a more elegant colormap
     im = ax.imshow(model.emission_probs, cmap='YlOrRd', aspect='auto', vmin=0, vmax=1)
     
-    # Add colorbar
+    # Add colorbar with cleaner style
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Emission Probability', rotation=270, labelpad=20)
+    cbar.set_label('Emission Probability', rotation=270, labelpad=20, fontsize=10)
+    cbar.outline.set_visible(False)
     
     # Set ticks and labels
     ax.set_xticks(range(model.n_symbols))
     ax.set_yticks(range(model.n_states))
-    ax.set_xticklabels(model.alphabet, rotation=45, ha='right')
-    ax.set_yticklabels(model.state_names)
+    ax.set_xticklabels(model.alphabet, rotation=45, ha='right', fontsize=9)
+    ax.set_yticklabels(model.state_names, fontsize=9)
     
     # Add text annotations (only if matrix is not too large)
     if model.n_states <= 10 and model.n_symbols <= 15:
@@ -164,11 +232,17 @@ def _plot_emission_matrix(
                 text = ax.text(j, i, f'{model.emission_probs[i, j]:.2f}',
                               ha="center", va="center",
                               color="black" if model.emission_probs[i, j] < 0.5 else "white",
-                              fontsize=8)
+                              fontsize=8, weight='medium')
     
-    ax.set_xlabel('Observed Symbol')
-    ax.set_ylabel('Hidden State')
-    ax.set_title('Emission Probability Matrix')
+    ax.set_xlabel('Observed Symbol', fontsize=10)
+    ax.set_ylabel('Hidden State', fontsize=10)
+    ax.set_title('Emission Probability Matrix', fontsize=11, pad=10, weight='medium')
+    
+    # Remove top and right spines for cleaner look
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('#cccccc')
+    ax.spines['left'].set_color('#cccccc')
     
     return fig
 
@@ -186,22 +260,29 @@ def _plot_initial_probs(
     else:
         fig = ax.figure
     
-    # Create bar chart
-    bars = ax.bar(range(model.n_states), model.initial_probs, color='steelblue', alpha=0.7)
+    # Create bar chart with a more elegant color
+    bars = ax.bar(range(model.n_states), model.initial_probs, 
+                  color='#4A90E2', alpha=0.8, edgecolor='white', linewidth=1.5)
     
     # Add value labels on bars
     for i, (bar, prob) in enumerate(zip(bars, model.initial_probs)):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height,
                 f'{prob:.3f}',
-                ha='center', va='bottom')
+                ha='center', va='bottom', fontsize=9, weight='medium')
     
     ax.set_xticks(range(model.n_states))
-    ax.set_xticklabels(model.state_names, rotation=45, ha='right')
-    ax.set_ylabel('Probability')
-    ax.set_title('Initial State Probabilities')
+    ax.set_xticklabels(model.state_names, rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel('Probability', fontsize=10)
+    ax.set_title('Initial State Probabilities', fontsize=11, pad=10, weight='medium')
     ax.set_ylim(0, max(model.initial_probs) * 1.2)
-    ax.grid(axis='y', alpha=0.3)
+    ax.grid(axis='y', alpha=0.2, linestyle='--', linewidth=0.5)
+    
+    # Remove top and right spines for cleaner look
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('#cccccc')
+    ax.spines['left'].set_color('#cccccc')
     
     return fig
 
@@ -390,6 +471,314 @@ def _plot_mhmm_emissions(
     
     if model.n_clusters > 1:
         plt.colorbar(im, ax=axes, orientation='horizontal', pad=0.1)
+    
+    plt.tight_layout()
+    return fig
+
+
+def _plot_hmm_network(
+    model: HMM,
+    figsize: Optional[tuple] = None,
+    ax: Optional[plt.Axes] = None,
+    vertex_size: float = 50,
+    vertex_label_dist: float = 1.5,
+    edge_curved: Union[bool, float] = 0.5,
+    edge_label_cex: float = 0.8,
+    vertex_label: str = 'initial.probs',
+    loops: bool = False,
+    trim: float = 1e-15,
+    combine_slices: float = 0.05,
+    with_legend: Union[bool, str] = 'bottom',
+    layout: str = 'horizontal',
+    **kwargs
+) -> plt.Figure:
+    """
+    Plot HMM as a network graph with pie chart nodes (similar to R's plot.hmm).
+    
+    This function creates a directed graph where:
+    - Nodes are pie charts showing emission probabilities for each hidden state
+    - Edges are arrows showing transition probabilities between states
+    - Node labels show initial probabilities or state names
+    
+    Args:
+        model: Fitted HMM model object
+        figsize: Figure size tuple (width, height)
+        ax: Optional matplotlib axes
+        vertex_size: Size of vertices (nodes)
+        vertex_label_dist: Distance of vertex labels from center
+        edge_curved: Whether to plot curved edges (bool or float for curvature)
+        edge_label_cex: Character expansion factor for edge labels
+        vertex_label: Labels for vertices ('initial.probs', 'names', or custom list)
+        loops: Whether to plot self-loops
+        trim: Minimum transition probability to plot
+        combine_slices: Emission probabilities below this are combined into 'others'
+        with_legend: Whether and where to plot legend
+        layout: Layout of vertices ('horizontal' or 'vertical')
+        **kwargs: Additional arguments
+    
+    Returns:
+        matplotlib Figure: The figure object
+    """
+    if ax is None:
+        if figsize is None:
+            figsize = (15, 5)
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+    
+    # Get model parameters
+    n_states = model.n_states
+    transition_probs = model.transition_probs.copy()
+    emission_probs = model.emission_probs.copy()
+    initial_probs = model.initial_probs.copy()
+    
+    # Get colors for observed states
+    # Try to get colors from observations if available
+    if hasattr(model.observations, 'color_map') and model.observations.color_map:
+        colors = [model.observations.color_map.get(sym, '#808080') for sym in model.alphabet]
+    else:
+        # Default color palette (similar to TraMineR)
+        default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', 
+                         '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        colors = default_colors[:len(model.alphabet)]
+        # Extend if needed
+        while len(colors) < len(model.alphabet):
+            colors.append('#808080')
+    
+    # Trim transitions (remove very small probabilities)
+    transition_probs[transition_probs < trim] = 0
+    
+    # Remove self-loops if not requested
+    if not loops:
+        np.fill_diagonal(transition_probs, 0)
+    
+    # Calculate node positions
+    if layout == 'horizontal':
+        positions = {i: (i, 0) for i in range(n_states)}
+    elif layout == 'vertical':
+        positions = {i: (0, -i) for i in range(n_states)}
+    else:
+        positions = {i: (i, 0) for i in range(n_states)}
+    
+    # Normalize positions to fit in plot
+    if positions:
+        x_coords = [pos[0] for pos in positions.values()]
+        y_coords = [pos[1] for pos in positions.values()]
+        x_range = max(x_coords) - min(x_coords) if max(x_coords) != min(x_coords) else 1
+        y_range = max(y_coords) - min(y_coords) if max(y_coords) != min(y_coords) else 1
+        
+        # Scale positions
+        scale = max(vertex_size * n_states * 0.15, 2.0)
+        positions = {i: (pos[0] * scale, pos[1] * scale) for i, pos in positions.items()}
+    
+    # Prepare emission probabilities for pie charts
+    pie_values = []
+    pie_colors_list = []
+    combined_slice_probs = []
+    
+    for i in range(n_states):
+        emis = emission_probs[i, :].copy()
+        combined_prob = 0
+        
+        # Combine small slices
+        if combine_slices > 0:
+            small_mask = emis < combine_slices
+            if np.any(small_mask):
+                combined_prob = np.sum(emis[small_mask])
+                emis[small_mask] = 0
+                if combined_prob > 0:
+                    emis = np.append(emis, combined_prob)
+                    pie_colors_list.append(colors + ['white'])
+                else:
+                    pie_colors_list.append(colors)
+            else:
+                pie_colors_list.append(colors)
+        else:
+            pie_colors_list.append(colors)
+        
+        # Remove zero probabilities
+        non_zero_mask = emis > 0
+        pie_values.append(emis[non_zero_mask])
+        combined_slice_probs.append(combined_prob)
+    
+    # Draw edges (transitions)
+    edge_widths = []
+    edge_labels = {}
+    edges_to_draw = []
+    
+    for i in range(n_states):
+        for j in range(n_states):
+            prob = transition_probs[i, j]
+            if prob > 0:
+                edges_to_draw.append((i, j))
+                edge_widths.append(prob * 5)  # Scale width by probability
+                edge_labels[(i, j)] = f'{prob:.3f}'
+    
+    # Draw edges
+    for (i, j), width in zip(edges_to_draw, edge_widths):
+        x1, y1 = positions[i]
+        x2, y2 = positions[j]
+        
+        # Calculate arrow properties
+        dx = x2 - x1
+        dy = y2 - y1
+        dist = np.sqrt(dx**2 + dy**2)
+        
+        if dist > 0:
+            # Normalize direction
+            dx_norm = dx / dist
+            dy_norm = dy / dist
+            
+            # Adjust start/end to account for node radius
+            node_radius = vertex_size / 200.0  # Convert to data coordinates
+            start_x = x1 + dx_norm * node_radius
+            start_y = y1 + dy_norm * node_radius
+            end_x = x2 - dx_norm * node_radius
+            end_y = y2 - dy_norm * node_radius
+            
+            # Curved edge
+            if edge_curved and (isinstance(edge_curved, bool) or edge_curved != 0):
+                curvature = edge_curved if isinstance(edge_curved, (int, float)) else 0.5
+                # Create curved path
+                mid_x = (start_x + end_x) / 2
+                mid_y = (start_y + end_y) / 2
+                # Perpendicular direction for curve
+                perp_x = -dy_norm * curvature * dist * 0.3
+                perp_y = dx_norm * curvature * dist * 0.3
+                control_x = mid_x + perp_x
+                control_y = mid_y + perp_y
+                
+                # Use quadratic bezier curve
+                from matplotlib.path import Path
+                path_data = [
+                    (Path.MOVETO, (start_x, start_y)),
+                    (Path.CURVE3, (control_x, control_y)),
+                    (Path.CURVE3, (end_x, end_y)),
+                ]
+                codes, verts = zip(*path_data)
+                path = Path(verts, codes)
+                
+                arrow = FancyArrowPatch(
+                    path=path,
+                    arrowstyle='->',
+                    lw=max(width, 0.5),
+                    color='gray',
+                    alpha=0.7,
+                    zorder=1
+                )
+            else:
+                # Straight edge
+                arrow = FancyArrowPatch(
+                    (start_x, start_y),
+                    (end_x, end_y),
+                    arrowstyle='->',
+                    lw=max(width, 0.5),
+                    color='gray',
+                    alpha=0.7,
+                    zorder=1
+                )
+            
+            ax.add_patch(arrow)
+            
+            # Add edge label
+            if (i, j) in edge_labels:
+                label_x = (start_x + end_x) / 2
+                label_y = (start_y + end_y) / 2
+                if edge_curved and (isinstance(edge_curved, bool) or edge_curved != 0):
+                    curvature = edge_curved if isinstance(edge_curved, (int, float)) else 0.5
+                    perp_x = -dy_norm * curvature * dist * 0.3
+                    perp_y = dx_norm * curvature * dist * 0.3
+                    label_x += perp_x * 0.5
+                    label_y += perp_y * 0.5
+                
+                ax.text(label_x, label_y, edge_labels[(i, j)],
+                       fontsize=8 * edge_label_cex,
+                       ha='center', va='center',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7, edgecolor='none'),
+                       zorder=3)
+    
+    # Draw nodes (pie charts)
+    for i in range(n_states):
+        x, y = positions[i]
+        emis = pie_values[i]
+        node_colors = pie_colors_list[i][:len(emis)]
+        
+        # Draw pie chart
+        if len(emis) > 0 and np.sum(emis) > 0:
+            # Normalize to sum to 1
+            emis_norm = emis / np.sum(emis)
+            angles = np.cumsum(emis_norm * 2 * np.pi)
+            angles = np.insert(angles, 0, 0)
+            
+            # Draw wedges
+            for j in range(len(emis_norm)):
+                if emis_norm[j] > 0:
+                    theta1 = angles[j] * 180 / np.pi
+                    theta2 = angles[j + 1] * 180 / np.pi
+                    wedge = Wedge((x, y), vertex_size / 200.0, theta1, theta2,
+                                 facecolor=node_colors[j], edgecolor='black', linewidth=1.5, zorder=2)
+                    ax.add_patch(wedge)
+        
+        # Add node label
+        if vertex_label == 'initial.probs':
+            label_text = f'{initial_probs[i]:.2f}'
+        elif vertex_label == 'names':
+            label_text = model.state_names[i] if i < len(model.state_names) else f'State {i+1}'
+        else:
+            if isinstance(vertex_label, list) and i < len(vertex_label):
+                label_text = str(vertex_label[i])
+            else:
+                label_text = f'{initial_probs[i]:.2f}'
+        
+        # Position label
+        if layout == 'horizontal':
+            label_x = x
+            label_y = y - vertex_size / 200.0 - vertex_label_dist * 0.1
+        else:
+            label_x = x - vertex_size / 200.0 - vertex_label_dist * 0.1
+            label_y = y
+        
+        ax.text(label_x, label_y, label_text,
+               fontsize=10, ha='center', va='top' if layout == 'horizontal' else 'center',
+               weight='bold', zorder=4)
+    
+    # Add legend if requested
+    if with_legend and with_legend != False:
+        legend_labels = list(model.alphabet)
+        if combine_slices > 0 and any(combined_slice_probs):
+            legend_labels.append('others')
+            legend_colors = colors + ['white']
+        else:
+            legend_colors = colors
+        
+        # Create legend
+        legend_elements = [mpatches.Patch(facecolor=col, edgecolor='black', label=label)
+                          for col, label in zip(legend_colors[:len(legend_labels)], legend_labels)]
+        
+        if with_legend == 'bottom' or with_legend == True:
+            ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.15),
+                     ncol=min(len(legend_labels), 6), frameon=True, fontsize=9)
+        elif with_legend == 'top':
+            ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                     ncol=min(len(legend_labels), 6), frameon=True, fontsize=9)
+        elif with_legend == 'right':
+            ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.1, 0.5),
+                     ncol=1, frameon=True, fontsize=9)
+        elif with_legend == 'left':
+            ax.legend(handles=legend_elements, loc='center right', bbox_to_anchor=(-0.1, 0.5),
+                     ncol=1, frameon=True, fontsize=9)
+    
+    # Set axis properties
+    ax.set_aspect('equal')
+    ax.axis('off')
+    
+    # Adjust limits
+    if positions:
+        x_coords = [pos[0] for pos in positions.values()]
+        y_coords = [pos[1] for pos in positions.values()]
+        margin = vertex_size / 100.0 + 0.5
+        ax.set_xlim(min(x_coords) - margin, max(x_coords) + margin)
+        ax.set_ylim(min(y_coords) - margin, max(y_coords) + margin)
     
     plt.tight_layout()
     return fig

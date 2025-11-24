@@ -505,6 +505,11 @@ class SequenceData:
         self._alphabet = val
 
     @property
+    def sequences(self):
+        """Returns sequences as a list of lists (one list per sequence)."""
+        return [list(row) for row in self.seqdata.values]
+
+    @property
     def weights(self):
         return self._weights
 

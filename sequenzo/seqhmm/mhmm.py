@@ -192,8 +192,12 @@ class MHMM:
             
             for k in range(self.n_clusters):
                 # Fit this cluster's HMM if not already fitted
-                if self.clusters[k].log_likelihood is None:
-                    self.clusters[k].fit(n_iter=10, tol=tol, verbose=False)
+                # Suppress warnings about init_params during fitting
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='.*init_params.*')
+                    if self.clusters[k].log_likelihood is None:
+                        self.clusters[k].fit(n_iter=10, tol=tol, verbose=False)
                 
                 # Compute log-likelihood for each sequence
                 for seq_idx in range(n_sequences):
@@ -227,7 +231,11 @@ class MHMM:
                 # For simplicity, we fit using all sequences but this could be
                 # optimized to use only sequences with high responsibility
                 # For now, we refit each cluster's HMM
-                self.clusters[k].fit(n_iter=10, tol=tol, verbose=False)
+                # Suppress warnings about init_params during fitting
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='.*init_params.*')
+                    self.clusters[k].fit(n_iter=10, tol=tol, verbose=False)
             
             # Compute overall log-likelihood
             # log P(data) = sum over sequences of log(sum over clusters of P(seq | cluster) * P(cluster))

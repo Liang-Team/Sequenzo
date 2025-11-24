@@ -123,16 +123,22 @@ class HMM:
             )
             
             # Set initial parameters if provided
+            # When custom parameters are provided, we need to remove the corresponding
+            # letters from init_params to prevent hmmlearn from re-initializing them
+            # 's' = startprob, 't' = transmat, 'e' = emissionprob
             if initial_probs is not None:
                 self._hmm_model.startprob_ = initial_probs
+                # Remove 's' from init_params so startprob won't be re-initialized during fit
                 self._hmm_model.init_params = self._hmm_model.init_params.replace('s', '')
             
             if transition_probs is not None:
                 self._hmm_model.transmat_ = transition_probs
+                # Remove 't' from init_params so transmat won't be re-initialized during fit
                 self._hmm_model.init_params = self._hmm_model.init_params.replace('t', '')
             
             if emission_probs is not None:
                 self._hmm_model.emissionprob_ = emission_probs
+                # Remove 'e' from init_params so emissionprob won't be re-initialized during fit
                 self._hmm_model.init_params = self._hmm_model.init_params.replace('e', '')
         else:
             # Multichannel: hmmlearn doesn't support this directly
@@ -178,13 +184,37 @@ class HMM:
             # Single channel: use hmmlearn
             X, lengths = sequence_data_to_hmmlearn_format(self.observations)
             
+            # Ensure init_params is correctly set before fitting
+            # Remove letters from init_params if we have custom parameters
+            if self.initial_probs is not None:
+                self._hmm_model.startprob_ = self.initial_probs.copy()
+                # Remove 's' from init_params to prevent re-initialization
+                if 's' in self._hmm_model.init_params:
+                    self._hmm_model.init_params = self._hmm_model.init_params.replace('s', '')
+            
+            if self.transition_probs is not None:
+                self._hmm_model.transmat_ = self.transition_probs.copy()
+                # Remove 't' from init_params to prevent re-initialization
+                if 't' in self._hmm_model.init_params:
+                    self._hmm_model.init_params = self._hmm_model.init_params.replace('t', '')
+            
+            if self.emission_probs is not None:
+                self._hmm_model.emissionprob_ = self.emission_probs.copy()
+                # Remove 'e' from init_params to prevent re-initialization
+                if 'e' in self._hmm_model.init_params:
+                    self._hmm_model.init_params = self._hmm_model.init_params.replace('e', '')
+            
             # Update hmmlearn model parameters
             self._hmm_model.n_iter = n_iter
             self._hmm_model.tol = tol
             self._hmm_model.verbose = verbose
             
-            # Fit the model
-            self._hmm_model.fit(X, lengths)
+            # Fit the model, suppressing warnings about init_params
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*init_params.*')
+                warnings.filterwarnings('ignore', message='.*overwritten during initialization.*')
+                self._hmm_model.fit(X, lengths)
             
             # Extract fitted parameters
             self.initial_probs = self._hmm_model.startprob_.copy()
