@@ -490,6 +490,7 @@ def _plot_hmm_network(
     combine_slices: float = 0.05,
     with_legend: Union[bool, str] = 'bottom',
     layout: str = 'horizontal',
+    legend_prop: float = 0.5,
     **kwargs
 ) -> plt.Figure:
     """
@@ -514,17 +515,55 @@ def _plot_hmm_network(
         combine_slices: Emission probabilities below this are combined into 'others'
         with_legend: Whether and where to plot legend
         layout: Layout of vertices ('horizontal' or 'vertical')
+        legend_prop: Proportion of figure used for legend (0-1). Default 0.5.
         **kwargs: Additional arguments
     
     Returns:
         matplotlib Figure: The figure object
     """
+    # Determine if we need separate subplots for legend (like R's layout)
+    use_separate_legend = (with_legend and with_legend != False and 
+                          with_legend in ['bottom', 'top', 'left', 'right'])
+    
     if ax is None:
         if figsize is None:
-            figsize = (15, 5)
-        fig, ax = plt.subplots(figsize=figsize)
+            # Adjust figsize based on legend position
+            if use_separate_legend and with_legend in ['bottom', 'top']:
+                figsize = (12, 8)
+            elif use_separate_legend and with_legend in ['left', 'right']:
+                figsize = (14, 6)
+            else:
+                figsize = (12, 6)
+        
+        # Create figure with subplots if legend is needed
+        if use_separate_legend:
+            if with_legend == 'bottom':
+                fig = plt.figure(figsize=figsize)
+                gs = fig.add_gridspec(2, 1, height_ratios=[1 - legend_prop, legend_prop], hspace=0.3)
+                ax = fig.add_subplot(gs[0])
+                ax_legend = fig.add_subplot(gs[1])
+            elif with_legend == 'top':
+                fig = plt.figure(figsize=figsize)
+                gs = fig.add_gridspec(2, 1, height_ratios=[legend_prop, 1 - legend_prop], hspace=0.3)
+                ax_legend = fig.add_subplot(gs[0])
+                ax = fig.add_subplot(gs[1])
+            elif with_legend == 'right':
+                fig = plt.figure(figsize=figsize)
+                gs = fig.add_gridspec(1, 2, width_ratios=[1 - legend_prop, legend_prop], wspace=0.3)
+                ax = fig.add_subplot(gs[0])
+                ax_legend = fig.add_subplot(gs[1])
+            elif with_legend == 'left':
+                fig = plt.figure(figsize=figsize)
+                gs = fig.add_gridspec(1, 2, width_ratios=[legend_prop, 1 - legend_prop], wspace=0.3)
+                ax_legend = fig.add_subplot(gs[0])
+                ax = fig.add_subplot(gs[1])
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
+            ax_legend = None
     else:
         fig = ax.figure
+        ax_legend = None
+        use_separate_legend = False
     
     # Get model parameters
     n_states = model.n_states
@@ -552,29 +591,42 @@ def _plot_hmm_network(
     if not loops:
         np.fill_diagonal(transition_probs, 0)
     
-    # Calculate node positions
+    # Calculate node positions (similar to R's layout)
+    # First, determine coordinate limits (similar to R's xlim/ylim calculation)
     if layout == 'horizontal':
+        x_min, x_max = -0.1, n_states - 1 + 0.1
+        y_min, y_max = -0.5, 0.5
+        # Horizontal layout: nodes in a line
         positions = {i: (i, 0) for i in range(n_states)}
     elif layout == 'vertical':
+        x_min, x_max = -0.5, 0.5
+        y_min, y_max = -0.1, n_states - 1 + 0.1
         positions = {i: (0, -i) for i in range(n_states)}
     else:
+        x_min, x_max = -0.1, n_states - 1 + 0.1
+        y_min, y_max = -0.5, 0.5
         positions = {i: (i, 0) for i in range(n_states)}
     
-    # Normalize positions to fit in plot
+    # Scale positions to fit in plot area
     if positions:
         x_coords = [pos[0] for pos in positions.values()]
         y_coords = [pos[1] for pos in positions.values()]
-        x_range = max(x_coords) - min(x_coords) if max(x_coords) != min(x_coords) else 1
-        y_range = max(y_coords) - min(y_coords) if max(y_coords) != min(y_coords) else 1
         
-        # Scale positions
-        scale = max(vertex_size * n_states * 0.15, 2.0)
-        positions = {i: (pos[0] * scale, pos[1] * scale) for i, pos in positions.items()}
+        # Normalize and scale positions to fit within xlim/ylim
+        if max(x_coords) != min(x_coords):
+            x_range = max(x_coords) - min(x_coords)
+            positions = {i: ((pos[0] - min(x_coords)) / x_range * (x_max - x_min) + x_min, 
+                           pos[1]) for i, pos in positions.items()}
+        else:
+            positions = {i: (x_min + (x_max - x_min) / 2, pos[1]) 
+                        for i, pos in positions.items()}
     
     # Prepare emission probabilities for pie charts
     pie_values = []
     pie_colors_list = []
     combined_slice_probs = []
+    legend_labels_list = []
+    legend_colors_list = []
     
     for i in range(n_states):
         emis = emission_probs[i, :].copy()
@@ -589,30 +641,89 @@ def _plot_hmm_network(
                 if combined_prob > 0:
                     emis = np.append(emis, combined_prob)
                     pie_colors_list.append(colors + ['white'])
+                    # Track which colors are used for legend
+                    used_colors = [colors[j] for j in range(len(emis) - 1) if emis[j] > 0]
+                    used_labels = [model.alphabet[j] for j in range(len(emis) - 1) if emis[j] > 0]
+                    legend_labels_list.append(used_labels + ['others'])
+                    legend_colors_list.append(used_colors + ['white'])
                 else:
                     pie_colors_list.append(colors)
+                    legend_labels_list.append([model.alphabet[j] for j in range(len(emis)) if emis[j] > 0])
+                    legend_colors_list.append([colors[j] for j in range(len(emis)) if emis[j] > 0])
             else:
                 pie_colors_list.append(colors)
+                legend_labels_list.append([model.alphabet[j] for j in range(len(emis)) if emis[j] > 0])
+                legend_colors_list.append([colors[j] for j in range(len(emis)) if emis[j] > 0])
         else:
             pie_colors_list.append(colors)
+            legend_labels_list.append([model.alphabet[j] for j in range(len(emis)) if emis[j] > 0])
+            legend_colors_list.append([colors[j] for j in range(len(emis)) if emis[j] > 0])
         
         # Remove zero probabilities
         non_zero_mask = emis > 0
         pie_values.append(emis[non_zero_mask])
         combined_slice_probs.append(combined_prob)
     
-    # Draw edges (transitions)
+    # Collect unique legend items (by appearance order, like R)
+    if use_separate_legend:
+        unique_labels = []
+        unique_colors = []
+        seen = set()
+        for labels, cols in zip(legend_labels_list, legend_colors_list):
+            for label, col in zip(labels, cols):
+                if (label, col) not in seen:
+                    unique_labels.append(label)
+                    unique_colors.append(col)
+                    seen.add((label, col))
+        # Add 'others' if needed
+        if combine_slices > 0 and any(combined_slice_probs):
+            if 'others' not in unique_labels:
+                unique_labels.append('others')
+                unique_colors.append('white')
+    
+    # Calculate node radius in data coordinates
+    # Convert vertex_size (in points) to data coordinates
+    # R uses vertex.size directly in the plot coordinate system
+    # We'll use a reasonable scaling factor based on the coordinate range
+    if layout == 'horizontal':
+        # Estimate data coordinate range
+        data_range = max(x_max - x_min, 1.0)
+        # Convert vertex_size to data coordinates
+        # Scale factor: vertex_size of 50 should be about 0.2-0.25 of the spacing between nodes
+        # For horizontal layout, spacing is approximately (x_max - x_min) / max(n_states - 1, 1)
+        spacing = (x_max - x_min) / max(n_states - 1, 1) if n_states > 1 else (x_max - x_min)
+        node_radius = (vertex_size / 50.0) * spacing * 0.25
+    else:
+        data_range = max(y_max - y_min, 1.0)
+        spacing = (y_max - y_min) / max(n_states - 1, 1) if n_states > 1 else (y_max - y_min)
+        node_radius = (vertex_size / 50.0) * spacing * 0.25
+    
+    # Draw edges (transitions) first (so they appear behind nodes)
     edge_widths = []
     edge_labels = {}
     edges_to_draw = []
     
+    # Get all non-zero transitions
+    transitions = []
     for i in range(n_states):
         for j in range(n_states):
             prob = transition_probs[i, j]
             if prob > 0:
                 edges_to_draw.append((i, j))
-                edge_widths.append(prob * 5)  # Scale width by probability
+                transitions.append(prob)
+    
+    # Calculate edge widths (similar to R: transitions * (7 / max(transitions)))
+    if transitions:
+        max_trans = max(transitions)
+        edge_widths = [t * (7.0 / max_trans) if max_trans > 0 else 1.0 for t in transitions]
+        # Format edge labels
+        for (i, j), prob in zip(edges_to_draw, transitions):
+            if prob >= 0.001 or prob == 0:
                 edge_labels[(i, j)] = f'{prob:.3f}'
+            else:
+                edge_labels[(i, j)] = f'{prob:.2e}'
+    else:
+        edge_widths = [1.0] * len(edges_to_draw)
     
     # Draw edges
     for (i, j), width in zip(edges_to_draw, edge_widths):
@@ -630,7 +741,6 @@ def _plot_hmm_network(
             dy_norm = dy / dist
             
             # Adjust start/end to account for node radius
-            node_radius = vertex_size / 200.0  # Convert to data coordinates
             start_x = x1 + dx_norm * node_radius
             start_y = y1 + dy_norm * node_radius
             end_x = x2 - dx_norm * node_radius
@@ -661,10 +771,11 @@ def _plot_hmm_network(
                 arrow = FancyArrowPatch(
                     path=path,
                     arrowstyle='->',
-                    lw=max(width, 0.5),
-                    color='gray',
-                    alpha=0.7,
-                    zorder=1
+                    lw=max(width, 0.8),
+                    color='#666666',
+                    alpha=0.8,
+                    zorder=1,
+                    mutation_scale=15
                 )
             else:
                 # Straight edge
@@ -672,10 +783,11 @@ def _plot_hmm_network(
                     (start_x, start_y),
                     (end_x, end_y),
                     arrowstyle='->',
-                    lw=max(width, 0.5),
-                    color='gray',
-                    alpha=0.7,
-                    zorder=1
+                    lw=max(width, 0.8),
+                    color='#666666',
+                    alpha=0.8,
+                    zorder=1,
+                    mutation_scale=15
                 )
             
             ax.add_patch(arrow)
@@ -692,9 +804,10 @@ def _plot_hmm_network(
                     label_y += perp_y * 0.5
                 
                 ax.text(label_x, label_y, edge_labels[(i, j)],
-                       fontsize=8 * edge_label_cex,
+                       fontsize=9 * edge_label_cex,
                        ha='center', va='center',
-                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7, edgecolor='none'),
+                       bbox=dict(boxstyle='round,pad=0.2', facecolor='white', 
+                                alpha=0.9, edgecolor='gray', linewidth=0.5),
                        zorder=3)
     
     # Draw nodes (pie charts)
@@ -715,8 +828,9 @@ def _plot_hmm_network(
                 if emis_norm[j] > 0:
                     theta1 = angles[j] * 180 / np.pi
                     theta2 = angles[j + 1] * 180 / np.pi
-                    wedge = Wedge((x, y), vertex_size / 200.0, theta1, theta2,
-                                 facecolor=node_colors[j], edgecolor='black', linewidth=1.5, zorder=2)
+                    wedge = Wedge((x, y), node_radius, theta1, theta2,
+                                 facecolor=node_colors[j], edgecolor='black', 
+                                 linewidth=2, zorder=2)
                     ax.add_patch(wedge)
         
         # Add node label
@@ -730,20 +844,51 @@ def _plot_hmm_network(
             else:
                 label_text = f'{initial_probs[i]:.2f}'
         
-        # Position label
+        # Position label (similar to R's vertex.label.dist)
+        if isinstance(vertex_label_dist, (int, float)) and vertex_label_dist != 'auto':
+            label_dist = vertex_label_dist
+        else:
+            # Auto: place outside vertex
+            label_dist = node_radius * 1.4
+        
         if layout == 'horizontal':
             label_x = x
-            label_y = y - vertex_size / 200.0 - vertex_label_dist * 0.1
+            label_y = y - label_dist
         else:
-            label_x = x - vertex_size / 200.0 - vertex_label_dist * 0.1
+            label_x = x - label_dist
             label_y = y
         
         ax.text(label_x, label_y, label_text,
-               fontsize=10, ha='center', va='top' if layout == 'horizontal' else 'center',
+               fontsize=11, ha='center', va='top' if layout == 'horizontal' else 'center',
                weight='bold', zorder=4)
     
-    # Add legend if requested
-    if with_legend and with_legend != False:
+    # Set axis properties
+    ax.set_aspect('equal')
+    ax.axis('off')
+    
+    # Set limits (matching R's xlim/ylim)
+    if layout == 'horizontal':
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+    else:
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+    
+    # Add legend in separate subplot if requested
+    if use_separate_legend and ax_legend is not None:
+        ax_legend.axis('off')
+        # Create legend elements
+        legend_elements = [mpatches.Patch(facecolor=col, edgecolor='black', linewidth=1, label=label)
+                          for col, label in zip(unique_colors, unique_labels)]
+        
+        # Calculate number of columns
+        ncol = min(len(unique_labels), 6) if with_legend in ['bottom', 'top'] else 1
+        
+        ax_legend.legend(handles=legend_elements, loc='center', 
+                        ncol=ncol, frameon=True, fontsize=10, 
+                        handlelength=1.5, handletextpad=0.5)
+    elif with_legend and with_legend != False and not use_separate_legend:
+        # Fallback: use regular legend (may overlap)
         legend_labels = list(model.alphabet)
         if combine_slices > 0 and any(combined_slice_probs):
             legend_labels.append('others')
@@ -751,34 +896,15 @@ def _plot_hmm_network(
         else:
             legend_colors = colors
         
-        # Create legend
         legend_elements = [mpatches.Patch(facecolor=col, edgecolor='black', label=label)
                           for col, label in zip(legend_colors[:len(legend_labels)], legend_labels)]
         
         if with_legend == 'bottom' or with_legend == True:
-            ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.15),
+            ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.1),
                      ncol=min(len(legend_labels), 6), frameon=True, fontsize=9)
         elif with_legend == 'top':
-            ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 1.15),
+            ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 1.1),
                      ncol=min(len(legend_labels), 6), frameon=True, fontsize=9)
-        elif with_legend == 'right':
-            ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.1, 0.5),
-                     ncol=1, frameon=True, fontsize=9)
-        elif with_legend == 'left':
-            ax.legend(handles=legend_elements, loc='center right', bbox_to_anchor=(-0.1, 0.5),
-                     ncol=1, frameon=True, fontsize=9)
-    
-    # Set axis properties
-    ax.set_aspect('equal')
-    ax.axis('off')
-    
-    # Adjust limits
-    if positions:
-        x_coords = [pos[0] for pos in positions.values()]
-        y_coords = [pos[1] for pos in positions.values()]
-        margin = vertex_size / 100.0 + 0.5
-        ax.set_xlim(min(x_coords) - margin, max(x_coords) + margin)
-        ax.set_ylim(min(y_coords) - margin, max(y_coords) + margin)
     
     plt.tight_layout()
     return fig
