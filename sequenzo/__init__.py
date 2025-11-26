@@ -119,7 +119,21 @@ from .seqhmm import (
     # Non-homogeneous HMM
     NHMM,
     build_nhmm,
-    fit_nhmm
+    fit_nhmm,
+    # Model comparison
+    aic,
+    bic,
+    compare_models,
+    # Simulation
+    simulate_hmm,
+    simulate_mhmm,
+    # Bootstrap
+    bootstrap_model,
+    # Advanced optimization
+    fit_model_advanced,
+    # Formulas
+    Formula,
+    create_model_matrix
 )
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
