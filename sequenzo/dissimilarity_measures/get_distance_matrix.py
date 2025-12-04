@@ -435,6 +435,20 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             indellist = indel
 
         indel = np.max(indellist)
+    
+    # OM method: convert vector indel to scalar if needed
+    # OMdistance C++ code only accepts scalar indel, not state-dependent
+    # Following TraMineR's behavior: when indel.type == "vector", use max(indel)
+    # See TraMineR seqdist.R line 696: params[["indel"]] <- max(indel)
+    elif method == "OM" and indel_type == "vector":
+        if isinstance(indel, np.ndarray):
+            # Use max(indel) to match TraMineR's behavior
+            indel = float(np.max(indel))
+            indel_type = "number"
+        elif isinstance(indel, list):
+            indel_array = np.array(indel)
+            indel = float(np.max(indel_array))
+            indel_type = "number"
 
     # OMspell
     # Redefined dseqs.num

@@ -1,0 +1,1580 @@
+## =========
+Version 2.2-12 [2025-06-29]
+
+Bug fixes:
+
+  - dissdomassoc() issue with ties when ranking values for spearman correlation.
+  - disscenter() wrong distance values returned when allcenter=TRUE.
+  - seqformat(): useless test on covar when to is not "SRS".
+  - seqformat() with from="SPELL" (SPELL_to_STS): unreadable list of 
+    cases with spells ending before start time.
+  - seqformat(): several internal checkindexes badly specified.
+
+## =========
+Version 2.2-11 [2024-12-08]
+
+Changes in existing functions:
+
+  - dissrep(): when all distances are zero, the
+    number nb of cases in the neighborhood of the
+    representative is set as the sum of weights
+    (was zero in previous versions)
+
+Bug fixes:
+
+  - dissrep() error when seqdata is a single sequence
+  - seqecreate() (and tmrsequenceseveral cpp function): 
+    segfault error when intEvent is NULL. 
+    (Fix required by Brian Ripley.)
+
+## =========
+Version 2.2-10 [2024-05-20]
+
+New functions:
+
+  - dissmergegroups() merges groups so as to minimize
+    loss of partition quality.
+  - seqhasmiss() count and identification of
+    sequences with missings.
+
+Changes in existing functions:
+
+  - seqdist() new argument opt.args to test
+    non-documented arguments at development stage.
+  - seqdef() now raises an error when it finds
+    negative or NA weights.
+  - seqprecstart() includes derived state.order and
+    state.equiv as attributes.
+
+Bug fixes:
+
+  - seqcost() method="INDELSLOG" returned NA costs
+    for token 0 when alphabet is numeric.
+  - print.stslist(, format="SPS") error with some
+    version of R.
+  - plot.stslist.statd(,type="dH") error when xtstep > 1.
+  - plot.stslist.statd(,type="Ht") argument main was
+    ignored.
+  - plot.stslist.statd(,type="Ht") displayed useless
+    x-label "Index" when xlab=NULL.
+  - seqdHplot(), seqplot(,type="dH"), seqplotMD(,type="dH")
+    use col.entr instead of col to control color of
+    overlayed entropy because of name conflict.
+  - seqidegrad() and seqinsecurity: unexpected results
+    when order of undesirableness degrees provided
+    with stprec differed from alphabet order.
+  - seqdomassoc() error when only two domains.
+  - noRemap issues
+
+
+## =========
+Version 2.2-9 [2024-01-08]
+
+Changes in existing functions:
+
+  - All TraMineR plot functions: improved support of
+    graphical parameters. (E.g., las and cex.axis can
+    now be used to control the display of tick labels.)
+  - seqdist() transforms kweights into vector
+    rep(kweights, ncol(seqdata)) when it is scalar.
+  - seqdist() raises a warning when the vector
+    kweights is shorter than the number of columns
+    in seqdata.
+
+Bug fixes:
+
+  - seqdef(): lack of separation between found tokens
+    not listed in the alphabet.
+  - seqdist(): error when all DSS have length 1 and
+    method is one of OMspell, NMSMST, and SVRspell.
+  - seqdist(): error when all DSS are identical and
+    of length 1 when method is OMstran.
+  - seqdist() with method="OMstran": returned distance
+    matrix was not labeled with sequence rownames.
+  - issues with lost braces in .Rd files (NOTE in CRAN check)
+
+
+## =========
+Version 2.2-8 [2023-09-18]
+
+New functions:
+
+  - disstree.get.rules() character string vector of
+    the classification rules of a disstree as R commands.
+  - disstree.assign() determines the index of the rules
+    that apply to the provided profiles.
+
+Changes in existing functions:
+  - seqST() When number phi of subsequences is NaN, it is
+    set as .Machine$double.xmax to compute turbulence and
+    a warning is raised.
+  - seqplot() and seqplotMD(): when type="f",
+    the yaxis argument can now also be "pct" or "left.pct".
+  - seqrep() and dissrep(): returned object gains attributes
+    Rep.group with the representative to which each object
+    is assigned, and idx.rep a list with indexes of all
+    occurrences of each representative.
+  - seqtreedisplay() and seqtree2dot(): argument 'axes'
+    is deprecated and replaced by 'xaxis' to be
+    conformable with seqplot.
+  - disstreedisplay() and seqtreedisplay() now raise an error
+    when the file filename of the image cannot be created.
+  - disstreeleaf() gains an argument 'collapse' to control
+    separator within classes of categories.
+
+Bug fixes:
+  - seqfplot() and seqplot(type="f"): option yaxis="pct"
+    did no longer work after update to v 2.2-7.
+  - disstreedisplay() and seqtreedisplay() did sometimes
+    not find the GraphViz path.
+  - disstreedisplay() and seqtreedisplay() uselessly printed
+    TRUE when filename was not NULL.
+
+
+## =========
+Version 2.2-7 [2023-03-31]
+
+New functions:
+  - seqplotMD(): plot of multidomain/multichannel sequences
+    by domain and group.
+  - seqdomassoc(): pairwise state association between domains.
+
+Changes in existing functions:
+  - dissrf() and seqrf(): sortv="mds" is now the default and
+    sortv=NULL selects the original seqdata order.
+  - seqrfplot() (seqplot(..., type="rf", ...)) with option
+    sortv="mds" (new default in seqrf) the MDS sorting is
+    done on the whole seqdata instead of independently for
+    each group.
+  - seqMD(): with.missing can now be NULL (new default),
+    in which case the with.missing value of each domain is
+    set as TRUE when the domain has missings and as FALSE
+    otherwise.
+  - seqMD(): new logical argument 'fill.with.miss', which
+    offers the option to fill the shorter sequences
+    with missings in case of non-matching lengths
+    across domains.
+  - seqplot() and all the seqxxplot family: ylab can
+    be a vector of labels by group level.
+  - seqplot() and all the seqxxplot family support
+    arguments of legend among the ... list.
+  - "[.stslist" raises a warning when row subsetting
+    condition has \code{NA}s.
+
+Bug fixes:
+  - seqrf(): options sortv="from.start" and sortv="from.end"
+    did not work as expected.
+  - seqMD(): error when sequences had different lengths.
+  - foreign c function wcorr called with character string
+    naming while package calls R_forceSymbols.
+    (Fix asked for by K. Hornik).
+
+Misc.:
+  - Statement "SystemRequirements: C++11" dropped from
+    DESCRIPTION as requested by CRAN check.
+  - Using new CITATION commands.
+
+
+
+## =========
+Version 2.2-6 [2022-11-29]
+
+Changes in existing functions
+  - seqplot() and all the seqxxplot family functions: default
+    value for the main argument is now "auto" and NULL behaves
+    as expected, i.e., removes all titles.
+  - seqplot()} and all the \code{seqxxplot family functions:
+    argument 'axes' is deprecated and replaced by 'xaxis'.
+    Argument 'yaxis' can now also be one of "all" or "left".
+  - plot() methods for objects returned by seqdef, seqstatd,
+    seqtab, seqmodst, seqmeant, and seqrf now display the ylab
+    closer from the y-axis when yaxis=FALSE.
+  - plot() method for object returned by seqrep now displays
+    the ylab closer from the y-axis when stats=FALSE.
+
+Bug fixes:
+  - summary.dissrf(): five number statistics ignored weights
+    (reported by Marcel Raab)
+  - seqstatl(): non-integer state value were not recognized.
+  - plot() methods for objects returned by seqdef, seqstatd,
+    seqtab, seqmodst, seqmeant, seqrf, and seqrep ignored
+    the cex.lab argument.
+  - issues with prototypes in init.c
+  - removed unused code with deprecated \code{sprintf}
+    in eventdictionary.cpp
+
+Misc.:
+  - replaced seqdistmc with seqMD in examples of dissdomassoc.
+
+
+## =========
+Version 2.2-5 [2022-08-30]
+
+New functions:
+  - dissrf() medoids of relative frequency (RF) groups
+  - seqrf() medoid sequences of RF groups
+  - plot.seqrf() plot method for medoid sequences of RF groups
+  - seqrfplot() alias for seqplot(...,type="rf",...)
+  - print and summary methods for dissrf and seqrf objects
+  - seqfposend() position of end of first spell in given state
+
+Changes in existing functions
+  - seqplot() new value \code{"rf"} (RF plots) for argument type.
+  - seqtab(): result gains an attribute idxf with indexes
+    of first found most frequent sequences.
+  - seqdistmc() renamed seqMD to better reflect that the
+    function can return various outcomes related to multidomain
+    (MD) sequences, not just distances based on the MCSA trick.
+    Old name maintained as an alias for backward compatibility.
+  - plot.stslist() now raises an explicit error for bad
+    ytlab value.
+
+Bug fixes:
+  - plot.stslist() possible conflict between x names and
+    arguments of order.
+  - plot.stslist.rep() position of y-axis when !is.na(ylab)
+
+Misc.
+  - Proper wtd.cor, wtd.mean, wtd.var, wtd.fivenum,
+    and wtd.boxplot internal functions
+    to avoid issues with dependence on packages weights,
+    Hmisc, and ENmisc.
+    (Code in TraMineR-weights.R and TraMineR-wtd-stats.R.)
+  - Function TraMineR.checkupdates has been removed.
+
+## =========
+Version 2.2-4 [2022-06-08]
+
+New functions:
+  - seqdHplot() alias for seqplot(...,type="dH",...)
+  - seqlength.align() sets lengths of sequences of multiple
+    domains as the shortest length among the domains.
+  - seqmaintokens() returns indexes of more frequent tokens.
+
+Changes in existing function:
+  - plot.stslist.statd() new type "dH" that overlays entropy
+    line on the chronogram. In addition, new arguments col,
+    lwd, and ylim allow controlling aspect of entropy line.
+  - seqplot() new type "dH".
+  - seqformat(), seqdef(), seqdecomp(), seqconc(), seqstatl()
+    now support tibble input data.
+  - seqformat() accepts a tibble as pdata table.
+  - seqformat() accepts a character string vector as input data.
+  - seqdistmc(): option what="sm" becomes what="cost".
+    Deprecated "sm" value maintained for backward
+    compatibility.
+  - plot.stslist.rep() gains two arguments seq.alt to specify
+    the domain in which representatives are displayed
+    and info to control whether coverage info should
+    be displayed.
+
+Misc.:
+  - Suppressed dependence on cNORM because of license
+    incompatibility. (dissdomassoc uses now a proper
+    internal function in place of cNORM:::weighted.rank).
+
+
+## =========
+Version 2.2-3 [2022-01-19]
+
+New functions:
+  - summary.ddomassoc() summary method that organizes
+    outcome of dissdomassoc in table form.
+
+Changes in existing functions:
+  - dissdomassoc() now returns also p-values of the
+    computed correlations.
+  - plot.subseqelistchisq() (plot of outcome of seqecmpgroup)
+    gains attribute 'with.legend'.
+  - plot.stslist.modst() new attribute 'info' to control
+    whether frequency of sequence of modal state should
+    be displayed.
+  - plot.ststlist.meant() now uses an internal function
+    to draw error bars to avoid issues with dependence
+    on Hmisc.
+  - plot.ststlist.meant() new arguments 'bar.labels',
+    'cex.barlab', and 'offset.barlab' to display and
+    control bar labels.
+  - seqmtplot() (seqplot(..,type="mt",..)) adapted for
+    handling bar labels with groups. See details in
+    seqplot help page.
+  - seqformat() with from="SPELL", provides info about
+    number of sequences truncated, empty sequences because
+    of spell occurring before birth year, and empty because
+    of missing start time. A new attribute 'issues' contains
+    the indexes of sequences with issues.
+  - seqdef() now prints, when applicable, the number of
+    empty sequences and lists the first 9 empty sequences only.
+  - seqdistmc() gains an argument 'ch.sep' to control
+    the separator symbol for building state names of
+    of the expanded alphabet.
+  - seqdistmc() rows and columns of the returned distance matrix
+    and the mc sequences are now labelled with rownames of the
+    first channel. Rows and columns of the mc substitution
+    cost matrix are labelled with the expanded alphabet.
+  - seqdistmc() columns of the returned expanded sequence object
+    now labelled with column names of longest domain.
+  - seqdistmc() indel argument can now be "auto" (new default)
+    to automatically set indel values. In addition, state
+    dependent indels are now supported.
+  - seqdistmc()} \code{with.missing} can now be a vector
+    to provide different values for each channel.
+  - seqdistmc() now also supports "INDELS" and "INDELSLOG"
+    values for the sm argument.
+  - seqcost() removed "->" at end of row/column labels
+    of matrix sm.
+
+Bug fixes:
+  - seqdiff() negative values in cmprange caused an error.
+  - seqdiff() changed deprecated norm=TRUE into
+    norm='auto' in default seqdist.args value.
+  - seqecreate() NAs introduced by coercion with character id.
+
+Misc.
+  - Dependence on boot and RColorBrewer replaced by importFrom
+    of functions boot and brewer.pal.
+
+
+## =========
+Version 2.2-2 [2021-06-03]
+
+New functions:
+  - seqidegrad() degradation index (replaces seqprecorr() that
+    becomes obsolete). Class seqprecorr now named seqidegrad
+    and associated print method renamed accordingly.
+  - seqibad() badness index.
+  - seqinsecurity() insecurity index.
+  - dissdomassoc() computes measures proposed in
+    Piccarreta (SMR 2017) to assess the degree of association
+    between domains.
+
+Changes in existing functions:
+  - seqdist() can now compute distances between two subsets of
+    sequences. The subsets are defined by providing a list with
+    two subsets of sequence indexes as 'refseq' argument.
+  - seqdist() dimnames of the objects returned by seqdist are
+    now all set from the rownames of the provided sequence object.
+  - seqdist() method="DHD" now supports sm="INDELS" and
+    sm="INDELSLOG".
+  - seqcost() time.varying=TRUE works with "INDELS"
+    and "INDELSLOG".
+  - seqdistmc() gains a 'what' argument to choose what
+    value will be returned: distances, costs, or combined
+    state sequences.
+  - seqintegration() renamed seqintegr()
+  - seqindic() the possible indicator list gains elements
+    'degrad' for degradation index,
+    'bad' for badness index,
+    'insec' for insecurity index,
+      and the type 2 forms
+      'meand2', 'dustd2', 'turb2', and 'turb2n'
+      taking non-visited states into account.
+    In addition, indic accepts now also value
+    'ranked' that is equivalent to c('degrad','bad','prec','insec').
+  - seqindic() value 'inpos' of indic renamed 'integr', 'volat'
+    now in the 'complexity' group.
+  - seqindic() changes in index order in the returned table.
+  - seqformat() with from='SPELL' and process=TRUE now issues
+    a warning message when the max of the 'end' column exceeds limit.
+  - seqlegend() gains an argument 'boxes' to control how colors
+    are displayed. In addition, now supports any argument of
+    function legend and, e.g. 'x' (or 'x' and 'y') can be used instead
+    of 'position'.
+  - seqstatf() gains the 'with.missing' argument.
+  - seqlogp() gains the with.missing argument. In addition,
+    the overall state distribution can now be used as starting
+    point by setting begin='global.freq'.
+
+Bug fixes:
+  - seqlogp() error for state sequences with missing values.
+
+Misc.:
+  - New imports from psych and cNORM (for dissdomassoc)
+
+## =========
+Version 2.2-1 [2020-10-24]
+
+New functions:
+  - seqivardur() computes the variance of spell durations
+    for each individual sequence. Either the variance of observed
+    non null spells or by considering also the 0-time spent
+    in non-visited states. The associated print method can print
+    the mean, standard deviation, variance, and max variance.
+
+Changes in existing functions:
+  - seqST() gains an argument 'type' to select the type of duration
+    variance used.
+  - seqindic() the possible indicator list gains elements
+    'recu' for recurrence index,
+    'nvolat' for normative volatility,
+    'meand' for mean duration,
+    'dustd' for standard deviation of the duration.
+    The 'indic' argument accepts now also
+    values 'basic', 'diversity', 'complexity', and 'binary' that each
+    selects a subset of indicators.
+  - seqprecstart() the normalized stprec has now a minimum 0.
+  - seqdist() the check of allowed number of unique sequences now
+    depends on refseq and used thresholds are
+    sqrt(.Machine$integer.max) when refseq==NULL,
+    and .Machine$integer.max otherwise. In addition, a new argument
+    permits to skip the test.
+
+Bug Fixes:
+  - seqdur() returned sometimes bad values for the duration of the
+    last spell of sequences of unequal lengths when
+    with.missing=TRUE.
+  - seqdur() unexpected outcome for sequences with missing values
+    when with.missing=FALSE. Now correctly ignores missing values.
+  - seqdplot() and plot.stslist.statd() ignored the xlab argument.
+  - seqconc(), seqdecomp(), seqformat(), and the print method for
+    stslist objects produced in some circumstances output without
+    the row names of the input data.
+  - seqsubsn() error for sequences with missing values when
+    with.missing=FALSE. Now correctly ignores missing values.
+
+Misc.:
+  - TraMineRextras added to 'Suggests' list (to avoid NOTE on
+    undeclared package in Rd xrefs.)
+
+## =========
+Version 2.2-0.1 [2020-04-29]
+
+Misc.:
+  - seqdef(): switched back from [grDevices] hcl.colors to
+    [colorspace] qualitative_hcl to avoid dependence
+    on R >=3.6 necessary for hcl.colors.
+
+## =========
+Version 2.2-0 [2020-04-22]
+
+Changes in existing functions:
+  - seqdist(), argument 'indel' can now be "auto" (new default)
+    in which case a suitable indel value is generated for the
+    provided sm.
+  - seqdist() now uses the rbind stslist method to add refseq to
+    the set of sequences when it is a sequence object.
+    (Transparent to the user.)
+  - seqdist() now gives a zero weight to the refseq when specified
+    as a state sequence object.
+  - seqdist() refseq including refseq as a state sequence
+    object can be used with all methods (did not work with
+    OMstran, CHI2, and EUCLID).
+  - seqdist() vector indel now supported by OMspell, OMslen,
+    and OMstran (previously only by OM).
+  - seqdist(), normalization now also possible for OMspell, OMslen,
+    OMstran, OMloc, and TWED.
+  - seqdef() now uses hcl.colors (grDevices) instead of
+    qualitative_hcl (colorspace) to set default colors when n>13.
+    (Transparent to the user.)
+
+Bug Fixes:
+  - rbind.stslist() bad handling of missing states.
+  - seqdist(), argument 'sm' did not recognize values "INDELS" and
+    "INDELSLOG".
+  - seqdist() raised warnings when method='OMslen' because of a
+    vector of conditions in an if test.
+  - seqdist() ignored the 'weighted' value when computing substitution
+    costs with the sm method.
+  - seqdist() for OMstran ignored the 'weighted' value when computing
+    probability-based indels (i.e. with transindel="prob").
+  - seqdist() TWED wrongly depended on the indel value. Now indel
+    serves only in the improbable case of empty sequences.
+  - seqdist() maxlength and gmean normalization generated negative
+    distances in some circumstances. Fixed by setting the
+    maximum length as max length x max indel.
+
+Misc:
+  - Deleted unused OMVI2distance cpp and h files
+
+
+## =========
+Version 2.0-15 [2020-03-18]
+
+New functions:
+  - seqintegration(), index of integrative potential of C. Brzinsky-Fay
+  - seqivolatility(), index of objective volatility of C. Brzinsky-Fay
+  - print.seqipos() print method for objects returned by seqipos()
+  - is.stslist() checks that the object is a proper stslist object.
+  - rbind.stslist() rbind method for state sequence objects.
+
+Changes in existing functions
+  - seqdef() now provides a default color palette (using colorspace)
+    when number of states exceeds 12.
+  - alphabet() gains an argument 'with.missing'.
+  - seqipos() gains an argument 'index' to select between three
+    types of indicators: share of positive states, volatility, or
+    integrative potential for the positive state.
+  - seqipos() returned object has an attribute 'sbinary' with
+    the derived binary sequences.
+  - seqindic() possible values for argument 'indic' include now
+    the indicators of objective volatility and integrative
+    potential both for the provided sequences and the
+    positive-negative sequences derived from them.
+  - seqdist(): OMloc, OMslen, OMspell, and OMstran now also
+    apply to sequences of different lengths.
+  - seqdist(): with.missing=TRUE now supported by all methods.
+  - seqdist() raises a warning when there are empty sequences
+    except for OMloc where an error is raised.
+  - seqcost(): 'with.missing' forced as FALSE (as in seqdist)
+    when there are no non-void missings in the sequences.
+  - seqprecorr(): new methods "FREQ+", "TRATE+", "TRATEDSS+",
+    "RANK+" that adjust the returned penalty for the mean
+    transition weight.
+  - seqprecorr(), a same state value is assigned to equivalent
+    states when counting transitions and computing transition
+    probabilities (methods "FREQ", "TRATE", "TRATEDSS").
+
+Bug fixes:
+  - Print methods for seqprec and seqprecorr objects
+    did not work.
+  - print.stslist() did not print ending missing values
+    when format='SPS'.
+  - print.stslist(), when format='SPS', additional parameters
+    for controlling the format were ignored.
+  - seqformat() did not account for the 'right' argument
+    when to='SPS'.
+  - seqdist() with 'method=CHI2'. Fixed issue with unexpected
+    warnings when over an interval all sequences stay in
+    the same state.
+  - seqdist() raised an error for some methods when the
+    unused argument indel was a vector.
+  - seqdist(), argument 'sm': values 'CONSTANT' and 'TRATE'
+    were only accepted for method='OM' and 'HAM'. Now can be
+    used with all methods that require the sm argument.
+  - seqplot() raised an error when deprecated 'tlim' argument
+    was used. Now a warning.
+  - [] subsetting of stslist objects with negative column
+    indexes produced unexpected results.
+
+
+
+## =========
+Version 2.0-14 [2020-01-13]
+
+Bug Fixes:
+  - print.stslist.freq() wrongly used 'width' argument
+
+## =========
+Version 2.0-13 [2019-11-19]
+
+New functions:
+  - seqindic() returns a table with per sequence
+    values of selected indicators.
+  - seqipos(): proportion of positive spells/states
+    per sequence.
+  - seqprecarity() precarity index
+    (previously in TraMineRextras)
+  - seqprecorr() correction factor for precarity index
+    (previously in TraMineRextras)
+  - seqprecstart() state precarity level for precarity index
+    (previously in TraMineRextras)
+
+Changes in existing functions:
+  - seqlength(), seqST(), and seqsubsn() gain a
+    'with.missing' argument to control how missing
+    values should be treated.
+
+Bug Fixes:
+  - seqST() normalization did not account for non-void
+    missing values when present.
+
+Misc:
+  - Fixed issue with \traminer in vignette.
+
+## =========
+Version 2.0-12 [2019-06-21]
+
+Changes in existing functions:
+  - seqdef() now raises an error when argument 'alphabet'
+    contains duplicate elements.
+  - alphabet() in its assign form now raises an error
+    when the assigned vector contains duplicate elements.
+  - seqdist() gains a new argument 'global.pdotj'
+    to control the marginal distribution to be used
+    for the CHI2 distance.
+  - seqdist(), 'CHI2' and 'EUCLID' distances are now, when
+    norm='auto', normalized by the maximal distance, which
+    for 'CHI2' depends on the marginal state distribution.
+  - seqici(), seqient(), and seqST() gain a new argument
+    'silent' to control whether messages about running
+    operations should be displayed.
+  - seqST(). Suppression of useless messages when norm=TRUE.
+
+Misc.:
+  - Suppressed unused argument 'weighted' from
+    internal OMstran function.
+  - Help page for seqdist: description of the
+    weighted argument adjusted to reflect that it
+    applies only to the "CHI2" distance.
+  - Updated links to Swiss Household Panel in actcal and
+    biofam help pages.
+
+
+## =========
+Version 2.0-11.1 [2019-03-22]
+
+Bug Fixes:
+  - eventseq.cpp: rchk message 'calling allocating function
+    Rf_asChar with argument allocated using TMRNumberFormat'.
+
+## =========
+Version 2.0-11 [2019-03-18]
+
+Changes in existing functions:
+  - seqdef(). Speed improvement suggested by Jouni Helske.
+    Transparent for the user.
+  - seqdist(). An error is raised when the number of
+    unique sequences exceeds the maximal allowed.
+  - plot.ststlist.statd(). Now checks the 'type' argument and
+    returns the values plotted.
+
+Bug Fixes:
+  - seqtab(), seqxtract(), checkcost(), SPELL_to_STS(). Issues
+    with length > 1 in coercion to logical.
+  - Warning about potential stack imbalanced PROTECT in relation
+    with TMRNumberFormat in the C++ code (eventseq.cpp).
+
+## =========
+Version 2.0-10 [2018-11-18]
+
+Bug Fixes:
+  - seqdist(): when 'refseq' was passed as a state sequence
+    object wrong results were sometimes returned.
+  - seqdist(): CHI2 and EUCLID distances were computed using
+    counts instead of proportions.
+  - seqdist(): CHI2 and EUCLID bad behavior in presence of missings.
+  - Vignette: Fixed issue with updated \code{fancyvrb.sty}.
+
+Misc:
+  - Vignette: Error in formula for complexity index.
+    Also, now DOI instead of link to JSS article.
+
+## =========
+Version 2.0-9 [2018-08-20]
+
+Changes in existing functions:
+  - seqplot()} now supports the 'ncol' argument for controlling
+    the number of columns in the color legend.
+  - seqdef(): new argument 'tick.last' to set the 'tick.last'
+    attribute of the state sequence object. Default is
+    tick.last = FALSE to preserve the previous behavior.
+  - plot.stslist(), plot.stslist.freq(), plot.stslist.statd(),
+    plot.stslist.modst(), plot.stslist.rep() (i.e. also seqplot()
+    with type "i", "I", "f", "d", "Ht", "ms", or "r"),
+    and plot.seqdiff(): new argument 'tick.last' that when
+    set as TRUE enforces a tick mark at the last position on
+    the time x-axis. Has no effect when the last position is
+    1 + a multiple of xtstep.
+  - seqformat():
+    - For 'from = "SPELL"' and 'process = FALSE',
+      'pdata = "auto"' is now equivalent to NULL instead of
+      raising an error. Also, using argument 'pvar' with
+      'pdata = NULL' now raises a warning instead of
+      an error and 'pvar' is simply ignored.
+    - For 'from = "SPELL"', an error is raised when columns
+      referred to by 'begin' and 'end' are of class "Date".
+    - When 'from = "SPELL"' or 'to = "SPELL"', an error is
+      raised when the birth year column of pdata is of
+      class "Date". Integer values are expected.
+  - seqplot(): for type "r" (seqrplot), an error is raised
+      when a group has less than two cases.
+
+Bug fixes:
+  - seqformat(): An unneeded warning was raised when data
+      was a matrix with a single string element.
+  - seqdef(): Bad handling of 'missing' argument when
+      informat = "SPS" or "SPELL".
+
+## =========
+Version 2.0-8 [2018-01-26]
+
+Changes in existing functions:
+  - seqcost()}: argument 'miss.cost.fixed' is now NULL by
+    default and will be set as FALSE when method = "INDELS" or
+    "INDELSLOG", and as TRUE otherwise.
+  - seqpcplot(): new logical 'weighted' argument to control
+    whether weights should be used or not.
+
+Bug fixes:
+  - seqrplot() and seqplot(..., type="r", ...): the method and
+    other related arguments for computing the diss matrix when
+    the later was not provided was not recognized.
+  - seqplot(): Fixed some unused argument issues.
+
+Misc:
+  - Vignette: Suppressed the loading of two unused LaTeX packages
+    (subfigure and afterpage) that prevented the vignette to be built
+    under OSX.
+  - Declaring use of C++11 for log1p: 'SystemRequirements: C++11'
+    declaration in DESCRIPTION and math.h header in NMSdistance.cpp.
+  - Internal function checkargs() renamed as TraMineR.check.depr.args()
+    and made public for use in TraMineRextras.
+
+
+
+## =========
+Version 2.0-7 [2017-08-15]
+
+Changes in existing functions:
+  - alphabet(): the get form now also applies to event sequences.
+    In addition, an error is now raised when the argument is not
+    a state sequence object, an event sequence object, or a
+    probabilistic suffix tree (see the PST package for the latter).
+  - seqdecomp(): the 'miss' argument can now also be a vector,
+    e.g. miss = c("*", "%")
+  - seqformat() has a new 'right' argument to be used with
+    to = 'SPELL'. The default right = 'DEL' suppresses the
+    end spells of missing values. Set right = NA to keep the
+    end spells of missing values.
+  - seqdef() now raises an error message when 'void' is not a character
+    different from 'left', 'gaps', and 'right'.
+  - seqtrate() gains a new argument 'count'. When 'count = TRUE',
+    the function returns counts of transitions instead of transition
+    probabilities.
+
+Bug fixes:
+  - seqpcplot(): Due to a change in the R tapply function,
+    option ltype="non-embeddable" did no longer work.
+  - seqefsub() with non-null str.subseq argument: multiple partial
+    matches between events in str.subseq and the alphabet of events of
+    the eseq event sequence object crashed the R session. Fixed by a change
+    in the internal seqecreatesub function.
+  - seqformat(): to="TSE" and to="SPELL" produced errors or unexpected
+    results in presence of missing and/or void states. Now, when
+    to = "SPELL", the missing and void codes are both converted
+    to NA before conversion while they are kept as is when to = "TSE".
+  - seqetm() produced an error in presence of void elements.
+  - An error occurred in the internal \code{implicativestat} function
+    when a same condition subsequence was present in all subsequences.
+
+Misc:
+  - Documentation of seqformat() and seqecreate(): added examples
+    of the handling of missings in conversion into TSE and SPELL format.
+
+
+## =========
+Version 2.0-6 [2017-06-17]
+
+Changes in existing functions:
+  - seqformat():
+    - Redesigned version of the function with a new extensible, robust and
+      documented implementation.
+    - Rewritten documentation with argument types, default values, scopes and
+      detailed explanations.
+    - Added and generalized conversion to "SPELL" (previously in TraMineRextras);
+      added a 'with.missing' argument specifically for this conversion.
+    - Added the possibility to pass directly the unique individual IDs (row names)
+      of the input sequences with 'id' when converting to "TSE".
+    - Clarified meaning of 'id' argument and changed its position in the
+      list of arguments to reflect this.
+    - Changed the default value of the 'id', 'begin', 'end', and 'status'
+      arguments (now "SPELL" oriented).
+    - Renamed 'compressed' argument as 'compress' to avoid confusion (here it
+      applies to the output, not to input data).
+    - Renamed 'nr' argument as 'missing' to avoid confusion (here it specifies
+      the code to consider as missing values in input data, which is not
+      the TraMineR internal code for missing values in state sequence objects).
+    - Adapted function calls to match the renamed argument names ('compressed',
+      'nr') and the new input type checking (ie. single strings are deprecated).
+    - See the updated documentation of seqformat() for details.
+  - SPS_to_STS(): renamed 'nr' argument as 'missing' to match seqformat()
+    argument names renaming.
+
+Bug fixes:
+  - seqformat():
+    - From "SPELL" to "TSE": output IDs were incorrect.
+    - From "SPELL" to "STS": states not appearing in the data were dropped
+      from the output column levels.
+
+Misc:
+  - Added new internal helper functions:
+    - msg.warn0(): same as the existing msg.warn() but without white space insertion.
+    - is.positive.integers(): check if an object is a vector of positive integers.
+    - is.a.character(): check if an object is a (unique) character.
+    - is.a.string(): check if an object is a string.
+    - is.strings(): check if an object is a vector of strings.
+    - is.index(): check if an object is a positive integer or a string.
+    - is.indexes(): check if an object is a vector of positive integers or strings.
+    - checkindex(): check if an object is a valid data frame or matrix index;
+      otherwise, an error is raised and an information message is displayed.
+    - checkindexes(): check if an object is a vector of valid data frame or
+      matrix indexes; otherwise, an error is raised and an information message
+      is displayed.
+  - Grouped internal 'is.xxx' helper functions into a single
+    TraMineR-is_helpers.R file.
+  - Generalized msg.warn() / msg.warn0() and msg() / msg0() code.
+  - Internal C/C++ function \code{tmrWeightedInertiaDist()} made public as the R
+    function TraMineRInternalWeightedInertiaDist(). (Used by package Weightedcluster).
+
+
+## =========
+Version 2.0-5 [2017-05-13] (Stable version)
+
+Note:
+  - This is a major update of the CRAN version of TraMineR.
+  - Check also changes in versions 1.9-14, 2.0-0, 2.0-1, 2.0-2, 2.0-3,
+    and 2.0-4 that have not been released on the CRAN.
+
+Bug fixes:
+  - seqtrate(): now accepts a sequence object ('seqdata') containing only one sequence.
+  - seqdist(): now accepts a reference sequence object ('refseq') containing
+    missing values while the main sequence object ('seqdata') doesn't.
+
+Misc:
+  - Replaced default deprecated values of 'norm' in
+    seqdistmc() and seqtree().
+  - Fixed issues with examples in documentation page of
+    seqtree().
+
+
+## =========
+Version 2.0-4 [2017-04-13] (Unreleased version)
+
+Changes in existing functions:
+  - Renamed several argument names to increase consistency within TraMineR and
+    between TraMineR and R. The aim is also to have a common naming
+    convention within TraMineR.
+    A new internal function - checkargs() - is used to guarantee backward
+    compatibility. If the old argument name is used instead of the new one,
+    a warning message with an explanation is displayed and the execution
+    continues. If the new and old argument names are used together, an error
+    message is displayed and the execution stops.
+    The following functions have at least one renamed argument: dissrep(),
+    disstree(), disstree2dot(), disstree2dotp(), disstreedisplay(), is.eseq(),
+    is.seqelist(), seqdiff(), seqeconstraint(), seqecontain(), seqecreate(),
+    seqefsub(), seqeid(), seqelength(), seqelength<-, seqetm(), seqeweight(),
+    seqeweight<-, seqlegend(), seqpcplot(), seqplot(), seqrep(), seqtab(),
+    seqtrate(), seqtree(), seqtree2dot(), seqtreedisplay(), seqeisweighted(),
+    plot.seqalign(), plot.seqdiff(), plot.stslist(), plot.stslist.freq(),
+    plot.stslist.meant(), plot.stslist.modst(), plot.stslist.rep(),
+    plot.stslist.statd(), plot.subseqelistchisq(). See the help page of each of
+    these functions for the mapping between old and new argument names.
+  - Renamed function: is.seqe() was renamed as is.eseq().
+
+Misc:
+  - Fixed an issue with an example in the documentation page of seqpcplot().
+  - Fixed equation typing errors in seqrep() documentation.
+
+
+## =========
+Version 2.0-3 [2017-04-06] (Unreleased version)
+
+Misc:
+  - In src/tmrsequence.cpp from TraMineR 1.8-13:
+    - Fixed two memory errors detected by Valgrind.
+    - Fixed a PROTECT error.
+  - Fixed issues with examples in documentation pages of
+    dissmfacw, disstree, seqtree, and plot.stslist.meant.
+
+
+## =========
+Version 2.0-2 [2017-03-28] (Unreleased version)
+
+Misc:
+  - Changed character encoding from latin1 (ISO-8859-1) to UTF-8.
+  - Normalized line endings: LF.
+
+
+## =========
+Version 2.0-1 [2017-03-27] (Unreleased version)
+
+Misc:
+  - Removed the following unused functions: vidx(), seqmatsaltt(), seqmathenikoff().
+  - Removed the functions deprecated in TraMineR 1.x: seqesetlength(), dissreg(), dissmfac().
+
+
+## =========
+Version 2.0-0 [2017-03-27] (Unreleased version)
+
+New function:
+  - seqcost(): Evolution of seqsubm() that offers different ways (CONSTANT,
+    TRATE, INDELS, INDELSLOG, FUTURE, FEATURES) to determine indel and
+    substitution costs (see the documentation of seqcost() for details). Unlike
+    seqsubm(), seqcost() returns both the indel and the substitution costs.
+
+Changes in existing functions:
+  - seqdist():
+    - New major version with many new features and a new extensible, robust
+      and documented implementation (R code).
+    - New methods: localized OM (OMloc), spell length sensitive OM (OMslen),
+      OM of spells (OMspell), OM of sequences of transitions (OMstran),
+      Time Warp Edit Distance (TWED), Number of Matching Subsequences (NMS),
+      Number of Matching Subsequences weighted by the Minimum Shared Time (NMSMST),
+      Subsequence Vectorial Representation (SVRspell), Euclidean distance (EUCLID),
+      Chi-squared distance (CHI2).
+    - New arguments: 'kweights', 'tpow', 'expcost', 'context', 'link', 'h', 'nu',
+      'transindel', 'otto', 'previous', 'add.column', 'breaks', 'step', 'overlap',
+      'weighted', 'prox'.
+    - 'sm': value "CONSTANT" has been removed for DHD as it doesn't make sense
+      and the values "INDELS" and "INDELSLOG" have been added (see seqcost()
+      documentation).
+    - 'norm': value TRUE is replaced by "auto" and FALSE by "none".
+    - See the updated documentation of seqdist() for details.
+  - seqsubm(): This now an alias for seqcost(...)$sm.
+
+
+## =========
+Version 1.9-14 [2017-03-20] (Unreleased version)
+
+Misc:
+  - Registration of native routines for R 3.4.x.
+    See https://stat.ethz.ch/pipermail/r-devel/2017-February/073755.html.
+
+
+## =========
+Version 1.8-13
+
+Misc:
+  - Changes in C-code for the seqefsub function: replaced call
+    to function round by a call to fround to comply with
+    forthcoming changes in R 3.4.0 (request of Brian D. Ripley).
+    The change is transparent for the user.
+
+
+## =========
+Version 1.8-12
+
+Changes in existing functions:
+  - seqST(): new argument 'norm' to ask for a normalized
+    turbulence index.
+  - seqformat(): The transformation now stops with an error message
+    when the columns referenced with the begin and end
+    argument contain a non integer value.
+
+Bug fixes:
+  - plot.stslist(): an unnecessary warning occurred when a
+    vector of labels was passed as ytlab argument.
+  - seqdef(): now accepts to create a state sequence object
+    with an alphabet that has only one element. Fixed an error
+    that occurred when there was only one state
+
+New data examples:
+  - bfspell: a small data set with 20 sequences in SPELL format.
+
+Misc:
+  - updated seqformat help page: now includes an example of a
+    transformation from SPELL to STS.
+  - fixed bad use of extern "C" {} in TraMineR.h
+    (done by B. Ripley, CRAN version 1.8-11.1)
+
+
+## =========
+Version 1.8-11
+
+Changes in existing functions:
+  - seqmeant(): New serr argument. When serr=TRUE, seqmeant computes
+    the variance and standard deviation of the total times spent in the
+    different states, and the standard error of the mean total times.
+  - seqmtplot(): When serr=TRUE, error bars are displayed in the
+    mean time plot.
+  - seqdist():
+    - New error message when sm=NA with method "OM".
+    - New error message when 'refseq' is a state sequence object with
+      an alphabet assigned to it different from that of 'seqdata'.
+
+Misc:
+  - updated disstreedisplay help page (tree argument).
+  - updated seqdist help page (refseq argument and example).
+  - updated CITATION file (new ref and fixed a doi argument).
+
+## =========
+Version 1.8-10
+
+Misc:
+  - Updated help pages: seqeconstraint, seqtree, distree2dot
+  - Added required basic packages to the import statements to
+    comply with R v3.3 requirements
+  - One additional exported alias to a TraMineR internal function:
+    TraMineRInternalSeqgbar.
+
+
+## =========
+Version 1.8-9
+
+New function:
+  - pcfilter(): convenience function to define the coloring
+    filter options to be passed as 'filter' argument to seqpcplot().
+
+Changes in existing functions:
+  - seqpm(): New sep argument to allow searching for string patterns when
+    states are not labelled with single characters.
+  - seqpcplot():
+    - New argument 'seed' to control the jittering.
+    - The 'filter' argument can now simply be a scalar, in which case
+      the 'minfreq' filter is applied with this numeric value as threshold.
+      See also the new function seqpcfilter().
+    - New argument 'missing' to control  whether and how to display missing
+      values.
+
+Bug fixes:
+  - seqformat(): fixed error occurring when converting from STS to TSE
+    with a tevent matrix containing empty strings (i.e. "")
+  - dissmfacw(): reported F values now obtained by dividing the within
+    discrepancy in the denominator by (n-m), where n is the sample size
+    and m the total number of predictors (contrasts for categorical
+    factors). Up to here (n-m-1) was mistakenly used
+    (Reported by Vicente Ponsoda.)
+
+Misc:
+  - Two additional exported aliases to TraMineR internal functions:
+    TraMineRInternalSeqeage and and TraMineRInternalLegend.
+
+## =========
+Version 1.8-8
+
+Bug fixes:
+  - seqecreate(): an error is thrown when events are not grouped
+    by id in inputted TSE data. (Reported by Nicolas Jay).
+    This requirement is now specified in seqecreate help page.
+
+Misc:
+  - exported alias functions allowing other packages to access TraMineR
+    internal functions (see ?TraMineRInternalLayout).
+
+## =========
+Version 1.8-7
+
+Changes in existing functions:
+  - seqpcplot(): Suppressed unnecessary "output" argument. The
+    'seqpcplot' object is automatically retrieved when using the
+    assignment operator, e.g., p <- seqepcplot(...).
+
+Bug fixes:
+  - seqformat(): When converting from STS to TSE, an error was raised if the
+    tevent matrix had empty strings (i.e. ""). Now, this is considered as no event.
+  - seqpcplot(): Fixed error that appeared at the use of "_end" events.
+  - seqpcplot(): An error occurred when plotting a state sequence object
+    (of class stslist) with a numeric 'cnames' attribute.
+
+Misc:
+  - Required packages RColorBrewer and boot now listed as "imports"
+    in DESCRIPTION and using import in NAMESPACE.
+
+
+## =========
+Version 1.8-6
+
+Changes in existing functions:
+  - seqformat(): new 'nr' argument to specify the missing state
+    symbol in SPS input.
+  - disstreeleaf(): new logical 'label' argument to specify
+    whether the leaf membership should be labelled with
+    the classification rules.
+
+Bug fixes:
+  - seqtreedisplay() and disstreedisplay(): GraphViz installer no longer
+    adds GraphViz to the PATH environment variable. Therefore the two
+    functions have been adapted to search for GraphViz. In case GraphViz
+    would not be found, you can specify the GraphViz installation
+    directory with the new 'gvpath' argument.
+  - disstree() and seqtree(): removed the warning when R equals 0 or 1
+    (no permutations).
+  - seqformat(): fixed a problem with missing states when converting
+    from SPS to STS (see Changes in function above.)
+  - seqpcplot(): fixed issues with 'which' argument of 'plot.seqpcplot'.
+  - seqpcplot(): fixed issues with arguments 'xlab' and 'title'.
+  - seqpcplot(): replaced a warning message by an error message at
+    failures in finding plot positions for sequences. The error
+    message advices to modify the (currently hidden) 'maxit' argument.
+    Additionally, automatically generated subtitles are now hidden
+    when the argument 'title' is used.
+  - as.character.seqelist(), print.seqelist(): fixed an issue with time
+    display in event sequences which was in scientific notation for numbers
+    with more than 2 digits. The function now uses the R format function and
+    thus accounts for global formatting options such as options(digits=)
+    and/or options(scipen=).
+  - seqtrate(): fixed error with sequence objects having only two columns.
+
+New functionalities:
+  - disstree2dot() and disstree2dotp() gain a new argument called "title.outer".
+    If title.outer=TRUE, the title is printed in the outer margins.
+
+## =========
+Version 1.8-5
+
+Bug fixes:
+  - seqefsub(): reported support did not properly account for weights.
+  - seqtreedisplay(): corrected a bug when using representative sequences and
+    a "dist" object was passed to the "dist.matrix" argument (reported by
+    Emanuela Struffolino).
+  - seqLLCS() and seqLLCP(): added a check on the argument. Both sequences
+    should belong to state sequence objects with a common alphabet.
+  - seqpcplot(): small change in default lower ylim.
+
+Help pages:
+  - help pages updated with author and keyword fields.
+
+## =========
+Version 1.8-4
+
+Bug fixes:
+  - seqrep(), dissrep(), seqrplot(): wrong (unweighted) "na" values were returned;
+    also quality measures "MD" (mean distance to representative) and "V"
+    (discrepancy) were not computed properly when more than one representative
+    selected (since version 1.8-2).
+
+User invisible changes:
+  - Added an internal function to fix an issue with an internal C level
+    function when called from other packages.
+
+## =========
+Version 1.8-3
+
+Information pages:
+  - Updated online help pages.
+  - Updated list of references returned by citation("TraMineR").
+
+New functionalities:
+  - seqpcplot(): parallel coordinate plot for sequence data
+
+Changes in existing functions:
+  - seqdss(): adding long state labels to returned sequence object
+  - seqplot(): new option type = "pc"
+  - seqplot(), seqdplot(), seqiplot(), seqfplot(), seqmsplot(), seqrplot():
+    if 'density' and/or 'angle' are used to produce shading lines
+    instead of solid colors, the legend is plotted using the same
+    parameters and thus corresponds to the colors/shades used in the plot.
+  - seqplot(): if group argument is a factor, the plots are
+    now ordered the same way as the factor levels.
+  - seqplot(), plot.stslist(): if sortv is a factor, the
+    sequences are now sorted according to the order of the factor levels.
+  - seqmodst() and plot.stslist.modst(): changed name of
+    attribute "occurences" of object returned by seqmodst to
+    "occurrences". Made resulting changes in plot.stslsit.modst.
+
+Bug fixes:
+  - seqdef(): When selecting subsets of sequence objects using rownames
+    instead of row indexes, the corresponding weights were not selected.
+    Fixed by setting (row)names of weight vector as the sequence
+    rownames. (Alexis Gabadinho)
+
+
+## ==========
+Version 1.8-2
+
+Vignettes: Slightly modified JSS article vol. 40(4) added as a vignette
+    on state sequence analysis.
+
+Misc:
+  - added 'ex2' data sets to test and illustrate the handling of weights,
+        type help(ex2) for details.
+
+New functionalities:
+  - New faster interface between C code and R.
+  - seqalign() and associated print and plot methods to see computation details
+        about the alignment of two state sequences.
+
+Changes in existing functions:
+  - seqtree(), disstree(): speed improvements.
+  - seqtm(): gives a warning when state names or state labels contain a comma.
+  - seqdef(): changed the display of alphabet, state labels and long labels when
+        creating a state sequence object.
+  - seqistatd() and seqmeant(): added 'prop' argument to calculate
+        proportions of time spent in
+        each state instead of absolute values.
+  - seqplot() and aliases: 'group' now also accepts as argument a list of
+        variables/vectors and produces a plot for each combination of the
+        values of the variables in the list.
+  - dissrep(), seqrep(), seqrplot(): now accounts for weights when present.
+  - seqtrate(), seqsubm(): added two arguments:
+        - lag: compute transition rates from (t) to (t+lag), set to one by default
+        - with.missing: If TRUE, compute transition rates to and from missing values.
+  - seqtreedisplay(): now overwrites previous file if filename is not NULL.
+        Tree quality measures displayed with R code.
+  - checktriangleineq(): internal function to check triangle inequality is now
+        in C, which allows checking much bigger distance matrices.
+  - seqIplot(), seqiplot() and seqplot() with type "I" or "i": the 'sortv' argument now
+        also accepts a sorting method, namely one of "from.start" or "from.end".
+        See the help page ?plot.stslist for explanation.
+  - seqeconstraint() and other 'seqe...' functions for event sequences: support
+        of subsequences can now be determined by means of any of
+        Joshi's 5 counting methods (see the ref manual page). The method should be
+        specified with seqeconstraint().
+  - seqeapplaysub(): when "method=NULL" is specified (now the default), the count method
+        assigned to the event sequence object is used. With method="count"
+        CDIST_O (number of distinct occurrences) is used as previously.
+  - seqrep(): attribute 'Index' of the returned object is now a vector instead of
+        an object of class 'dissrep'.
+
+Bug fixes:
+  - seqtreedisplay(): was changing current directory when an error occurred in
+        the plotting function.
+  - dissrep(), seqrep(): error when 'nrep' cannot be reached (reported by M. Studer)
+  - seqefsub(): when using strsubseq argument, countMethod of seqeconstraint
+        was not taken into account (Reported by Reto Bürgin).
+  - seqeconstraint(): added consistency checks to avoid misuses (Reported by Reto Bürgin).
+  - print.seqelist() and as.character.seqelist(): generated segfault when
+        converting long event sequences to character (Reported by Pierre Molinier).
+  - seqsubm(): Very small rounding errors (1e-16) were sometimes leading to non symmetric
+        substitution cost matrix (Reported by Alexandre Pollien).
+
+## ==========
+Version 1.8-1
+
+Misc:
+  - updated references in the citation file and manual pages to point to the newly published article
+    in the Journal of Statistical Software
+  - other references update in the manual pages
+
+
+## =========
+Version 1.8
+
+New functionalities:
+  - seqtreedisplay(): drawing a sequence regression tree.
+  - seqtree(): creating a sequence regression tree from a dissimilarity matrix.
+  - seqrecode(): recoding state sequences objects (i.e., merging states).
+  - weights are now supported by all dissimilarity analysis functions.
+  - weights can be assigned to event sequence objects and are
+      supported by all related functions.
+  - seqdef(): 'xtstep' option added to set step between displayed tick-marks and
+      labels on the x-axis of state sequence plots.
+  - seqplot(): 'xtstep' option added to state sequence plots.
+
+Bug fixes:
+  - seqformat(): fixed problems with fillblanks argument when converting from SPELL to STS.
+  - seqdist() and seqdistmc(): method="HAM" did not account for the provided substitution
+      cost matrix; it used 1 for all substitution costs (Reported by Florian Hertel).
+  - seqdist(): fixed a (possible) memory leak.
+  - seqdss(), seqdur(): fixed bad handling of missing values in several cases:
+    - sequences finishing with missing values,
+    - sequences made of only one distinct state and missing values.
+  - seqiplot(), seqIplot(), seqfplot(): changed the automatic setting of the x-axis length,
+      to ensure identical lengths of the x-axis when the maximal sequence length differs
+      between groups (reported by M. Studer).
+  - seqplot() and aliases: fixed error with 'xaxis' argument.
+  - seqtransn(): the returned normalized number of transitions for
+      sequences of length 1 was NaN (value of transn.norm=0/seqlength-1). Now set to 0.
+  - seqici(): returns now correctly 0 instead of NaN for sequences of length 1.
+
+Changes in existing functions:
+  - seqient(): new option 'base' for choosing the base of the logarithm used
+      to compute the entropy.
+  - seqdist(): enhanced check of substitution cost matrix.
+      - The function can now be cleanly interrupted by the user.
+      - Timing information now uses the processor time (instead of the elapsed time).
+  - seqformat() when converting from "SPELL":
+      - new error message when a start time is lower than 1 and/or an end time is smaller than the start time.
+      - warning message when start time of episode 1 is missing (sequence creation is skipped)
+      - warning message when start/end time of an episode is missing (episode is skipped and filled with NA's)
+  - disstree() and dissassoc() have been entirely redesigned; objects created
+      with the old function are no longer supported.
+  - seqdss() and seqdur(): the number of columns of the returned object is now set to the
+      maximum DSS length rather than to the length of the original state sequence object.
+
+Misc:
+  - 'ex1' example data set: contains now an additional sequence 's7'
+      with only missing values.
+
+
+
+## ==========
+Version 1.6-2
+
+Bug fixes:
+  - seqdef(): now checks whether all states encountered in the input data are present in an optional
+      user provided alphabet ('state' argument)
+  - seqefsub(): The support of a subsequence with a total support of 1 was set to 0 (hence, this only
+    applies if the minimum support is 1.) This is now corrected (Reported by Anna Hera).
+  - Corrected compilation problems under SOLARIS (Reported by Prof Brian Ripley).
+  - seqformat(): when converting from SPELL to STS, the fillblank argument was not used.
+
+## ==========
+Version 1.6-1
+
+New functionalities:
+  - Added a startup message when loading the TraMineR library.
+
+Changes in existing functions:
+  - seqtab() and seqfplot(): tlim argument now allows to return any selected frequent sequences,
+      in the same way as the tlim argument used in plot.stslist() and seqiplot() (Requested
+      by G. Ritschard).
+      For example, tlim=3:6 returns the third, fourth, fifth and sixth most frequent sequences
+      in the set. Default for tlim is now 1:10 instead of 10.
+  - seqsubsn(): added detection of missing state in the sequences and computation of subsequences
+      number by adding missing state to the alphabet.
+  - seqST(): added detection of missing state in the sequences and computation of turbulence
+      by adding missing state to the alphabet (Requested by G. Ritschard).
+  - seqrplot now accepts "half" matrices ("dist" objects) as produced by seqdist
+      with the "full.matrix=FALSE" option (Requested by L. Lesnard).
+  - seqiplot() and plot.stslist(): new "ytlab" option allowing to display sequence labels
+      on the Y-axis in sequence index plots (if set to "id", the sequence ids are displayed).
+      An additional "ylas" option sets the orientation of the labels (Requested by Andrew ?
+      and P. Jeuniaux).
+  - seqsubm():
+    - When method="TRATE", the substitution costs are now based on the value of "cval":
+      SC(i,j) = cval -P(i,j) -P(j,i) where P(i,j) is the transition rate from state i to j.
+    - added a new "transition" argument to use only transition from "previous" or "next" state
+      instead of the default "both" when "time.varying" is TRUE.
+    - Now, by default "cval" equals 2, unless "transition" is set to "both" and
+            "time.varying" is TRUE in which case "cval" equals 4.
+  - plot.stslist.meant(), seqmtplot(), plot.stslist.freq(), seqfplot(), plot.stslist.modst(),
+    seqmsplot(): added display of weighted n instead of n in axis label if weighted=TRUE
+  - seqdplot(): disabled plot of a legend for missing state if 'with.missing=FALSE' (Requested by
+    M. Studer and G. Ritschard).
+  - seqplot(), plot.stslist(), plot.stslist.statd(), plot.stslist.modst(), plot.stslist.freq(),
+    plot.stslist.meant(): when 'weighted=TRUE', weighted n displayed in the axis label rounded to
+    2 digits (Requested by M. Studer).
+
+Bug fixes:
+  - plot.stslist.modst(), seqmsplot(): fixed bad display of missing states if 'with.missing=TRUE'
+  - seqmeant(): added color for missing state to color palette when using 'with.missing=TRUE'.
+  - dissrep(), seqrep(), seqrplot(): fixed bad coverage statistics when tsim set to other
+      than default value of 0.10 (Reported by G. Ritschard).
+  - seqdist(): Bad handling of missing values in DHD distance (wrong default substitution costs
+      with missing values, set to one instead of four).
+  - seqdist(): Fixed an error in seqdist when using refseq with missing values (Reported by an
+      anonymous user).
+
+## ==========
+Version 1.6
+
+New functionalities:
+  - seqIplot() and seqplot(..., type="I"): sequence index plot displaying all sequences
+    with no space (space=0) and no border (border=NA) by default.
+  - stlab(): retrieving or setting the long state labels of a sequence object.
+  - seqici(): computes the complexity index, a composite measure of sequence complexity.
+  - seqtransn(): computes the number of transitions in a sequence.
+
+Bug fixes:
+  - seqrplot() and plot.stslist.rep(): missing states are now correctly
+    plotted (reported by G. Ritschard).
+  - dissrep() (called by seqrplot() and plot.stslist.rep()): when using coverage
+    threshold, does no longer select one too many representative.
+  - seqdplot() / plot.stslist.statd(): fixed bad coloring of missing states (reported by M. Studer).
+  - seqstatd() and print.stslist.statd(): fixed error when printing seqstatd
+    output and length of the longest short state label was >2. (reported by G. Ritschard).
+  - seqdss(): (with default with.missing=FALSE value) DSS with identical
+    successive states resulted when there were missing values between two identical states.
+    For example, before: DSS of "A-A-*-A-*-A" was "A-A-A" and now "A".
+
+Changes in existing functions:
+  - summary.stslist(): added information in the output of the summary method
+    for state sequence objects.
+  - seqdist(), seqdistmc(), seqdss(), seqdur(),  seqient(), seqistatd(), seqmpos(),
+    seqnum(), seqsubm():
+    "with.miss" argument replaced by "with.missing" (obsolete "with.miss" argument
+    still works for backward compatibility)
+  - seqmeant(): added "with.missing" argument to account for missing states.
+  - seqdef():
+    - new warning when one or several sequences contain only missing values.
+    - when no weights are provided:
+      - "weights" attribute of the returned sequence object is now set to NULL
+         instead to a vector of 1's;
+      - the "[>] sum of weights" message is suppressed;
+    - new "Version" attribute with the number of the TraMineR version
+      used for creating the sequence object;
+    - message "[>] missing values in input file" changed to
+      "[>] found missing values ('...') in sequence data"
+      and displayed only if missing values are found in the input data.
+  - seqIplot(), seqiplot(), seqplot(..., type="I"), seqplot(..., type="i") and plot.stslist():
+    - new "weighted" argument. If set to TRUE sequence bar widths are set
+      proportional to weights.
+  - seqiplot() and plot.stslist(): when sequence object contains less than
+    10 sequences and tlim=NULL, only the actual sequences are plotted
+    without additional "void sequences".
+  - seqmodst(): added "weighted" and "with.missing" arguments.
+  - seqtab() and seqstatd(): attribute nbseq of the returned object is now
+    the sum of weights (if weighted=TRUE and the sequence object has weights)
+    instead of the number of sequences.
+  - seqfplot() / plot.stslist.freq() and seqdplot() / plot.stslist.statd():
+    when weights are used, i.e. when the "weighted=TRUE" argument is passed
+    and the sequence object has weights,
+    - the "n=" in the y axis legend now gives the sum of weights instead of
+      the number of sequences;
+    - "weighted" is specified in the y axis legend;
+  - seqfplot() and plot.stslist.freq(): more precise positioning of the 0 of the y axis;
+  - seqrplot() and plot.stslist.rep():
+    - new "stats" option. If set to FALSE, statistics are not plotted;
+    - label of the yaxis changed.
+  - dissrep(): name of the main argument changed from "dist.matrix" to "diss"
+    as in other "diss..." functions.
+
+## ==========
+Version 1.4-1
+
+Bug fixes:
+  - seqecreate(): Problems with handling simultaneous events when
+    creating event sequences with data not previously sorted on
+    id, timestamp and event.
+  - seqrep() with density criterion: neigborhood diameter is now
+    correctly set to "trep*dmax" instead of "trep".
+
+New functionalities:
+  - dissrep(): extracts a set of representative objects using a
+    dissimilarity matrix. This function is used by seqrep.
+
+Changes in existing functions:
+  -  seqrep():
+     - much faster extraction of the representative set;
+     - default criterion is now "density" instead of "frequency";
+     - "trep" now sets a coverage threshold for the representative set
+       rather than a size threshold for the candidate list;
+     - in the output object, name of the attribute containing
+       statistics for the representative set changed from "Quality"
+       to "Statistics" and that of the attribute containing the
+       overall quality measure changed from "rindex" to "Quality".
+  -  seqplot(): now checks that the length of the vector given as
+     "group" argument matches the number of sequences.
+  -  plot.stslist(): now checks that the length of the vector given as
+     "sortv" argument matches the number of sequences.
+  -  seqformat(): dramatic speed improvement in conversion from SPELL data.
+
+## ========
+Version 1.4
+
+New functionalities:
+  - TraMineR.checkupdates(): check for TraMineR updates.
+  - seqdistmc(): computes multichannel distances.
+  - seqmeant(): computes mean duration in each state.
+  - seqmodst(): returns the sequence of modal states.
+  - seqmsplot(): for plotting the sequence of modal states. This
+    function is a shortcut for seqplot with type="ms", see below.
+  - seqrep(): extracts a set of representative sequences.
+  - seqrplot(): for producing representative sequence plots. This function is
+    a shortcut for seqplot with type="r", see below.
+  - seqHtplot(): for producing Entropy Index plots. This function is
+    a shortcut for seqplot with type="Ht", see below.
+  - seqlogp(): Computing logarithm of sequence probabilities.
+  - seqdef(): new 'weights=' option for providing a vector of weights.
+  - seqstatd(), seqtrate(), seqlogp() and seqtab(): new option 'weighted=TRUE'
+    for using the weights when computing the statistics.
+  - seqtrate() and seqsubm(): new 'time.varying' argument for computing
+    position dependant transition rates or costs.
+  - seqdist(): two additional methods are now available for computing
+    distances, namely "HAM" (Hamming distance) and "DHD" (Dynamic
+    Hamming Distance).
+  - output produced by the seqstatd(), seqtab(), seqmeant(), seqmodst() and
+    seqrep() can now be plotted with their plot() dedicated methods (see
+    new classes and methods below).
+
+Important changes:
+  - seqplot(): is now the generic function for plotting state sequence objects with
+    'type' argument. Available types are "d" for state distribution plots,
+    "f" for sequence frequency plots, "Ht" for entropy index plots,
+    "i" for sequence index plots, "ms" for modal state sequence plots,
+    "mt" for meant time plots, "r" for representative plots.
+    This function replaces the previous generic plot.stslist() function.
+  - plot.stslist(): now produces only a sequence index plot (see new classes and
+    methods below).
+
+Changes in existing functions:
+  - seqfplot():
+    - new 'yaxis' option: with yaxis="cum" (default) cumulated percentages
+      are displayed, while with yaxis="pct" individual sequence percentages
+      are shown.
+    - pbarw=TRUE is now the default for the pbarw argument.
+  - seqtab(): the 'format' argument that specifies the format of the sequences
+    displayed as rownames is now set by default to the short SPS format,
+    e.g. TR/9-EM/63.
+  - seqiplot(): sequence indexes are now displayed by default on the y axis.
+    This can be disabled with "yaxis=FALSE".
+
+Fixed minor bugs in seqformat(): changes concern mainly the from="SPELL" and
+    from="SPS" options.
+
+New classes and methods:
+  - new class 'stslist.statd' for objects produced by the seqstatd() function
+    and methods for printing and plotting such objects.
+  - new class 'stslist.freq' for objects produced by seqtab() function and
+    methods for printing and plotting such objects.
+  - new class 'stslist.meant' for objects produced by seqmeant() function
+    and methods for printing and plotting such objects.
+  - new class 'stslist.modst' for objects produced by seqmodst() function
+    and methods for printing and plotting such objects.
+
+
+## ==========
+Version 1.2-1
+
+Changes in function arguments:
+  - seqdef(): new 'id' argument for setting the rownames of the sequence object.
+  - disscenter(): new 'medoid.index' argument to get the indexes of all
+    medoids (rather than only the first one).
+
+Minor bugs fixed:
+  - Plotting missing states with seqiplot() and seqfplot() functions.
+  - Sum of transition rates with sequences of different lengths not equal to 1.
+
+## ========
+Version 1.2
+
+Changes regarding plotting functions:
+  - New generic function 'plot.stlist()' with option 'type=' for
+    plotting state sequence objects of class 'ststlist' created by
+    the 'seqdef()' function. Old functions 'seqdplot()', 'seqfplot()',
+    'seqiplot()', 'seqmtplot()' work as in the previous version but by
+    calling 'plot.stslist' with the appropriate 'type=' option
+    (types are 'd','f','i' and 'mt'). However, the order of the
+    functions' arguments may have changed and this may cause problems
+    if the names of the arguments were not explicitly specified in your
+    scripts (which is inadvisable anyway).
+
+Changes in the dissimilarity and discrepancy analysis diss module:
+  - dissreg() is renamed to dissmfac() for multi-factor dissimilarity analysis.
+  - disstree(): great speed and memory improvements.
+
+Speed and memory improvements:
+  - seqformat(): conversion to TSE format is now much faster.
+  - seqdur()
+  - seqST()
+
+Changes in the computation of distances between sequences:
+  - seqdist() now checks if substitution costs respects the triangle inequality.
+    When this is the case it ensures that the resulting dissimilarity matrix
+    also respects the triangle inequality.
+  - New options for selecting the distance normalization method.
+  - New reversed LCP, i.e. longest common suffix method. (method="RLCP")
+
+Various changes:
+  - CITATION file added.
+  - seqST() caused an error when run with more than 12 states: bug fixed.
+  - Fixed other minor bugs.
+
+
+## ========
+Version 1.1
+
+mvad example data set added
+
+Name changes of the following functions
+  - seqLLCP() instead of old seqLCP()
+  - seqLLCS() instead of old seqLCS()
+
+New diss module for analysing a dissimilarity matrix (such as the one returned by seqdist)
+  - dissassoc(): Computes association with a factor
+  - dissreg()  : Regression analysis of a dissimilarity matrix
+  - disstree() : Tree analysis of a dissimilarity matrix
+  - dissvar()  : Computes a pseudo-variance from a dissimilarity matrix.
+
+Changes in the graphics functions (seqiplot, seqfplot, seqdplot, ...):
+  - New 'group' option allowing to draw several plots for the levels
+    of a factor within a single command
+  - TraMineR now uses 'layout' for controlling the position of the
+    plots and the legend in the graphic area. This is not compatible
+    with par(mfrow=...). To use the standard 'par(mfrow=...)' method,
+    one must set the 'use.layout=FALSE' option in the plot functions.
+  - seqmtplot() : new function that plots the mean time spent in each state.
+  - Option 'withborder=FALSE' is now obsolete and replaced by the standard 'border=NA' option.
+
+Changes in Event Sequence Analysis (seqe module):
+  - New plot for exhibiting discriminant subsequences (seqecmpgroup).
+  - Overall syntax have been reviewed and is now much simpler.
+  - seqefsub now allows to search for user specified subsequences (seqefsub).
+  - Event subsequence lists now have specific plot and print method (seqefsub, seqecmpgroup)
+  - seqecreate now accepts state sequence and performs automatic conversion (seqecreate)
+  - Time constraints are now implemented separately and are stored with the results (seqeconstraint)
+
+Changes in the seqformat() function:
+  - New options for importing SPELL formatted data.
+  - The STS internal and the output in STS, SPS or DSS formats are now by
+    default in extended format (a matrix with one state per column) instead of
+    compressed format (a character string).
+    Use the compressed=TRUE option to get an output in the compressed format
+    (sequences as character strings).
+  - SPS1 and SPS2 formats are now replaced by the generic SPS format with
+    options SPS.in and SPS.out for defining the separator and surrounding
+    characters used for specifying the state/duration couples.
+
+Other new functions:
+  - seqgen()   : generates a random sequence.

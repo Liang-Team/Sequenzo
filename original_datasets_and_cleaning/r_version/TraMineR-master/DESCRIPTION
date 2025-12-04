@@ -1,0 +1,43 @@
+Package: TraMineR
+Version: 2.2-12
+Date: 2025-06-29
+Title: Trajectory Miner: a Sequence Analysis Toolkit
+Authors@R: c(
+  person("Alexis", "Gabadinho",
+    role = c("aut", "cph")),
+  person("Matthias", "Studer",
+    role = c("aut", "cph"),
+    comment = c(ORCID = "0000-0002-6269-1412")),
+  person("Nicolas", "Müller",
+    role = "aut"),
+  person("Reto", "Bürgin",
+    role = "aut",
+    comment = c(ORCID = "0000-0002-6212-1567")),
+  person("Pierre-Alexandre", "Fonta",
+    role = "ctb"),
+  person("Gilbert", "Ritschard",
+    role = c("aut", "cre", "cph"),
+    email = "gilbert.ritschard@unige.ch",
+    comment = c(ORCID = "0000-0001-7776-0903")))
+Depends: R (>= 3.0.0)
+Imports: utils, graphics, grDevices, stats, cluster, colorspace,
+        RColorBrewer, boot, vegan
+Suggests: xtable, TraMineRextras, WeightedCluster
+Description: Set of sequence analysis tools for manipulating, describing and rendering categorical sequences, and more generally mining sequence data in the field of social sciences. Although this sequence analysis package is primarily intended for state or event sequences that describe time use or life courses such as family formation histories or professional careers, its features also apply to many other kinds of categorical sequence data. It accepts many different sequence representations as input and provides tools for converting sequences from one format to another. It offers several functions for describing and rendering sequences, for computing distances between sequences with different metrics (among which optimal matching), original dissimilarity-based analysis tools, and functions for extracting the most frequent event subsequences and identifying the most discriminating ones among them. A user's guide can be found on the TraMineR web page.
+License: GPL (>= 2)
+URL: http://traminer.unige.ch
+Encoding: UTF-8
+Maintainer: Gilbert Ritschard <gilbert.ritschard@unige.ch>
+RoxygenNote: 7.2.3
+NeedsCompilation: yes
+Packaged: 2025-06-29 10:04:56 UTC; grits
+Author: Alexis Gabadinho [aut, cph],
+  Matthias Studer [aut, cph] (ORCID:
+    <https://orcid.org/0000-0002-6269-1412>),
+  Nicolas Müller [aut],
+  Reto Bürgin [aut] (ORCID: <https://orcid.org/0000-0002-6212-1567>),
+  Pierre-Alexandre Fonta [ctb],
+  Gilbert Ritschard [aut, cre, cph] (ORCID:
+    <https://orcid.org/0000-0001-7776-0903>)
+Repository: CRAN
+Date/Publication: 2025-06-29 11:50:02 UTC

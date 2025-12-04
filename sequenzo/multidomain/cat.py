@@ -244,19 +244,27 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                 raise ValueError("[!] Channel ", i,
                                  " is not a state sequence object, use 'seqdef' function to create one.")
 
-            # Since states is prepared for the upcoming MD states
-            # And MD uses numeric representations, we use numbers here instead of the original string states.
-            states = np.arange(1, len(channel.states) + 1).astype(str).tolist()
+            # Use the actual states from the channel (like TraMineR uses attr(channels[[i]],"alphabet"))
+            # TraMineR: alphabet_list[[i]] <- attr(channels[[i]],"alphabet")
+            states = list(channel.states)  # Convert to list to ensure it's mutable
 
             # Checking missing values
             if with_missing[i]:
                 print("[>] Including missing value as an additional state.")
+                # TraMineR adds missing value to alphabet: alphabet_list[[i]] <- c(alphabet_list[[i]],attr(channels[[i]],"nr"))
+                # In SequenceData, missing values are represented internally as len(states) + 1
+                # We need to add the string representation for matching in MD sequences
+                # The missing value code in SequenceData is len(states) + 1, convert to string
+                missing_code = len(channel.states) + 1
+                missing_str = str(missing_code)
+                if missing_str not in states:
+                    states.append(missing_str)
             else:
                 if channel.ismissing:
                     raise ValueError("[!] Found missing values in channel ", i,
                                      ", set with.missing as TRUE for that channel.")
 
-            # Check states
+            # Check states - store as list for indexing
             alphabet_list.append(states)
             alphsize_list.append(len(states))
 
@@ -273,11 +281,55 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                                                          with_missing=has_miss[i],
                                                          time_varying=timeVarying, cval=cval,
                                                          miss_cost=miss_cost)
-                substmat_list.append(costs['sm'])
+                sm_matrix = costs['sm']
+                
+                # TraMineR's seqcost returns a matrix WITHOUT "null" row/column
+                # Python's get_substitution_cost_matrix returns DataFrame WITH "null" at index 0
+                # For consistency with TraMineR, we need to remove the "null" row/column
+                # when it's a DataFrame (for numpy arrays, there's no "null")
+                if isinstance(sm_matrix, pd.DataFrame):
+                    # Remove "null" row and column to match TraMineR structure
+                    # The DataFrame has index=["null", state1, state2, ...]
+                    # We want to keep only [state1, state2, ...]
+                    if "null" in sm_matrix.index:
+                        sm_matrix = sm_matrix.drop(index="null").drop(columns="null")
+                    # Ensure DataFrame index matches alphabet_list (states) exactly
+                    # This is critical for proper indexing when building CAT matrix
+                    # The index should be the same as alphabet_list[i] (which is channel.states)
+                    # Convert states to list of strings to ensure exact match
+                    expected_index = pd.Index([str(s) for s in states])
+                    current_index = pd.Index([str(s) for s in sm_matrix.index])
+                    if not current_index.equals(expected_index):
+                        # Reindex to match alphabet_list exactly, preserving values
+                        # Use fill_value=0 for any missing entries (shouldn't happen, but safe)
+                        sm_matrix = sm_matrix.reindex(index=expected_index, columns=expected_index, fill_value=0.0)
+                    # Convert to numpy array for consistent indexing and to match TraMineR behavior
+                    # TraMineR uses numeric indexing, so we convert DataFrame to array
+                    # But keep the index mapping for .loc access
+                    # Actually, keep as DataFrame for .loc access, but ensure values are correct
+                
+                substmat_list.append(sm_matrix)
 
                 if "auto" == indel:
-                    costs['indel'] = np.repeat(costs['indel'], alphsize_list[i])
-                    indel_list.append(costs['indel'])
+                    # costs['indel'] may include "null" at index 0 for some methods, but we only need state indels
+                    # Extract state indels (skip index 0 which is "null" if present)
+                    indel_val = costs['indel']
+                    if isinstance(indel_val, np.ndarray) and len(indel_val) > alphsize_list[i]:
+                        # Array has "null" at index 0, extract only state indels
+                        state_indel = indel_val[1:]
+                    elif np.isscalar(indel_val):
+                        # Scalar indel, use as-is
+                        state_indel = indel_val
+                    else:
+                        # Array with correct length (no "null" entry)
+                        state_indel = indel_val
+                    
+                    # If it's a scalar or single-element array, repeat it for all states
+                    if np.isscalar(state_indel) or (isinstance(state_indel, np.ndarray) and state_indel.size == 1):
+                        indel_list.append(np.repeat(state_indel if np.isscalar(state_indel) else state_indel[0], alphsize_list[i]))
+                    else:
+                        # Already an array with correct length
+                        indel_list.append(state_indel)
                 else:
                     indel_list.append(indel[i])
 
@@ -332,9 +384,31 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                     statelistj = alphabet[j].split(ch_sep)
 
                     for chan in range(nchannels):
-                        ipos = alphabet_list[chan].index(statelisti[chan]) + 1
-                        jpos = alphabet_list[chan].index(statelistj[chan]) + 1
-                        cost += substmat_list[chan].iloc[ipos, jpos]
+                        # TraMineR: ipos <- match(statelisti[chan], alphabet_list[[chan]])
+                        #          cost <- cost + substmat_list[[chan]][ipos, jpos]
+                        # match() returns 1-based index in R, but we use 0-based index in Python
+                        state_i = statelisti[chan]  # State string from MD sequence (e.g., "1", "2")
+                        state_j = statelistj[chan]  # State string from MD sequence
+                        
+                        # After removing "null" row/column, DataFrame structure matches TraMineR:
+                        # index=[state1, state2, ...] (no "null")
+                        # User-provided numpy arrays also don't have "null" row/column
+                        if isinstance(substmat_list[chan], pd.DataFrame):
+                            # DataFrame has structure: index=[state1, state2, ...] (no "null")
+                            # Use .loc with actual state labels for safer indexing
+                            # Ensure state_i and state_j are strings to match DataFrame index
+                            state_i_str = str(state_i)
+                            state_j_str = str(state_j)
+                            if state_i_str not in substmat_list[chan].index or state_j_str not in substmat_list[chan].columns:
+                                raise ValueError(f"State {state_i_str} or {state_j_str} not found in substitution matrix for channel {chan}. "
+                                               f"Available indices: {list(substmat_list[chan].index)}")
+                            cost += substmat_list[chan].loc[state_i_str, state_j_str]
+                        else:
+                            # numpy array doesn't have "null" row/column, use index directly
+                            # Get 0-based index in alphabet_list
+                            ipos_base = alphabet_list[chan].index(state_i)
+                            jpos_base = alphabet_list[chan].index(state_j)
+                            cost += substmat_list[chan][ipos_base, jpos_base]
 
                     newsm[i, j] = cost
                     newsm[j, i] = cost
@@ -352,10 +426,26 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                         statelistj = alphabet[j].split(ch_sep)
 
                         for chan in range(nchannels):
-                            ipos = alphabet_list[chan].index(statelisti[chan])
-                            jpos = alphabet_list[chan].index(statelistj[chan])
-
-                            cost += substmat_list[chan][t, ipos, jpos]
+                            # For time-varying matrices, there is no "null" row/column
+                            # TraMineR: ipos <- match(statelisti[chan], alphabet_list[[chan]])
+                            #          cost <- cost + substmat_list[[chan]][ipos, jpos, t]
+                            # match() returns 1-based index in R, but we use 0-based index in Python
+                            state_i = statelisti[chan]
+                            state_j = statelistj[chan]
+                            ipos = alphabet_list[chan].index(state_i)
+                            jpos = alphabet_list[chan].index(state_j)
+                            
+                            # For time-varying, substmat_list[chan] is a 3D numpy array: (time, states, states)
+                            # No "null" row/column, so use index directly
+                            if isinstance(substmat_list[chan], np.ndarray) and substmat_list[chan].ndim == 3:
+                                cost += substmat_list[chan][t, ipos, jpos]
+                            else:
+                                # Fallback for DataFrame (shouldn't happen for time-varying, but just in case)
+                                # DataFrame has no "null" row/column after removal, use .loc with state labels
+                                if isinstance(substmat_list[chan], pd.DataFrame):
+                                    cost += substmat_list[chan].loc[state_i, state_j]
+                                else:
+                                    cost += substmat_list[chan][t, ipos, jpos]
 
                         newsm[t, i, j] = cost
                         newsm[t, j, i] = cost
@@ -363,8 +453,40 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
         print("  - OK.")
 
         # Indel as sum
+        # When newindel is None and indel is not state-dependent (simple vector), compute sum
+        # TraMineR: if (is.null(newindel) & !is.list(indel_list)) newindel <- sum(indel*cweight)
         if newindel is None:
-            newindel = np.sum(cweight * cweight[:, np.newaxis], axis=0)
+            # Check if indel is state-dependent (any element has length > 1)
+            is_state_dependent = False
+            if isinstance(indel, list) and len(indel) > 0:
+                # Check if any indel[i] has more than one element (state-dependent)
+                for ind in indel:
+                    if isinstance(ind, (list, np.ndarray)) and len(ind) > 1:
+                        is_state_dependent = True
+                        break
+            
+            if is_state_dependent:
+                # State-dependent indel: should have been computed above
+                # If we reach here, it means we have state-dependent indels but didn't compute newindel
+                # This shouldn't happen, but fallback to computing it
+                newindel = np.zeros(alphabet_size)
+                for i in range(alphabet_size):
+                    statelisti = alphabet[i].split(ch_sep)
+                    for chan in range(nchannels):
+                        state = statelisti[chan]
+                        ipos = alphabet_list[chan].index(state)
+                        indel_val = indel[chan][ipos] if isinstance(indel[chan], (list, np.ndarray)) else indel[chan]
+                        newindel[i] += indel_val * cweight[chan]
+            else:
+                # Simple vector: sum(indel * cweight) like TraMineR
+                # Extract single values from each channel's indel
+                indel_values = []
+                for ind in indel:
+                    if isinstance(ind, (list, np.ndarray)):
+                        indel_values.append(ind[0] if len(ind) > 0 else 1.0)
+                    else:
+                        indel_values.append(ind)
+                newindel = np.sum(np.array(indel_values) * np.array(cweight))
 
         # If we want the mean of cost
         if link == "mean":
@@ -416,7 +538,8 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                                               labels=md_labels,
                                               id_col=channels[0].id_col)
 
-            newindel = np.max(newindel)
+            # Pass newindel as-is (can be scalar or vector depending on state-dependency)
+            # TraMineR passes the full newindel vector/scalar to seqdist
             with contextlib.redirect_stdout(io.StringIO()):
                 diss_matrix = get_distance_matrix(newseqdata_seq,
                                                   method=method,
