@@ -13,8 +13,11 @@ import matplotlib.pyplot as plt
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
+    create_standalone_legend,
+    combine_plot_with_legend,
     save_and_show_results,
-    show_plot_title
+    show_plot_title,
+    save_figure_to_buffer
 )
 
 
@@ -187,8 +190,42 @@ def plot_mean_time(seqdata: SequenceData,
         norm_note = f"Note: Some bars may appear as zero, but actually have small non-zero values."
         plt.figtext(0.5, -0.02, norm_note, ha='center', fontsize=fontsize-2, style='italic')
 
-    # Adjust layout(2/2)
+    # Adjust layout before saving
     plt.tight_layout()
 
-    save_and_show_results(save_as, dpi=200)
+    # Get colors for legend - use color_map_by_label like in plot_modal_state
+    colors_for_legend = seqdata.color_map_by_label
+
+    # Save main figure to memory
+    main_buffer = save_figure_to_buffer(fig, dpi=dpi)
+
+    # Create standalone legend
+    legend_buffer = create_standalone_legend(
+        colors=colors_for_legend,
+        labels=seqdata.labels,
+        ncol=min(5, len(seqdata.states)),
+        figsize=(12, 1),
+        fontsize=fontsize - 2,
+        dpi=dpi
+    )
+
+    # Handle save_as extension
+    if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+        save_as = save_as + '.png'
+
+    # Combine main plot with legend
+    combined_img = combine_plot_with_legend(
+        main_buffer,
+        legend_buffer,
+        output_path=save_as,
+        dpi=dpi,
+        padding=20  # Increased padding between plot and legend
+    )
+
+    # Display combined image
+    plt.figure(figsize=(12, 8))
+    plt.imshow(combined_img)
+    plt.axis('off')
+    plt.show()
+    plt.close()
 
