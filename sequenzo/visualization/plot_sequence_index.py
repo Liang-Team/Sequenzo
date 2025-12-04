@@ -489,6 +489,25 @@ def plot_sequence_index(seqdata: SequenceData,
         missing_groups = [g for g in group_dataframe[group_column_name].unique() if g not in group_order]
         if missing_groups:
             print(f"[Warning] Groups not in group_order will be excluded: {missing_groups}")
+    elif group_labels is not None:
+        # If group_labels is provided, use its key order to determine groups order
+        # This ensures subplot order matches the order in group_labels dictionary
+        # Note: group_labels keys are original values, values are labels (which become groups)
+        mapped_labels = []
+        available_labels = set(group_dataframe[group_column_name].unique())
+        
+        # Iterate through group_labels in order (Python 3.7+ dicts maintain insertion order)
+        for original_key, label_value in group_labels.items():
+            # Check if this label exists in the mapped dataframe
+            if label_value in available_labels:
+                mapped_labels.append(label_value)
+        
+        # Also check for any labels in dataframe that weren't in group_labels
+        missing_in_labels = available_labels - set(mapped_labels)
+        if missing_in_labels:
+            print(f"[Warning] Some groups in data are not in group_labels and will be excluded: {missing_in_labels}")
+        
+        groups = mapped_labels
     elif sort_groups == 'numeric' or sort_groups == 'auto':
         groups = smart_sort_groups(group_dataframe[group_column_name].unique())
     elif sort_groups == 'alpha':
