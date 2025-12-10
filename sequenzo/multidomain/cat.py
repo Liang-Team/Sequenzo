@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : Xinyi Li 李欣怡, Yuqi Liang 梁彧祺
 @File    : cat.py
 @Time    : 2025/4/8 09:06
 @Desc    : Build multidomain (MD) sequences of combined individual domain states (expanded alphabet),
@@ -206,10 +206,51 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
     for i in range(nchannels):
         seqchan = channels[i].values.copy()
+        # Convert numeric codes back to state names using inverse mapping
+        inverse_mapping = channels[i].inverse_state_mapping
+        
+        # Handle missing values: if "Missing" is in states, it has a normal mapping
+        # If not, missing values (NaN) map to len(states) as the default
+        # We need to ensure this code maps to the actual missing state name
+        missing_code = len(channels[i].states)
+        if channels[i].ismissing and missing_code not in inverse_mapping:
+            # Find the missing state name (could be "Missing" or np.nan)
+            missing_state = None
+            for s in channels[i].states:
+                if pd.isna(s) or (isinstance(s, str) and s.lower() == "missing"):
+                    missing_state = s
+                    break
+            if missing_state is not None:
+                # "Missing" is in states, so it should already be in inverse_mapping
+                # But if it's not, add it
+                if missing_state not in inverse_mapping.values():
+                    # Find what code "Missing" maps to
+                    for code, state in inverse_mapping.items():
+                        if state == missing_state:
+                            break
+                    else:
+                        # "Missing" not found in mapping, add missing_code -> missing_state
+                        inverse_mapping[missing_code] = missing_state
 
         for j in range(maxlength):
             if j < maxlength_list[i]:
-                newcol = seqchan[:, j].astype(str)
+                # Convert numeric codes to state names
+                # Codes are already integers from .values, but convert to int to be safe
+                def code_to_state(code):
+                    code_int = int(code)
+                    # Use inverse mapping to get state name
+                    state_name = inverse_mapping.get(code_int)
+                    if state_name is None:
+                        # Code not found in mapping - this shouldn't happen with valid data
+                        # But handle it gracefully by returning the code as string
+                        # This will help identify data issues
+                        return str(code_int)
+                    # Convert state name to string (handles np.nan case)
+                    if pd.isna(state_name):
+                        return "Missing"
+                    return str(state_name)
+                
+                newcol = np.array([code_to_state(code) for code in seqchan[:, j]], dtype='U256')
 
                 # TraMineR default missing value is legal, and we already do this.
                 # newseqdataNA[,j] <- newseqdataNA[,j] & newCol == void
@@ -246,19 +287,28 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
             # Use the actual states from the channel (like TraMineR uses attr(channels[[i]],"alphabet"))
             # TraMineR: alphabet_list[[i]] <- attr(channels[[i]],"alphabet")
-            states = list(channel.states)  # Convert to list to ensure it's mutable
+            # Convert states to strings to match what's in MD sequences
+            states = [str(s) if not pd.isna(s) else "Missing" for s in channel.states]
 
             # Checking missing values
             if with_missing[i]:
                 print("[>] Including missing value as an additional state.")
                 # TraMineR adds missing value to alphabet: alphabet_list[[i]] <- c(alphabet_list[[i]],attr(channels[[i]],"nr"))
-                # In SequenceData, missing values are represented internally as len(states) + 1
-                # We need to add the string representation for matching in MD sequences
-                # The missing value code in SequenceData is len(states) + 1, convert to string
-                missing_code = len(channel.states) + 1
-                missing_str = str(missing_code)
-                if missing_str not in states:
-                    states.append(missing_str)
+                # In SequenceData, missing values are represented internally as len(states)
+                # (not len(states) + 1) because state_mapping uses 1-based indexing: states map to 1..len(states)
+                # and missing values map to len(states) as the default
+                # We need to add the actual missing state name (as a string) to match what's in the MD sequences
+                # Find the missing state name from the states list
+                missing_state = None
+                for s in channel.states:
+                    if pd.isna(s) or (isinstance(s, str) and s.lower() == "missing"):
+                        missing_state = str(s) if not pd.isna(s) else "Missing"
+                        break
+                if missing_state is None:
+                    missing_state = "Missing"
+                # Add the missing state name to the alphabet list (as string)
+                if missing_state not in states:
+                    states.append(missing_state)
             else:
                 if channel.ismissing:
                     raise ValueError("[!] Found missing values in channel ", i,
