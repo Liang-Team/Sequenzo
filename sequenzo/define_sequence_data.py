@@ -1,5 +1,5 @@
 """
-@Author  : 梁彧祺 Yuqi Liang
+@Author  : 梁彧祺 Yuqi Liang, 李欣怡 Xinyi Li
 @File    : define_sequence_data.py
 @Time    : 05/02/2025 12:47
 @Desc    :
@@ -58,6 +58,7 @@ import pandas as pd
 from docutils.parsers.rst import states
 from matplotlib.colors import ListedColormap
 import re
+from typing import Union
 
 
 class SequenceData:
@@ -80,7 +81,8 @@ class SequenceData:
         id_col: str = None,
         weights: np.ndarray = None,
         start: int = 1,
-        custom_colors: list = None
+        custom_colors: list = None,
+        missing_values: Union[None, int, float, str, list] = None
     ):
         """
         Initialize the SequenceData object.
@@ -97,6 +99,12 @@ class SequenceData:
         :param void: Symbol for void elements (default: "%").
         :param nr: Symbol for missing values (default: "*").
         :param custom_colors: Custom color palette for visualization.
+        :param missing_values: Custom missing value indicators. Can be:
+            - None (default): Auto-detect missing values (NaN, string "Missing")
+            - Single value: e.g., 99, 9, 1000, "Missing"
+            - List: e.g., [99, 9, 1000] or ["Missing", "N/A"]
+            The system will also check for pandas NaN and string "Missing" (case-insensitive)
+            and warn if other missing values are detected.
         """
         # Import pandas here instead of the top of the file
         import pandas as pd
@@ -118,6 +126,19 @@ class SequenceData:
         self._weights_provided = weights is not None  # Track if weights were originally provided
         self.start = start
         self.custom_colors = custom_colors
+        
+        # Process missing_values parameter: convert to list format
+        if missing_values is None:
+            self.missing_values = []
+        elif isinstance(missing_values, (list, tuple)):
+            self.missing_values = list(missing_values)
+        else:
+            self.missing_values = [missing_values]
+        
+        # Track original number of states before processing missing values
+        # This helps us determine if custom_colors needs adjustment
+        self._original_num_states = len(self.states)
+        self._missing_auto_added = False  # Track if Missing was automatically added
 
         # Validate parameters
         self._validate_parameters()
@@ -155,7 +176,7 @@ class SequenceData:
 
         # Validate that states are present in the actual data values
         data_values = set(self.data[self.time].stack().unique())
-        states_clean = [s for s in self.states if not pd.isna(s)]    # stack() 会去掉 nan 值，因此如果传进来的 states 有 np.nan，则会报错
+        states_clean = [s for s in self.states if not pd.isna(s)]    # stack() removes nan values, so if states contains np.nan, it will cause an error
         unmatched_states = [s for s in states_clean if s not in data_values]
 
         if unmatched_states:
@@ -215,7 +236,7 @@ class SequenceData:
         return self.data[self.time].copy()
 
     def _process_missing_values(self):
-        """Handles missing values based on the specified rules."""
+        """Handles missing values based on the specified rules and user-defined missing_values."""
         # left, right, gaps = self.missing_handling.values()
         #
         # # Fill left-side missing values
@@ -230,21 +251,171 @@ class SequenceData:
         # if not pd.isna(gaps) and gaps != "DEL":
         #     self.seqdata.replace(self.nr, gaps, inplace=True)
 
-        self.ismissing = self.seqdata.isna().any().any()
-
-        if self.ismissing:
-            # 判断 states 中是否已经含有 "Missing" 或 np.nan
-            # 以及兼容用户传进来的各种形式的 "missing"
-            has_missing_state = any(pd.isna(s) for s in self.states) or any(s.lower() == "missing" for s in self.states if isinstance(s, str))
-            has_missing_label = any(label.lower() == "missing" for label in self.labels if isinstance(label, str))
-            
-            if not has_missing_state:
-                # 自动判断 states 是字符串型还是数字型
-                example_missing = "'Missing'" if all(isinstance(s, str) for s in self.states) else "np.nan"
-                quote = "" if example_missing == "np.nan" else "'"
-
+        # Collect all detected missing value indicators
+        detected_missing = []
+        
+        # Check for pandas NaN values
+        has_pandas_nan = self.seqdata.isna().any().any()
+        if has_pandas_nan:
+            detected_missing.append("NaN (pandas)")
+        
+        # Check for user-specified missing_values in the data
+        user_missing_found = []
+        for mv in self.missing_values:
+            if pd.isna(mv):
+                # Handle NaN in missing_values list
+                if has_pandas_nan and "NaN (pandas)" not in user_missing_found:
+                    user_missing_found.append("NaN (pandas)")
+            else:
+                # Check if this missing value exists in the data
+                if (self.seqdata == mv).any().any():
+                    user_missing_found.append(mv)
+        
+        # Check for string "Missing" (case-insensitive) as missing indicator
+        # This handles cases where missing values are represented as the string "Missing" instead of NaN
+        # Only check if not already in user-specified missing_values
+        has_string_missing = False
+        string_missing_variants = []
+        
+        # Check if "Missing" (case-insensitive) is already in user-specified missing_values
+        has_missing_string_in_user_spec = any(
+            isinstance(mv, str) and mv.lower() == 'missing' for mv in self.missing_values
+        )
+        
+        if not has_missing_string_in_user_spec:
+            try:
+                # Check case-insensitive "missing" strings
+                missing_mask = self.seqdata.astype(str).str.lower() == 'missing'
+                if missing_mask.any().any():
+                    has_string_missing = True
+                    # Find actual string values (preserving case)
+                    actual_values = self.seqdata[missing_mask].dropna().unique()
+                    string_missing_variants = [str(v) for v in actual_values if str(v).lower() == 'missing']
+            except (AttributeError, TypeError):
+                # If conversion fails, check column by column
+                try:
+                    for col in self.seqdata.columns:
+                        col_mask = self.seqdata[col].astype(str).str.lower() == 'missing'
+                        if col_mask.any():
+                            has_string_missing = True
+                            actual_values = self.seqdata.loc[col_mask, col].unique()
+                            for v in actual_values:
+                                variant = str(v)
+                                if variant.lower() == 'missing' and variant not in string_missing_variants:
+                                    string_missing_variants.append(variant)
+                except:
+                    pass
+        
+        if has_string_missing:
+            # Add unique string variants to detected missing (only if not already specified by user)
+            for variant in string_missing_variants:
+                if variant not in detected_missing and variant not in user_missing_found:
+                    detected_missing.append(variant)
+        
+        # Combine user-specified and auto-detected missing values
+        all_missing_values = list(set(self.missing_values + detected_missing))
+        # Remove NaN placeholders and add actual NaN check
+        if has_pandas_nan:
+            all_missing_values = [mv for mv in all_missing_values if mv != "NaN (pandas)"] + [np.nan]
+        else:
+            all_missing_values = [mv for mv in all_missing_values if mv != "NaN (pandas)"]
+        
+        # Check if there are any missing values at all
+        has_any_missing = False
+        if has_pandas_nan:
+            has_any_missing = True
+        elif user_missing_found:
+            has_any_missing = True
+        elif has_string_missing:
+            has_any_missing = True
+        else:
+            # Check if any user-specified missing_values exist in data
+            for mv in self.missing_values:
+                if not pd.isna(mv):
+                    if (self.seqdata == mv).any().any():
+                        has_any_missing = True
+                        break
+        
+        self.ismissing = has_any_missing
+        
+        # Warn user if other missing values were detected beyond what they specified
+        if self.missing_values and detected_missing:
+            other_missing = [mv for mv in detected_missing if mv not in [str(m) for m in self.missing_values] and mv != "NaN (pandas)"]
+            if other_missing or (has_pandas_nan and not any(pd.isna(mv) for mv in self.missing_values)):
                 print(
-                    "[!] Detected missing values (empty cells) in the sequence data.\n"
+                    f"[!] Warning: Detected additional missing value indicators in your data beyond those you specified.\n"
+                    f"    You specified: {self.missing_values}\n"
+                    f"    Additional missing values found: {other_missing + (['NaN'] if has_pandas_nan and not any(pd.isna(mv) for mv in self.missing_values) else [])}\n"
+                    f"    Recommendation: Include these in the `missing_values` parameter for complete handling.\n"
+                    f"    Example: missing_values={self.missing_values + other_missing + (['NaN'] if has_pandas_nan and not any(pd.isna(mv) for mv in self.missing_values) else [])}"
+                )
+        
+        # Determine the canonical missing representation for states/labels
+        # This will be used when adding missing to states if needed
+        canonical_missing_value = None
+        if has_pandas_nan:
+            canonical_missing_value = np.nan
+        elif string_missing_variants:
+            # Use the first variant (usually "Missing")
+            canonical_missing_value = string_missing_variants[0]
+        elif user_missing_found:
+            # Use the first user-specified missing value that was found
+            canonical_missing_value = user_missing_found[0]
+        elif self.missing_values:
+            # Use the first user-specified missing value
+            canonical_missing_value = self.missing_values[0]
+        
+        if self.ismissing:
+            # Check if states already contains any form of "Missing" or np.nan
+            # Check if states contains any representation of missing values
+            has_missing_state = False
+            for state in self.states:
+                if pd.isna(state):
+                    has_missing_state = True
+                    break
+                elif isinstance(state, str):
+                    # Check if state matches any missing value (case-insensitive for strings)
+                    state_lower = state.lower()
+                    if state_lower == "missing" or state in self.missing_values or state in user_missing_found:
+                        has_missing_state = True
+                        break
+                elif state in self.missing_values or state in user_missing_found:
+                    has_missing_state = True
+                    break
+            
+            # Also check labels
+            has_missing_label = any(
+                label.lower() == "missing" or label in self.missing_values or label in user_missing_found
+                for label in self.labels if isinstance(label, str)
+            ) or any(pd.isna(label) for label in self.labels)
+            
+            if not has_missing_state and canonical_missing_value is not None:
+                # Automatically determine if states are string type or numeric type
+                if pd.isna(canonical_missing_value):
+                    example_missing = "np.nan"
+                    quote = ""
+                    missing_state_value = np.nan
+                else:
+                    example_missing = f"'{canonical_missing_value}'" if isinstance(canonical_missing_value, str) else str(canonical_missing_value)
+                    quote = "'" if isinstance(canonical_missing_value, str) else ""
+                    missing_state_value = canonical_missing_value
+
+                # Build description of missing types found
+                missing_types = []
+                if has_pandas_nan:
+                    missing_types.append("NaN (pandas)")
+                if string_missing_variants:
+                    missing_types.extend([f"'{v}'" for v in string_missing_variants])
+                if user_missing_found:
+                    missing_types.extend([str(v) for v in user_missing_found if v not in string_missing_variants and not pd.isna(v)])
+                missing_type_desc = ", ".join(missing_types) if missing_types else "missing values"
+                
+                missing_values_desc = ""
+                if self.missing_values:
+                    missing_values_desc = f"\n    You specified missing_values={self.missing_values}."
+                
+                print(
+                    f"[!] Detected missing values ({missing_type_desc}) in the sequence data.{missing_values_desc}\n"
                     f"    -> Automatically added {example_missing} to `states` and `labels` for compatibility.\n"
                     "    However, it's strongly recommended to manually include it when defining `states` and `labels`.\n"
                     "    For example:\n\n"
@@ -253,17 +424,19 @@ class SequenceData:
                     "    This ensures consistent color mapping and avoids unexpected visualization errors."
                 )
 
-                # 添加 missing 到 states 和 labels
-                if example_missing == "'Missing'":
-                    self.states.append("Missing")
-                else:
-                    self.states.append(np.nan)
+                # Add missing to states and labels
+                self.states.append(missing_state_value)
                     
-                # 只有当labels中没有Missing时才添加
+                # Only add if Missing is not already in labels
                 if not has_missing_label:
-                    self.labels = [label for label in self.labels   # 去除所有大小写混杂的 "missing"
+                    self.labels = [label for label in self.labels   # Remove all case-variants of "missing"
                                    if not (isinstance(label, str) and label.lower() == "missing")]
+                    # Use "Missing" as the label regardless of the actual missing value
                     self.labels.append("Missing")
+                
+                # Mark that Missing was automatically added
+                self._missing_auto_added = True
+                
 
     def _convert_states(self):
         """
@@ -279,16 +452,33 @@ class SequenceData:
 
         # Create the state mapping with correct order
         self.state_mapping = {original_state: i + 1 for i, original_state in enumerate(self.states)}
-        # 保留下面的映射关系，这样后面 legend 和绘图都能用 numeric 编码了
+        # Keep the inverse mapping so that legends and plots can use numeric encoding
         self.inverse_state_mapping = {v: k for k, v in self.state_mapping.items()}
 
         # Apply the mapping
-        # If there are missing values, replace them with the last index + 1
-        # And update the additional missing value as a new state in self.state and self.alphabet
+        # Handle missing values: replace with the last index (which should be the missing state)
+        # Also handle user-specified missing_values that might not be in state_mapping
+        def map_value(x):
+            # First check if it's in the state mapping
+            if x in self.state_mapping:
+                return self.state_mapping[x]
+            # Check if it's a pandas NaN
+            if pd.isna(x):
+                return len(self.states)  # Last state should be missing
+            # Check if it's in user-specified missing_values
+            if x in self.missing_values or str(x).lower() == 'missing':
+                # If missing value is in states, use its mapping; otherwise use last index
+                if x in self.states:
+                    return self.state_mapping.get(x, len(self.states))
+                else:
+                    return len(self.states)
+            # If not found, use last index as fallback (treat as missing)
+            return len(self.states)
+        
         try:
-            self.seqdata = self.seqdata.map(lambda x: self.state_mapping.get(x, len(self.states)))
+            self.seqdata = self.seqdata.map(map_value)
         except AttributeError:
-            self.seqdata = self.seqdata.applymap(lambda x: self.state_mapping.get(x, len(self.states)))
+            self.seqdata = self.seqdata.applymap(map_value)
 
         if self.ids is not None:
             self.seqdata.index = self.ids
@@ -317,9 +507,31 @@ class SequenceData:
                 elif len(self.custom_colors) == non_missing_states:
                     # User provided colors only for non-missing states - add gray for missing
                     color_list = self.custom_colors + [missing_gray_color]
+                    if self._missing_auto_added:
+                        print(
+                            f"[!] Automatically added gray color (#cfcccc) for missing values.\n"
+                            f"    -> You provided {len(self.custom_colors)} colors for {self._original_num_states} states, "
+                            f"but Missing was automatically added.\n"
+                            f"    -> Added gray (#cfcccc) as the color for Missing state."
+                        )
+                elif self._missing_auto_added and len(self.custom_colors) == self._original_num_states:
+                    # Missing was automatically added, and user provided colors for original states
+                    # Automatically add gray for the missing state
+                    color_list = self.custom_colors + [missing_gray_color]
+                    print(
+                        f"[!] Automatically added gray color (#cfcccc) for missing values.\n"
+                        f"    -> You provided {len(self.custom_colors)} colors for {self._original_num_states} states, "
+                        f"but Missing was automatically added.\n"
+                        f"    -> Added gray (#cfcccc) as the color for Missing state."
+                    )
                 else:
-                    raise ValueError(f"Length of custom_colors ({len(self.custom_colors)}) must match "
-                                   f"either total states ({num_states}) or non-missing states ({non_missing_states}).")
+                    raise ValueError(
+                        f"Length of custom_colors ({len(self.custom_colors)}) must match "
+                        f"either total states ({num_states}) or non-missing states ({non_missing_states}).\n"
+                        f"Hint: If Missing was automatically added, you can either:\n"
+                        f"  1. Include 'Missing' in your states and labels when creating SequenceData, or\n"
+                        f"  2. Provide {non_missing_states} colors (without Missing) and we'll add gray automatically."
+                    )
             else:
                 # Generate colors for non-missing states and add gray for missing
                 if non_missing_states <= 20:
@@ -380,10 +592,10 @@ class SequenceData:
                     color_list = list(reversed(color_list))
 
         # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
-        # 这样所有 color map key 是 1, 2, 3...，就可以和 imshow(vmin=1, vmax=N) 对齐
+        # This way all color map keys are 1, 2, 3..., which aligns with imshow(vmin=1, vmax=N)
         self.color_map = {i + 1: color_list[i] for i in range(num_states)}
 
-        # 构造以 label 为 key 的 color_map（用于 legend）
+        # Construct color_map with label as key (for legend)
         self.color_map_by_label = {
             self.state_to_label[state]: self.color_map[self.state_mapping[state]]
             for state in self.states
