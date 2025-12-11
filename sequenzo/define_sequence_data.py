@@ -424,15 +424,42 @@ class SequenceData:
                     "    This ensures consistent color mapping and avoids unexpected visualization errors."
                 )
 
-                # Add missing to states and labels
+                # Add missing to states
                 self.states.append(missing_state_value)
                     
-                # Only add if Missing is not already in labels
-                if not has_missing_label:
-                    self.labels = [label for label in self.labels   # Remove all case-variants of "missing"
-                                   if not (isinstance(label, str) and label.lower() == "missing")]
-                    # Use "Missing" as the label regardless of the actual missing value
-                    self.labels.append("Missing")
+                # Always ensure labels has the same length as states after appending missing state
+                # Strategy: 
+                # 1. If labels already has "Missing", we need to ensure it's removed and re-added at the end
+                # 2. We need to preserve labels for the original states (before adding missing)
+                # 3. If labels length matches original states length, just replace any "Missing" and append
+                # 4. If labels has extra elements, take only the first N (where N = original states count)
+                
+                # Remove any existing "Missing" labels (case-insensitive)
+                labels_without_missing = [label for label in self.labels
+                                          if not (isinstance(label, str) and label.lower() == "missing")]
+                
+                # Ensure we have the correct number of labels for non-missing states
+                # If labels_without_missing has fewer elements than original states, we're missing some labels
+                # If it has more, we take only the first N that match original states
+                if len(labels_without_missing) < self._original_num_states:
+                    # Not enough labels - this is unusual but we'll pad with generic labels
+                    while len(labels_without_missing) < self._original_num_states:
+                        labels_without_missing.append(f"State {len(labels_without_missing) + 1}")
+                elif len(labels_without_missing) > self._original_num_states:
+                    # Too many labels - take only the first N
+                    labels_without_missing = labels_without_missing[:self._original_num_states]
+                
+                # Append "Missing" label at the end to match the appended missing state
+                self.labels = labels_without_missing + ["Missing"]
+                
+                # Verify lengths match (safety check)
+                if len(self.states) != len(self.labels):
+                    raise ValueError(
+                        f"Internal error: Length mismatch after adding missing state. "
+                        f"States length: {len(self.states)}, Labels length: {len(self.labels)}. "
+                        f"States: {self.states}, Labels: {self.labels}. "
+                        f"Original num states: {self._original_num_states}"
+                    )
                 
                 # Mark that Missing was automatically added
                 self._missing_auto_added = True
