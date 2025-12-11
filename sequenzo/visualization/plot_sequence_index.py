@@ -317,7 +317,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         n_sequences=10,
                         show_sequence_ids=False,
                         sort_by_ids=None,
-                        return_sorted_ids=False
+                        return_sorted_ids=False,
+                        show_title=True
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -395,6 +396,8 @@ def plot_sequence_index(seqdata: SequenceData,
                              IDs from the first plot to align subsequent plots.
                              Returns a dictionary with group names as keys and sorted ID arrays as values
                              (for grouped plots), or a single array of sorted IDs (for single plots).
+    :param show_title: (bool, default: True) If False, suppresses the main title display even if title parameter is provided.
+                      This allows you to control title visibility separately from providing a title string.
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -466,7 +469,7 @@ def plot_sequence_index(seqdata: SequenceData,
     
     # If no grouping information, create a single plot
     if group_dataframe is None or group_column_name is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids, show_title)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -738,8 +741,8 @@ def plot_sequence_index(seqdata: SequenceData,
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
-    # Add a common title if provided
-    if title:
+    # Add a common title if provided and show_title is True
+    if title and show_title:
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning and eliminate extra right space
@@ -819,7 +822,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 n_sequences=10,
                                 show_sequence_ids=False,
                                 sort_by_ids=None,
-                                return_sorted_ids=False):
+                                return_sorted_ids=False,
+                                show_title=True):
     """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
@@ -1036,8 +1040,8 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
     
-    # Set title with weight information if available
-    if title is not None:
+    # Set title with weight information if available and show_title is True
+    if title is not None and show_title:
         display_title = title
         
         # Check if we have effective weights (not all 1.0) and they were provided by user

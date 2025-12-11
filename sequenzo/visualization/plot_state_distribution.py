@@ -64,7 +64,8 @@ def plot_state_distribution(seqdata: SequenceData,
                             group_order=None,
                             fontsize=12,
                             sort_groups='auto',
-                            show_group_titles: bool = True) -> None:
+                            show_group_titles: bool = True,
+                            show_title: bool = True) -> None:
     """
     Creates state distribution plots for different groups, showing how state
     prevalence changes over time within each group.
@@ -113,6 +114,8 @@ def plot_state_distribution(seqdata: SequenceData,
     :param stacked: (bool) Whether to create stacked area plots (True) or line plots (False)
     :param group_order: List, manually specify group order (overrides sort_groups)
     :param sort_groups: String, sorting method: 'auto'(smart numeric), 'numeric'(numeric prefix), 'alpha'(alphabetical), 'none'(original order)
+    :param show_title: (bool, default: True) If False, suppresses the main title display even if title parameter is provided.
+                      This allows you to control title visibility separately from providing a title string.
 
     :return: None
     """
@@ -187,7 +190,8 @@ def plot_state_distribution(seqdata: SequenceData,
             seqdata=seqdata, weights=weights, figsize=actual_figsize,
             plot_style=plot_style, title=title, xlabel=xlabel, ylabel=ylabel,
             save_as=save_as, dpi=dpi, stacked=stacked,
-            show=show, include_legend=include_legend, fontsize=fontsize
+            show=show, include_legend=include_legend, fontsize=fontsize,
+            show_title=show_title
         )
 
     # Process weights
@@ -393,8 +397,8 @@ def plot_state_distribution(seqdata: SequenceData,
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
-    # Add a common title if provided
-    if title:
+    # Add a common title if provided and show_title is True
+    if title and show_title:
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning and eliminate extra right space
@@ -467,7 +471,8 @@ def _plot_state_distribution_single(seqdata: SequenceData,
                                     dpi=200,
                                     show=False,
                                     include_legend=True,
-                                    fontsize=12) -> None:
+                                    fontsize=12,
+                                    show_title=True) -> None:
     """
     Creates a state distribution plot showing how the prevalence of states changes over time,
     with enhanced color vibrancy.
@@ -601,7 +606,7 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10)
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10)
 
-    if title:
+    if title and show_title:
         ax.set_title(title, fontsize=fontsize+2, fontweight='bold', pad=20)
 
     # Set x-axis labels based on time points
