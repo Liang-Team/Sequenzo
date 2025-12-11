@@ -315,7 +315,9 @@ def plot_sequence_index(seqdata: SequenceData,
                         include_legend: bool = True,
                         sequence_selection="all",
                         n_sequences=10,
-                        show_sequence_ids=False
+                        show_sequence_ids=False,
+                        sort_by_ids=None,
+                        return_sorted_ids=False
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -383,6 +385,16 @@ def plot_sequence_index(seqdata: SequenceData,
     :param n_sequences: Number of sequences to show when using "first_n" or "last_n" (default: 10)
     :param show_sequence_ids: If True, show actual sequence IDs on y-axis instead of sequence numbers. 
         Most useful when sequence_selection is a list of IDs (default: False)
+    :param sort_by_ids: (list or np.ndarray, optional) Custom ID order for sorting sequences.
+                       When provided, sequences will be sorted to match this ID order, overriding 
+                       the sort_by parameter. This is useful for aligning multiple plots so that 
+                       the same IDs appear in the same row across different visualizations.
+                       Example: sort_by_ids=[1, 3, 2, 5, 4] will sort sequences by this exact order.
+    :param return_sorted_ids: (bool, default: False) If True, returns the sorted ID order after plotting.
+                             This is useful for multidomain analysis where you want to use the sorted 
+                             IDs from the first plot to align subsequent plots.
+                             Returns a dictionary with group names as keys and sorted ID arrays as values
+                             (for grouped plots), or a single array of sorted IDs (for single plots).
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -454,7 +466,7 @@ def plot_sequence_index(seqdata: SequenceData,
     
     # If no grouping information, create a single plot
     if group_dataframe is None or group_column_name is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -530,6 +542,11 @@ def plot_sequence_index(seqdata: SequenceData,
     )
     axes = axes.flatten()
 
+    # Dictionary to store sorted IDs for each group (if return_sorted_ids is True)
+    # Use OrderedDict or list to maintain group order
+    sorted_ids_by_group = {}
+    group_order_list = []  # Track the order of groups as they are processed
+
     # Create a plot for each group
     for i, group in enumerate(groups):
         # Get IDs for this group
@@ -564,7 +581,35 @@ def plot_sequence_index(seqdata: SequenceData,
             group_sequences = group_sequences.astype(float)
             group_sequences[np.isnan(group_sequences)] = np.nan
 
-        if sort_by_weight and group_weights is not None:
+        # Get the IDs for this group (after selection)
+        group_ids_after_selection = seqdata.ids[mask]
+
+        # Determine sorting method: sort_by_ids takes priority if provided
+        if sort_by_ids is not None:
+            # Sort by custom ID order
+            # Convert sort_by_ids to numpy array for easier handling
+            sort_by_ids_array = np.asarray(sort_by_ids)
+            
+            # Create a mapping from ID to position in sort_by_ids
+            # IDs not in sort_by_ids will be placed at the end
+            id_to_position = {id_val: pos for pos, id_val in enumerate(sort_by_ids_array)}
+            
+            # Get positions for each ID in the current group
+            # IDs not in sort_by_ids get a very large position value (placed at end)
+            max_position = len(sort_by_ids_array)
+            positions = np.array([id_to_position.get(id_val, max_position + i) 
+                                 for i, id_val in enumerate(group_ids_after_selection)])
+            
+            # Sort by position (ascending order)
+            sorted_indices = np.argsort(positions)
+            
+            # Warn if some IDs in the group are not in sort_by_ids
+            missing_ids = set(group_ids_after_selection) - set(sort_by_ids_array)
+            if missing_ids:
+                print(f"[Warning] Group '{group}': {len(missing_ids)} IDs not found in sort_by_ids, "
+                      f"they will be placed at the end: {list(missing_ids)[:5]}{'...' if len(missing_ids) > 5 else ''}")
+        
+        elif sort_by_weight and group_weights is not None:
             # Sort by weight (descending)
             sorted_indices = np.argsort(-group_weights)
         else:
@@ -589,6 +634,13 @@ def plot_sequence_index(seqdata: SequenceData,
         sorted_group_ids = None
         if group_ids_for_labels is not None and show_sequence_ids:
             sorted_group_ids = group_ids_for_labels[sorted_indices]
+        
+        # Store sorted IDs for this group if return_sorted_ids is True
+        if return_sorted_ids:
+            sorted_ids_by_group[group] = group_ids_after_selection[sorted_indices]
+            # Track group order (only add once per group)
+            if group not in group_order_list:
+                group_order_list.append(group)
 
         # Plot on the corresponding axis
         ax = axes[i]
@@ -740,6 +792,14 @@ def plot_sequence_index(seqdata: SequenceData,
             plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
         plt.show()
         plt.close()
+    
+    # Return sorted IDs if requested
+    # Return as dictionary with group order preserved (groups processed in plot order)
+    if return_sorted_ids:
+        # Create an ordered dictionary or return the dictionary with group_order_list for reference
+        # For simplicity, return the dictionary (Python 3.7+ maintains insertion order)
+        # But we'll also return group_order_list as metadata if needed
+        return sorted_ids_by_group
 
 
 def _sequence_index_plot_single(seqdata: SequenceData,
@@ -757,7 +817,9 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 include_legend=True,
                                 sequence_selection="all",
                                 n_sequences=10,
-                                show_sequence_ids=False):
+                                show_sequence_ids=False,
+                                sort_by_ids=None,
+                                return_sorted_ids=False):
     """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
@@ -840,7 +902,32 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         sequence_values = sequence_values.astype(float)
 
     # Sort sequences based on specified method
-    if sort_by_weight and weights is not None:
+    # sort_by_ids takes priority if provided
+    if sort_by_ids is not None:
+        # Sort by custom ID order
+        # Convert sort_by_ids to numpy array for easier handling
+        sort_by_ids_array = np.asarray(sort_by_ids)
+        
+        # Create a mapping from ID to position in sort_by_ids
+        # IDs not in sort_by_ids will be placed at the end
+        id_to_position = {id_val: pos for pos, id_val in enumerate(sort_by_ids_array)}
+        
+        # Get positions for each ID in the selected sequences
+        # IDs not in sort_by_ids get a very large position value (placed at end)
+        max_position = len(sort_by_ids_array)
+        positions = np.array([id_to_position.get(id_val, max_position + i) 
+                             for i, id_val in enumerate(selected_ids)])
+        
+        # Sort by position (ascending order)
+        sorted_indices = np.argsort(positions)
+        
+        # Warn if some IDs are not in sort_by_ids
+        missing_ids = set(selected_ids) - set(sort_by_ids_array)
+        if missing_ids:
+            print(f"[Warning] {len(missing_ids)} IDs not found in sort_by_ids, "
+                  f"they will be placed at the end: {list(missing_ids)[:5]}{'...' if len(missing_ids) > 5 else ''}")
+    
+    elif sort_by_weight and weights is not None:
         # Sort by weight (descending)
         sorted_indices = np.argsort(-weights)
     else:
@@ -968,3 +1055,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         ax.legend(*seqdata.get_legend(), bbox_to_anchor=(1.05, 1), loc='upper left')
 
     save_and_show_results(save_as, dpi=dpi)
+    
+    # Return sorted IDs if requested
+    if return_sorted_ids:
+        return selected_ids[sorted_indices] if selected_ids is not None else None
