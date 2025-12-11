@@ -21,7 +21,17 @@
 
 # Sequenzo: Fast, scalable, and intuitive social sequence analysis in Python
 
-Sequenzo is a high-performance Python package designed for social sequence analysis. It is built to analyze **any sequence of categorical events**, from individual career paths and migration patterns to corporate growth and urban development. 
+Sequenzo is a high-performance Python package designed for social sequence analysis. 
+
+Its methodological foundations build upon prior work in the R ecosystem, especially [the TraMineR (Gabadinho et al. 2011) R package](https://traminer.unige.ch/), which established many of the core concepts, representations, and analytical tools in sequence analysis.
+
+Sequenzo also draws inspiration from [WeightedCluster (Studer, 2013)](https://mephisto.unige.ch/weightedcluster/) for typology construction and [seqHMM (Helske & Helske, 2019)](https://www.jstatsoft.org/article/view/v088i03) for probabilistic modeling using hidden markov chain models.
+
+We gratefully acknowledge these pioneering contributions. Sequenzo seeks to expand the social sequence analysis ecosystem by connecting long-standing methodological traditions with the computational practices of the Python data science community, particularly in machine learning and deep learning.
+
+---
+
+Sequenzo is built to analyze **any sequence of categorical events**, from individual career paths and migration patterns to corporate growth and urban development. 
 Whether you are working with **people, places, or policies**, Sequenzo helps uncover meaningful patterns efficiently. 
 
 Sequenzo outperforms traditional R-based tools in social sequence analysis, delivering faster processing and superior efficiency, especially for large-scale datasets. **No big data? No problem. You don’t need big data to benefit as Sequenzo is designed to enhance sequence analysis at any scale, making complex methods accessible to everyone.**
@@ -186,7 +196,15 @@ Others
 
 **Acknowledgements**
 
+* Amazing authors of R packages in soial sequence analysis, including [TraMineR (Gabadinho et al. 2011)](https://traminer.unige.ch/), [WeightedCluster (Studer, 2013)](https://mephisto.unige.ch/weightedcluster/), and [seqHMM (Helske & Helske, 2019)](https://cran.r-project.org/web/packages/seqHMM/index.html)
 * Methodological advisor in sequence analysis: [Professor Tim Liao (University of Illinois Urbana-Champaign)](https://sociology.illinois.edu/directory/profile/tfliao)
+* [Social Sequence Analysis Association](https://sequenceanalysis.org/)
+* Helpful discussions and comments: 
+  * [Gilbert Ritschard](https://mephisto.unige.ch/Gilbert/)
+  * [Matthias Studer](https://www.unige.ch/sciences-societe/ideso/membres/matthias-studer)
+  * [Emanuela Struffolino](https://emastruffolino.github.io/)
+  * [Marcel Raab](https://marcelraab.de/)
+  * [Heyi Zhang](https://profiles.ucl.ac.uk/100967-heyi-zhang)
 * Yuqi's PhD advisor [Professor Ridhi Kashyap (University of Oxford)](https://www.nuffield.ox.ac.uk/people/profiles/ridhi-kashyap/), and mentor [Charles Rahal (University of Oxford)](https://crahal.com/)
 * Yuqi's original programming mentor: [JiangHuShiNian](https://github.com/jianghushinian)
 
