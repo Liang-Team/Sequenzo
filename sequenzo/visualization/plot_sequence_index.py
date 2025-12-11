@@ -8,6 +8,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 # Use relative import to avoid circular import when top-level package imports visualization
 from ..define_sequence_data import SequenceData
@@ -318,7 +319,9 @@ def plot_sequence_index(seqdata: SequenceData,
                         show_sequence_ids=False,
                         sort_by_ids=None,
                         return_sorted_ids=False,
-                        show_title=True
+                        show_title=True,
+                        proportional_scaling=False,
+                        hide_y_axis=False
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -398,6 +401,11 @@ def plot_sequence_index(seqdata: SequenceData,
                              (for grouped plots), or a single array of sorted IDs (for single plots).
     :param show_title: (bool, default: True) If False, suppresses the main title display even if title parameter is provided.
                       This allows you to control title visibility separately from providing a title string.
+    :param proportional_scaling: (bool, default: False) If True, scales subplot heights proportionally based on 
+                                the number of sequences in each group. Useful when groups have very different sizes.
+                                Only applies to grouped plots with layout='column'.
+    :param hide_y_axis: (bool, default: False) If True, hides y-axis ticks, labels, and spine for all subplots.
+                       Useful when using proportional_scaling to create cleaner visualizations.
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -537,13 +545,42 @@ def plot_sequence_index(seqdata: SequenceData,
     # Calculate figure size and layout based on number of groups and specified layout
     nrows, ncols = determine_layout(num_groups, layout=layout, nrows=nrows, ncols=ncols)
 
-    fig, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
-        gridspec_kw={'wspace': 0.15, 'hspace': 0.25}  # Reduced spacing for tighter layout
-    )
-    axes = axes.flatten()
+    # Calculate height ratios for proportional scaling if enabled
+    if proportional_scaling and layout == 'column':
+        # First pass: collect group sizes
+        group_sizes = []
+        for group in groups:
+            group_ids = group_dataframe[group_dataframe[group_column_name] == group][id_col_name].values
+            mask = np.isin(seqdata.ids, group_ids)
+            if np.any(mask):
+                mask = _select_sequences_subset(seqdata, sequence_selection, n_sequences, sort_by, sort_by_weight, weights, mask)
+                group_sizes.append(int(np.sum(mask)))
+            else:
+                group_sizes.append(1)
+        
+        # Calculate height ratios (min 0.3 to avoid too small subplots)
+        if len(group_sizes) > 0:
+            max_size = max(group_sizes)
+            height_ratios = [max(0.3, size / max_size) for size in group_sizes]
+            max_ratio = max(height_ratios)
+            height_ratios = [h / max_ratio for h in height_ratios]
+        else:
+            height_ratios = [1.0] * num_groups
+        
+        # Use gridspec for proportional heights
+        fig = plt.figure(figsize=(actual_figsize[0], actual_figsize[1] * sum(height_ratios) / len(height_ratios) * num_groups))
+        gs = gridspec.GridSpec(nrows=num_groups, ncols=1, figure=fig, 
+                               height_ratios=height_ratios, hspace=0.25, wspace=0.15)
+        axes = [fig.add_subplot(gs[i]) for i in range(num_groups)]
+    else:
+        # Standard subplots with equal heights
+        fig, axes = plt.subplots(
+            nrows=nrows,
+            ncols=ncols,
+            figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
+            gridspec_kw={'wspace': 0.15, 'hspace': 0.25}
+        )
+        axes = axes.flatten()
 
     # Dictionary to store sorted IDs for each group (if return_sorted_ids is True)
     # Use OrderedDict or list to maintain group order
@@ -695,28 +732,37 @@ def plot_sequence_index(seqdata: SequenceData,
             ytick_positions = np.unique(ytick_positions)
             ytick_labels = (ytick_positions + 1).astype(int)
         
-        ax.set_yticks(ytick_positions)
-        ax.set_yticklabels(ytick_labels, fontsize=fontsize-2, color='black')
+        # Hide y-axis if requested
+        if hide_y_axis:
+            ax.set_yticks([])
+            ax.set_yticklabels([])
+            ax.spines['left'].set_visible(False)
+        else:
+            ax.set_yticks(ytick_positions)
+            ax.set_yticklabels(ytick_labels, fontsize=fontsize-2, color='black')
 
         # Customize axis style
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_color('gray')
+        if not hide_y_axis:
+            ax.spines['left'].set_color('gray')
+            ax.spines['left'].set_linewidth(0.7)
+            ax.spines['left'].set_position(('outward', 5))
         ax.spines['bottom'].set_color('gray')
-        ax.spines['left'].set_linewidth(0.7)
         ax.spines['bottom'].set_linewidth(0.7)
         
         # Move spines slightly away from the plot area for better aesthetics
-        ax.spines['left'].set_position(('outward', 5))
         ax.spines['bottom'].set_position(('outward', 5))
         
         # Ensure ticks are always visible regardless of plot style
         ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major')
-        ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
+        if not hide_y_axis:
+            ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
         
         # Force tick visibility for narrow plot styles
         ax.xaxis.set_ticks_position('bottom')
-        ax.yaxis.set_ticks_position('left')
+        if not hide_y_axis:
+            ax.yaxis.set_ticks_position('left')
         ax.tick_params(axis='both', which='major', direction='out')
 
         # Add group title with weight information
@@ -731,22 +777,26 @@ def plot_sequence_index(seqdata: SequenceData,
             show_plot_title(ax, group_title, show=True, fontsize=fontsize, loc='right')
 
         # Add axis labels
-        if i % ncols == 0:
+        if i % ncols == 0 and not hide_y_axis:
             ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
         # if i >= num_groups - ncols:
         ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
 
-    # Hide unused subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].set_visible(False)
+    # Hide unused subplots (not needed for proportional scaling with column layout)
+    if not (proportional_scaling and layout == 'column'):
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
 
     # Add a common title if provided and show_title is True
     if title and show_title:
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning and eliminate extra right space
-    fig.subplots_adjust(wspace=0.15, hspace=0.25, bottom=0.1, top=0.9, right=0.98, left=0.08)
+    if proportional_scaling and layout == 'column':
+        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.9, wspace=0.15)
+    else:
+        fig.subplots_adjust(wspace=0.15, hspace=0.25, bottom=0.1, top=0.9, right=0.98, left=0.08)
 
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
