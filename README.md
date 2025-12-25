@@ -23,11 +23,21 @@
 
 Sequenzo is a high-performance Python package designed for social sequence analysis. 
 
-Its methodological foundations build upon prior work in the R ecosystem, especially [the TraMineR (Gabadinho et al. 2011) R package](https://traminer.unige.ch/), which established many of the core concepts, representations, and analytical tools in sequence analysis.
+Its methodological foundations build upon prior work in the R ecosystem, especially
+[the TraMineR (Gabadinho et al. 2011) R package](https://traminer.unige.ch/), which
+established many of the core concepts, representations, and analytical tools in
+sequence analysis, as well as subsequent methodological extensions developed within
+[TraMineRextras (Gabadinho et al. 2021)](https://cran.r-project.org/web/packages/TraMineRextras/index.html).
 
-Sequenzo also draws inspiration from [WeightedCluster (Studer, 2013)](https://mephisto.unige.ch/weightedcluster/) for typology construction and [seqHMM (Helske & Helske, 2019)](https://www.jstatsoft.org/article/view/v088i03) for probabilistic modeling using hidden markov chain models.
+Sequenzo also draws inspiration from
+[WeightedCluster (Studer, 2013)](https://mephisto.unige.ch/weightedcluster/) for
+typology construction,
+[seqHMM (Helske & Helske, 2019)](https://www.jstatsoft.org/article/view/v088i03) for
+probabilistic modeling using hidden Markov models,
+and [ggseqplot (Raab, 2022)](https://maraab23.github.io/ggseqplot/) for the design of
+relative frequency sequence visualizations (Fasang & Liao, 2013).
 
-We gratefully acknowledge these pioneering contributions. Sequenzo seeks to expand the social sequence analysis ecosystem by connecting long-standing methodological traditions with the computational practices of the Python data science community, particularly in machine learning and deep learning.
+We gratefully acknowledge these pioneering contributions and the broader community in social sequence analysis whose work enables everything we do. Sequenzo seeks to expand the social sequence analysis ecosystem by connecting long-standing methodological traditions with the computational practices of the Python data science community, particularly in machine learning and deep learning.
 
 ---
 
