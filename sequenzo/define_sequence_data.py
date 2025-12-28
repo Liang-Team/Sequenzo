@@ -82,6 +82,7 @@ class SequenceData:
         weights: np.ndarray = None,
         start: int = 1,
         custom_colors: list = None,
+        additional_colors: dict = None,
         missing_values: Union[None, int, float, str, list] = None
     ):
         """
@@ -98,7 +99,14 @@ class SequenceData:
         :param missing_handling: Dict specifying handling for missing values (left, right, gaps).
         :param void: Symbol for void elements (default: "%").
         :param nr: Symbol for missing values (default: "*").
-        :param custom_colors: Custom color palette for visualization.
+        :param custom_colors: Custom color palette for visualization. 
+            If provided, should be a list of colors matching the number of states.
+            Colors can be hex strings (e.g., "#FF5733") or RGB tuples.
+        :param additional_colors: Dictionary to specify additional custom colors for specific states 
+            while keeping the default palette for others. This is useful when you want to keep default colors 
+            but assign custom colors to specific states (e.g., {"Other": "#BDBDBD"} to make "Other" gray).
+            Format: {state_name: color}, where color can be hex string (e.g., "#BDBDBD") or RGB tuple.
+            Example: additional_colors={"Other": "#BDBDBD", "Missing": "#E0E0E0"}
         :param missing_values: Custom missing value indicators. Can be:
             - None (default): Auto-detect missing values (NaN, string "Missing")
             - Single value: e.g., 99, 9, 1000, "Missing"
@@ -126,6 +134,7 @@ class SequenceData:
         self._weights_provided = weights is not None  # Track if weights were originally provided
         self.start = start
         self.custom_colors = custom_colors
+        self.additional_colors = additional_colors or {}
         
         # Process missing_values parameter: convert to list format
         if missing_values is None:
@@ -142,6 +151,22 @@ class SequenceData:
 
         # Validate parameters
         self._validate_parameters()
+        
+        # Validate additional_colors if provided
+        if self.additional_colors:
+            if self.custom_colors:
+                raise ValueError(
+                    "[!] You cannot use both 'custom_colors' and 'additional_colors' at the same time.\n"
+                    "    -> Use 'custom_colors' to specify all colors, or\n"
+                    "    -> Use 'additional_colors' to assign custom colors to specific states while keeping default colors."
+                )
+            # Check that all states in additional_colors exist in self.states
+            invalid_states = [state for state in self.additional_colors.keys() if state not in self.states]
+            if invalid_states:
+                raise ValueError(
+                    f"[!] The following states in 'additional_colors' are not found in 'states': {invalid_states}\n"
+                    f"    Available states: {self.states}"
+                )
 
         # Extract & process sequences
         self.seqdata = self._extract_sequences()
@@ -618,6 +643,28 @@ class SequenceData:
                 if reverse_colors:
                     color_list = list(reversed(color_list))
 
+        # Apply additional_colors if specified (assign custom colors to specific states while keeping default colors)
+        if self.additional_colors:
+            color_list = list(color_list)  # Make a copy to avoid modifying original
+            for state, custom_color in self.additional_colors.items():
+                if state in self.states:
+                    state_index = self.states.index(state)
+                    # Convert hex string to RGB tuple if needed
+                    if isinstance(custom_color, str) and custom_color.startswith('#'):
+                        # Convert hex to RGB tuple (values 0-1)
+                        hex_color = custom_color.lstrip('#')
+                        rgb = tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+                        color_list[state_index] = rgb
+                    elif isinstance(custom_color, (tuple, list)) and len(custom_color) == 3:
+                        # If RGB values are 0-255, convert to 0-1
+                        if all(0 <= v <= 255 for v in custom_color):
+                            color_list[state_index] = tuple(v / 255.0 for v in custom_color)
+                        else:
+                            # Assume already 0-1 range
+                            color_list[state_index] = tuple(custom_color)
+                    else:
+                        color_list[state_index] = custom_color
+
         # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
         # This way all color map keys are 1, 2, 3..., which aligns with imshow(vmin=1, vmax=N)
         self.color_map = {i + 1: color_list[i] for i in range(num_states)}
@@ -846,6 +893,221 @@ class SequenceData:
             result["weighted_uniqueness_rate"] = weighted_uniqueness_rate
 
         return result
+
+    def show_color_palette(self, save_as: str = None, dpi: int = 200):
+        """
+        Instance method to show the default color palette for the current number of states.
+        This is a convenience method that calls show_default_color_palette() with the number of states
+        from this SequenceData instance.
+        
+        Parameters:
+        -----------
+        save_as : str, optional
+            If provided, save the color preview figure to this file path.
+        dpi : int, default=200
+            Resolution for saving the figure (if save_as is provided).
+        
+        Returns:
+        --------
+        dict : Dictionary with keys:
+            - 'colors': List of RGB tuples (0-1 range)
+            - 'hex_colors': List of hex color codes (e.g., "#FF5733")
+            - 'rgb_255': List of RGB tuples (0-255 range)
+        
+        Example:
+        --------
+        # Show color palette for this SequenceData instance
+        seq_data = SequenceData(...)
+        color_info = seq_data.show_color_palette()
+        """
+        return SequenceData.show_default_color_palette(
+            n_states=len(self.states), 
+            reverse_colors=True, 
+            save_as=save_as, 
+            dpi=dpi
+        )
+
+    @staticmethod
+    def show_default_color_palette(n_states: int, reverse_colors: bool = True, save_as: str = None, dpi: int = 200):
+        """
+        Display and print the default color palette that would be used for a given number of states.
+        This is useful for viewing default colors and copying hex codes to create custom_colors.
+        
+        Parameters:
+        -----------
+        n_states : int
+            Number of states (colors) to generate. This determines which palette will be used.
+        reverse_colors : bool, default=True
+            Whether to reverse the color order (same as default behavior in SequenceData).
+        save_as : str, optional
+            If provided, save the color preview figure to this file path.
+        dpi : int, default=200
+            Resolution for saving the figure (if save_as is provided).
+        
+        Returns:
+        --------
+        dict : Dictionary with keys:
+            - 'colors': List of RGB tuples (0-1 range)
+            - 'hex_colors': List of hex color codes (e.g., "#FF5733")
+            - 'rgb_255': List of RGB tuples (0-255 range)
+        
+        Example:
+        --------
+        # View default colors for 13 states (call via class)
+        color_info = SequenceData.show_default_color_palette(13)
+        
+        # Or call via instance (which will use the instance's number of states)
+        seq_data = SequenceData(...)
+        color_info = seq_data.show_color_palette()
+        
+        # Then you can copy the hex_colors to use as custom_colors
+        custom_colors = color_info['hex_colors']
+        """
+        # Generate default colors using the same logic as _assign_colors
+        if n_states <= 20:
+            color_list = sns.color_palette("Spectral", n_states)
+        else:
+            if n_states <= 40:
+                color_list = sns.color_palette("viridis", n_states)
+            else:
+                viridis_colors = sns.color_palette("viridis", min(n_states // 2, 20))
+                pastel_colors = sns.color_palette("Set3", min(n_states // 2, 12))
+                tab20_colors = sns.color_palette("tab20", min(n_states // 3, 20))
+                combined_colors = viridis_colors + pastel_colors + tab20_colors
+                while len(combined_colors) < n_states:
+                    combined_colors.extend(combined_colors[:min(len(combined_colors), n_states - len(combined_colors))])
+                color_list = combined_colors[:n_states]
+        
+        if reverse_colors:
+            color_list = list(reversed(color_list))
+        
+        # Convert RGB (0-1) to hex and RGB (0-255)
+        hex_colors = []
+        rgb_255_list = []
+        for rgb in color_list:
+            # Convert from 0-1 to 0-255
+            rgb_255 = tuple(int(c * 255) for c in rgb)
+            rgb_255_list.append(rgb_255)
+            # Convert to hex
+            hex_color = f"#{rgb_255[0]:02X}{rgb_255[1]:02X}{rgb_255[2]:02X}"
+            hex_colors.append(hex_color)
+        
+        # Print color information
+        print(f"\n{'='*80}")
+        print(f"Default Color Palette for {n_states} States")
+        print(f"{'='*80}\n")
+        print("Color Index | Hex Code  | RGB (0-255)    | Preview")
+        print("-" * 80)
+        
+        # Create visualization
+        fig, ax = plt.subplots(figsize=(12, max(6, n_states * 0.5)))
+        
+        for i, (hex_color, rgb, rgb_255) in enumerate(zip(hex_colors, color_list, rgb_255_list)):
+            # Print color info
+            print(f"    {i+1:3d}    | {hex_color} | {str(rgb_255):15s} | ", end="")
+            # Visual preview in terminal (using ANSI escape codes if supported)
+            print(f"███")
+            
+            # Draw color swatch
+            y_pos = n_states - i - 1
+            rect = plt.Rectangle((0, y_pos), 1, 0.8, facecolor=rgb, edgecolor='black', linewidth=0.5)
+            ax.add_patch(rect)
+            ax.text(1.1, y_pos + 0.4, f"{i+1:2d}. {hex_color} | RGB{rgb_255}", 
+                   va='center', fontsize=10, fontfamily='monospace')
+        
+        print(f"\n{'='*80}")
+        print("\nTo use these colors as custom_colors, copy the hex codes:")
+        print("  custom_colors = " + str(hex_colors))
+        print("\nOr use additional_colors to assign custom colors to specific states:")
+        print("  additional_colors = {'Other': '#BDBDBD'}  # Assign gray color to 'Other' state")
+        print(f"{'='*80}\n")
+        
+        # Configure plot
+        ax.set_xlim(0, 8)
+        ax.set_ylim(-0.5, n_states)
+        ax.set_yticks([])
+        ax.set_xticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.set_title(f'Default Color Palette for {n_states} States', fontsize=14, pad=20)
+        
+        plt.tight_layout()
+        
+        if save_as:
+            plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+            print(f"[>] Color palette saved to: {save_as}")
+        
+        plt.show()
+        
+        return {
+            'colors': color_list,  # RGB tuples (0-1 range)
+            'hex_colors': hex_colors,  # Hex codes
+            'rgb_255': rgb_255_list  # RGB tuples (0-255 range)
+        }
+
+    @staticmethod
+    def get_default_color_palette(n_states: int, reverse_colors: bool = True, return_format: str = 'hex'):
+        """
+        Get the default color palette for a given number of states.
+        This returns the colors without displaying them (useful for programmatic use).
+        
+        Parameters:
+        -----------
+        n_states : int
+            Number of states (colors) to generate.
+        reverse_colors : bool, default=True
+            Whether to reverse the color order (same as default behavior in SequenceData).
+        return_format : str, default='hex'
+            Format to return colors in. Options:
+            - 'hex': List of hex color codes (e.g., "#FF5733")
+            - 'rgb': List of RGB tuples (0-1 range, for matplotlib)
+            - 'rgb255': List of RGB tuples (0-255 range)
+        
+        Returns:
+        --------
+        list : List of colors in the requested format.
+        
+        Example:
+        --------
+        # Get hex codes for 13 states
+        hex_colors = SequenceData.get_default_color_palette(13, return_format='hex')
+        
+        # Use them as custom_colors
+        seq = SequenceData(df, time=..., states=..., custom_colors=hex_colors)
+        """
+        # Generate default colors using the same logic as _assign_colors
+        if n_states <= 20:
+            color_list = sns.color_palette("Spectral", n_states)
+        else:
+            if n_states <= 40:
+                color_list = sns.color_palette("viridis", n_states)
+            else:
+                viridis_colors = sns.color_palette("viridis", min(n_states // 2, 20))
+                pastel_colors = sns.color_palette("Set3", min(n_states // 2, 12))
+                tab20_colors = sns.color_palette("tab20", min(n_states // 3, 20))
+                combined_colors = viridis_colors + pastel_colors + tab20_colors
+                while len(combined_colors) < n_states:
+                    combined_colors.extend(combined_colors[:min(len(combined_colors), n_states - len(combined_colors))])
+                color_list = combined_colors[:n_states]
+        
+        if reverse_colors:
+            color_list = list(reversed(color_list))
+        
+        if return_format == 'rgb':
+            return color_list
+        elif return_format == 'hex':
+            hex_colors = []
+            for rgb in color_list:
+                rgb_255 = tuple(int(c * 255) for c in rgb)
+                hex_color = f"#{rgb_255[0]:02X}{rgb_255[1]:02X}{rgb_255[2]:02X}"
+                hex_colors.append(hex_color)
+            return hex_colors
+        elif return_format == 'rgb255':
+            return [tuple(int(c * 255) for c in rgb) for rgb in color_list]
+        else:
+            raise ValueError(f"return_format must be 'hex', 'rgb', or 'rgb255', got '{return_format}'")
 
 
 
