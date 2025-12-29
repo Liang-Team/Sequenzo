@@ -894,7 +894,7 @@ class SequenceData:
 
         return result
 
-    def show_color_palette(self, save_as: str = None, dpi: int = 200):
+    def show_color_palette(self, palette_name: str = 'default', save_as: str = None, dpi: int = 200):
         """
         Instance method to show the default color palette for the current number of states.
         This is a convenience method that calls show_default_color_palette() with the number of states
@@ -902,6 +902,8 @@ class SequenceData:
         
         Parameters:
         -----------
+        palette_name : str, default='default'
+            Name of the color palette to use. See show_default_color_palette() for available options.
         save_as : str, optional
             If provided, save the color preview figure to this file path.
         dpi : int, default=200
@@ -919,26 +921,158 @@ class SequenceData:
         # Show color palette for this SequenceData instance
         seq_data = SequenceData(...)
         color_info = seq_data.show_color_palette()
+        
+        # Show with a specific palette template
+        color_info = seq_data.show_color_palette(palette_name='viridis')
         """
         return SequenceData.show_default_color_palette(
             n_states=len(self.states), 
             reverse_colors=True, 
+            palette_name=palette_name,
             save_as=save_as, 
             dpi=dpi
         )
 
     @staticmethod
-    def show_default_color_palette(n_states: int, reverse_colors: bool = True, save_as: str = None, dpi: int = 200):
+    def _get_available_palette_names():
         """
-        Display and print the default color palette that would be used for a given number of states.
+        Get list of available color palette names that can be used with show_default_color_palette.
+        
+        Returns:
+        --------
+        list : List of available palette names (strings)
+        """
+        # Common seaborn color palettes
+        available_palettes = [
+            'default',  # Uses automatic selection based on n_states (Spectral/viridis/combined)
+            'Spectral',
+            'viridis',
+            'Set3',
+            'tab20',
+            'deep',
+            'muted',
+            'pastel',
+            'bright',
+            'dark',
+            'colorblind',
+            'husl',
+            'hls',
+            'coolwarm',
+            'RdYlGn',
+            'RdYlBu',
+            'RdBu',
+            'PiYG',
+            'PRGn',
+            'BrBG',
+            'Set1',
+            'Set2',
+            'Paired',
+            'Accent',
+            'Dark2',
+        ]
+        return available_palettes
+    
+    @staticmethod
+    def _generate_color_list(n_states: int, palette_name: str = 'default', reverse_colors: bool = True):
+        """
+        Generate color list based on palette name and number of states.
+        
+        Parameters:
+        -----------
+        n_states : int
+            Number of states (colors) to generate.
+        palette_name : str, default='default'
+            Name of the color palette to use. Use 'default' for automatic selection.
+            Available palettes: see _get_available_palette_names()
+        reverse_colors : bool, default=True
+            Whether to reverse the color order.
+        
+        Returns:
+        --------
+        list : List of RGB tuples (0-1 range)
+        """
+        if palette_name == 'default':
+            # Use the original logic for default palette selection
+            if n_states <= 20:
+                color_list = sns.color_palette("Spectral", n_states)
+            else:
+                if n_states <= 40:
+                    color_list = sns.color_palette("viridis", n_states)
+                else:
+                    viridis_colors = sns.color_palette("viridis", min(n_states // 2, 20))
+                    pastel_colors = sns.color_palette("Set3", min(n_states // 2, 12))
+                    tab20_colors = sns.color_palette("tab20", min(n_states // 3, 20))
+                    combined_colors = viridis_colors + pastel_colors + tab20_colors
+                    while len(combined_colors) < n_states:
+                        combined_colors.extend(combined_colors[:min(len(combined_colors), n_states - len(combined_colors))])
+                    color_list = combined_colors[:n_states]
+        else:
+            # Use specified palette name
+            try:
+                color_list = sns.color_palette(palette_name, n_states)
+            except ValueError:
+                # If palette doesn't support n_states directly, try to generate more colors
+                try:
+                    # Try to get a base palette and extend it
+                    base_palette = sns.color_palette(palette_name)
+                    color_list = []
+                    while len(color_list) < n_states:
+                        color_list.extend(base_palette)
+                    color_list = color_list[:n_states]
+                except Exception as e:
+                    raise ValueError(f"Invalid palette name '{palette_name}'. Available palettes: {', '.join(SequenceData._get_available_palette_names())}") from e
+        
+        if reverse_colors:
+            color_list = list(reversed(color_list))
+        
+        return color_list
+    
+    @staticmethod
+    def _convert_rgb_to_hex_and_255(color_list):
+        """
+        Convert list of RGB tuples (0-1 range) to hex codes and RGB (0-255 range).
+        
+        Parameters:
+        -----------
+        color_list : list
+            List of RGB tuples in 0-1 range.
+        
+        Returns:
+        --------
+        tuple : (hex_colors, rgb_255_list) where:
+            - hex_colors: List of hex color codes (e.g., "#FF5733")
+            - rgb_255_list: List of RGB tuples (0-255 range)
+        """
+        hex_colors = []
+        rgb_255_list = []
+        for rgb in color_list:
+            # Convert from 0-1 to 0-255
+            rgb_255 = tuple(int(c * 255) for c in rgb)
+            rgb_255_list.append(rgb_255)
+            # Convert to hex
+            hex_color = f"#{rgb_255[0]:02X}{rgb_255[1]:02X}{rgb_255[2]:02X}"
+            hex_colors.append(hex_color)
+        return hex_colors, rgb_255_list
+    
+    @staticmethod
+    def show_default_color_palette(n_states: int, reverse_colors: bool = True, palette_name: str = 'default', save_as: str = None, dpi: int = 200):
+        """
+        Display the default color palette that would be used for a given number of states.
         This is useful for viewing default colors and copying hex codes to create custom_colors.
         
         Parameters:
         -----------
         n_states : int
-            Number of states (colors) to generate. This determines which palette will be used.
+            Number of states (colors) to generate.
         reverse_colors : bool, default=True
             Whether to reverse the color order (same as default behavior in SequenceData).
+        palette_name : str, default='default'
+            Name of the color palette to use. Use 'default' to use the automatic palette selection
+            (Spectral for ≤20 states, viridis for 21-40 states, combined for >40 states).
+            Available palettes: 'default', 'Spectral', 'viridis', 'Set3', 'tab20', 'deep', 'muted', 
+            'pastel', 'bright', 'dark', 'colorblind', 'husl', 'hls', 'coolwarm', 'RdYlGn', 'RdYlBu',
+            'RdBu', 'PiYG', 'PRGn', 'BrBG', 'Set1', 'Set2', 'Paired', 'Accent', 'Dark2', etc.
+            Call SequenceData._get_available_palette_names() to see all available options.
         save_as : str, optional
             If provided, save the color preview figure to this file path.
         dpi : int, default=200
@@ -956,6 +1090,9 @@ class SequenceData:
         # View default colors for 13 states (call via class)
         color_info = SequenceData.show_default_color_palette(13)
         
+        # View a specific palette template
+        color_info = SequenceData.show_default_color_palette(13, palette_name='viridis')
+        
         # Or call via instance (which will use the instance's number of states)
         seq_data = SequenceData(...)
         color_info = seq_data.show_color_palette()
@@ -963,51 +1100,30 @@ class SequenceData:
         # Then you can copy the hex_colors to use as custom_colors
         custom_colors = color_info['hex_colors']
         """
-        # Generate default colors using the same logic as _assign_colors
-        if n_states <= 20:
-            color_list = sns.color_palette("Spectral", n_states)
-        else:
-            if n_states <= 40:
-                color_list = sns.color_palette("viridis", n_states)
-            else:
-                viridis_colors = sns.color_palette("viridis", min(n_states // 2, 20))
-                pastel_colors = sns.color_palette("Set3", min(n_states // 2, 12))
-                tab20_colors = sns.color_palette("tab20", min(n_states // 3, 20))
-                combined_colors = viridis_colors + pastel_colors + tab20_colors
-                while len(combined_colors) < n_states:
-                    combined_colors.extend(combined_colors[:min(len(combined_colors), n_states - len(combined_colors))])
-                color_list = combined_colors[:n_states]
-        
-        if reverse_colors:
-            color_list = list(reversed(color_list))
+        # Generate colors using the specified palette
+        color_list = SequenceData._generate_color_list(n_states, palette_name, reverse_colors)
         
         # Convert RGB (0-1) to hex and RGB (0-255)
-        hex_colors = []
-        rgb_255_list = []
-        for rgb in color_list:
-            # Convert from 0-1 to 0-255
-            rgb_255 = tuple(int(c * 255) for c in rgb)
-            rgb_255_list.append(rgb_255)
-            # Convert to hex
-            hex_color = f"#{rgb_255[0]:02X}{rgb_255[1]:02X}{rgb_255[2]:02X}"
-            hex_colors.append(hex_color)
+        hex_colors, rgb_255_list = SequenceData._convert_rgb_to_hex_and_255(color_list)
         
-        # Print color information
+        # Print header with palette information
         print(f"\n{'='*80}")
-        print(f"Default Color Palette for {n_states} States")
+        palette_display_name = "Default (automatic selection)" if palette_name == 'default' else palette_name
+        print(f"Color Palette: {palette_display_name} for {n_states} States")
         print(f"{'='*80}\n")
-        print("Color Index | Hex Code  | RGB (0-255)    | Preview")
-        print("-" * 80)
+        
+        # Show available palette names if using default
+        if palette_name == 'default':
+            available_palettes = SequenceData._get_available_palette_names()
+            print("Available color palette templates:")
+            print("  " + ", ".join(available_palettes))
+            print("\n  You can specify a palette template by using the 'palette_name' parameter.")
+            print("  Example: show_default_color_palette(13, palette_name='viridis')\n")
         
         # Create visualization
         fig, ax = plt.subplots(figsize=(12, max(6, n_states * 0.5)))
         
         for i, (hex_color, rgb, rgb_255) in enumerate(zip(hex_colors, color_list, rgb_255_list)):
-            # Print color info
-            print(f"    {i+1:3d}    | {hex_color} | {str(rgb_255):15s} | ", end="")
-            # Visual preview in terminal (using ANSI escape codes if supported)
-            print(f"███")
-            
             # Draw color swatch
             y_pos = n_states - i - 1
             rect = plt.Rectangle((0, y_pos), 1, 0.8, facecolor=rgb, edgecolor='black', linewidth=0.5)
@@ -1015,7 +1131,7 @@ class SequenceData:
             ax.text(1.1, y_pos + 0.4, f"{i+1:2d}. {hex_color} | RGB{rgb_255}", 
                    va='center', fontsize=10, fontfamily='monospace')
         
-        print(f"\n{'='*80}")
+        print(f"{'='*80}")
         print("\nTo use these colors as custom_colors, copy the hex codes:")
         print("  custom_colors = " + str(hex_colors))
         print("\nOr use additional_colors to assign custom colors to specific states:")
@@ -1031,7 +1147,8 @@ class SequenceData:
         ax.spines['right'].set_visible(False)
         ax.spines['bottom'].set_visible(False)
         ax.spines['left'].set_visible(False)
-        ax.set_title(f'Default Color Palette for {n_states} States', fontsize=14, pad=20)
+        title_text = f"Color Palette: {palette_display_name} ({n_states} States)"
+        ax.set_title(title_text, fontsize=14, pad=20)
         
         plt.tight_layout()
         
@@ -1048,7 +1165,7 @@ class SequenceData:
         }
 
     @staticmethod
-    def get_default_color_palette(n_states: int, reverse_colors: bool = True, return_format: str = 'hex'):
+    def get_default_color_palette(n_states: int, reverse_colors: bool = True, palette_name: str = 'default', return_format: str = 'hex'):
         """
         Get the default color palette for a given number of states.
         This returns the colors without displaying them (useful for programmatic use).
@@ -1059,6 +1176,8 @@ class SequenceData:
             Number of states (colors) to generate.
         reverse_colors : bool, default=True
             Whether to reverse the color order (same as default behavior in SequenceData).
+        palette_name : str, default='default'
+            Name of the color palette to use. See show_default_color_palette() for available options.
         return_format : str, default='hex'
             Format to return colors in. Options:
             - 'hex': List of hex color codes (e.g., "#FF5733")
@@ -1071,41 +1190,26 @@ class SequenceData:
         
         Example:
         --------
-        # Get hex codes for 13 states
+        # Get hex codes for 13 states using default palette
         hex_colors = SequenceData.get_default_color_palette(13, return_format='hex')
+        
+        # Get hex codes using a specific palette template
+        hex_colors = SequenceData.get_default_color_palette(13, palette_name='viridis', return_format='hex')
         
         # Use them as custom_colors
         seq = SequenceData(df, time=..., states=..., custom_colors=hex_colors)
         """
-        # Generate default colors using the same logic as _assign_colors
-        if n_states <= 20:
-            color_list = sns.color_palette("Spectral", n_states)
-        else:
-            if n_states <= 40:
-                color_list = sns.color_palette("viridis", n_states)
-            else:
-                viridis_colors = sns.color_palette("viridis", min(n_states // 2, 20))
-                pastel_colors = sns.color_palette("Set3", min(n_states // 2, 12))
-                tab20_colors = sns.color_palette("tab20", min(n_states // 3, 20))
-                combined_colors = viridis_colors + pastel_colors + tab20_colors
-                while len(combined_colors) < n_states:
-                    combined_colors.extend(combined_colors[:min(len(combined_colors), n_states - len(combined_colors))])
-                color_list = combined_colors[:n_states]
-        
-        if reverse_colors:
-            color_list = list(reversed(color_list))
+        # Generate colors using the specified palette
+        color_list = SequenceData._generate_color_list(n_states, palette_name, reverse_colors)
         
         if return_format == 'rgb':
             return color_list
         elif return_format == 'hex':
-            hex_colors = []
-            for rgb in color_list:
-                rgb_255 = tuple(int(c * 255) for c in rgb)
-                hex_color = f"#{rgb_255[0]:02X}{rgb_255[1]:02X}{rgb_255[2]:02X}"
-                hex_colors.append(hex_color)
+            hex_colors, _ = SequenceData._convert_rgb_to_hex_and_255(color_list)
             return hex_colors
         elif return_format == 'rgb255':
-            return [tuple(int(c * 255) for c in rgb) for rgb in color_list]
+            _, rgb_255_list = SequenceData._convert_rgb_to_hex_and_255(color_list)
+            return rgb_255_list
         else:
             raise ValueError(f"return_format must be 'hex', 'rgb', or 'rgb255', got '{return_format}'")
 
