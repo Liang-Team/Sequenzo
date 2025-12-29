@@ -194,7 +194,7 @@ def check_version_update(
             file=sys.stderr
         )
         print(
-            f"[notice] To update, run: pip install --upgrade sequenzo",
+            f"[notice] To update, run: pip install --upgrade sequenzo=={latest}",
             file=sys.stderr
         )
     

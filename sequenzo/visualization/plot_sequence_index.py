@@ -568,17 +568,22 @@ def plot_sequence_index(seqdata: SequenceData,
             height_ratios = [1.0] * num_groups
         
         # Use gridspec for proportional heights
+        # Increase hspace to prevent x-axis labels from overlapping with subplot above
+        # Use larger hspace for column layout to accommodate group titles and x-axis labels
+        hspace_value = 0.4 if layout == 'column' else 0.25
         fig = plt.figure(figsize=(actual_figsize[0], actual_figsize[1] * sum(height_ratios) / len(height_ratios) * num_groups))
         gs = gridspec.GridSpec(nrows=num_groups, ncols=1, figure=fig, 
-                               height_ratios=height_ratios, hspace=0.25, wspace=0.15)
+                               height_ratios=height_ratios, hspace=hspace_value, wspace=0.15)
         axes = [fig.add_subplot(gs[i]) for i in range(num_groups)]
     else:
         # Standard subplots with equal heights
+        # Increase hspace for column layout to prevent x-axis labels from overlapping
+        hspace_value = 0.4 if layout == 'column' else 0.25
         fig, axes = plt.subplots(
             nrows=nrows,
             ncols=ncols,
             figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
-            gridspec_kw={'wspace': 0.15, 'hspace': 0.25}
+            gridspec_kw={'wspace': 0.15, 'hspace': hspace_value}
         )
         axes = axes.flatten()
 
@@ -780,8 +785,16 @@ def plot_sequence_index(seqdata: SequenceData,
         if i % ncols == 0 and not hide_y_axis:
             ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
-        # if i >= num_groups - ncols:
-        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
+        # For column layout, only show x-axis label on the bottom subplot
+        # For grid layout, show x-axis label on bottom row subplots
+        if layout == 'column':
+            # Only show xlabel on the last (bottom) subplot
+            if i == num_groups - 1:
+                ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
+        else:
+            # For grid layout, show xlabel on bottom row
+            if i >= num_groups - ncols:
+                ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
 
     # Hide unused subplots (not needed for proportional scaling with column layout)
     if not (proportional_scaling and layout == 'column'):
@@ -793,10 +806,12 @@ def plot_sequence_index(seqdata: SequenceData,
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
     # Adjust layout to remove tight_layout warning and eliminate extra right space
+    # Increase hspace for column layout to prevent x-axis labels from overlapping with subplot above
     if proportional_scaling and layout == 'column':
-        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.9, wspace=0.15)
+        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.9, wspace=0.15, hspace=0.4)
     else:
-        fig.subplots_adjust(wspace=0.15, hspace=0.25, bottom=0.1, top=0.9, right=0.98, left=0.08)
+        hspace_value = 0.4 if layout == 'column' else 0.25
+        fig.subplots_adjust(wspace=0.15, hspace=hspace_value, bottom=0.1, top=0.9, right=0.98, left=0.08)
 
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
