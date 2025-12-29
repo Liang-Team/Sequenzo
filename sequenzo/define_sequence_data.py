@@ -199,15 +199,73 @@ class SequenceData:
         if not self.states:
             raise ValueError("'states' must be provided.")
 
+        # Get all unique values from the data (including NaN)
+        # stack() drops NaN by default, so we need to check separately
+        data_values_no_nan = set(self.data[self.time].stack().unique())
+        # Check if there are any NaN values in the data
+        has_nan_in_data = self.data[self.time].isna().any().any()
+        
+        # Combine all data values (including NaN indicator if present)
+        all_data_values = data_values_no_nan.copy()
+        if has_nan_in_data:
+            all_data_values.add(np.nan)
+        
         # Validate that states are present in the actual data values
-        data_values = set(self.data[self.time].stack().unique())
         states_clean = [s for s in self.states if not pd.isna(s)]    # stack() removes nan values, so if states contains np.nan, it will cause an error
-        unmatched_states = [s for s in states_clean if s not in data_values]
+        unmatched_states = [s for s in states_clean if s not in data_values_no_nan]
 
         if unmatched_states:
             raise ValueError(
                 f"[!] The following provided 'states' are not found in the data: {unmatched_states}\n"
-                f"    Hint: Check spelling or formatting. Data contains these unique values: {sorted(data_values)}"
+                f"    Hint: Check spelling or formatting. Data contains these unique values: {sorted([v for v in data_values_no_nan if not pd.isna(v)])}"
+            )
+        
+        # Validate that all data values are present in the provided states (complete state space check)
+        # Exclude missing values from this check (NaN and user-specified missing_values)
+        states_set = set(self.states)
+        # Check for NaN in states
+        has_nan_in_states = any(pd.isna(s) for s in self.states)
+        
+        # Get missing value indicators to exclude from the check
+        missing_indicators = set()
+        if has_nan_in_states:
+            missing_indicators.add(np.nan)
+        # Add user-specified missing_values
+        for mv in self.missing_values:
+            if pd.isna(mv):
+                missing_indicators.add(np.nan)
+            else:
+                missing_indicators.add(mv)
+        # Also check for string "Missing" (case-insensitive) in states
+        for s in self.states:
+            if isinstance(s, str) and s.lower() == 'missing':
+                missing_indicators.add(s)
+        
+        # Find data values that are not in states and not missing values
+        missing_from_states = []
+        for dv in all_data_values:
+            # Skip if it's a missing value indicator
+            if pd.isna(dv):
+                # NaN is only allowed if it's in states or in missing_indicators
+                if np.nan not in missing_indicators and not has_nan_in_states:
+                    missing_from_states.append("NaN")
+            elif dv in missing_indicators:
+                continue  # This is a known missing value, skip
+            elif dv not in states_set:
+                missing_from_states.append(dv)
+        
+        if missing_from_states:
+            # Format the error message nicely
+            data_values_display = sorted([v for v in data_values_no_nan if not pd.isna(v)])
+            if has_nan_in_data:
+                data_values_display.append("NaN")
+            
+            raise ValueError(
+                f"[!] The following values found in the data are not included in your 'states' list: {missing_from_states}\n"
+                f"    Your provided states: {self.states}\n"
+                f"    All unique values in data: {data_values_display}\n"
+                f"    Hint: You must include ALL unique values from the data in your 'states' parameter.\n"
+                f"    Missing values (NaN or user-specified) are automatically handled, but all other data values must be in 'states'."
             )
 
         # ----------------
@@ -238,7 +296,32 @@ class SequenceData:
 
         if self.labels:
             if len(self.labels) != len(self.states):
-                raise ValueError("'labels' must match the length of 'states'.")
+                # Provide detailed error message showing what's missing or extra
+                states_len = len(self.states)
+                labels_len = len(self.labels)
+                
+                if labels_len < states_len:
+                    missing_count = states_len - labels_len
+                    error_msg = (
+                        f"[!] 'labels' length ({labels_len}) is shorter than 'states' length ({states_len}).\n"
+                        f"    Missing {missing_count} label(s).\n"
+                        f"    Your states: {self.states}\n"
+                        f"    Your labels: {self.labels}\n"
+                        f"    Hint: You need to provide {states_len} labels, one for each state.\n"
+                        f"    Example: labels = {[str(s) for s in self.states]}"
+                    )
+                else:
+                    extra_count = labels_len - states_len
+                    error_msg = (
+                        f"[!] 'labels' length ({labels_len}) is longer than 'states' length ({states_len}).\n"
+                        f"    You have {extra_count} extra label(s).\n"
+                        f"    Your states: {self.states}\n"
+                        f"    Your labels: {self.labels}\n"
+                        f"    Hint: You should provide exactly {states_len} labels, one for each state.\n"
+                        f"    The extra labels are: {self.labels[states_len:]}"
+                    )
+                
+                raise ValueError(error_msg)
 
             # Ensure labels are all strings
             non_string_labels = [label for label in self.labels if not isinstance(label, str)]
