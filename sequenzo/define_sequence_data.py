@@ -240,17 +240,32 @@ class SequenceData:
         for s in self.states:
             if isinstance(s, str) and s.lower() == 'missing':
                 missing_indicators.add(s)
+        # Also check for string "NaN" (case-insensitive) in states
+        for s in self.states:
+            if isinstance(s, str) and s.lower() == 'nan':
+                missing_indicators.add(s)
+        
+        # Auto-detect string "NaN" (case-insensitive) in data as missing value
+        # Similar to how we handle string "Missing" in _process_missing_values
+        # Also check for string "Missing" (case-insensitive) in data
+        for dv in data_values_no_nan:
+            if isinstance(dv, str):
+                dv_lower = dv.lower()
+                if dv_lower == 'nan' or dv_lower == 'missing':
+                    missing_indicators.add(dv)
         
         # Find data values that are not in states and not missing values
         missing_from_states = []
         for dv in all_data_values:
             # Skip if it's a missing value indicator
             if pd.isna(dv):
-                # NaN is only allowed if it's in states or in missing_indicators
-                if np.nan not in missing_indicators and not has_nan_in_states:
-                    missing_from_states.append("NaN")
+                # True pandas NaN should always be automatically handled, skip it
+                continue
             elif dv in missing_indicators:
                 continue  # This is a known missing value, skip
+            elif isinstance(dv, str) and (dv.lower() == 'nan' or dv.lower() == 'missing'):
+                # Double-check: if it's a string "NaN" or "Missing" (case-insensitive), skip it
+                continue
             elif dv not in states_set:
                 missing_from_states.append(dv)
         
@@ -420,6 +435,47 @@ class SequenceData:
                 if variant not in detected_missing and variant not in user_missing_found:
                     detected_missing.append(variant)
         
+        # Check for string "NaN" (case-insensitive) as missing indicator
+        # Similar to how we handle string "Missing"
+        # Only check if not already in user-specified missing_values
+        has_string_nan = False
+        string_nan_variants = []
+        
+        # Check if "NaN" (case-insensitive) is already in user-specified missing_values
+        has_nan_string_in_user_spec = any(
+            isinstance(mv, str) and mv.lower() == 'nan' for mv in self.missing_values
+        )
+        
+        if not has_nan_string_in_user_spec:
+            try:
+                # Check case-insensitive "nan" strings
+                nan_mask = self.seqdata.astype(str).str.lower() == 'nan'
+                if nan_mask.any().any():
+                    has_string_nan = True
+                    # Find actual string values (preserving case)
+                    actual_values = self.seqdata[nan_mask].dropna().unique()
+                    string_nan_variants = [str(v) for v in actual_values if str(v).lower() == 'nan']
+            except (AttributeError, TypeError):
+                # If conversion fails, check column by column
+                try:
+                    for col in self.seqdata.columns:
+                        col_mask = self.seqdata[col].astype(str).str.lower() == 'nan'
+                        if col_mask.any():
+                            has_string_nan = True
+                            actual_values = self.seqdata.loc[col_mask, col].unique()
+                            for v in actual_values:
+                                variant = str(v)
+                                if variant.lower() == 'nan' and variant not in string_nan_variants:
+                                    string_nan_variants.append(variant)
+                except:
+                    pass
+        
+        if has_string_nan:
+            # Add unique string variants to detected missing (only if not already specified by user)
+            for variant in string_nan_variants:
+                if variant not in detected_missing and variant not in user_missing_found:
+                    detected_missing.append(variant)
+        
         # Combine user-specified and auto-detected missing values
         all_missing_values = list(set(self.missing_values + detected_missing))
         # Remove NaN placeholders and add actual NaN check
@@ -435,6 +491,8 @@ class SequenceData:
         elif user_missing_found:
             has_any_missing = True
         elif has_string_missing:
+            has_any_missing = True
+        elif has_string_nan:
             has_any_missing = True
         else:
             # Check if any user-specified missing_values exist in data
@@ -466,6 +524,9 @@ class SequenceData:
         elif string_missing_variants:
             # Use the first variant (usually "Missing")
             canonical_missing_value = string_missing_variants[0]
+        elif string_nan_variants:
+            # Use the first variant (usually "NaN")
+            canonical_missing_value = string_nan_variants[0]
         elif user_missing_found:
             # Use the first user-specified missing value that was found
             canonical_missing_value = user_missing_found[0]
@@ -484,7 +545,7 @@ class SequenceData:
                 elif isinstance(state, str):
                     # Check if state matches any missing value (case-insensitive for strings)
                     state_lower = state.lower()
-                    if state_lower == "missing" or state in self.missing_values or state in user_missing_found:
+                    if state_lower == "missing" or state_lower == "nan" or state in self.missing_values or state in user_missing_found:
                         has_missing_state = True
                         break
                 elif state in self.missing_values or state in user_missing_found:
@@ -493,7 +554,7 @@ class SequenceData:
             
             # Also check labels
             has_missing_label = any(
-                label.lower() == "missing" or label in self.missing_values or label in user_missing_found
+                (label.lower() == "missing" or label.lower() == "nan") or label in self.missing_values or label in user_missing_found
                 for label in self.labels if isinstance(label, str)
             ) or any(pd.isna(label) for label in self.labels)
             
@@ -514,8 +575,10 @@ class SequenceData:
                     missing_types.append("NaN (pandas)")
                 if string_missing_variants:
                     missing_types.extend([f"'{v}'" for v in string_missing_variants])
+                if string_nan_variants:
+                    missing_types.extend([f"'{v}'" for v in string_nan_variants])
                 if user_missing_found:
-                    missing_types.extend([str(v) for v in user_missing_found if v not in string_missing_variants and not pd.isna(v)])
+                    missing_types.extend([str(v) for v in user_missing_found if v not in string_missing_variants and v not in string_nan_variants and not pd.isna(v)])
                 missing_type_desc = ", ".join(missing_types) if missing_types else "missing values"
                 
                 missing_values_desc = ""
