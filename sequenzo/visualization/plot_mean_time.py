@@ -13,11 +13,7 @@ import matplotlib.pyplot as plt
 from typing import Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
-    create_standalone_legend,
-    combine_plot_with_legend,
-    save_and_show_results,
-    show_plot_title,
-    save_figure_to_buffer
+    show_plot_title
 )
 
 
@@ -41,7 +37,11 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
     
     # Get data and preprocess
     seq_df = seqdata.to_dataframe()
-    inv = {v: k for k, v in seqdata.state_mapping.items()}
+    # Use inverse_state_mapping if available, otherwise build it
+    if hasattr(seqdata, 'inverse_state_mapping'):
+        inv = seqdata.inverse_state_mapping
+    else:
+        inv = {v: k for k, v in seqdata.state_mapping.items()}
     states = list(range(1, len(seqdata.states) + 1))  # Use numerical state indices
     n = len(seq_df)
 
@@ -89,8 +89,20 @@ def _compute_mean_time(seqdata: SequenceData, weights="auto") -> pd.DataFrame:
             se[s] = 0.0
 
     # Create result DataFrame
+    # Convert state indices to state names, handling missing values
+    state_names = []
+    for s in states:
+        state_name = inv.get(s, None)
+        # Handle np.nan: replace with 'missing'
+        if pd.isna(state_name):
+            state_name = 'missing'
+        # Also handle string 'nan' or 'NaN'
+        elif isinstance(state_name, str) and state_name.lower() == 'nan':
+            state_name = 'missing'
+        state_names.append(state_name)
+    
     mean_time_df = pd.DataFrame({
-        'State': [inv[s] for s in states],
+        'State': state_names,
         'MeanTime': [mean_times[s] for s in states],
         'StandardError': [se[s] for s in states]
     })
@@ -147,8 +159,11 @@ def plot_mean_time(seqdata: SequenceData,
                 color=row['Color'], edgecolor='white', linewidth=0.5)
 
     # Set y-axis ticks and labels
+    # Replace 'nan' with 'missing' for display
+    y_labels = mean_time_df['State'].copy()
+    y_labels = y_labels.replace('nan', 'missing')
     ax.set_yticks(range(len(mean_time_df)))
-    ax.set_yticklabels(mean_time_df['State'], fontsize=fontsize-2)
+    ax.set_yticklabels(y_labels, fontsize=fontsize-2)
 
     # Add error bars if needed
     if show_error_bar:
@@ -193,39 +208,15 @@ def plot_mean_time(seqdata: SequenceData,
     # Adjust layout before saving
     plt.tight_layout()
 
-    # Get colors for legend - use color_map_by_label like in plot_modal_state
-    colors_for_legend = seqdata.color_map_by_label
-
-    # Save main figure to memory
-    main_buffer = save_figure_to_buffer(fig, dpi=dpi)
-
-    # Create standalone legend
-    legend_buffer = create_standalone_legend(
-        colors=colors_for_legend,
-        labels=seqdata.labels,
-        ncol=min(5, len(seqdata.states)),
-        figsize=(12, 1),
-        fontsize=fontsize - 2,
-        dpi=dpi
-    )
-
     # Handle save_as extension
     if save_as and not save_as.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
         save_as = save_as + '.png'
 
-    # Combine main plot with legend
-    combined_img = combine_plot_with_legend(
-        main_buffer,
-        legend_buffer,
-        output_path=save_as,
-        dpi=dpi,
-        padding=20  # Increased padding between plot and legend
-    )
+    # Save figure if needed
+    if save_as:
+        fig.savefig(save_as, dpi=dpi, bbox_inches='tight', facecolor='white')
 
-    # Display combined image
-    plt.figure(figsize=(12, 8))
-    plt.imshow(combined_img)
-    plt.axis('off')
+    # Display plot
     plt.show()
     plt.close()
 
