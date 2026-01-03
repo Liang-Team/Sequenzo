@@ -348,11 +348,17 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                     # The index should be the same as alphabet_list[i] (which is channel.states)
                     # Convert states to list of strings to ensure exact match
                     expected_index = pd.Index([str(s) for s in states])
-                    current_index = pd.Index([str(s) for s in sm_matrix.index])
+                    # Convert current index to strings to ensure type consistency
+                    sm_matrix.index = pd.Index([str(s) for s in sm_matrix.index])
+                    sm_matrix.columns = pd.Index([str(s) for s in sm_matrix.columns])
+                    current_index = sm_matrix.index
                     if not current_index.equals(expected_index):
                         # Reindex to match alphabet_list exactly, preserving values
                         # Use fill_value=0 for any missing entries (shouldn't happen, but safe)
                         sm_matrix = sm_matrix.reindex(index=expected_index, columns=expected_index, fill_value=0.0)
+                    # Ensure index and columns are strings after reindexing
+                    sm_matrix.index = pd.Index([str(s) for s in sm_matrix.index])
+                    sm_matrix.columns = pd.Index([str(s) for s in sm_matrix.columns])
                     # Convert to numpy array for consistent indexing and to match TraMineR behavior
                     # TraMineR uses numeric indexing, so we convert DataFrame to array
                     # But keep the index mapping for .loc access
