@@ -234,7 +234,7 @@ class SequenceData:
                 s = s.item()
             states_clean_normalized.append(s)
         
-        unmatched_states = [s for s in states_clean_normalized if s not in data_values_no_nan]
+        unmatched_states = [s for s in data_values_no_nan if s not in states_clean_normalized]
         
         if unmatched_states:
             raise ValueError(
