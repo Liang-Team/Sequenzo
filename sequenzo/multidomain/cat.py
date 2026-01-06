@@ -268,7 +268,19 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             else:
                 newseqdata[:, j] = newcol
 
-    states_space = list(np.unique(newseqdata))
+    # Get unique states in order of first appearance (like R's seqdef)
+    # np.unique sorts, but we need to preserve order of first appearance to match TraMineR
+    # TraMineR's seqdef uses the order of first appearance in the data
+    # Exclude empty strings (void) and NaN values, matching R's behavior
+    seen = set()
+    states_space = []
+    for i in range(numseq):
+        for j in range(maxlength):
+            val = newseqdata[i, j]
+            # Exclude empty strings (void) and NaN values
+            if val and val.strip() and not pd.isna(val) and val not in seen:
+                seen.add(val)
+                states_space.append(val)
 
     print("  - OK.")
 
