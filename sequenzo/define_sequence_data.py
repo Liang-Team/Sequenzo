@@ -201,7 +201,22 @@ class SequenceData:
 
         # Get all unique values from the data (including NaN)
         # stack() drops NaN by default, so we need to check separately
-        data_values_no_nan = set(self.data[self.time].stack().unique())
+        # Convert to Python native types for consistent comparison across Python versions
+        # Python 3.12 may return numpy scalar types which need to be converted
+        stacked_values = self.data[self.time].stack().unique()
+        # Normalize values to Python native types for consistent comparison
+        data_values_list = []
+        for val in stacked_values:
+            # Skip NaN values (they're handled separately)
+            if pd.isna(val):
+                continue
+            # Convert numpy scalar types to Python native types for consistent comparison
+            # This is important for Python 3.12 compatibility
+            if hasattr(val, 'item'):  # numpy scalar
+                val = val.item()
+            data_values_list.append(val)
+        
+        data_values_no_nan = set(data_values_list)
         # Check if there are any NaN values in the data
         has_nan_in_data = self.data[self.time].isna().any().any()
         
@@ -212,8 +227,15 @@ class SequenceData:
         
         # Validate that states are present in the actual data values
         states_clean = [s for s in self.states if not pd.isna(s)]    # stack() removes nan values, so if states contains np.nan, it will cause an error
-        unmatched_states = [s for s in states_clean if s not in data_values_no_nan]
-
+        # Normalize states to Python native types for consistent comparison
+        states_clean_normalized = []
+        for s in states_clean:
+            if hasattr(s, 'item'):  # numpy scalar
+                s = s.item()
+            states_clean_normalized.append(s)
+        
+        unmatched_states = [s for s in states_clean_normalized if s not in data_values_no_nan]
+        
         if unmatched_states:
             raise ValueError(
                 f"[!] The following provided 'states' are not found in the data: {unmatched_states}\n"
@@ -222,7 +244,17 @@ class SequenceData:
         
         # Validate that all data values are present in the provided states (complete state space check)
         # Exclude missing values from this check (NaN and user-specified missing_values)
-        states_set = set(self.states)
+        # Normalize states to Python native types for consistent comparison
+        states_normalized = []
+        for s in self.states:
+            if pd.isna(s):
+                states_normalized.append(s)
+            else:
+                if hasattr(s, 'item'):  # numpy scalar
+                    s = s.item()
+                states_normalized.append(s)
+        states_list = list(states_normalized)
+        states_set = set(states_normalized)
         # Check for NaN in states
         has_nan_in_states = any(pd.isna(s) for s in self.states)
         
@@ -255,6 +287,7 @@ class SequenceData:
                     missing_indicators.add(dv)
         
         # Find data values that are not in states and not missing values
+        # Use more robust comparison that handles type mismatches
         missing_from_states = []
         for dv in all_data_values:
             # Skip if it's a missing value indicator
@@ -266,7 +299,9 @@ class SequenceData:
             elif isinstance(dv, str) and (dv.lower() == 'nan' or dv.lower() == 'missing'):
                 # Double-check: if it's a string "NaN" or "Missing" (case-insensitive), skip it
                 continue
-            elif dv not in states_set:
+            
+            # Check if dv is in states_set (both are now normalized to Python native types)
+            if dv not in states_set:
                 missing_from_states.append(dv)
         
         if missing_from_states:

@@ -4,6 +4,7 @@
 @Time    : 2024/11/11 12:00
 @Desc    : Compute substitution costs and substitution-cost/proximity matrix
 """
+import warnings
 
 import pandas as pd
 import numpy as np
@@ -161,7 +162,9 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
         if method == "INDELSLOG":
             indels = np.log(2 / (1 + indels))
         else:
-            indels = 1 / indels
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                indels = 1 / indels
             indels[np.isinf(indels)] = 1e15  # 避免cast警告
 
         if time_varying:
