@@ -92,10 +92,10 @@ def plot_relative_frequency(seqdata: SequenceData,
     for i, seq in enumerate(rep_sequences):
         for t, state_idx in enumerate(seq):
             color = state_palette.get(state_idx, "gray")  # 直接用整数查颜色
-            ax.add_patch(Rectangle((t, i), 1, 1, color=color))
+            ax.add_patch(Rectangle((t, i + 0.5), 1, 1, color=color))
 
     ax.set_xlim(0, seqdata.values.shape[1])
-    ax.set_ylim(0, len(rep_sequences))
+    ax.set_ylim(0.5, len(rep_sequences) + 0.5)
     # Add weight information to title if weights are used
     if show_title:
         if weights is not None and not np.allclose(weights, 1.0):
@@ -120,7 +120,7 @@ def plot_relative_frequency(seqdata: SequenceData,
     ax.set_xticklabels(visible_labels, fontsize=fontsize-2, rotation=0, ha='right', color='gray')
 
     # Y-axis labels
-    ax.set_yticks(range(0, num_groups, max(1, num_groups // 10)))
+    ax.set_yticks(range(1, num_groups + 1, max(1, num_groups // 10)))
     ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=fontsize-2, color='gray')
 
     # **Remove unwanted black outlines**
@@ -136,6 +136,7 @@ def plot_relative_frequency(seqdata: SequenceData,
     box_parts = box_ax.boxplot(
         dissimilarities,
         vert=False,  # Horizontal box plot
+        positions=range(1, num_groups + 1),  # Align boxes with y-axis ticks
         patch_artist=True,  # Allow fill color
         boxprops=dict(facecolor='lightblue', edgecolor='gray', linewidth=1),  # Box style
         whiskerprops=dict(color='gray', linewidth=1),  # Whisker style
@@ -145,7 +146,7 @@ def plot_relative_frequency(seqdata: SequenceData,
     )
 
     # Y-axis labels
-    box_ax.set_yticks(range(0, num_groups, max(1, num_groups // 10)))
+    box_ax.set_yticks(range(1, num_groups + 1, max(1, num_groups // 10)))
     box_ax.set_yticklabels(range(1, num_groups + 1, max(1, num_groups // 10)), fontsize=fontsize-2, color='black')
 
     # Keep only the bottom x-axis visible
