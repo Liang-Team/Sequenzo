@@ -496,13 +496,58 @@ def plot_sequence_index(seqdata: SequenceData,
         # Validate that all values in the group column have labels
         unique_values = group_dataframe[group_column_name].unique()
         missing_keys = set(unique_values) - set(group_labels.keys())
+        
+        # Track if we performed auto-remapping (to avoid double copying)
+        remapping_performed = False
+        
+        # Auto-detect and fix: if missing_keys exist and they look like medoid indices
+        # (e.g., large integers that don't match group_labels keys), automatically remap them
         if missing_keys:
-            raise ValueError(
-                f"group_labels missing mappings for values: {missing_keys}. "
-                f"Please provide labels for all unique values in '{group_column_name}': {sorted(unique_values)}"
-            )
+            # Check if missing_keys look like medoid indices (large integers > expected cluster count)
+            expected_cluster_count = len(group_labels)
+            missing_values_list = list(missing_keys)
+            
+            # Check if all missing values are numeric and larger than expected cluster count
+            # This suggests they might be medoid indices from KMedoids
+            all_numeric = all(isinstance(v, (int, float, np.integer, np.floating)) and not pd.isna(v) 
+                            for v in missing_values_list)
+            all_large = all(isinstance(v, (int, float, np.integer, np.floating)) and not pd.isna(v) 
+                           and (v > expected_cluster_count or v < 1) for v in missing_values_list)
+            
+            if all_numeric and all_large and len(missing_values_list) == expected_cluster_count:
+                # This looks like medoid indices - auto-remap to 1-k
+                print(f"[>] Detected medoid indices in '{group_column_name}'. "
+                      f"Automatically remapping {sorted(missing_values_list)} to cluster labels 1-{expected_cluster_count}.")
+                
+                # Create mapping from medoid indices to cluster labels 1-k
+                sorted_missing = sorted(missing_values_list)
+                medoid_to_cluster = {val: idx + 1 for idx, val in enumerate(sorted_missing)}
+                
+                # Apply the remapping
+                group_dataframe = group_dataframe.copy()  # Avoid modifying original
+                remapping_performed = True
+                group_dataframe[group_column_name] = group_dataframe[group_column_name].map(medoid_to_cluster)
+                
+                # Now verify that all values match group_labels keys
+                unique_values_after_remap = group_dataframe[group_column_name].unique()
+                missing_keys_after = set(unique_values_after_remap) - set(group_labels.keys())
+                if missing_keys_after:
+                    raise ValueError(
+                        f"After auto-remapping, group_labels still missing mappings for values: {missing_keys_after}. "
+                        f"Please provide labels for all unique values in '{group_column_name}': {sorted(unique_values_after_remap)}"
+                    )
+            else:
+                # Not medoid indices - raise error as before
+                raise ValueError(
+                    f"group_labels missing mappings for values: {missing_keys}. "
+                    f"Please provide labels for all unique values in '{group_column_name}': {sorted(unique_values)}"
+                )
+        
         # Apply the labels mapping
-        group_dataframe = group_dataframe.copy()  # Avoid modifying original
+        # Only copy if we haven't already copied above (during medoid remapping)
+        if not remapping_performed:
+            group_dataframe = group_dataframe.copy()  # Avoid modifying original
+        
         group_dataframe[group_column_name] = group_dataframe[group_column_name].map(group_labels)
 
     # Get unique groups and sort them based on user preference

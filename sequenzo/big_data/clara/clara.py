@@ -131,7 +131,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
-                states = np.arange(1, len(seqdata.states)).tolist()
+                states = np.arange(1, len(seqdata.states) + 1).tolist()
                 data_subset = SequenceData(data_subset,
                                            time=seqdata.time,
                                            states=states)
@@ -163,7 +163,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             refseq = [list(range(0, len(agseqdata))), medoids.tolist()]
             with open(os.devnull, 'w') as fnull:
                 with redirect_stdout(fnull):
-                    states = np.arange(1, len(seqdata.states)).tolist()
+                    states = np.arange(1, len(seqdata.states) + 1).tolist()
                     agseqdata = SequenceData(agseqdata,
                                              time=seqdata.time,
                                              states=states)
