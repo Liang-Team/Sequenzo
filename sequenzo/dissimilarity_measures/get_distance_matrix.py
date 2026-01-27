@@ -278,10 +278,22 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if sm_type == "matrix":
             if method in om_methods + ["TWED"]:
                 # TODO : checkcost()
+                # Add a NaN column at the beginning and a NaN row at the top
+                # This ensures that indexing starts from 1
+                nan_col = np.full((sm.shape[0], 1), np.nan)
+                sm = np.hstack([nan_col, sm])
+                nan_row = np.full((1, sm.shape[1]), np.nan)
+                sm = np.vstack([nan_row, sm])
                 pass
+
             elif method == "HAM":
                 # TODO : checkcost()
+                nan_col = np.full((sm.shape[0], 1), np.nan)
+                sm = np.hstack([nan_col, sm])
+                nan_row = np.full((1, sm.shape[1]), np.nan)
+                sm = np.vstack([nan_row, sm])
                 pass
+
             else:
                 raise ValueError(f"[x] No known 'sm' check for {method}.")
 
