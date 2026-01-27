@@ -228,7 +228,9 @@ def seqsubm(*args, **kwargs):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv('D:/country_co2_emissions_missing.csv')
+    from sequenzo.dissimilarity_measures import get_substitution_cost_matrix
+
+    df = pd.read_csv('/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/country_co2_emissions_missing.csv')
 
     time = list(df.columns)[1:]
 

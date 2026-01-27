@@ -175,7 +175,8 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
     # Checking correct numbers of info per channel
     if what != "MDseq":
         if len(sm) != nchannels or len(cweight) != nchannels:
-            raise ValueError("[!] You must supply one weight, one substitution matrix, and one indel per domain.")
+            raise ValueError("[!] You must supply one weight, one substitution matrix, and one indel per domain.\n"
+                             "    Hint: The length of `sm` or `cweight` does not match the number of domains.")
 
     # Checking that all channels have the same length
     slength1 = seqlength(channels[1])
@@ -299,34 +300,12 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
             # Use the actual states from the channel (like TraMineR uses attr(channels[[i]],"alphabet"))
             # TraMineR: alphabet_list[[i]] <- attr(channels[[i]],"alphabet")
+            # Important: We need to preserve the exact order of channel.states for proper indexing
             # Convert states to strings to match what's in MD sequences
-            states = [str(s) if not pd.isna(s) else "Missing" for s in channel.states]
+            # Store original states list for reference (before adding missing)
+            original_states = channel.states.copy()
+            states = [str(s) if not pd.isna(s) else "Missing" for s in original_states]
 
-            # Checking missing values
-            if with_missing[i]:
-                print("[>] Including missing value as an additional state.")
-                # TraMineR adds missing value to alphabet: alphabet_list[[i]] <- c(alphabet_list[[i]],attr(channels[[i]],"nr"))
-                # In SequenceData, missing values are represented internally as len(states)
-                # (not len(states) + 1) because state_mapping uses 1-based indexing: states map to 1..len(states)
-                # and missing values map to len(states) as the default
-                # We need to add the actual missing state name (as a string) to match what's in the MD sequences
-                # Find the missing state name from the states list
-                missing_state = None
-                for s in channel.states:
-                    if pd.isna(s) or (isinstance(s, str) and s.lower() == "missing"):
-                        missing_state = str(s) if not pd.isna(s) else "Missing"
-                        break
-                if missing_state is None:
-                    missing_state = "Missing"
-                # Add the missing state name to the alphabet list (as string)
-                if missing_state not in states:
-                    states.append(missing_state)
-            else:
-                if channel.ismissing:
-                    raise ValueError("[!] Found missing values in channel ", i,
-                                     ", set with.missing as TRUE for that channel.")
-
-            # Check states - store as list for indexing
             alphabet_list.append(states)
             alphsize_list.append(len(states))
 
@@ -340,42 +319,10 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
                 with contextlib.redirect_stdout(io.StringIO()):
                     costs = get_substitution_cost_matrix(channel, sm[i],
-                                                         with_missing=has_miss[i],
-                                                         time_varying=timeVarying, cval=cval,
+                                                         time_varying=timeVarying,
+                                                         cval=cval,
                                                          miss_cost=miss_cost)
                 sm_matrix = costs['sm']
-                
-                # TraMineR's seqcost returns a matrix WITHOUT "null" row/column
-                # Python's get_substitution_cost_matrix returns DataFrame WITH "null" at index 0
-                # For consistency with TraMineR, we need to remove the "null" row/column
-                # when it's a DataFrame (for numpy arrays, there's no "null")
-                if isinstance(sm_matrix, pd.DataFrame):
-                    # Remove "null" row and column to match TraMineR structure
-                    # The DataFrame has index=["null", state1, state2, ...]
-                    # We want to keep only [state1, state2, ...]
-                    if "null" in sm_matrix.index:
-                        sm_matrix = sm_matrix.drop(index="null").drop(columns="null")
-                    # Ensure DataFrame index matches alphabet_list (states) exactly
-                    # This is critical for proper indexing when building CAT matrix
-                    # The index should be the same as alphabet_list[i] (which is channel.states)
-                    # Convert states to list of strings to ensure exact match
-                    expected_index = pd.Index([str(s) for s in states])
-                    # Convert current index to strings to ensure type consistency
-                    sm_matrix.index = pd.Index([str(s) for s in sm_matrix.index])
-                    sm_matrix.columns = pd.Index([str(s) for s in sm_matrix.columns])
-                    current_index = sm_matrix.index
-                    if not current_index.equals(expected_index):
-                        # Reindex to match alphabet_list exactly, preserving values
-                        # Use fill_value=0 for any missing entries (shouldn't happen, but safe)
-                        sm_matrix = sm_matrix.reindex(index=expected_index, columns=expected_index, fill_value=0.0)
-                    # Ensure index and columns are strings after reindexing
-                    sm_matrix.index = pd.Index([str(s) for s in sm_matrix.index])
-                    sm_matrix.columns = pd.Index([str(s) for s in sm_matrix.columns])
-                    # Convert to numpy array for consistent indexing and to match TraMineR behavior
-                    # TraMineR uses numeric indexing, so we convert DataFrame to array
-                    # But keep the index mapping for .loc access
-                    # Actually, keep as DataFrame for .loc access, but ensure values are correct
-                
                 substmat_list.append(sm_matrix)
 
                 if "auto" == indel:
@@ -452,19 +399,10 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                     statelistj = alphabet[j].split(ch_sep)
 
                     for chan in range(nchannels):
-                        # TraMineR: ipos <- match(statelisti[chan], alphabet_list[[chan]])
-                        #          cost <- cost + substmat_list[[chan]][ipos, jpos]
-                        # match() returns 1-based index in R, but we use 0-based index in Python
                         state_i = statelisti[chan]  # State string from MD sequence (e.g., "1", "2")
                         state_j = statelistj[chan]  # State string from MD sequence
-                        
-                        # After removing "null" row/column, DataFrame structure matches TraMineR:
-                        # index=[state1, state2, ...] (no "null")
-                        # User-provided numpy arrays also don't have "null" row/column
+
                         if isinstance(substmat_list[chan], pd.DataFrame):
-                            # DataFrame has structure: index=[state1, state2, ...] (no "null")
-                            # Use .loc with actual state labels for safer indexing
-                            # Ensure state_i and state_j are strings to match DataFrame index
                             state_i_str = str(state_i)
                             state_j_str = str(state_j)
                             if state_i_str not in substmat_list[chan].index or state_j_str not in substmat_list[chan].columns:
@@ -575,15 +513,11 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
             print("[>] Computing MD distances using additive trick.")
 
-            # This step will hide the state concatenation,
-            # And the returned result will convert the MD strings into numbers.
-            # for example : '1+2+3' --> 1, '1+4+6' --> 2
             newseqdata_df = pd.DataFrame(newseqdata, columns=md_cnames)
             newseqdata_df.insert(0, channels[0].id_col, channels[0].ids)
 
             # Reconstruct multi-domain labels for composite states
-            domain_labels = [channel.labels for channel in
-                             channels]  # e.g., [["At home", "Left home"], ["No child", "Child"]]
+            domain_labels = [channel.labels for channel in channels]  # e.g., [["At home", "Left home"], ["No child", "Child"]]
 
             md_labels = []
             for md_state in states_space:
@@ -608,15 +542,55 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
             # Pass newindel as-is (can be scalar or vector depending on state-dependency)
             # TraMineR passes the full newindel vector/scalar to seqdist
+            temp_newsm = pd.DataFrame(newsm, index=alphabet, columns=alphabet)
             with contextlib.redirect_stdout(io.StringIO()):
                 diss_matrix = get_distance_matrix(newseqdata_seq,
                                                   method=method,
                                                   norm=norm,
                                                   indel=newindel,
                                                   sm=newsm,
-                                                  with_missing=False,
                                                   full_matrix=full_matrix)
             print("  - OK.")
 
             diss_matrix = pd.DataFrame(diss_matrix, index=channels[0].ids, columns=channels[0].ids)
             return diss_matrix
+
+
+if __name__ == "__main__":
+    import os
+
+    root = "/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data"
+
+    path1 = os.path.join(root, "country_co2_emissions_Without_missing_values.csv")
+    path2 = os.path.join(root, "country_co2_emissions_global_deciles_Without_missing_values.csv")
+
+    file1 = pd.read_csv(path1)
+    file2 = pd.read_csv(path2)
+
+    file1_time_list = list(file1.columns)[1:]
+    file2_time_list = list(file2.columns)[1:]
+
+    file1_states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    file2_states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    file1_sequence_data = SequenceData(file1,
+                                     time=file1_time_list,
+                                     id_col="country",
+                                     states=file1_states,
+                                     labels=file1_states)
+    file2_sequence_data = SequenceData(file2,
+                                       time=file2_time_list,
+                                       id_col="country",
+                                       states=file2_states,
+                                       labels=file2_states)
+
+    sequence_list = [file1_sequence_data, file2_sequence_data]
+
+    MD = compute_cat_distance_matrix(channels=sequence_list,
+                                     method="OM",
+                                     sm=["CONSTANT", "TRATE"],
+                                     what="diss",)
+    print(MD)
+
+    # out_path = os.path.join(root, "CO2_MD_python_result_OM_TRATE_diss.csv")
+    # MD.to_csv(out_path, index=False)
