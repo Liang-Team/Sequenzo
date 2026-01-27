@@ -42,7 +42,8 @@ dependencies = [
     "Pillow>=8.3.2",
     "pybind11>=2.6.0",
     "cython>=0.29.21",
-    "scipy>=1.6.3",
+    # Avoid SciPy builds from source on manylinux2014 (OpenBLAS missing)
+    "scipy>=1.6.3,<1.17",
     "scikit-learn>=0.24.2",
     "joblib>=1.0.1",
     "docutils>=0.17",

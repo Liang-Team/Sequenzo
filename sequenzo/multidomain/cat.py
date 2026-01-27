@@ -589,6 +589,7 @@ if __name__ == "__main__":
     MD = compute_cat_distance_matrix(channels=sequence_list,
                                      method="OM",
                                      sm=["CONSTANT", "TRATE"],
+                                     indel=[2, 10],
                                      what="diss",)
     print(MD)
 
