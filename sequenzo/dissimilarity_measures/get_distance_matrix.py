@@ -11,7 +11,7 @@
             seqdata        : State sequence object of class stslist
             method         : String.The dissimilarity measure to use.
                             It can be "OM", "OMloc", "OMslen",  "OMspell", "OMstran", "HAM", "DHD",
-                            "CHI2", "EUCLID", "LCS", "LCP", "RLCP",
+                            "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell",
                             "NMS", "NMSMST", "SVRspell", or "TWED".
             refseq         : Default: NULL. The baseline sequence to compute the distances from.
                             (1)When an integer, the index of a sequence in seqdata or 0 for the most frequent sequence.
@@ -19,12 +19,12 @@
                             (3)When a list, it must be a list of two sets of indexes of seqdata rows.
             norm           : Default: "none". The normalization to use when method is one of
                             {"OM", "OMloc", "OMslen", "OMspell", "OMstran", "TWED", "HAM", "DHD",
-                            "LCS", "LCP", "RLCP","CHI2", "EUCLID"}.
+                            "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "CHI2", "EUCLID"}.
                             (1)It can be "none", "auto", or,
                                 except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", or "YujianBo".
                             (2)"auto" is equivalent to
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
-                                2)"gmean"  when method is one of "LCS", "LCP", or "RLCP",
+                                2)"gmean"  when method is one of "LCS", "LCP", "RLCP", "LCPspell", or "RLCPspell",
                                 3) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMstran", "TWED".
             indel          : Insertion/deletion  cost(s).
                             Applies when method is one of "OM", "OMslen", "OMspell", or "OMstran".
@@ -48,7 +48,7 @@
                             Objects of class dist are smaller and can be passed directly as arguments to most clustering functions.
             tpow           : Default: 1.0.
                             The exponential weight of spell length when method is one of "OMspell", "NMSMST", or "SVRspell".
-            expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc" or method = "OMspell".
+            expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "LCPspell", or "RLCPspell".
                             It must be positive. The exact interpretation is distance-dependent.
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
@@ -142,7 +142,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # check method
     om_methods = ["OM", "OMspell"]
-    methods = om_methods + ["HAM", "DHD", "LCP", "RLCP"]
+    methods = om_methods + ["HAM", "DHD", "LCP", "RLCP", "LCPspell", "RLCPspell"]
 
     if method not in methods:
         raise ValueError(f"[!] Invalid 'method': {method}. Expected one of {methods}")
@@ -232,15 +232,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Check Arguments Not Yet Implemented
     # ===================================
     # norm: all but  SVRspell, NMS, NMSMST
-    if norm != "none" and method not in ["OM", "OMspell","HAM", "DHD", "LCP", "RLCP"]:
+    if norm != "none" and method not in ["OM", "OMspell", "HAM", "DHD", "LCP", "RLCP", "LCPspell", "RLCPspell"]:
         raise ValueError(f"[x] norm is not matched with {method}.")
 
     # ===============================
     # Check Method Specific Arguments
     # ===============================
-    # 1. OMspell
+    # 1. OMspell, LCPspell, RLCPspell
     if method in ["OMspell"] and expcost < 0:
         raise ValueError("[x] 'expcost' must be positive.")
+    if method in ["LCPspell", "RLCPspell"] and expcost < 0:
+        raise ValueError("[x] 'expcost' must be non-negative for LCPspell/RLCPspell (use 0 to ignore duration).")
 
     # 2. DHD
     elif method == "DHD":
@@ -258,7 +260,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if norm == "auto":
         if method in ["OM", "HAM", "DHD"]:
             norm = "maxlength"
-        elif method in ["LCP", "RLCP"]:
+        elif method in ["LCP", "RLCP", "LCPspell", "RLCPspell"]:
             norm = "gmean"
         elif method in ["OMspell"]:
             norm = "YujianBo"
@@ -370,7 +372,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             else:
                 raise ValueError("[x] 'sm' is missing.")
 
-    elif method not in ["CHI2", "EUCLID", "LCP", "RLCP", "NMS", "NMSMST", "SVRspell"]:
+    elif method not in ["CHI2", "EUCLID", "LCP", "RLCP", "LCPspell", "RLCPspell", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] No known 'sm' preparation for {method}.")
 
     # ===========================
@@ -464,7 +466,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # OMspell
     # Redefined dseqs.num
-    if method in ["OMspell", "NMSMST", "SVRspell"]:
+    if method in ["OMspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
         dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
 
         # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
@@ -483,8 +485,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
-        if method == "OMspell":
+        if method in ["OMspell", "LCPspell", "RLCPspell"]:
             _seqlength = seqlength(dseqs_num)
+        if method == "LCPspell":
+            sign = 1
+        elif method == "RLCPspell":
+            sign = -1
 
         del dseqs_oidxs
         del c
@@ -509,6 +515,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     elif method == "RLCP":
         sign = -1
 
+    # LCPspell (spell-based LCP, forward)
+    elif method == "LCPspell":
+        sign = 1
+
+    # RLCPspell (spell-based LCP, reverse)
+    elif method == "RLCPspell":
+        sign = -1
+
     del index_map
     del seqdata_num
 
@@ -518,7 +532,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Modified dseqs.num for OMspell
     ndn = dseqs_num.shape[0]
     incl_refseq = " (including refseq)" if refseq_type == "sequence" else ""
-    seq_or_spell = "spell sequences" if method in ["OMspell"] else "sequences"
+    seq_or_spell = "spell sequences" if method in ["OMspell", "LCPspell", "RLCPspell"] else "sequences"
     print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
     del ndn
     del seq_or_spell
@@ -576,6 +590,16 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
 
+        elif method == "LCPspell" or method == "RLCPspell":
+            LCPspell = c_code.LCPspellDistance(dseqs_num,
+                                                dseqs_dur,
+                                                _seqlength,
+                                                norm_num,
+                                                sign,
+                                                refseq_id,
+                                                expcost)
+            dist_matrix = LCPspell.compute_refseq_distances()
+
         dist_matrix = dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2[None, :]]
 
         dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
@@ -618,6 +642,16 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      sign,
                                      refseq_id)
             dist_matrix = LCP.compute_all_distances()
+
+        elif method == "LCPspell" or method == "RLCPspell":
+            LCPspell = c_code.LCPspellDistance(dseqs_num,
+                                               dseqs_dur,
+                                               _seqlength,
+                                               norm_num,
+                                               sign,
+                                               refseq_id,
+                                               expcost)
+            dist_matrix = LCPspell.compute_all_distances()
 
         _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
         _dist2matrix = _matrix.padding_matrix()

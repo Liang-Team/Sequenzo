@@ -27,18 +27,18 @@ unit_test/
 # sequenzo/dissimilarity_measures/utils/*.c  # <- Should be ignored
 # sequenzo/clustering/utils/*.c              # <- Should be ignored
 
-# 如果你有 cpp 源码用于 Pybind11（这些是手写的源码，应该保留）
-!sequenzo/dissimilarity_measures/src/*.cpp
-!sequenzo/clustering/src/*.cpp
-!sequenzo/clustering/sequenzo_fastcluster/src/*.cpp
-
-# 通常忽略所有 .c 和 .so 文件
+# 通常忽略所有 .c 和 .so 文件（先写忽略规则）
 *.c
 *.cpp
 *.so
 *.dylib
 *.o
 *.a
+
+# 再取消忽略 Pybind11 手写 C++ 源码（否定规则必须写在 *.cpp 之后才生效）
+!sequenzo/dissimilarity_measures/src/*.cpp
+!sequenzo/clustering/src/*.cpp
+!sequenzo/clustering/sequenzo_fastcluster/src/*.cpp
 
 # Python wheels
 *.whl
