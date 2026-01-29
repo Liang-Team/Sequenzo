@@ -7,6 +7,7 @@
 """
 from .system_level_indicators import (
     build_prefix_tree,
+    get_depth_stats,
     compute_prefix_count,
     compute_branching_factor,
     compute_js_divergence,
@@ -25,6 +26,7 @@ from .utils import (
 __all__ = [
     # System-level
     "build_prefix_tree",
+    "get_depth_stats",
     "compute_prefix_count",
     "compute_branching_factor",
     "compute_js_divergence",

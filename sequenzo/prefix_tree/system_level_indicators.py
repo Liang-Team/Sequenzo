@@ -17,7 +17,7 @@ from scipy.spatial.distance import jensenshannon
 from sequenzo.visualization.utils import save_and_show_results
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Tuple
 
 
 class PrefixTree:
@@ -84,35 +84,102 @@ class PrefixTree:
         return f"PrefixTree(max_depth={max(depths) if depths else 0}, total_prefixes={len(self.counts)})"
 
 
-def compute_prefix_count(tree, max_depth):
-    return [len(tree.get_prefixes_at_depth(t)) for t in range(1, max_depth + 1)]
+def get_depth_stats(tree: "PrefixTree") -> Dict[str, Any]:
+    """
+    Build depth-level stats in a single pass over the tree's prefix counts.
+    Use this when calling both compute_prefix_count and compute_branching_factor
+    to avoid scanning the tree twice (important when T or prefix count is large).
+
+    Returns:
+        dict with keys:
+          - 'depth_counts': dict depth -> number of distinct prefixes at that depth
+          - 'depth_to_prefixes': dict depth -> list of prefix tuples at that depth
+    """
+    depth_counts = defaultdict(int)
+    depth_to_prefixes = defaultdict(list)
+    for k in tree.counts:
+        d = len(k)
+        depth_counts[d] += 1
+        depth_to_prefixes[d].append(k)
+    return {
+        "depth_counts": dict(depth_counts),
+        "depth_to_prefixes": dict(depth_to_prefixes),
+    }
 
 
-def compute_branching_factor(tree, max_depth):
+def compute_prefix_count(
+    tree, max_depth, depth_stats: Optional[Dict[str, Any]] = None
+) -> List[int]:
+    """
+    Prefix counts per time step 1..max_depth.
+    When T is large, pass precomputed depth_stats from get_depth_stats(tree)
+    so that combined with compute_branching_factor only one pass over the tree is used.
+    """
+    if depth_stats is None:
+        depth_counts = defaultdict(int)
+        for k in tree.counts:
+            depth_counts[len(k)] += 1
+        depth_counts = dict(depth_counts)
+    else:
+        depth_counts = depth_stats["depth_counts"]
+    return [depth_counts.get(t, 0) for t in range(1, max_depth + 1)]
+
+
+def compute_branching_factor(
+    tree, max_depth, depth_prefixes: Optional[Dict[int, List[Tuple]]] = None
+) -> List[float]:
+    """
+    Branching factor per time step; first element is 0 to align with prefix count.
+    When T is large, pass depth_prefixes from get_depth_stats(tree)['depth_to_prefixes']
+    to avoid an extra full scan of the tree.
+    """
+    if depth_prefixes is None:
+        depth_to_prefixes = defaultdict(list)
+        for k in tree.counts:
+            depth_to_prefixes[len(k)].append(k)
+        depth_to_prefixes = dict(depth_to_prefixes)
+    else:
+        depth_to_prefixes = depth_prefixes
     result = []
     for t in range(2, max_depth + 1):
-        prefixes = tree.get_prefixes_at_depth(t - 1)
+        prefixes = depth_to_prefixes.get(t - 1, [])
         if not prefixes:
-            result.append(0)
+            result.append(0.0)
             continue
         child_counts = [tree.get_children_count(p) for p in prefixes]
-        result.append(np.mean(child_counts))
-    return [0] + result  # pad to align with prefix count
+        result.append(float(np.mean(child_counts)))
+    return [0.0] + result  # pad to align with prefix count
 
 
 def compute_js_divergence(sequences, state_set):
+    """
+    Jensen-Shannon divergence between consecutive time-step distributions.
+    Uses a single pass over sequences and vectorized numpy operations for speed
+    when T or N is large.
+    """
     T = len(sequences[0])
-    distros = []
+    state_list = list(state_set)
+    n_states = len(state_list)
+    state_to_idx = {s: i for i, s in enumerate(state_list)}
+    N = len(sequences)
+    # Build (N, T) matrix of state indices in one pass
+    mat = np.empty((N, T), dtype=np.intp)
+    for i, seq in enumerate(sequences):
+        for t in range(T):
+            mat[i, t] = state_to_idx[seq[t]]
+    # Per-time distributions via bincount
+    distros = np.zeros((T, n_states), dtype=float)
     for t in range(T):
-        counter = Counter(seq[t] for seq in sequences)
-        dist = np.array([counter[s] for s in state_set], dtype=float)
-        dist = dist / dist.sum()
-        distros.append(dist)
-
+        counts = np.bincount(mat[:, t], minlength=n_states)
+        total = counts.sum()
+        if total > 0:
+            distros[t] = counts / total
+        else:
+            distros[t] = counts
     js_scores = [0.0]
     for t in range(1, T):
         js = jensenshannon(distros[t], distros[t - 1])
-        js_scores.append(js)
+        js_scores.append(float(js))
     return js_scores
 
 

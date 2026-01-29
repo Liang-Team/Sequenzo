@@ -7,6 +7,7 @@
 """
 from .system_level_indicators import (
     build_suffix_tree,
+    get_depth_stats,
     compute_suffix_count,
     compute_merging_factor,
     compute_js_convergence,
@@ -29,6 +30,7 @@ from .utils import (
 __all__ = [
     # System-level
     "build_suffix_tree",
+    "get_depth_stats",
     "compute_suffix_count",
     "compute_merging_factor",
     "compute_js_convergence",

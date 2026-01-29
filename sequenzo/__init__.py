@@ -62,6 +62,7 @@ from .prefix_tree import (
 
 from .suffix_tree import (
     build_suffix_tree,
+    get_depth_stats,
     compute_suffix_count,
     compute_merging_factor,
     compute_js_convergence,
@@ -202,6 +203,7 @@ __all__ = [
 
     # Suffix Tree
     "build_suffix_tree",
+    "get_depth_stats",
     "compute_suffix_count",
     "compute_merging_factor",
     "compute_js_convergence",
