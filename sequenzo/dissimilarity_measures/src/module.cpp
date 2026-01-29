@@ -4,6 +4,7 @@
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
 #include "LCPdistance.cpp"
+#include "LCPspellDistance.cpp"
 
 namespace py = pybind11;
 
@@ -16,6 +17,11 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPdistance::compute_all_distances)
             .def("compute_refseq_distances", &LCPdistance::compute_refseq_distances);
+
+    py::class_<LCPspellDistance>(m, "LCPspellDistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double>())
+            .def("compute_all_distances", &LCPspellDistance::compute_all_distances)
+            .def("compute_refseq_distances", &LCPspellDistance::compute_refseq_distances);
 
     py::class_<DHDdistance>(m, "DHDdistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, int, double, py::array_t<int>>())
