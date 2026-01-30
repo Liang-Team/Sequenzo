@@ -62,6 +62,8 @@ from .prefix_tree import (
     SpellPrefixTree,
     build_spell_prefix_tree,
     compute_js_divergence_spell,
+    convert_seqdata_to_spells,
+    SpellIndividualDivergence,
 )
 
 from .suffix_tree import (
@@ -79,6 +81,7 @@ from .suffix_tree import (
     SpellSuffixTree,
     build_spell_suffix_tree,
     compute_js_convergence_spell,
+    SpellIndividualConvergence,
 )
 
 from .sequence_characteristics import (
@@ -211,6 +214,8 @@ __all__ = [
     "SpellPrefixTree",
     "build_spell_prefix_tree",
     "compute_js_divergence_spell",
+    "convert_seqdata_to_spells",
+    "SpellIndividualDivergence",
 
     # Suffix Tree
     "build_suffix_tree",
@@ -226,6 +231,7 @@ __all__ = [
     "SpellSuffixTree",
     "build_spell_suffix_tree",
     "compute_js_convergence_spell",
+    "SpellIndividualConvergence",
 
     # Sequence characteristics
     "get_subsequences_in_single_sequence",

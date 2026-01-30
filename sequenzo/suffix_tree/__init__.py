@@ -21,11 +21,13 @@ from .spell_level_indicators import (
     build_spell_suffix_tree,
     compute_js_convergence_spell,
 )
+from .spell_individual_level_indicators import SpellIndividualConvergence
 
 from .individual_level_indicators import (
     IndividualConvergence,
     compute_path_uniqueness_by_group,
     plot_suffix_rarity_distribution,
+    plot_individual_indicators_correlation,
 )
 
 from .utils import (
@@ -47,6 +49,7 @@ __all__ = [
     "compute_js_convergence",
     "compute_js_convergence_spell",
     "build_spell_suffix_tree",
+    "SpellIndividualConvergence",
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
 
@@ -54,6 +57,7 @@ __all__ = [
     "IndividualConvergence",
     "compute_path_uniqueness_by_group",
     "plot_suffix_rarity_distribution",
+    "plot_individual_indicators_correlation",
 
     # Utilities
     "extract_sequences",

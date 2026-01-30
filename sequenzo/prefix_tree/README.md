@@ -82,6 +82,68 @@ js_scores = compute_js_divergence_spell(
 )
 ```
 
+## Individual-Level Indicators
+
+Individual-level indicators measure how typical or unique each sequence is (per individual).
+
+### Position-based (time index): `IndividualDivergence`
+
+Use when you have a list of sequences (same length) or a position-based prefix tree. Level = time index; prefix = states from start up to time t.
+
+```python
+from sequenzo import IndividualDivergence, build_prefix_tree
+
+# From list of sequences (e.g. from extract_sequences or Position PrefixTree)
+tree = build_prefix_tree(seqs, mode="position")
+sequences = tree.sequences  # or your list of lists
+ind = IndividualDivergence(sequences)
+
+# Per-year rarity (each individual × each time point)
+rarity_df = ind.compute_prefix_rarity_per_year(zscore=False)
+# Aggregated rarity and standardized score (one value per individual)
+scores = ind.compute_prefix_rarity_score()
+std_scores = ind.compute_standardized_rarity_score(min_t=2, window=1)
+
+# Binary divergence (0/1) and first divergence year
+diverged = ind.compute_diverged(method="zscore", z_threshold=1.5, min_t=2)
+first_year = ind.compute_first_divergence_year(method="zscore", z_threshold=1.5, min_t=2)
+
+# Path uniqueness (how many time steps have a unique prefix)
+uniqueness = ind.compute_path_uniqueness()
+```
+
+Methods for `compute_diverged` and `compute_first_divergence_year`: `"zscore"` (window of high rarity z-scores), `"top_proportion"` (top p% most atypical), `"quantile"` (above a quantile threshold). See docstrings in `individual_level_indicators.py`.
+
+### Spell-based: `SpellIndividualDivergence`
+
+Use when the unit of analysis is the spell (run of same state). Level = spell index (1st spell, 2nd spell, ...). Requires a `SpellPrefixTree` built with `build_spell_prefix_tree(seqdata)`.
+
+```python
+from sequenzo import build_spell_prefix_tree, SpellIndividualDivergence
+
+tree = build_spell_prefix_tree(seqdata, expcost=0)
+ind = SpellIndividualDivergence(tree)
+
+# Per-spell rarity (each individual × each spell level)
+rarity_df = ind.compute_prefix_rarity_per_spell(zscore=False)
+scores = ind.compute_prefix_rarity_score()
+std_scores = ind.compute_standardized_rarity_score(min_k=2, window=1)
+
+# Binary divergence and first divergence spell level
+diverged = ind.compute_diverged(method="zscore", z_threshold=1.5, min_k=2)
+first_spell = ind.compute_first_divergence_spell(method="zscore", z_threshold=1.5, min_k=2)
+
+# Path uniqueness (how many spell levels have a unique prefix)
+uniqueness = ind.compute_path_uniqueness()
+```
+
+Variable-length sequences are supported: individuals with fewer spells have NaN at spell levels beyond their length.
+
+### Plotting
+
+- `plot_prefix_rarity_distribution(data, ...)`: distribution of (e.g. standardized) rarity scores, optionally by group, with threshold line.
+- `plot_individual_indicators_correlation(df, ...)`: correlation heatmap of individual-level indicators (e.g. diverged, prefix_rarity_score, path_uniqueness).
+
 ## Helper: `convert_seqdata_to_spells`
 
 Extract spell representation from `SequenceData`:
