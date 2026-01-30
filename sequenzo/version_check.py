@@ -25,11 +25,30 @@ def get_installed_version() -> str:
     """
     Get the currently installed version of Sequenzo.
     
+    This function tries multiple methods to get the version:
+    1. First, try to get version from the currently imported sequenzo module
+       (works in development mode when project directory is in sys.path)
+    2. Then, try importlib.metadata (works for installed packages)
+    3. Finally, try reading from pyproject.toml (fallback for development)
+    
     Returns:
         str: The installed version string (e.g., "0.1.24")
     """
+    # Method 1: Try to get version from currently imported sequenzo module
+    # This works in development mode when the project directory is in sys.path
     try:
-        # Try to get version from pyproject.toml via importlib.metadata
+        import sequenzo
+        if hasattr(sequenzo, '__version__'):
+            version = sequenzo.__version__
+            # Clean up version string (remove any git commands accidentally included)
+            version = version.split()[0] if version else None
+            if version:
+                return version
+    except (ImportError, AttributeError):
+        pass
+    
+    # Method 2: Try to get version from importlib.metadata (for installed packages)
+    try:
         if sys.version_info >= (3, 8):
             from importlib.metadata import version as get_package_version
             return get_package_version("sequenzo")
@@ -38,8 +57,32 @@ def get_installed_version() -> str:
             import pkg_resources
             return pkg_resources.get_distribution("sequenzo").version
     except Exception:
-        # If we can't get the version, return None
-        return None
+        pass
+    
+    # Method 3: Try to read from pyproject.toml (fallback for development mode)
+    # Use simple regex parsing to avoid dependency on tomli/tomllib
+    try:
+        import os
+        import re
+        
+        # Find project root (where pyproject.toml should be)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        pyproject_path = os.path.join(project_root, "pyproject.toml")
+        
+        if os.path.exists(pyproject_path):
+            with open(pyproject_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                # Simple regex to find version = "x.y.z" in [project] section
+                # Look for pattern: version = "0.1.30" or version = '0.1.30'
+                match = re.search(r'^\s*version\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                if match:
+                    return match.group(1)
+    except Exception:
+        pass
+    
+    # If all methods fail, return None
+    return None
 
 
 def get_latest_version_from_pypi(package_name: str = "sequenzo", timeout: float = 1.0) -> Optional[str]:
