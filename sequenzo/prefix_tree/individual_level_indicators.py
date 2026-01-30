@@ -1,14 +1,41 @@
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : individual_level_indicators.py
-@Time    : 02/05/2025 11:07
+@Time    : 01/30/2026 11:07
 @Desc    : 
-    This module provides methods for calculating individual-level indicators in sequence data analysis.
-    It includes tools to assess sequence divergence, identify divergence timing, measure prefix rarity,
-    and evaluate path uniqueness for individuals or groups. 
-    
-    These indicators help quantify how typical or unique an individual's sequence is within a population, 
-    and can be used for both overall and subgroup analyses.
+Individual-level indicators for position-based prefix tree (level = time index).
+
+This module provides per-sequence (per-individual) divergence and rarity measures when
+the unit of analysis is TIME INDEX: level t = states from the start up to time t.
+Higher prefix rarity means a more atypical (rarer) path from the start.
+
+Usage (position-based: list of sequences, same length)
+------------------------------------------------------
+    from sequenzo import IndividualDivergence, extract_sequences
+
+    # sequences: list of lists, e.g. [[1,2,3], [2,3,1], ...], all same length T
+    sequences = extract_sequences(df, time_cols, id_col, states)  # or from build_prefix_tree(..., mode="position").sequences
+    ind = IndividualDivergence(sequences)
+
+    # Per-year rarity: (N x T) matrix or DataFrame. rarity_{i,t} = -log(freq(prefix_{i,t})/N)
+    rarity_df = ind.compute_prefix_rarity_per_year(as_dataframe=True, zscore=False)
+
+    # One score per individual: sum over t of rarity, or standardized (max over windows of min z)
+    scores = ind.compute_prefix_rarity_score()
+    std_scores = ind.compute_standardized_rarity_score(min_t=2, window=1)
+
+    # Binary divergence (0/1) and first divergence year (1-indexed, or None)
+    diverged = ind.compute_diverged(method="zscore", z_threshold=1.5, min_t=2, window=1)
+    first_year = ind.compute_first_divergence_year(method="zscore", z_threshold=1.5, min_t=2)
+
+    # Methods: "zscore" (window of high z), "top_proportion" (top p% most atypical), "quantile" (above quantile)
+    # With group_labels, top_proportion/quantile are applied within each group.
+
+    # Path uniqueness: count of time steps at which prefix is unique (freq==1)
+    uniqueness = ind.compute_path_uniqueness()
+
+Spell-based (level = spell index) is in spell_individual_level_indicators.SpellIndividualDivergence;
+use build_spell_prefix_tree(seqdata) then SpellIndividualDivergence(tree).
 """
 from collections import defaultdict, Counter
 from typing import Optional
@@ -17,6 +44,26 @@ import pandas as pd
 
 
 class IndividualDivergence:
+    """
+    Individual-level divergence and prefix rarity for position-based prefix trees.
+
+    Input: sequences — a list of sequences (list of lists), all of the same length T.
+    Each sequence is the list of states at time 1, 2, ..., T. Level t corresponds
+    to the prefix (states from start up to time t). Rarity at (i, t) is
+    -log(freq(prefix_{i,t})/N); higher rarity = more atypical path.
+
+    Main methods:
+    - compute_prefix_rarity_per_year: (N x T) rarity matrix or DataFrame.
+    - compute_prefix_rarity_score: one aggregated rarity score per individual (sum over t).
+    - compute_standardized_rarity_score: z-based score for classification (higher = more atypical).
+    - compute_diverged: binary 0/1 per individual (method: zscore, top_proportion, quantile).
+    - compute_first_divergence_year: first year (1-indexed) at which diverged, or None.
+    - compute_path_uniqueness: count of time steps with unique prefix per individual.
+    - diagnose_divergence_calculation: diagnostic dict (variance by year, count diverged, etc.).
+
+    Plotting: plot_prefix_rarity_distribution, plot_individual_indicators_correlation (in this module).
+    """
+
     def __init__(self, sequences):
         # Handle case where sequences might already be an IndividualDivergence object
         if isinstance(sequences, IndividualDivergence):

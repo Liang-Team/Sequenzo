@@ -84,6 +84,66 @@ js_scores = compute_js_convergence_spell(
 )
 ```
 
+## Individual-Level Indicators
+
+Individual-level indicators measure how typical or unique each sequence’s *ending* is (convergence: low rarity = typical).
+
+### Position-based (time index from end): `IndividualConvergence`
+
+Use when you have a list of sequences (same length) or a position-based suffix tree. Level = time index from end; suffix = states from time t to end.
+
+```python
+from sequenzo import IndividualConvergence, build_suffix_tree
+
+tree = build_suffix_tree(seqs, mode="position")
+sequences = tree.sequences  # or your list of lists
+ind = IndividualConvergence(sequences)
+
+# Per-year suffix rarity (each individual × each time point from end)
+rarity_df = ind.compute_suffix_rarity_per_year(zscore=False)
+scores = ind.compute_suffix_rarity_score()
+std_scores = ind.compute_standardized_rarity_score(min_t=1, window=1)
+
+# Binary convergence (0/1) and first convergence year
+converged = ind.compute_converged(method="zscore", z_threshold=1.5, min_t=1)
+first_year = ind.compute_first_convergence_year(method="zscore", z_threshold=1.5, min_t=1)
+
+# Path uniqueness (how many time steps from end have a unique suffix)
+uniqueness = ind.compute_path_uniqueness()
+```
+
+Methods for `compute_converged` and `compute_first_convergence_year`: `"zscore"` (window of *low* rarity z-scores, i.e. z < -z_threshold), `"top_proportion"` (bottom p% most typical), `"quantile"` (below a quantile threshold). See docstrings in `individual_level_indicators.py`.
+
+### Spell-based: `SpellIndividualConvergence`
+
+Use when the unit of analysis is the spell from the end. Level = spell index from end (last spell, last two spells, ...). Requires a `SpellSuffixTree` built with `build_spell_suffix_tree(seqdata)`.
+
+```python
+from sequenzo import build_spell_suffix_tree, SpellIndividualConvergence
+
+tree = build_spell_suffix_tree(seqdata, expcost=0)
+ind = SpellIndividualConvergence(tree)
+
+# Per-spell suffix rarity (from end)
+rarity_df = ind.compute_suffix_rarity_per_spell(zscore=False)
+scores = ind.compute_suffix_rarity_score()
+std_scores = ind.compute_standardized_rarity_score(min_k=1, window=1)
+
+# Binary convergence and first convergence spell level (from end)
+converged = ind.compute_converged(method="zscore", z_threshold=1.5, min_k=1)
+first_spell = ind.compute_first_convergence_spell(method="zscore", z_threshold=1.5, min_k=1)
+
+# Path uniqueness (how many spell levels from end have a unique suffix)
+uniqueness = ind.compute_path_uniqueness()
+```
+
+Variable-length sequences are supported.
+
+### Plotting
+
+- `plot_suffix_rarity_distribution(data, ...)`: distribution of suffix rarity (or standardized) scores, optionally by group, with threshold line.
+- `plot_individual_indicators_correlation(df, ...)`: correlation heatmap of individual-level indicators (e.g. converged, suffix_rarity_score, path_uniqueness).
+
 ## Helper: `convert_seqdata_to_spells`
 
 Spell representation is shared with prefix tree:

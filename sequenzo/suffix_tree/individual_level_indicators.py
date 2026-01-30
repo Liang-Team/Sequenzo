@@ -1,20 +1,41 @@
 """
+Individual-level indicators for position-based suffix tree (level = time index from end).
+
+This module provides per-sequence (per-individual) convergence and rarity measures when
+the unit of analysis is TIME INDEX FROM END: level t = suffix (states from time t to end).
+Lower suffix rarity means a more typical (common) ending pattern; convergence = low rarity.
+
+Usage (position-based: list of sequences, same length)
+-----------------------------------------------------
+    from sequenzo import IndividualConvergence, extract_sequences
+
+    # sequences: list of lists, all same length T (e.g. from build_suffix_tree(..., mode="position").sequences)
+    sequences = extract_sequences(df, time_cols, id_col, states)
+    ind = IndividualConvergence(sequences)
+
+    # Per-year suffix rarity: (N x T) matrix or DataFrame. rarity_{i,t} = -log(freq(suffix_{i,t})/N)
+    rarity_df = ind.compute_suffix_rarity_per_year(as_dataframe=True, zscore=False)
+
+    # One score per individual: sum over t of rarity, or standardized (min over windows of max z)
+    scores = ind.compute_suffix_rarity_score()
+    std_scores = ind.compute_standardized_rarity_score(min_t=1, window=1)
+
+    # Binary convergence (0/1) and first convergence year (1-indexed, or None)
+    converged = ind.compute_converged(method="zscore", z_threshold=1.5, min_t=1, window=1)
+    first_year = ind.compute_first_convergence_year(method="zscore", z_threshold=1.5, min_t=1)
+
+    # Methods: "zscore" (window of low z, i.e. z < -z_threshold), "top_proportion" (bottom p% most typical), "quantile" (below quantile)
+    # With group_labels, top_proportion/quantile are applied within each group.
+
+    # Path uniqueness: count of time steps (from end) at which suffix is unique (freq==1)
+    uniqueness = ind.compute_path_uniqueness()
+
+Spell-based (level = spell index from end) is in spell_individual_level_indicators.SpellIndividualConvergence;
+use build_spell_suffix_tree(seqdata) then SpellIndividualConvergence(tree).
+
 @Author  : Yuqi Liang 梁彧祺
 @File    : individual_level_indicators.py
 @Time    : 08/08/2025 15:30
-@Desc    : 
-    This module provides methods for calculating individual-level convergence indicators 
-    in sequence data analysis. It includes tools to assess convergence, identify timing, 
-    measure suffix rarity, and evaluate path uniqueness.
-
-    The convergence indicators capture whether, when, and to what extent a person's trajectory 
-    aligns with dominant population patterns over time.
-
-    Key indicators:
-    - Suffix Rarity Score: cumulative rarity of path suffixes (positive, higher = rarer)
-    - Binary converged indicator: low rarity z-scores indicate convergence to typical patterns
-    - First convergence year: timing when trajectory becomes more typical (low rarity)
-    - Path uniqueness for extreme structural isolation
 """
 from collections import defaultdict
 from typing import Optional, List
@@ -23,6 +44,26 @@ import pandas as pd
 
 
 class IndividualConvergence:
+    """
+    Individual-level convergence and suffix rarity for position-based suffix trees.
+
+    Input: sequences — a list of sequences (list of lists), all of the same length T.
+    Each sequence is the list of states at time 1, 2, ..., T. Level t corresponds
+    to the suffix (states from time t to end). Rarity at (i, t) is
+    -log(freq(suffix_{i,t})/N); lower rarity = more typical ending.
+
+    Main methods:
+    - compute_suffix_rarity_per_year: (N x T) rarity matrix or DataFrame.
+    - compute_suffix_rarity_score: one aggregated rarity score per individual (sum over t).
+    - compute_standardized_rarity_score: z-based score for classification (lower = more typical).
+    - compute_converged: binary 0/1 per individual (method: zscore, top_proportion, quantile).
+    - compute_first_convergence_year: first year (1-indexed) at which converged, or None.
+    - compute_path_uniqueness: count of time steps (from end) with unique suffix per individual.
+    - diagnose_convergence_calculation: diagnostic dict (variance by year, count converged, etc.).
+
+    Plotting: plot_suffix_rarity_distribution, plot_individual_indicators_correlation (in this module).
+    """
+
     def __init__(self, sequences):
         # Handle case where sequences might already be an IndividualConvergence object
         if isinstance(sequences, IndividualConvergence):
