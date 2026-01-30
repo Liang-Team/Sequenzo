@@ -183,13 +183,25 @@ def compute_js_divergence(sequences, state_set):
     return js_scores
 
 
-def build_prefix_tree(sequences):
+def _build_prefix_tree_position(sequences):
+    """Internal: build position-based prefix tree (level = time index)."""
     tree = PrefixTree()
     tree.total_sequences = len(sequences)
     for seq in sequences:
         for t in range(1, len(seq) + 1):
             tree.insert(seq[:t])
     return tree
+
+
+def build_prefix_tree(sequences):
+    """
+    Build position-based prefix tree (level = time index).
+
+    For spell-based tree or unified hub with mode/expcost, use:
+        from sequenzo.prefix_tree.hub import build_prefix_tree
+        tree = build_prefix_tree(seqdata, mode="spell", expcost=0)
+    """
+    return _build_prefix_tree_position(sequences)
 
 
 def plot_system_indicators(
