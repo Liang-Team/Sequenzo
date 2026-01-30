@@ -6,8 +6,8 @@
     Split and preprocess Pairfam MultiChannel data.
 
     This script splits the MultiChannel.csv file into two separate datasets:
-    1. pairfam_family: Contains family state sequences (family1...family264 -> 1...264)
-    2. pairfam_activity: Contains activity state sequences (activity1...activity264 -> 1...264)
+    1. pairfam_family_by_month.csv: Family state sequences (family1...family264 -> 1...264)
+    2. pairfam_activity_by_month.csv: Activity state sequences (activity1...activity264 -> 1...264)
 
     Data preprocessing:
     - Converts column names like 'family11' to '11', 'activity1' to '1', etc.
@@ -106,7 +106,7 @@ def clean_time_columns_auto(df: pd.DataFrame,
 def split_pairfam_data(input_csv_path: str, 
                       output_dir: str = None) -> tuple:
     """
-    Split MultiChannel.csv into pairfam_family and pairfam_activity datasets.
+    Split MultiChannel.csv into pairfam_family_by_month and pairfam_activity_by_month datasets.
     
     Parameters:
     -----------
@@ -164,8 +164,8 @@ def split_pairfam_data(input_csv_path: str,
     os.makedirs(output_dir, exist_ok=True)
     
     # Save the processed datasets
-    family_output_path = os.path.join(output_dir, 'pairfam_family.csv')
-    activity_output_path = os.path.join(output_dir, 'pairfam_activity.csv')
+    family_output_path = os.path.join(output_dir, 'pairfam_family_by_month.csv')
+    activity_output_path = os.path.join(output_dir, 'pairfam_activity_by_month.csv')
     
     print(f"\nSaving pairfam_family to: {family_output_path}")
     pairfam_family.to_csv(family_output_path, index=False)
@@ -196,15 +196,15 @@ if __name__ == "__main__":
     
     input_csv_path = os.path.join(
         project_root,
-        'pairfam_and_little_green_book',
         'data_sources',
+        'month_level',
         'MultiChannel.csv'
     )
     
     output_dir = os.path.join(
         project_root,
-        'pairfam_and_little_green_book',
-        'data_sources'
+        'data_sources',
+        'month_level'
     )
     
     # Check if input file exists
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         print("Summary:")
         print("="*60)
         print(f"✓ Successfully split MultiChannel.csv")
-        print(f"✓ Created pairfam_family.csv with {len(pairfam_family.columns)} columns")
-        print(f"✓ Created pairfam_activity.csv with {len(pairfam_activity.columns)} columns")
+        print(f"✓ Created pairfam_family_by_month.csv with {len(pairfam_family.columns)} columns")
+        print(f"✓ Created pairfam_activity_by_month.csv with {len(pairfam_activity.columns)} columns")
         print(f"✓ Column names cleaned (e.g., family11 -> 11, activity1 -> 1)")
         print("="*60)
