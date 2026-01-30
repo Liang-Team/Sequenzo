@@ -57,7 +57,11 @@ from .prefix_tree import (
     plot_system_indicators,
     plot_system_indicators_multiple_comparison,
     plot_prefix_rarity_distribution,
-    plot_individual_indicators_correlation
+    plot_individual_indicators_correlation,
+    # Spell-based (mode="spell")
+    SpellPrefixTree,
+    build_spell_prefix_tree,
+    compute_js_divergence_spell,
 )
 
 from .suffix_tree import (
@@ -71,6 +75,10 @@ from .suffix_tree import (
     plot_system_indicators,
     plot_system_indicators_multiple_comparison,
     plot_suffix_rarity_distribution,
+    # Spell-based (mode="spell")
+    SpellSuffixTree,
+    build_spell_suffix_tree,
+    compute_js_convergence_spell,
 )
 
 from .sequence_characteristics import (
@@ -200,6 +208,9 @@ __all__ = [
     "plot_system_indicators_multiple_comparison",
     "plot_prefix_rarity_distribution",
     "plot_individual_indicators_correlation",
+    "SpellPrefixTree",
+    "build_spell_prefix_tree",
+    "compute_js_divergence_spell",
 
     # Suffix Tree
     "build_suffix_tree",
@@ -212,6 +223,9 @@ __all__ = [
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
     "plot_suffix_rarity_distribution",
+    "SpellSuffixTree",
+    "build_spell_suffix_tree",
+    "compute_js_convergence_spell",
 
     # Sequence characteristics
     "get_subsequences_in_single_sequence",

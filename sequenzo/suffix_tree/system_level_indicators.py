@@ -183,13 +183,25 @@ def compute_js_convergence(sequences, state_set):
     return js_scores
 
 
-def build_suffix_tree(sequences):
+def _build_suffix_tree_position(sequences):
+    """Internal: build position-based suffix tree (level = time index from end)."""
     tree = SuffixTree()
     tree.total_sequences = len(sequences)
     for seq in sequences:
         for t in range(len(seq)):
             tree.insert(seq[t:])
     return tree
+
+
+def build_suffix_tree(sequences):
+    """
+    Build position-based suffix tree (level = time index from end).
+
+    For spell-based tree or unified hub with mode/expcost, use:
+        from sequenzo.suffix_tree.hub import build_suffix_tree
+        tree = build_suffix_tree(seqdata, mode="spell", expcost=0)
+    """
+    return _build_suffix_tree_position(sequences)
 
 
 def plot_system_indicators(

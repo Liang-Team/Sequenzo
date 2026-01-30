@@ -4,15 +4,22 @@
 @Time    : 08/08/2025 15:50
 @Desc    :
     Suffix Tree Framework - exposes core indicators and utilities for sequence convergence analysis.
+    Supports both position-based (level = time from end) and spell-based (level = spell from end) modes via hub.
 """
+from .hub import build_suffix_tree
 from .system_level_indicators import (
-    build_suffix_tree,
+    SuffixTree,
     get_depth_stats,
     compute_suffix_count,
     compute_merging_factor,
     compute_js_convergence,
     plot_system_indicators,
     plot_system_indicators_multiple_comparison,
+)
+from .spell_level_indicators import (
+    SpellSuffixTree,
+    build_spell_suffix_tree,
+    compute_js_convergence_spell,
 )
 
 from .individual_level_indicators import (
@@ -28,13 +35,18 @@ from .utils import (
 )
 
 __all__ = [
-    # System-level
+    # Hub (unified entry point: mode="position" | "spell", expcost)
     "build_suffix_tree",
+
+    # System-level (works for both SuffixTree and SpellSuffixTree)
+    "SuffixTree",
+    "SpellSuffixTree",
     "get_depth_stats",
     "compute_suffix_count",
     "compute_merging_factor",
     "compute_js_convergence",
-    # plotting
+    "compute_js_convergence_spell",
+    "build_spell_suffix_tree",
     "plot_system_indicators",
     "plot_system_indicators_multiple_comparison",
 
