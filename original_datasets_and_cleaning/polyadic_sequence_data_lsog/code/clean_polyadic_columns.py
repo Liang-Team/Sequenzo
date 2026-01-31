@@ -1,4 +1,8 @@
 """
+@Author  : Yuqi Liang 梁彧祺
+@File    : clean_polyadic_columns.py
+@Time    : 31/01/2026 10:01
+@Desc    : 
 Clean polyadic sequence data (LSOG): rename time columns from status15 -> 15, pstatus15 -> 15, etc.
 
 Uses clean_time_columns_auto from sequenzo.data_preprocessing. Reads original CSVs from
