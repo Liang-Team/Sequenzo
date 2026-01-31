@@ -6,9 +6,56 @@
 """
 import pandas as pd
 import numpy as np
+import re
 import matplotlib.pyplot as plt
 import missingno as msno
 from typing import Union, List
+
+
+def clean_time_columns_auto(df: pd.DataFrame, prefix_patterns: list = None) -> pd.DataFrame:
+    """
+    Clean column names by extracting the numeric part (e.g. status15 -> 15, pstatus16 -> 16).
+
+    Columns whose names start with one of the given prefixes are renamed to the number
+    they contain. Other columns (e.g. id, sex) are left unchanged. Useful for time-series
+    or panel data where columns are named like status1, status2, ... or pstatus15, ...
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame.
+    prefix_patterns : list, optional
+        Prefixes to match (e.g. ['status'], ['pstatus']). Only these columns are renamed.
+        If None, any column whose name contains both letters and digits is processed.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with cleaned column names (same data).
+    """
+    df_cleaned = df.copy()
+    new_columns = {}
+
+    for col in df.columns:
+        if prefix_patterns is None:
+            should_process = bool(re.search(r"\d+", col))
+        else:
+            should_process = any(col.startswith(prefix) for prefix in prefix_patterns)
+
+        if should_process:
+            numbers = re.findall(r"\d+", col)
+            if numbers:
+                extracted_number = numbers[-1]
+                if re.search(r"[a-zA-Z]", col):
+                    new_columns[col] = extracted_number
+                else:
+                    new_columns[col] = col
+            else:
+                new_columns[col] = col
+        else:
+            new_columns[col] = col
+
+    return df_cleaned.rename(columns=new_columns)
 
 
 def assign_unique_ids(df: pd.DataFrame, id_col_name: str = "Entity ID") -> pd.DataFrame:

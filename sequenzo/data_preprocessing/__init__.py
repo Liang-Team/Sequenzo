@@ -4,7 +4,8 @@
 @Time    : 01/05/2025 09:27
 @Desc    : 
 """
-from .helpers import (assign_unique_ids,
+from .helpers import (clean_time_columns_auto,
+                      assign_unique_ids,
                       wide_to_long_format_data,
                       long_to_wide_format_data,
                       summarize_missing_values,
@@ -12,6 +13,7 @@ from .helpers import (assign_unique_ids,
 
 
 __all__ = [
+    "clean_time_columns_auto",
     "assign_unique_ids",
     "wide_to_long_format_data",
     "long_to_wide_format_data",
