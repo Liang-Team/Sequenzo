@@ -1,12 +1,12 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : clean_polyadic_columns.py
+@File    : clean_dyadic_columns.py
 @Time    : 31/01/2026 10:01
 @Desc    : 
 Clean polyadic sequence data (LSOG): rename time columns from status15 -> 15, pstatus15 -> 15, etc.
 
 Uses clean_time_columns_auto from sequenzo.data_preprocessing. Reads original CSVs from
-data_sources/, applies it, and writes polyadic_children.csv and polyadic_parents.csv.
+data_sources/, applies it, and writes dyadic_children.csv and dyadic_parents.csv.
 """
 
 import os
@@ -21,10 +21,10 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_SOURCES = os.path.join(REPO_ROOT, "data_sources")
 OUTPUT_DIR = REPO_ROOT
 
-INPUT_CHILDREN = os.path.join(DATA_SOURCES, "original_polyadic_children.csv")
-INPUT_PARENTS = os.path.join(DATA_SOURCES, "original_polyadic_parents.csv")
-OUTPUT_CHILDREN = os.path.join(OUTPUT_DIR, "polyadic_children.csv")
-OUTPUT_PARENTS = os.path.join(OUTPUT_DIR, "polyadic_parents.csv")
+INPUT_CHILDREN = os.path.join(DATA_SOURCES, "original_dyadic_children.csv")
+INPUT_PARENTS = os.path.join(DATA_SOURCES, "original_dyadic_parents.csv")
+OUTPUT_CHILDREN = os.path.join(OUTPUT_DIR, "dyadic_children.csv")
+OUTPUT_PARENTS = os.path.join(OUTPUT_DIR, "dyadic_parents.csv")
 
 
 def main():
