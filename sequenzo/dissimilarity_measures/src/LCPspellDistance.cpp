@@ -136,7 +136,10 @@ public:
                 double raw = static_cast<double>(n + m);
                 double maxdist = raw;
                 double d = normalize_distance(raw, maxdist, static_cast<double>(n), static_cast<double>(m), norm);
-                return (d < 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d);
+                // Only clamp when normalizing; when norm=0 (none), return raw so user sees actual distance
+                if (norm != 0)
+                    return (d < 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d);
+                return d;
             }
 
             int L = 0;           // length of spell-based common prefix
@@ -158,10 +161,13 @@ public:
 
             double raw = (n + m - 2.0 * L) + timecost * duration_penalty;
             // Use same maxdist as position-wise LCP (n+m) so normalization is comparable;
-            // raw can exceed maxdist when timecost > 0, so we clamp the result to [0, 1].
+            // When norm != 0, clamp to [0, 1] since raw can exceed maxdist when timecost > 0.
+            // When norm == 0 (none), return raw so user sees (n+m-2*L) + timecost*duration_penalty.
             double maxdist = static_cast<double>(n + m);
             double d = normalize_distance(raw, maxdist, static_cast<double>(n), static_cast<double>(m), norm);
-            return (d < 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d);
+            if (norm != 0)
+                return (d < 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d);
+            return d;
         } catch (const std::exception& e) {
             py::print("Error in LCPspellDistance::compute_distance: ", e.what());
             throw;
