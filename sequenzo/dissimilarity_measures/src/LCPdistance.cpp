@@ -1,4 +1,22 @@
-﻿#include <pybind11/pybind11.h>
+/*
+ * LCPdistance: Longest Common Prefix (LCP) and Reverse LCP (RLCP).
+ *
+ * Compares sequences position-wise: the common prefix length L is the number
+ * of consecutive positions (from the start or from the end) where both sequences
+ * have the same state. Raw distance is (n + m - 2*L) where n, m are sequence
+ * lengths; normalized by maxdist = n + m so d = raw / maxdist is in [0, 1].
+ *
+ * Forward (sign > 0): LCP, compare from first position.
+ * Reverse (sign < 0): RLCP, compare from last position.
+ *
+ * Source:
+ *   Elzinga, C. H. (2007). Sequence analysis: Metric representations of
+ *   categorical time series. Manuscript, Dept of Social Science Research
+ *   Methods, Vrije Universiteit, Amsterdam.
+ * @Author  : Xinyi Li 李欣怡
+ */
+
+#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
