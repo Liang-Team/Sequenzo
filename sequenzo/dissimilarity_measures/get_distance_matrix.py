@@ -46,6 +46,12 @@
                             if FALSE, an object of class dist is returned,
                             that is, a vector containing only values from the lower triangle of the distance matrix.
                             Objects of class dist are smaller and can be passed directly as arguments to most clustering functions.
+            matrix_display : Default: "full". Only used when the result is a full DataFrame (full_matrix=True, refseq=None).
+                            How to display the symmetric distance matrix:
+                            - "full": show entire matrix (default).
+                            - "upper": show only the upper triangle (including diagonal); masked cells are shown as empty for a cleaner view.
+                            - "lower": show only the lower triangle (including diagonal); masked cells are shown as empty for a cleaner view.
+                            When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN"). The underlying distances are unchanged.
             tpow           : Default: 1.0.
                             The exponential weight of spell length when method is one of "OMspell", "NMSMST", or "SVRspell".
             expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "LCPspell", or "RLCPspell".
@@ -67,7 +73,7 @@ from sequenzo.define_sequence_data import SequenceData
 with_missing_warned = False
 
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,
-                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, opts=None, **kwargs):
+                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, matrix_display="full", opts=None, **kwargs):
 
     from .utils.seqconc import seqconc
     from .utils.seqdss import seqdss
@@ -93,6 +99,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         expcost = opts.get('expcost') or 0.5
         weighted = opts.get('weighted') or True
         check_max_size = opts.get('check_max_size') or True
+        matrix_display = opts.get('matrix_display') or "full"
 
     if 'with_missing' in kwargs:
         print("[!] 'with_missing' has been removed and is ignored.")
@@ -186,6 +193,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
     if norm not in norms:
         raise ValueError(f"[!] 'norm' should be in {norms}.")
+
+    # check matrix_display (only used when full_matrix=True and refseq=None)
+    if matrix_display not in ("full", "upper", "lower"):
+        raise ValueError("[!] 'matrix_display' should be one of 'full', 'upper', or 'lower'.")
 
     # check indel
     # indel_type: "number", "vector", "auto"
@@ -658,6 +669,15 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+        # Optional: show only upper or lower triangle for a cleaner display (distances unchanged)
+        if matrix_display == "upper":
+            # Upper triangle: keep row <= col (including diagonal); mask lower part, show as empty
+            mask = np.triu(np.ones_like(dist_matrix, dtype=bool))
+            dist_matrix = dist_matrix.where(mask).fillna("")
+        elif matrix_display == "lower":
+            # Lower triangle: keep row >= col (including diagonal); mask upper part, show as empty
+            mask = np.tril(np.ones_like(dist_matrix, dtype=bool))
+            dist_matrix = dist_matrix.where(mask).fillna("")
 
     elif full_matrix == False and refseq != None:
         print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None. This is same as TraMineR.")
