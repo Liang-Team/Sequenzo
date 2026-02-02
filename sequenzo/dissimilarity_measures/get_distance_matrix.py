@@ -24,8 +24,10 @@
                                 except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", or "YujianBo".
                             (2)"auto" is equivalent to
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
-                                2)"gmean"  when method is one of "LCS", "LCP", "RLCP", "LCPspell", or "RLCPspell",
-                                3) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED".
+                                2) "gmean" when method is one of "LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
+                                3) "maxdist" when method is one of "LCPspell", "RLCPspell",
+                                4) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED".
+                            See developer/NORM_GUIDE.md for formulas and pitfalls (e.g. LCPspell/RLCPspell must use maxdist, not gmean).
             indel          : Insertion/deletion  cost(s).
                             Applies when method is one of "OM", "OMslen", "OMspell", "OMspellNew", or "OMstran".
                             (1)The single state-independent insertion/deletion cost when a double.
@@ -271,12 +273,19 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if norm == "auto":
         if method in ["OM", "HAM", "DHD"]:
             norm = "maxlength"
-        elif method in ["LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+        elif method in ["LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             norm = "gmean"
+        elif method in ["LCPspell", "RLCPspell"]:
+            # LCPspell/RLCPspell use duration-aware raw/maxdist; gmean can yield d < 0
+            # because (maxdist-raw) is not bounded by 2*sqrt(n)*sqrt(m). Use maxdist.
+            norm = "maxdist"
         elif method in ["OMspell", "OMspellNew"]:
             norm = "YujianBo"
         else:
             raise ValueError(f"[!] No known normalization method to select automatically for {method}.")
+
+    if method in ["LCPspell", "RLCPspell"] and norm == "gmean":
+        print("[!] Warning: norm='gmean' for LCPspell/RLCPspell can yield distances outside [0, 1]. Prefer norm='maxdist' or norm='none'. See developer/NORM_GUIDE.md.")
 
     # ======================
     # Configure sm and indel
