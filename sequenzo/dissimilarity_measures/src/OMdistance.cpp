@@ -153,7 +153,7 @@ public:
                     }
                 }
 
-                // 补足尾部
+                // Complete the tail section.
                 for (; j < nSuf; ++j) {
                     int bj = ptr_seq(js, j-1);
                     double subcost = (ai == bj) ? 0.0 : ptr_sm(ai, bj);

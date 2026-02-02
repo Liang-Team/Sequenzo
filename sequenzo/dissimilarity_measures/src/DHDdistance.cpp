@@ -58,7 +58,7 @@ public:
             auto ptr_sm = sm.unchecked<3>();
             auto ptr_seq = sequences.unchecked<2>();
 
-            // 使用 SIMD 批量处理
+            // Batch processing using SIMD
             const int simd_width = xsimd::batch<double>::size;
             int i = 0;
 
@@ -67,7 +67,7 @@ public:
                 alignas(32) int seq_js[simd_width];
                 alignas(32) double tmp[simd_width];
 
-                // 加载序列
+                // load subsequence
                 for(int j = 0; j < simd_width; j++) {
                     seq_is[j] = ptr_seq(is, i + j);
                     seq_js[j] = ptr_seq(js, i + j);
@@ -75,7 +75,7 @@ public:
                 xsimd::batch<int> batch_seq_is = xsimd::load_unaligned(seq_is);
                 xsimd::batch<int> batch_seq_js = xsimd::load_unaligned(seq_js);
 
-                // 比较是否相等
+                // Compare whether they are equal
                 auto equal_mask = (batch_seq_is == batch_seq_js);
                 for(int j = 0; j < simd_width; j++) {
                     tmp[j] = equal_mask.get(j) ? 0.0 : ptr_sm(i + j, seq_is[j], seq_js[j]);
@@ -85,7 +85,7 @@ public:
                 cost += xsimd::reduce_add(costs);
             }
 
-            // 处理尾部：用 SIMD 填充无效数据
+            // Handling the tail: Fill in invalid data with SIMD.
             for(; i < minimum; i += simd_width) {
                 alignas(32) double tmp[simd_width];
                 int bound = std::min(simd_width, minimum - i);
