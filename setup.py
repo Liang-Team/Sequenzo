@@ -48,21 +48,104 @@ import importlib.util
 BASE_DIR = Path(__file__).parent.resolve()
 
 def ensure_xsimd_exists():
+    """
+    确保 xsimd 存在且指向正确的 commit。
+    
+    在 Git 仓库中：使用子模块方式，确保指向主仓库记录的 commit
+    在非 Git 环境：直接克隆最新版本（用于打包、分发等场景）
+    """
     xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
-
-    # 如果目录不存在或为空，则 clone
+    project_root = Path(__file__).parent
+    git_dir = project_root / ".git"
+    gitmodules_file = project_root / ".gitmodules"
+    is_git_repo = git_dir.exists() or gitmodules_file.exists()
+    
+    # 检查是否在 Git 仓库中
+    if is_git_repo:
+        # Git 仓库环境：使用子模块方式，确保指向正确的 commit
+        try:
+            # 检查子模块状态
+            result = subprocess.run(
+                ["git", "submodule", "status", "sequenzo/dissimilarity_measures/src/xsimd"],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            status_line = result.stdout.strip()
+            
+            if not status_line:
+                # 空输出，可能子模块不存在于配置中
+                print("[WARNING] xsimd submodule not found in .gitmodules, falling back to direct clone")
+            else:
+                # git submodule status 输出格式：
+                # '-commit path' - 未初始化
+                # ' commit path' - 在正确位置（空格开头）
+                # '+commit path' - 指向不同的 commit（需要更新）
+                # 'Ucommit path' - 有合并冲突
+                
+                first_char = status_line[0] if status_line else ''
+                
+                if first_char == '-':
+                    # 未初始化
+                    print("[INFO] xsimd submodule not initialized, initializing...")
+                    subprocess.run([
+                        "git", "submodule", "update", "--init",
+                        "sequenzo/dissimilarity_measures/src/xsimd"
+                    ], check=True, cwd=project_root)
+                    print("[INFO] xsimd submodule initialized successfully.")
+                elif first_char == '+':
+                    # 指向不同的 commit（这正是你遇到的问题）
+                    print("[INFO] xsimd submodule is at a different commit, updating to correct commit...")
+                    subprocess.run([
+                        "git", "submodule", "update", "--init",
+                        "sequenzo/dissimilarity_measures/src/xsimd"
+                    ], check=True, cwd=project_root)
+                    print("[INFO] xsimd submodule updated to correct commit.")
+                elif first_char == 'U':
+                    # 有合并冲突
+                    print("[WARNING] xsimd submodule has merge conflicts. Please resolve manually.")
+                elif first_char == ' ':
+                    # 在正确位置，检查目录是否存在
+                    if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
+                        print(f"[INFO] xsimd submodule is at correct commit: {xsimd_dir}")
+                    else:
+                        # 状态显示正确但目录不存在，重新初始化
+                        print("[INFO] xsimd submodule status is correct but directory missing, reinitializing...")
+                        subprocess.run([
+                            "git", "submodule", "update", "--init",
+                            "sequenzo/dissimilarity_measures/src/xsimd"
+                        ], check=True, cwd=project_root)
+                        print("[INFO] xsimd submodule reinitialized successfully.")
+                else:
+                    # 未知状态，尝试更新
+                    print(f"[WARNING] Unknown submodule status: {status_line}, attempting to update...")
+                    subprocess.run([
+                        "git", "submodule", "update", "--init",
+                        "sequenzo/dissimilarity_measures/src/xsimd"
+                    ], check=True, cwd=project_root)
+            return
+            
+        except subprocess.CalledProcessError as e:
+            # 子模块命令失败，可能是子模块配置有问题
+            print(f"[WARNING] Git submodule command failed: {e}")
+            print("[WARNING] Falling back to direct clone (this may cause version mismatch in Git repos)")
+        except FileNotFoundError:
+            # git 命令不存在
+            print("[WARNING] Git command not found, falling back to direct clone")
+    
+    # 非 Git 环境或子模块失败：直接克隆（用于打包、分发等场景）
     if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
         print(f"[INFO] xsimd already exists at {xsimd_dir}, skipping clone.")
         return
-
-    print(f"[INFO] xsimd not found or empty at {xsimd_dir}, attempting to clone...")
+    
+    print(f"[INFO] xsimd not found, cloning from repository...")
     try:
-        # 如果目录存在但为空，也要确保上级目录存在
         xsimd_dir.parent.mkdir(parents=True, exist_ok=True)
-
+        
         if xsimd_dir.exists():
             xsimd_dir.rmdir()
-
+        
         subprocess.run([
             "git", "clone", "--depth", "1",
             "https://github.com/xtensor-stack/xsimd.git",
