@@ -8,7 +8,8 @@ def list_datasets():
 
     with pkg_resources.path("sequenzo.datasets", "__init__.py") as datasets_path:
         datasets_dir = datasets_path.parent  # Get the datasets directory path
-        return [file.stem for file in datasets_dir.iterdir() if file.suffix == ".csv"]
+        datasets = [file.stem for file in datasets_dir.iterdir() if file.suffix == ".csv"]
+        return sorted(datasets)  # Sort alphabetically so related datasets are grouped together
 
 
 def load_dataset(name):
