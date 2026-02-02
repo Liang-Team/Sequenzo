@@ -49,10 +49,10 @@ BASE_DIR = Path(__file__).parent.resolve()
 
 def ensure_xsimd_exists():
     """
-    确保 xsimd 存在且指向正确的 commit。
-    
-    在 Git 仓库中：使用子模块方式，确保指向主仓库记录的 commit
-    在非 Git 环境：直接克隆最新版本（用于打包、分发等场景）
+    Ensure that `xsimd` exists and points to the correct commit.
+
+    In a Git repository: Use a submodule approach, ensuring it points to the commit recorded in the main repository.
+    In non-Git environments: Directly clone the latest version (for scenarios such as packaging and distribution).
     """
     xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
     project_root = Path(__file__).parent
@@ -60,11 +60,11 @@ def ensure_xsimd_exists():
     gitmodules_file = project_root / ".gitmodules"
     is_git_repo = git_dir.exists() or gitmodules_file.exists()
     
-    # 检查是否在 Git 仓库中
+    # Check whether it's in the Git repository.
     if is_git_repo:
-        # Git 仓库环境：使用子模块方式，确保指向正确的 commit
+        # Git repository environment: Use submodules to ensure it points to the correct commit.
         try:
-            # 检查子模块状态
+            # Check submodule status
             result = subprocess.run(
                 ["git", "submodule", "status", "sequenzo/dissimilarity_measures/src/xsimd"],
                 cwd=project_root,
@@ -75,19 +75,18 @@ def ensure_xsimd_exists():
             status_line = result.stdout.strip()
             
             if not status_line:
-                # 空输出，可能子模块不存在于配置中
                 print("[WARNING] xsimd submodule not found in .gitmodules, falling back to direct clone")
             else:
-                # git submodule status 输出格式：
-                # '-commit path' - 未初始化
-                # ' commit path' - 在正确位置（空格开头）
-                # '+commit path' - 指向不同的 commit（需要更新）
-                # 'Ucommit path' - 有合并冲突
+                # git submodule status output format:
+                # '-commit path' - Uninitialized
+                # ' commit path' - In the correct position (starts with a space)
+                # '+commit path' - Points to a different commit (needs to be updated)
+                # 'Ucommit path' - There is a merge conflict
                 
                 first_char = status_line[0] if status_line else ''
                 
                 if first_char == '-':
-                    # 未初始化
+                    # Uninitialized
                     print("[INFO] xsimd submodule not initialized, initializing...")
                     subprocess.run([
                         "git", "submodule", "update", "--init",
@@ -95,7 +94,7 @@ def ensure_xsimd_exists():
                     ], check=True, cwd=project_root)
                     print("[INFO] xsimd submodule initialized successfully.")
                 elif first_char == '+':
-                    # 指向不同的 commit（这正是你遇到的问题）
+                    # Point to different commits
                     print("[INFO] xsimd submodule is at a different commit, updating to correct commit...")
                     subprocess.run([
                         "git", "submodule", "update", "--init",
@@ -103,14 +102,14 @@ def ensure_xsimd_exists():
                     ], check=True, cwd=project_root)
                     print("[INFO] xsimd submodule updated to correct commit.")
                 elif first_char == 'U':
-                    # 有合并冲突
+                    # Merge conflict
                     print("[WARNING] xsimd submodule has merge conflicts. Please resolve manually.")
                 elif first_char == ' ':
-                    # 在正确位置，检查目录是否存在
+                    # Check if the directory exists in the correct location.
                     if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
                         print(f"[INFO] xsimd submodule is at correct commit: {xsimd_dir}")
                     else:
-                        # 状态显示正确但目录不存在，重新初始化
+                        # The status shows correct but the directory does not exist. Reinitialize.
                         print("[INFO] xsimd submodule status is correct but directory missing, reinitializing...")
                         subprocess.run([
                             "git", "submodule", "update", "--init",
@@ -118,7 +117,7 @@ def ensure_xsimd_exists():
                         ], check=True, cwd=project_root)
                         print("[INFO] xsimd submodule reinitialized successfully.")
                 else:
-                    # 未知状态，尝试更新
+                    # Unknown status, attempting to update
                     print(f"[WARNING] Unknown submodule status: {status_line}, attempting to update...")
                     subprocess.run([
                         "git", "submodule", "update", "--init",
@@ -127,14 +126,12 @@ def ensure_xsimd_exists():
             return
             
         except subprocess.CalledProcessError as e:
-            # 子模块命令失败，可能是子模块配置有问题
             print(f"[WARNING] Git submodule command failed: {e}")
             print("[WARNING] Falling back to direct clone (this may cause version mismatch in Git repos)")
         except FileNotFoundError:
-            # git 命令不存在
             print("[WARNING] Git command not found, falling back to direct clone")
     
-    # 非 Git 环境或子模块失败：直接克隆（用于打包、分发等场景）
+    # If the environment is not Git or the submodule fails: clone directly (for scenarios such as packaging and distribution).
     if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
         print(f"[INFO] xsimd already exists at {xsimd_dir}, skipping clone.")
         return
@@ -631,7 +628,7 @@ def configure_cpp_extension():
         # Ensure we have optimization but without fast-math
         if '-O3' not in fastcluster_compile_args:
             fastcluster_compile_args.append('-O3')
-        
+
         fastcluster_ext_module = Extension(
             '_sequenzo_fastcluster',
             sources=fastcluster_sources,
