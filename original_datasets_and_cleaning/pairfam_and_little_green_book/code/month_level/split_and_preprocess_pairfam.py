@@ -11,96 +11,18 @@
 
     Data preprocessing:
     - Converts column names like 'family11' to '11', 'activity1' to '1', etc.
-    - Uses clean_time_columns_auto() function to automatically extract numbers from column names
+    - Uses clean_time_columns_auto() function from sequenzo.data_preprocessing.helpers
+      to automatically extract numbers from column names
 """
 
 import pandas as pd
-import re
 import os
+import sys
+from pathlib import Path
 
-
-def clean_time_columns_auto(df: pd.DataFrame, 
-                             prefix_patterns: list = None) -> pd.DataFrame:
-    """
-    Automatically clean column names by extracting numbers from them.
-    
-    This function scans a DataFrame, identifies columns with names containing numbers
-    (e.g., state1, wave2, year2023, family11), and simplifies these names to just
-    the numbers they contain (becoming 1, 2, 2023, 11).
-    
-    This feature is particularly useful when processing time-series or panel data,
-    as it allows for quick standardization of column names that represent different
-    points in time.
-    
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        Input DataFrame with columns that may contain numbers in their names
-    prefix_patterns : list, optional
-        List of prefixes to match (e.g., ['family', 'activity', 'state']).
-        If provided, only columns starting with these prefixes will be cleaned.
-        If None, all columns with numbers will be cleaned.
-        
-    Returns:
-    --------
-    pd.DataFrame
-        DataFrame with cleaned column names (numbers extracted from column names)
-    
-    Examples:
-    ---------
-    >>> df = pd.DataFrame({'id': [1, 2], 'family1': [1, 2], 'family11': [3, 4]})
-    >>> cleaned = clean_time_columns_auto(df, prefix_patterns=['family'])
-    >>> cleaned.columns.tolist()
-    ['id', '1', '11']
-    
-    >>> df = pd.DataFrame({'id': [1], 'state1': [1], 'state264': [2]})
-    >>> cleaned = clean_time_columns_auto(df, prefix_patterns=['state'])
-    >>> cleaned.columns.tolist()
-    ['id', '1', '264']
-    """
-    df_cleaned = df.copy()
-    new_columns = {}
-    
-    for col in df.columns:
-        # Check if we should process this column
-        should_process = False
-        
-        if prefix_patterns is None:
-            # Process all columns with numbers
-            should_process = bool(re.search(r'\d+', col))
-        else:
-            # Only process columns that start with one of the specified prefixes
-            should_process = any(col.startswith(prefix) for prefix in prefix_patterns)
-        
-        if should_process:
-            # Extract all numbers from the column name
-            # This regex finds all sequences of digits in the column name
-            numbers = re.findall(r'\d+', col)
-            
-            if numbers:
-                # If numbers are found, use the last (or only) number sequence
-                # This handles cases like 'family11' -> '11', 'state1' -> '1'
-                # For cases like 'year2023', it will extract '2023'
-                extracted_number = numbers[-1]  # Take the last number found
-                
-                # Only rename if the column name actually contains non-numeric characters
-                # This prevents renaming columns that are already just numbers
-                if re.search(r'[a-zA-Z]', col):
-                    new_columns[col] = extracted_number
-                else:
-                    # Column is already numeric, keep it as is
-                    new_columns[col] = col
-            else:
-                # No numbers found, keep original column name
-                new_columns[col] = col
-        else:
-            # Don't process this column, keep original name
-            new_columns[col] = col
-    
-    # Rename columns
-    df_cleaned = df_cleaned.rename(columns=new_columns)
-    
-    return df_cleaned
+# Add the sequenzo package to the path to import helpers
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
+from sequenzo.data_preprocessing.helpers import clean_time_columns_auto
 
 
 def split_pairfam_data(input_csv_path: str, 
