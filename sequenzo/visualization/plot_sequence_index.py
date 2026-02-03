@@ -289,6 +289,30 @@ def sort_sequences_by_method(seqdata, method="unsorted", mask=None, distance_mat
                         f"Supported methods are: 'unsorted', 'lexicographic', 'mds', 'distance_to_most_frequent'")
 
 
+def _insert_sequence_gaps(data, gap, sequence_rows=1):
+    """
+    Insert blank rows between each sequence row for visual spacing.
+    Optionally expand each sequence to multiple rows for thicker bars.
+    :param data: 2D array (n_sequences, n_times)
+    :param gap: Number of blank rows to insert between each pair of sequences (0 = no change)
+    :param sequence_rows: Number of rows each sequence occupies (1 = thin, >1 = thicker bars)
+    :return: Expanded 2D array with NaN in gap rows
+    """
+    n_seq, n_time = data.shape
+    sequence_rows = max(1, int(sequence_rows))
+    if gap <= 0 and sequence_rows <= 1:
+        return data
+    # Each block: sequence_rows rows of sequence data + gap rows of NaN
+    n_rows = n_seq * sequence_rows + (n_seq - 1) * max(0, gap)
+    out = np.full((n_rows, n_time), np.nan, dtype=data.dtype)
+    block_stride = sequence_rows + max(0, gap)
+    for i in range(n_seq):
+        r0 = i * block_stride
+        for r in range(sequence_rows):
+            out[r0 + r, :] = data[i, :]
+    return out
+
+
 def plot_sequence_index(seqdata: SequenceData,
                         # Grouping parameters
                         group_by_column=None,
@@ -321,7 +345,9 @@ def plot_sequence_index(seqdata: SequenceData,
                         return_sorted_ids=False,
                         show_title=True,
                         proportional_scaling=False,
-                        hide_y_axis=False
+                        hide_y_axis=False,
+                        sequence_gap=0,
+                        sequence_rows=1
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -406,6 +432,10 @@ def plot_sequence_index(seqdata: SequenceData,
                                 Only applies to grouped plots with layout='column'.
     :param hide_y_axis: (bool, default: False) If True, hides y-axis ticks, labels, and spine for all subplots.
                        Useful when using proportional_scaling to create cleaner visualizations.
+    :param sequence_gap: (int, default: 0) Number of blank rows between each sequence band (0 = no gap, 1 = small gap like x-axis margin, 2 = larger).
+                         Keeps plots readable without excessive spacing.
+    :param sequence_rows: (int, default: 1) Number of rows each sequence occupies. Use >1 for thicker bars (e.g. 3 = 3x thicker).
+                         With sequence_gap=1, each gap will be 1/sequence_rows the height of each bar.
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -437,6 +467,11 @@ def plot_sequence_index(seqdata: SequenceData,
         )
     
     actual_figsize = style_sizes[plot_style]
+    
+    sequence_gap = int(sequence_gap)
+    if sequence_gap < 0:
+        sequence_gap = 0
+    sequence_rows = max(1, int(sequence_rows))
     
     # Handle the simplified API: group_by_column
     if group_by_column is not None:
@@ -477,7 +512,7 @@ def plot_sequence_index(seqdata: SequenceData,
     
     # If no grouping information, create a single plot
     if group_dataframe is None or group_column_name is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids, show_title)
+        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids, show_title, sequence_gap, sequence_rows)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -737,6 +772,8 @@ def plot_sequence_index(seqdata: SequenceData,
         # Use masked array for better NaN handling
         data = sorted_data.astype(float)
         data[data < 1] = np.nan
+        if sequence_gap > 0 or sequence_rows > 1:
+            data = _insert_sequence_gaps(data, sequence_gap, sequence_rows)
         
         # Check for all-missing or all-invalid data
         if np.all(~np.isfinite(data)):
@@ -781,6 +818,11 @@ def plot_sequence_index(seqdata: SequenceData,
             ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
             ytick_positions = np.unique(ytick_positions)
             ytick_labels = (ytick_positions + 1).astype(int)
+        
+        # When sequence_gap > 0 or sequence_rows > 1, ticks are at center of each sequence band
+        if sequence_gap > 0 or sequence_rows > 1:
+            block_stride = sequence_rows + max(0, sequence_gap)
+            ytick_positions = np.asarray(ytick_positions, dtype=float) * block_stride + sequence_rows / 2
         
         # Hide y-axis if requested
         if hide_y_axis:
@@ -933,7 +975,9 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 show_sequence_ids=False,
                                 sort_by_ids=None,
                                 return_sorted_ids=False,
-                                show_title=True):
+                                show_title=True,
+                                sequence_gap=0,
+                                sequence_rows=1):
     """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
@@ -1072,6 +1116,9 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     # Use masked array for better NaN handling
     data = sorted_data.astype(float)
     data[data < 1] = np.nan
+    sequence_rows = max(1, int(sequence_rows))
+    if sequence_gap > 0 or sequence_rows > 1:
+        data = _insert_sequence_gaps(data, sequence_gap, sequence_rows)
     
     # Check for all-missing or all-invalid data
     if np.all(~np.isfinite(data)):
@@ -1120,6 +1167,11 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         ytick_positions = np.linspace(0, num_sequences - 1, num=num_ticks, dtype=int)
         ytick_positions = np.unique(ytick_positions)
         ytick_labels = (ytick_positions + 1).astype(int)
+    
+    # When sequence_gap > 0 or sequence_rows > 1, ticks are at center of each sequence band
+    if sequence_gap > 0 or sequence_rows > 1:
+        block_stride = sequence_rows + max(0, sequence_gap)
+        ytick_positions = np.asarray(ytick_positions, dtype=float) * block_stride + sequence_rows / 2
     
     ax.set_yticks(ytick_positions)
     ax.set_yticklabels(ytick_labels, fontsize=fontsize-2, color='black')
