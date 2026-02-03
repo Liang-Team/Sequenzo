@@ -83,7 +83,8 @@ class SequenceData:
         start: int = 1,
         custom_colors: list = None,
         additional_colors: dict = None,
-        missing_values: Union[None, int, float, str, list] = None
+        missing_values: Union[None, int, float, str, list] = None,
+        alpha: float = 1.0
     ):
         """
         Initialize the SequenceData object.
@@ -107,6 +108,8 @@ class SequenceData:
             but assign custom colors to specific states (e.g., {"Other": "#BDBDBD"} to make "Other" gray).
             Format: {state_name: color}, where color can be hex string (e.g., "#BDBDBD") or RGB tuple.
             Example: additional_colors={"Other": "#BDBDBD", "Missing": "#E0E0E0"}
+        :param alpha: Opacity/transparency for all state colors (0=fully transparent, 1=opaque). 
+            Applied to color_map and color_map_by_label so all visualizations use the same transparency.
         :param missing_values: Custom missing value indicators. Can be:
             - None (default): Auto-detect missing values (NaN, string "Missing")
             - Single value: e.g., 99, 9, 1000, "Missing"
@@ -135,6 +138,9 @@ class SequenceData:
         self.start = start
         self.custom_colors = custom_colors
         self.additional_colors = additional_colors or {}
+        self.alpha = float(alpha)
+        if not (0 <= self.alpha <= 1):
+            raise ValueError("alpha must be between 0 and 1.")
         
         # Process missing_values parameter: convert to list format
         if missing_values is None:
@@ -716,6 +722,19 @@ class SequenceData:
         if self.ids is not None:
             self.seqdata.index = self.ids
 
+    def _to_rgba(self, color):
+        """Convert a single color (hex, RGB or RGBA) to RGBA tuple using self.alpha."""
+        if isinstance(color, str) and color.startswith('#'):
+            hex_color = color.lstrip('#')
+            r, g, b = (int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+            return (r, g, b, self.alpha)
+        if isinstance(color, (tuple, list)):
+            if len(color) == 4:
+                return (float(color[0]), float(color[1]), float(color[2]), self.alpha)
+            if len(color) == 3:
+                return (float(color[0]), float(color[1]), float(color[2]), self.alpha)
+        return color
+
     def _assign_colors(self, reverse_colors=True):
         """Assigns a color palette using user-defined or default Spectral palette.
         
@@ -845,6 +864,9 @@ class SequenceData:
                             color_list[state_index] = tuple(custom_color)
                     else:
                         color_list[state_index] = custom_color
+
+        # Apply alpha (transparency): convert each color to RGBA so visualizations use it
+        color_list = [self._to_rgba(c) for c in color_list]
 
         # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
         # This way all color map keys are 1, 2, 3..., which aligns with imshow(vmin=1, vmax=N)
