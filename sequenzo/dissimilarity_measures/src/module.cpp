@@ -1,7 +1,9 @@
 #include <pybind11/pybind11.h>
 #include "OMdistance.cpp"
+#include "OMlocDistance.cpp"
 #include "OMspellDistance.cpp"
 #include "OMspellNewDistance.cpp"
+#include "OMslenDistance.cpp"
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
 #include "LCPdistance.cpp"
@@ -51,8 +53,18 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_all_distances", &OMspellNewDistance::compute_all_distances)
             .def("compute_refseq_distances", &OMspellNewDistance::compute_refseq_distances);
 
+    py::class_<OMslenDistance>(m, "OMslenDistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
+            .def("compute_all_distances", &OMslenDistance::compute_all_distances)
+            .def("compute_refseq_distances", &OMslenDistance::compute_refseq_distances);
+
     py::class_<OMdistance>(m, "OMdistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<int>>())
             .def("compute_all_distances", &OMdistance::compute_all_distances)
             .def("compute_refseq_distances", &OMdistance::compute_refseq_distances);
+
+    py::class_<OMlocDistance>(m, "OMlocDistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<int>, double, double>())
+            .def("compute_all_distances", &OMlocDistance::compute_all_distances)
+            .def("compute_refseq_distances", &OMlocDistance::compute_refseq_distances);
 }
