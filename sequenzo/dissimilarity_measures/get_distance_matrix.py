@@ -744,7 +744,18 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     norm_num = norms[1:].index(norm)
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
+    
+    # Ensure arrays are writable for C++ code (fixes issue on Windows Intel)
+    # Some numpy operations (np.unique, np.hstack, np.vstack) may return read-only arrays
+    if not dseqs_num.flags.writeable:
+        dseqs_num = np.array(dseqs_num, copy=True)
+    if not sm.flags.writeable:
+        sm = np.array(sm, copy=True)
+    
     lengths = seqlength(dseqs_num)
+    # Ensure lengths is also writable (though seqlength should return a new array)
+    if not lengths.flags.writeable:
+        lengths = np.array(lengths, copy=True)
 
     # C++ already guarantees that invalid values will not be accessed
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
