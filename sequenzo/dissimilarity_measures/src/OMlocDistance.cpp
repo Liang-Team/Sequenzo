@@ -54,7 +54,7 @@ public:
     OMlocDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, 
                   py::array_t<int> seqlength, py::array_t<int> refseqS,
                   double expcost, double context)
-            : indel(indel), norm(norm), expcost(expcost), context(context) {
+            : indel(indel), norm(norm) {
 
         py::print("[>] Starting Optimal Matching with localized indel costs (OMloc)...");
         std::cout << std::flush;
