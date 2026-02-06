@@ -441,14 +441,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Ensure sm is a matrix (not a method string)
         if sm_type == "method":
             # Build sm using the specified method
-            sm_result = get_substitution_cost_matrix(seqdata, method=sm, weighted=weighted)
-            sm = sm_result['sm']
-            if indel_type == "auto":
-                indel = sm_result.get('indel', np.max(sm) / 2)
-                if isinstance(indel, np.ndarray):
-                    indel_type = "vector"
-                else:
-                    indel_type = "number"
+            # sm_result = get_substitution_cost_matrix(seqdata, method=sm, weighted=weighted)
+            # sm = sm_result['sm']
+            # if indel_type == "auto":
+            #     indel = sm_result.get('indel', np.max(sm) / 2)
+            #     if isinstance(indel, np.ndarray):
+            #         indel_type = "vector"
+            #     else:
+            #         indel_type = "number"
             sm_type = "matrix"
         
         # Convert sm DataFrame to numpy array if needed
@@ -612,8 +612,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Similar to R code: dseqs.dur <- seqdur(dseqs.num, with.missing=with.missing)
         # We need to create a temporary SequenceData from dseqs_num
         from sequenzo.define_sequence_data import SequenceData as SD
-        temp_seqdata = SD(dseqs_num, states=seqdata.states)
+        # TODO: seqdur 限制了传入的 sequence_data 必须是 SequenceData，是否可以让 seqdur 也接受 dataframe 和 numpy？
+        time = list(range(1, len(seqdata.time) + 1))
+        dseqs_num_dataframe = pd.DataFrame(dseqs_num, columns=time)
+        states = list(range(1, len(seqdata.states) + 1))
+        temp_seqdata = SD(dseqs_num_dataframe, states=states, time=time)
         dseqs_dur = seqdur(temp_seqdata)
+        del dseqs_num_dataframe
         
         # Build dur.mat: expand durations to position level
         # Similar to R code: dur.mat[i, 1:sum(y)] <- rep(y, times = y)
@@ -1005,11 +1010,11 @@ if __name__ == '__main__':
     # ===============================
     #             CO2
     # ===============================
-    df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    _time = list(df.columns)[1:]
-    states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
+    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
+    # _time = list(df.columns)[1:]
+    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
+    # sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
+    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
 
 
     # ===============================
@@ -1041,7 +1046,18 @@ if __name__ == '__main__':
     # for stat in top_stats[:10]:
     #     print(stat)
 
-    print("================")
-    end_time = time.time()
-    print(f"[>] Total time: {end_time - start_time:.2f} seconds")
-    print(om)
+    # print("================")
+    # end_time = time.time()
+    # print(f"[>] Total time: {end_time - start_time:.2f} seconds")
+    # print(om)
+
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+    sequence_data = SequenceData(df,
+                                 time=time_list,
+                                 id_col="country",
+                                 states=states,
+                                 labels=states)
+    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="CONSTANT", indel=1)
+    diss
