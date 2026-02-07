@@ -151,7 +151,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # check method
     om_methods = ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran"]
-    methods = om_methods + ["HAM", "DHD", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]
+    methods = om_methods + ["HAM", "DHD", "CHI2", "EUCLID", "TWED", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]
 
     if method not in methods:
         raise ValueError(f"[!] Invalid 'method': {method}. Expected one of {methods}")
@@ -172,6 +172,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     raise ValueError("[x] Some indexes in 'refseq' are out of range.")
 
             refseq_type = "sets"
+
+        elif isinstance(refseq, int):
+            if refseq < 0 or refseq >= nseqs:
+                raise ValueError("[x] 'refseq' index must be in range [0, nseqs-1].")
+            refseq_type = "index"
 
         else:
             raise ValueError("[!] Invalid 'refseq' value.")
@@ -195,6 +200,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
     if norm not in norms:
         raise ValueError(f"[!] 'norm' should be in {norms}.")
+    # CHI2 and EUCLID accept only "auto" or "none" (TraMineR)
+    if method in ["CHI2", "EUCLID"] and norm not in ["auto", "none"]:
+        raise ValueError(f"[!] For {method}, norm can only be one of 'none' or 'auto'.")
 
     # check matrix_display (only used when full_matrix=True and refseq=None)
     if matrix_display not in ("full", "upper", "lower"):
@@ -245,7 +253,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Check Arguments Not Yet Implemented
     # ===================================
     # norm: all but  SVRspell, NMS, NMSMST (LCS and SVRspell support norm)
-    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "HAM", "DHD", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
+    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED", "HAM", "DHD", "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] norm is not matched with {method}.")
 
     # ===============================
@@ -289,6 +297,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if sm_type == "method" and sm == "CONSTANT":
             raise ValueError("[!] 'sm = \"CONSTANT\"' is not relevant for DHD, consider HAM instead.")
 
+    # TWED: nu (stiffness) and h (lambda, gap penalty) required
+    elif method == "TWED":
+        nu = kwargs.get("nu", None)
+        h_twed = kwargs.get("h", 0.5)
+        if nu is None:
+            raise ValueError("[x] 'nu' is required for TWED (stiffness parameter, must be > 0).")
+        if not isinstance(nu, (int, float)) or nu <= 0:
+            raise ValueError("[x] 'nu' must be a number strictly greater than 0.")
+        if not isinstance(h_twed, (int, float)) or h_twed < 0:
+            raise ValueError("[x] 'h' must be a number greater than or equal to 0 for TWED.")
+
     # 3. HAM, DHD
     if method in ["HAM", "DHD"]:
         if seqs_dlens.shape[0] > 1:
@@ -308,13 +327,107 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             # LCPspell/RLCPspell use duration-aware raw/maxdist; gmean can yield d < 0
             # because (maxdist-raw) is not bounded by 2*sqrt(n)*sqrt(m). Use maxdist.
             norm = "maxdist"
-        elif method in ["OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran"]:
+        elif method in ["OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED"]:
             norm = "YujianBo"
+        elif method in ["CHI2", "EUCLID"]:
+            pass  # norm stays "auto" -> use normalization (divide by sqrt(n_breaks))
         else:
             raise ValueError(f"[!] No known normalization method to select automatically for {method}.")
 
+    # For CHI2/EUCLID: norm "auto" => True, "none" => False (TraMineR norm.chi2euclid)
+    norm_chi2euclid = (norm == "auto") if method in ["CHI2", "EUCLID"] else None
+
     if method in ["LCPspell", "RLCPspell"] and norm == "gmean":
         print("[!] Warning: norm='gmean' for LCPspell/RLCPspell can yield distances outside [0, 1]. Prefer norm='maxdist' or norm='none'. See developer/NORM_GUIDE.md.")
+
+    # =========================================
+    # CHI2 / EUCLID (C++ or Python implementation)
+    # =========================================
+    if method in ["CHI2", "EUCLID"]:
+        from .measures_implemented_with_python.chi2_euclid import (
+            build_chi2_allmat_pdotj,
+            chi2_euclid_distances,
+        )
+        step = kwargs.get("step", 1)
+        breaks = kwargs.get("breaks", None)
+        overlap = kwargs.get("overlap", False)
+        global_pdotj = kwargs.get("global_pdotj", None)
+        seqdata_mat = seqdata.values
+        alphabet = np.arange(1, nstates + 1, dtype=seqdata_mat.dtype)
+        w = seqdata.weights
+        if w is None or len(w) != nseqs:
+            w = np.ones(nseqs, dtype=np.float64)
+        else:
+            w = np.asarray(w, dtype=np.float64)
+        refseq_arg = None
+        if refseq_type == "sets":
+            refseq_arg = refseq
+        elif refseq_type == "index":
+            refseq_arg = refseq
+
+        built = build_chi2_allmat_pdotj(
+            seqdata_mat=seqdata_mat,
+            alphabet=alphabet,
+            weights=w,
+            step=step,
+            breaks=breaks,
+            overlap=overlap,
+            norm=norm_chi2euclid,
+            euclid=(method == "EUCLID"),
+            global_pdotj=global_pdotj,
+            refseq=refseq_arg,
+        )
+        allmat = built["allmat"]
+        pdotj = built["pdotj"]
+        norm_factor = built["norm_factor"]
+        refseq_id = built["refseq_id"]
+        refseq_type_b = built["refseq_type"]
+        n_total = built["n_total"]
+        n1, n2 = built["n1"], built["n2"]
+
+        use_cpp = False
+        try:
+            if c_code is not None and hasattr(c_code, "CHI2distance"):
+                use_cpp = True
+        except Exception:
+            pass
+
+        if use_cpp:
+            chi2 = c_code.CHI2distance(allmat, pdotj, float(norm_factor), refseq_id)
+            if refseq_type_b == "none":
+                result = chi2.compute_all_distances()
+            else:
+                result = chi2.compute_refseq_distances()
+        else:
+            result = chi2_euclid_distances(
+                seqdata_mat=seqdata_mat,
+                alphabet=alphabet,
+                weights=w,
+                step=step,
+                breaks=breaks,
+                overlap=overlap,
+                norm=norm_chi2euclid,
+                euclid=(method == "EUCLID"),
+                global_pdotj=global_pdotj,
+                refseq=refseq_arg,
+                full_matrix=full_matrix,
+            )
+            if refseq_type_b == "none" and not full_matrix:
+                print("[>] Computed Successfully.")
+                return result
+
+        if refseq_type_b == "none":
+            dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
+        elif refseq_type_b == "sets":
+            dist_matrix = pd.DataFrame(
+                result,
+                index=seqdata.ids[refseq[0]],
+                columns=seqdata.ids[refseq[1]],
+            )
+        else:
+            dist_matrix = pd.Series(result, index=seqdata.ids)
+        print("[>] Computed Successfully.")
+        return dist_matrix
 
     # ======================
     # Configure sm and indel
@@ -324,8 +437,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         indel = np.max(sm) / 2
         indel_type = "number"
 
-    # OM, OMloc, OMspell, HAM, DHD
-    if method in om_methods + ["OMloc", "HAM", "DHD"]:
+    # OM, OMloc, OMspell, HAM, DHD, TWED
+    if method in om_methods + ["OMloc", "HAM", "DHD", "TWED"]:
         if sm_type == "matrix":
             if method in om_methods + ["OMloc", "TWED"]:
                 # TODO : checkcost()
@@ -423,6 +536,19 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     elif method not in ["CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] No known 'sm' preparation for {method}.")
+
+    # TWED: set dummy row/col (state 0) for recurrence (TraMineR TWED uses 0 as "no previous")
+    if method == "TWED":
+        sm = np.asarray(sm, dtype=np.float64)
+        if sm.shape[0] == nstates:
+            nan_col = np.full((sm.shape[0], 1), np.nan)
+            sm = np.hstack([nan_col, sm])
+            nan_row = np.full((1, sm.shape[1]), np.nan)
+            sm = np.vstack([nan_row, sm])
+        indel_scalar = float(indel) if np.isscalar(indel) else float(np.max(indel))
+        sm[0, 0] = 0.0
+        sm[0, 1:] = indel_scalar
+        sm[1:, 0] = indel_scalar
 
     # ===========================
     # Pre-Process Data (Part 1/2)
@@ -603,6 +729,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             indel_array = np.array(indel)
             indel = float(np.max(indel_array))
             indel_type = "number"
+
+    # TWED: vector indel not supported, use max(indel) (TraMineR)
+    elif method == "TWED" and indel_type == "vector":
+        indel = float(np.max(indel))
+        indel_type = "number"
 
     # OMslen
     # Build dur.mat (expanded duration matrix)
@@ -812,6 +943,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                     refseq_id)
             dist_matrix = om.compute_refseq_distances()
 
+        elif method == "TWED":
+            nu = kwargs.get("nu")
+            h_twed = kwargs.get("h", 0.5)
+            twed = c_code.TWEDdistance(dseqs_num, sm, float(indel), norm_num, float(nu), float(h_twed), lengths, refseq_id)
+            dist_matrix = twed.compute_refseq_distances()
+
         elif method == "OMloc":
             context = kwargs.get("context", 1.0 - 2.0 * expcost)
             om = c_code.OMlocDistance(dseqs_num,
@@ -951,6 +1088,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                     lengths,
                                     refseq_id)
             dist_matrix = om.compute_all_distances()
+
+        elif method == "TWED":
+            nu = kwargs.get("nu")
+            h_twed = kwargs.get("h", 0.5)
+            twed = c_code.TWEDdistance(dseqs_num, sm, float(indel), norm_num, float(nu), float(h_twed), lengths, refseq_id)
+            dist_matrix = twed.compute_all_distances()
 
         elif method == "OMloc":
             context = kwargs.get("context", 1.0 - 2.0 * expcost)

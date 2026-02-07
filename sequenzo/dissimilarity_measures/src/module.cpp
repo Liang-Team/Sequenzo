@@ -6,6 +6,7 @@
 #include "OMslenDistance.cpp"
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
+#include "CHI2distance.cpp"
 #include "LCPdistance.cpp"
 #include "LCPspellDistance.cpp"
 #include "LCPmstDistance.cpp"
@@ -15,6 +16,7 @@
 #include "NMSdistance.cpp"
 #include "NMSMSTdistance.cpp"
 #include "NMSMSTSoftdistanceII.cpp"
+#include "TWEDdistance.cpp"
 
 namespace py = pybind11;
 
@@ -27,6 +29,11 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPdistance::compute_all_distances)
             .def("compute_refseq_distances", &LCPdistance::compute_refseq_distances);
+
+    py::class_<CHI2distance>(m, "CHI2distance")
+            .def(py::init<py::array_t<double>, py::array_t<double>, double, py::array_t<int>>())
+            .def("compute_all_distances", &CHI2distance::compute_all_distances)
+            .def("compute_refseq_distances", &CHI2distance::compute_refseq_distances);
 
     py::class_<LCSdistance>(m, "LCSdistance")
             .def(py::init<py::array_t<int>, py::array_t<int>, int, py::array_t<int>>())
@@ -97,4 +104,9 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &NMSMSTSoftdistanceII::compute_all_distances)
             .def("compute_refseq_distances", &NMSMSTSoftdistanceII::compute_refseq_distances);
+
+    py::class_<TWEDdistance>(m, "TWEDdistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, double, double, py::array_t<int>, py::array_t<int>>())
+            .def("compute_all_distances", &TWEDdistance::compute_all_distances)
+            .def("compute_refseq_distances", &TWEDdistance::compute_refseq_distances);
 }
