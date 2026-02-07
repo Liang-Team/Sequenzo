@@ -10,6 +10,11 @@
 #include "LCPspellDistance.cpp"
 #include "LCPmstDistance.cpp"
 #include "LCPprodDistance.cpp"
+#include "LCSdistance.cpp"
+#include "SVRspellDistance.cpp"
+#include "NMSdistance.cpp"
+#include "NMSMSTdistance.cpp"
+#include "NMSMSTSoftdistanceII.cpp"
 
 namespace py = pybind11;
 
@@ -22,6 +27,11 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPdistance::compute_all_distances)
             .def("compute_refseq_distances", &LCPdistance::compute_refseq_distances);
+
+    py::class_<LCSdistance>(m, "LCSdistance")
+            .def(py::init<py::array_t<int>, py::array_t<int>, int, py::array_t<int>>())
+            .def("compute_all_distances", &LCSdistance::compute_all_distances)
+            .def("compute_refseq_distances", &LCSdistance::compute_refseq_distances);
 
     py::class_<LCPspellDistance>(m, "LCPspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double>())
@@ -67,4 +77,24 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<int>, double, double>())
             .def("compute_all_distances", &OMlocDistance::compute_all_distances)
             .def("compute_refseq_distances", &OMlocDistance::compute_refseq_distances);
+
+    py::class_<SVRspellDistance>(m, "SVRspellDistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
+            .def("compute_all_distances", &SVRspellDistance::compute_all_distances)
+            .def("compute_refseq_distances", &SVRspellDistance::compute_refseq_distances);
+
+    py::class_<NMSdistance>(m, "NMSdistance")
+            .def(py::init<py::array_t<int>, py::array_t<int>, py::array_t<double>, int, py::array_t<int>>())
+            .def("compute_all_distances", &NMSdistance::compute_all_distances)
+            .def("compute_refseq_distances", &NMSdistance::compute_refseq_distances);
+
+    py::class_<NMSMSTdistance>(m, "NMSMSTdistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, py::array_t<int>>())
+            .def("compute_all_distances", &NMSMSTdistance::compute_all_distances)
+            .def("compute_refseq_distances", &NMSMSTdistance::compute_refseq_distances);
+
+    py::class_<NMSMSTSoftdistanceII>(m, "NMSMSTSoftdistanceII")
+            .def(py::init<py::array_t<int>, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
+            .def("compute_all_distances", &NMSMSTSoftdistanceII::compute_all_distances)
+            .def("compute_refseq_distances", &NMSMSTSoftdistanceII::compute_refseq_distances);
 }

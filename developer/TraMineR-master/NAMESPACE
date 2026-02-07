@@ -1,0 +1,251 @@
+## import(boot, RColorBrewer)
+importFrom("graphics", "abline", "arrows", "axis", "barplot", "box", "bxp", "hist", "layout", "legend", "lines", "mtext", "par", "plot", "plot.new", "points", "polygon", "rect", "segments", "strwidth", "text", "title")
+importFrom("grDevices", "col2rgb", "colorRamp", "dev.off", "rgb")
+importFrom("stats", "as.dist", "chisq.test", "coef", "cor", "complete.cases", "density", "dnorm", "dunif", "fitted", "formula", "lm", "loglin", "median", "model.frame", "model.matrix", "na.omit", "na.pass", "pchisq", "pnorm", "qnorm", "quantile", "reshape", "runif", "terms", "var", "weighted.mean", "xtabs",
+ "cmdscale", "cutree", "fivenum", "hclust", "pf")
+importFrom("utils", "combn", "download.file", "read.table", "read.csv", "packageDescription")
+importFrom("cluster", "daisy")
+importFrom("colorspace", "qualitative_hcl")
+##importFrom("weights", "wtd.cor")
+importFrom("RColorBrewer", "brewer.pal")
+importFrom("boot", "boot")
+importFrom("vegan","wcmdscale")
+##importFrom("WeightedCluster","wcClusterQuality")
+
+export(
+  alphabet,
+  "alphabet<-",
+  cpal,
+  "cpal<-",
+  is.stslist,
+  read.tda.mdist,
+  recodef,
+  seqalign,
+  seqcomp,
+  seqconc,
+  seqcost,
+  seqdecomp,
+  seqdef,
+  seqdiff,
+  seqdim,
+  seqdist,
+  seqdistmc, ##obsolete
+  seqdomassoc,
+  seqdplot,
+  seqdHplot,
+  seqdss,
+  seqdur,
+  seqfcheck,
+  seqfind,
+  seqformat,
+  seqfplot,
+  seqfpos,
+  seqfposend,
+  seqgen,
+  seqhasmiss,
+  seqHtplot,
+  seqibad,
+  seqici,
+  seqidegrad,
+  seqient,
+  seqindic,
+  seqintegr,
+  seqintegration,
+   seqinsecurity,
+  seqiplot,
+  seqIplot,
+  seqipos,
+  seqistatd,
+  seqivardur,
+  seqivolatility,
+  seqlegend,
+  seqlength,
+  seqlength.align,
+  seqLLCP,
+  seqLLCS,
+  seqlogp,
+  seqmaintokens,
+  seqMD,
+  seqmeant,
+  seqmodst,
+  seqmpos,
+  seqmsplot,
+  seqmtplot,
+  seqnum,
+  seqpcfilter,
+  seqpcplot,
+  seqplot,
+  seqplotMD,
+  seqpm,
+    seqprecarity,
+    seqprecorr,
+    seqprecstart,
+  seqrecode,
+  seqrep,
+  seqrf,
+  seqrfplot,
+  seqrplot,
+  seqsep,
+  seqstatd,
+  seqstatf,
+  seqstatl,
+  seqST,
+  seqsubm,
+  seqsubsn,
+  seqtab,
+  seqtransn,
+  seqtrate,
+  stlab,
+  "stlab<-",
+  TraMineR.check.depr.args,
+  TraMineRInternalLayout,
+  TraMineRInternalLegend,
+  TraMineRInternalNodeInit,
+  TraMineRInternalSeqeage,
+  TraMineRInternalSeqgbar,
+  TraMineRInternalSplitInit,
+  TraMineRInternalWeightedInertiaDist
+  )
+
+## stslist methods
+S3method(summary, stslist)
+S3method(print, stslist)
+S3method("[", stslist)
+S3method(plot, stslist)
+S3method(rbind, stslist)
+
+## seqalign methods
+S3method(plot, seqalign)
+S3method(print, seqalign)
+
+## seqpcplot methods
+S3method(plot, seqpcplot)
+S3method(summary , seqpcplot)
+
+## seqrf methods
+S3method(plot, seqrf)
+S3method(print, seqrf)
+S3method(summary, seqrf)
+
+## stslist.stad methods
+S3method(plot, stslist.statd)
+S3method(print, stslist.statd)
+S3method("[", stslist.statd)
+
+## stslist.freq methods
+S3method(plot, stslist.freq)
+S3method(print, stslist.freq)
+S3method("[", stslist.freq)
+
+## stslist.meant methods
+S3method(plot, stslist.meant)
+S3method(print, stslist.meant)
+
+## stslist.rep methods
+S3method(plot, stslist.rep)
+S3method(print, stslist.rep)
+S3method(summary, stslist.rep)
+
+## stslist.modst methods
+S3method(plot, stslist.modst)
+S3method(print, stslist.modst)
+S3method("[", stslist.modst)
+
+## TraMineRPermut methods
+S3method(print ,TraMineRPermut)
+S3method(summary ,TraMineRPermut)
+S3method(hist ,TraMineRPermut)
+
+## seqprecarity methods
+S3method(print , seqidegrad)
+S3method(print , seqprec)
+
+## seqipos methods
+S3method(print , seqipos)
+
+## seqivardur methods
+S3method(print , seqivardur)
+
+## sdomassoc methods
+S3method(print , sdomassoc)
+
+## diss module
+export(
+    dissassoc,
+    disscenter,
+    dissdomassoc,
+    dissmergegroups,
+    dissrep,
+    dissrf,
+    dissmfacw,
+    disstreedisplay,
+    disstree2dot,
+    disstree2dotp,
+    disstreeleaf,
+    disstree.get.rules,
+    disstree.assign,
+    disstree,
+    dissvar,
+    gower_matrix,
+    seqtree2dot,
+    seqtree,
+    seqtreedisplay
+)
+S3method(hist,dissassoc)
+S3method(print,dissassoc)
+S3method(print,dissmultifactor)
+S3method(print,disstree)
+S3method(print,seqtree)
+S3method(print,seqdiff)
+S3method(plot,seqdiff)
+S3method(print,diss.rep)
+S3method(print,dissrf)
+S3method(summary,dissrf)
+S3method(summary,diss.rep)
+S3method(summary,ddomassoc)
+
+
+
+## Event subsequence module
+S3method(plot,subseqelistchisq)
+S3method(plot,subseqelist)
+S3method("[",seqelist)
+S3method(Math,seqelist)
+S3method(Ops,seqelist)
+S3method(plot,seqelist)
+S3method(Summary,seqelist)
+S3method(Math,eseq)
+S3method(Ops,eseq)
+S3method(plot,eseq)
+S3method(Summary,eseq)
+S3method(levels,eseq)
+S3method(levels,seqelist)
+S3method(str,seqelist)
+S3method(str,eseq)
+S3method(as.character,eseq)
+S3method(as.character,seqelist)
+S3method(print,eseq)
+S3method(print,seqelist)
+S3method(print,seqeconstraint)
+S3method(print,subseqelist)
+S3method("[",subseqelist)
+S3method(plot,subseqelist)
+
+export(
+    seqeapplysub,
+    seqecmpgroup,
+    seqeconstraint,
+    seqecontain,
+    seqecreate,
+    seqefsub,
+    seqeid,
+    seqelength,
+    "seqelength<-",
+    seqeweight,
+    "seqeweight<-",
+    is.eseq,
+    is.seqelist,
+    seqetm
+)
+
+useDynLib(TraMineR, .registration = TRUE, .fixes = "C_")

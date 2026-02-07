@@ -244,8 +244,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # ===================================
     # Check Arguments Not Yet Implemented
     # ===================================
-    # norm: all but  SVRspell, NMS, NMSMST
-    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "HAM", "DHD", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+    # norm: all but  SVRspell, NMS, NMSMST (LCS and SVRspell support norm)
+    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "HAM", "DHD", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] norm is not matched with {method}.")
 
     # ===============================
@@ -300,8 +300,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if norm == "auto":
         if method in ["OM", "HAM", "DHD"]:
             norm = "maxlength"
-        elif method in ["LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+        elif method in ["LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             norm = "gmean"
+        elif method in ["NMS", "NMSMST", "SVRspell"]:
+            norm = "YujianBo"
         elif method in ["LCPspell", "RLCPspell"]:
             # LCPspell/RLCPspell use duration-aware raw/maxdist; gmean can yield d < 0
             # because (maxdist-raw) is not bounded by 2*sqrt(n)*sqrt(m). Use maxdist.
@@ -419,7 +421,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             else:
                 raise ValueError("[x] 'sm' is missing.")
 
-    elif method not in ["CHI2", "EUCLID", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
+    elif method not in ["CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] No known 'sm' preparation for {method}.")
 
     # ===========================
@@ -666,7 +668,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
-        if method in ["OMspell", "OMspellNew", "LCPspell", "RLCPspell"]:
+        if method in ["OMspell", "OMspellNew", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
             _seqlength = seqlength(dseqs_num)
         if method == "LCPspell":
             sign = 1
@@ -757,6 +759,41 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if not lengths.flags.writeable:
         lengths = np.array(lengths, copy=True)
 
+    # SVRspell: default prox (identity) and kweights (ones)
+    if method == "SVRspell":
+        prox = kwargs.get("prox", None)
+        if prox is None:
+            prox = np.eye(nstates, dtype=np.float64)
+        else:
+            prox = np.asarray(prox, dtype=np.float64)
+        kweights_svr = kwargs.get("kweights", None)
+        if kweights_svr is None:
+            kweights_svr = np.ones(dseqs_num.shape[1], dtype=np.float64)
+        else:
+            kweights_svr = np.asarray(kweights_svr, dtype=np.float64)
+            if len(kweights_svr) < dseqs_num.shape[1]:
+                kw = np.zeros(dseqs_num.shape[1], dtype=np.float64)
+                kw[:len(kweights_svr)] = kweights_svr
+                kweights_svr = kw
+
+    # NMS, NMSMST: kweights (default ones); NMS with prox uses NMSMSTSoftdistanceII
+    if method in ["NMS", "NMSMST"]:
+        kweights_nms = kwargs.get("kweights", None)
+        if kweights_nms is None:
+            kweights_nms = np.ones(dseqs_num.shape[1], dtype=np.float64)
+        else:
+            kweights_nms = np.asarray(kweights_nms, dtype=np.float64)
+            if len(kweights_nms) < dseqs_num.shape[1]:
+                kw = np.zeros(dseqs_num.shape[1], dtype=np.float64)
+                kw[:len(kweights_nms)] = kweights_nms
+                kweights_nms = kw
+    # NMS with prox uses NMSMSTSoftdistanceII; NMS without prox uses NMSdistance
+    prox_nms = None
+    if method == "NMS":
+        prox_nms = kwargs.get("prox", None)
+        if prox_nms is not None:
+            prox_nms = np.asarray(prox_nms, dtype=np.float64)
+
     # C++ already guarantees that invalid values will not be accessed
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
 
@@ -831,6 +868,49 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       refseq_id)
             dist_matrix = DHD.compute_refseq_distances()
 
+        elif method == "LCS":
+            LCS = c_code.LCSdistance(dseqs_num,
+                                     lengths,
+                                     norm_num,
+                                     refseq_id)
+            dist_matrix = LCS.compute_refseq_distances()
+
+        elif method == "SVRspell":
+            SVRspell = c_code.SVRspellDistance(dseqs_num,
+                                              dseqs_dur,
+                                              _seqlength,
+                                              prox,
+                                              kweights_svr,
+                                              norm_num,
+                                              refseq_id)
+            dist_matrix = SVRspell.compute_refseq_distances()
+
+        elif method == "NMS":
+            if prox_nms is not None:
+                NMSprox = c_code.NMSMSTSoftdistanceII(dseqs_num,
+                                                      lengths,
+                                                      prox_nms,
+                                                      kweights_nms,
+                                                      norm_num,
+                                                      refseq_id)
+                dist_matrix = NMSprox.compute_refseq_distances()
+            else:
+                NMS = c_code.NMSdistance(dseqs_num,
+                                         lengths,
+                                         kweights_nms,
+                                         norm_num,
+                                         refseq_id)
+                dist_matrix = NMS.compute_refseq_distances()
+
+        elif method == "NMSMST":
+            NMSMST = c_code.NMSMSTdistance(dseqs_num,
+                                           dseqs_dur,
+                                           _seqlength,
+                                           kweights_nms,
+                                           norm_num,
+                                           refseq_id)
+            dist_matrix = NMSMST.compute_refseq_distances()
+
         elif method == "LCP" or method == "RLCP":
             LCP = c_code.LCPdistance(dseqs_num,
                                      norm_num,
@@ -853,6 +933,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = LCPdur.compute_refseq_distances()
 
         dist_matrix = dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2[None, :]]
+
+        # TraMineR applies sqrt to NMS, NMSMST, SVRspell output
+        if method in ["NMS", "NMSMST", "SVRspell"]:
+            dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
 
         dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
 
@@ -924,6 +1008,49 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       refseq_id)
             dist_matrix = DHD.compute_all_distances()
 
+        elif method == "LCS":
+            LCS = c_code.LCSdistance(dseqs_num,
+                                     lengths,
+                                     norm_num,
+                                     refseq_id)
+            dist_matrix = LCS.compute_all_distances()
+
+        elif method == "SVRspell":
+            SVRspell = c_code.SVRspellDistance(dseqs_num,
+                                               dseqs_dur,
+                                               _seqlength,
+                                               prox,
+                                               kweights_svr,
+                                               norm_num,
+                                               refseq_id)
+            dist_matrix = SVRspell.compute_all_distances()
+
+        elif method == "NMS":
+            if prox_nms is not None:
+                NMSprox = c_code.NMSMSTSoftdistanceII(dseqs_num,
+                                                      lengths,
+                                                      prox_nms,
+                                                      kweights_nms,
+                                                      norm_num,
+                                                      refseq_id)
+                dist_matrix = NMSprox.compute_all_distances()
+            else:
+                NMS = c_code.NMSdistance(dseqs_num,
+                                         lengths,
+                                         kweights_nms,
+                                         norm_num,
+                                         refseq_id)
+                dist_matrix = NMS.compute_all_distances()
+
+        elif method == "NMSMST":
+            NMSMST = c_code.NMSMSTdistance(dseqs_num,
+                                            dseqs_dur,
+                                            _seqlength,
+                                            kweights_nms,
+                                            norm_num,
+                                            refseq_id)
+            dist_matrix = NMSMST.compute_all_distances()
+
         elif method == "LCP" or method == "RLCP":
             LCP = c_code.LCPdistance(dseqs_num,
                                      norm_num,
@@ -944,6 +1071,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         elif method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             LCPdur = c_code.LCPmstDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id) if method in ["LCPmst", "RLCPmst"] else c_code.LCPprodDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id)
             dist_matrix = LCPdur.compute_all_distances()
+
+        # TraMineR applies sqrt to NMS, NMSMST, SVRspell output
+        if method in ["NMS", "NMSMST", "SVRspell"]:
+            dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
 
         _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
         _dist2matrix = _matrix.padding_matrix()
