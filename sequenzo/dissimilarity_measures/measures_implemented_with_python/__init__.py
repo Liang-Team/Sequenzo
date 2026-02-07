@@ -10,8 +10,11 @@ rather than C++ for easier maintenance and flexibility.
 """
 
 from .omstran import create_transition_sequences, build_omstran_substitution_matrix
+from .chi2_euclid import chi2_euclid_distances, build_chi2_allmat_pdotj
 
 __all__ = [
     'create_transition_sequences',
     'build_omstran_substitution_matrix',
+    'chi2_euclid_distances',
+    'build_chi2_allmat_pdotj',
 ]
