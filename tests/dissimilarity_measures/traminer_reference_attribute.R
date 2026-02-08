@@ -1,3 +1,7 @@
+# @Author  : Yuqi Liang 梁彧祺
+# @File    : traminer_twed_reference.R
+# @Time    : 2026/02/07 22:40
+# @Desc    :
 # TraMineR reference distances for attribute-based measures:
 #   LCS, NMS (with prox), NMSMST, NMSSTSSoft (NMS with proximity; same as NMS with prox here), SVRspell.
 # Uses only the first 10 time columns to avoid C++ overflow in NMS/SVRspell (subsequence sums).

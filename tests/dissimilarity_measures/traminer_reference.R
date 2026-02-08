@@ -1,3 +1,7 @@
+# @Author  : Yuqi Liang 梁彧祺
+# @File    : traminer_reference.R
+# @Time    : 2026/02/08 13:14
+# @Desc    :
 # TraMineR reference distances for: OM+INDELS, OM+INDELSLOG, OM+FUTURE, OM+FEATURES, OMtspell.
 # Usage: Rscript traminer_reference.R <path_to_dyadic_children.csv> [nrows] [outdir]
 # Example: Rscript traminer_reference.R ../../../sequenzo/datasets/dyadic_children.csv 10 .

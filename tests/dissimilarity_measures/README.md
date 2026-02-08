@@ -45,6 +45,5 @@ pytest tests/dissimilarity_measures/new_measures/test_dissimilarity_measures_tra
 
 ## Notes
 
-- **OM+INDELS / OM+INDELSLOG**: TraMineR uses state-dependent indel; Sequenzo uses `max(indel)`.
-- **OM+FUTURE / OM+FEATURES / OMtspell**: Relaxed tolerances where implementation details can cause small differences.
+- **OM variants (INDELS, INDELSLOG, FUTURE, FEATURES, OMtspell)**: Implementations are aligned with TraMineR (seqcost, Gower/daisy for FEATURES, OMPerdistanceII for OMtspell). Tests use tight tolerance (`atol=1e-6`, `rtol=1e-5`) so results are strictly consistent.
 - **Attribute-based**: First 10 time columns only to avoid C++ overflow in NMS/SVRspell.

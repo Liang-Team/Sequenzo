@@ -295,7 +295,7 @@ def test_om_variant_future_matches_traminer(seqdata_subset, ref_dir_om):
 
 
 def test_om_variant_features_matches_traminer(seqdata_subset, ref_dir_om):
-    """OM variant: sm=FEATURES (state_features one column 1..6), norm=maxlength vs TraMineR."""
+    """OM variant: sm=FEATURES (state_features one column 1..6), norm=maxlength vs TraMineR (Gower = daisy)."""
     D_ref = _load_ref_matrix(ref_dir_om, "om_features")
     if D_ref is None:
         pytest.skip("ref_om_features.csv not found")
@@ -308,8 +308,7 @@ def test_om_variant_features_matches_traminer(seqdata_subset, ref_dir_om):
         norm="maxlength",
         state_features=state_features,
     )
-    # Gower/embedding details may differ slightly from TraMineR
-    _align_and_compare(D, D_ref, atol=0.35, rtol=0.35)
+    _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
 def test_om_variant_omtspell_matches_traminer(seqdata_subset, ref_dir_om):
@@ -327,8 +326,7 @@ def test_om_variant_omtspell_matches_traminer(seqdata_subset, ref_dir_om):
         expcost=0.5,
         tokdep_coeff=np.ones(nstates),
     )
-    # Duration/expcost encoding may differ from TraMineR
-    _align_and_compare(D, D_ref, atol=0.9, rtol=0.9)
+    _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
 # ----- Part 1b: OM parameter configs (vs TraMineR) -----
@@ -393,7 +391,7 @@ def test_omtspell_expcost_03_matches_traminer(seqdata_subset, ref_dir_om):
         expcost=0.3,
         tokdep_coeff=np.ones(nstates),
     )
-    _align_and_compare(D, D_ref, atol=0.9, rtol=0.9)
+    _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
 def test_omtspell_expcost_07_matches_traminer(seqdata_subset, ref_dir_om):
@@ -411,7 +409,7 @@ def test_omtspell_expcost_07_matches_traminer(seqdata_subset, ref_dir_om):
         expcost=0.7,
         tokdep_coeff=np.ones(nstates),
     )
-    _align_and_compare(D, D_ref, atol=0.9, rtol=0.9)
+    _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
 # =============================================================================

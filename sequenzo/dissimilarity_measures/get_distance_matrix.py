@@ -830,6 +830,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         if method in ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
             _seqlength = seqlength(dseqs_num)
+            # TraMineR uses original sequence length (number of time points) for OMspell/OMtspell normalization
+            _orig_seqlength = np.full((dseqs_num.shape[0],), seqdata.seqdata.shape[1], dtype=np.int32)
         if method == "LCPspell":
             sign = 1
         elif method == "RLCPspell":
@@ -1001,7 +1003,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          expcost,
                                          dseqs_dur,
                                          indellist.astype(np.float64),
-                                         _seqlength)
+                                         _seqlength,
+                                         _orig_seqlength)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMspellNew":
@@ -1026,7 +1029,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          dseqs_dur,
                                          indellist.astype(np.float64),
                                          _seqlength,
-                                         tokdeplist)
+                                         tokdeplist,
+                                         _orig_seqlength)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMslen":
@@ -1162,7 +1166,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          expcost,
                                          dseqs_dur,
                                          indellist,
-                                         _seqlength)
+                                         _seqlength,
+                                         _orig_seqlength)
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMspellNew":
@@ -1187,7 +1192,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          dseqs_dur,
                                          indellist,
                                          _seqlength,
-                                         tokdeplist)
+                                         tokdeplist,
+                                         _orig_seqlength)
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMslen":
