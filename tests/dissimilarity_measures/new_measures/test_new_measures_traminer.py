@@ -1,4 +1,8 @@
 """
+@Author  : Yuqi Liang 梁彧祺
+@File    : test_new_measures_traminer.py
+@Time    : 2026/02/08 08:07
+@Desc    : 
 Tests for new dissimilarity measures vs TraMineR:
   OM + INDELS, OM + INDELSLOG, OM + FUTURE, OM + FEATURES, OMtspell.
 

@@ -14,7 +14,7 @@ namespace py = pybind11;
 
 class OMdistance {
 public:
-    // indellist: optional state-dependent indel costs (length alphasize). If empty, use scalar indel (TraMineR OM with vector indel = method 7).
+    // indellist: optional state-dependent indel costs. If length alphasize: indellist[state] = cost for state (1-based). If length alphasize-1: indellist[state-1] = cost for state (TraMineR convention). Empty = scalar indel.
     OMdistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> seqlength, py::array_t<int> refseqS,
                py::array_t<double> indellist = py::array_t<double>())
             : indel(indel), norm(norm) {
@@ -32,12 +32,14 @@ public:
             seqlen = seq_shape[1];
             alphasize = sm.shape()[0];
 
-            use_indellist = (indellist.size() == static_cast<py::ssize_t>(alphasize));
+            use_indellist = (indellist.size() == static_cast<py::ssize_t>(alphasize) || indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
+            indellist_0based = (indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
             if (use_indellist)
                 this->indellist = indellist;
 
             dist_matrix = py::array_t<double>({nseq, nseq});
-            fmatsize = seqlen + 1;
+            // When use_indellist we do not skip prefix/suffix, so DP size is (seqlen+1)x(seqlen+1); prev/curr need seqlen+2 elements.
+            fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
 
             if (norm == 4) {
                 maxscost = 2 * indel;
@@ -70,7 +72,9 @@ public:
     inline double get_indel(int state) const {
         if (use_indellist) {
             auto ptr = indellist.unchecked<1>();
-            return ptr(state);
+            // state from sequence is 1-based (1..nstates). TraMineR passes indels of length nstates and uses indellist[state] with 0-based state in C.
+            int idx = indellist_0based ? (state - 1) : state;
+            return ptr(idx);
         }
         return indel;
     }
@@ -86,18 +90,20 @@ public:
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_sm = sm.unchecked<2>();
 
-            // Skipping common prefix
-            int ii = 1, jj = 1;
-            while (ii < mSuf && jj < nSuf && ptr_seq(is, ii-1) == ptr_seq(js, jj-1)) {
-                ii++; jj++; prefix++;
-            }
-            // Skipping common suffix
-            while (mSuf > ii && nSuf > jj && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
-                mSuf--; nSuf--;
+            // Skipping common prefix/suffix: TraMineR OMVIdistance (vector indel) does NOT skip (commented out in their code), so we match that when use_indellist to get identical results.
+            if (!use_indellist) {
+                int ii = 1, jj = 1;
+                while (ii < mSuf && jj < nSuf && ptr_seq(is, ii-1) == ptr_seq(js, jj-1)) {
+                    ii++; jj++; prefix++;
+                }
+                while (mSuf > ii && nSuf > jj && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
+                    mSuf--; nSuf--;
+                }
             }
 
-            int m = mSuf - prefix;
-            int n = nSuf - prefix;
+            // Segment lengths (TraMineR uses m=slen[is], n=slen[js]; we align segment [prefix..mSuf-2] so length = mSuf - prefix - 1).
+            int m = mSuf - prefix - 1;
+            int n = nSuf - prefix - 1;
 
             if (m == 0 && n == 0)
                 return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
@@ -245,6 +251,7 @@ private:
     double indel;
     int norm;
     bool use_indellist = false;
+    bool indellist_0based = false;  // true: indellist[state-1]; false: indellist[state]
     py::array_t<double> indellist;
     int nseq;
     int seqlen;
