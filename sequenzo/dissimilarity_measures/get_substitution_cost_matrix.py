@@ -27,7 +27,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
     if not isinstance(seqdata, SequenceData):
         raise ValueError(" [!] data is NOT a sequence object, see SequenceData function to create one.")
 
-    metlist = ["CONSTANT", "TRATE", "INDELS", "INDELSLOG"]
+    metlist = ["CONSTANT", "TRATE", "INDELS", "INDELSLOG", "FUTURE", "FEATURES"]
     if method not in metlist:
         raise ValueError(f" [!] method must be one of: {', '.join(metlist)}.")
 
@@ -137,6 +137,98 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
             indel = 0.5 * np.max(costs)
 
             return_result['indel'] = indel
+
+    # ==================
+    # Process "FUTURE"
+    # ==================
+    # TraMineR: substitution costs from chi-squared distance between rows of the
+    # transition rate matrix (common future). Not time-varying.
+    if method == "FUTURE":
+        if time_varying:
+            raise ValueError("[!] time.varying substitution cost is not (yet) implemented for method FUTURE.")
+        print("[>] Creating substitution-cost matrix using common future...")
+        tr = get_sm_trate_substitution_cost_matrix(
+            seqdata, time_varying=False, weighted=weighted, lag=lag
+        )
+        # TraMineR: with.missing=FALSE -> alphabet has len(states) only; chisqdista on 6x6 transition block.
+        # Our tr is (alphsize, alphsize) with row/col 0 unused; use only state block [1:alphsize, 1:alphsize] -> nstates x nstates.
+        n_states = len(states)
+        tr_states = tr[1 : n_states + 1, 1 : n_states + 1]
+        cs = np.sum(tr_states, axis=0)
+        pdot = np.zeros_like(cs)
+        np.place(pdot, cs > 0, 1.0 / np.where(cs > 0, cs, 1.0))
+        costs_ss = np.zeros((n_states, n_states))
+        for i in range(n_states):
+            for j in range(i + 1, n_states):
+                d = np.sum(pdot * (tr_states[i, :] - tr_states[j, :]) ** 2)
+                costs_ss[i, j] = np.sqrt(d)
+                costs_ss[j, i] = costs_ss[i, j]
+        np.fill_diagonal(costs_ss, 0)
+        max_ss = np.max(costs_ss)
+        return_result["indel"] = 0.5 * max_ss
+        # Embed in alphsize x alphsize for downstream (row/col 0 = null state)
+        costs = np.zeros((alphsize, alphsize), dtype=np.float64)
+        costs[1 : n_states + 1, 1 : n_states + 1] = costs_ss
+        costs[0, 1 : n_states + 1] = max_ss
+        costs[1 : n_states + 1, 0] = max_ss
+        costs[0, 0] = 0.0
+
+    # ==================
+    # Process "FEATURES"
+    # ==================
+    # TraMineR: substitution costs from Gower distance on state features (cluster::daisy).
+    # state_features: one row per state (same order as alphabet); optional weights and types.
+    if method == "FEATURES":
+        if time_varying:
+            raise ValueError("[!] time.varying substitution cost is not (yet) implemented for method FEATURES.")
+        state_features = kwargs.get("state_features")
+        feature_weights = kwargs.get("feature_weights", None)
+        feature_type = kwargs.get("feature_type", None)
+        if state_features is None or not isinstance(state_features, (pd.DataFrame, np.ndarray)):
+            raise ValueError(
+                "[!] state_features should be a DataFrame or array with one row per state (and optionally one for missing)."
+            )
+        if hasattr(state_features, "values"):
+            X = np.asarray(state_features.values, dtype=np.float64)
+        else:
+            X = np.asarray(state_features, dtype=np.float64)
+        if X.shape[0] not in (len(states), alphsize):
+            raise ValueError(
+                f"[!] state_features must have {len(states)} or {alphsize} rows (one per state, optionally one for missing), got {X.shape[0]}."
+            )
+        # TraMineR: state.features has one row per state (6 rows); daisy gives 6x6. We build 6x6 then embed in 7x7.
+        use_embed = X.shape[0] == len(states)
+        n_ss = len(states) if use_embed else alphsize
+        X_ss = X[:n_ss]
+        if feature_weights is None:
+            feature_weights = np.ones(X_ss.shape[1], dtype=np.float64)
+        else:
+            feature_weights = np.asarray(feature_weights, dtype=np.float64)
+            if feature_weights.size != X_ss.shape[1]:
+                feature_weights = np.resize(
+                    np.atleast_1d(feature_weights), X_ss.shape[1]
+                )
+        ranges = np.nanmax(X_ss, axis=0) - np.nanmin(X_ss, axis=0)
+        ranges[ranges == 0] = 1.0
+        costs_ss = np.zeros((n_ss, n_ss))
+        for i in range(n_ss):
+            for j in range(i + 1, n_ss):
+                d = np.nansum(
+                    feature_weights * np.abs(X_ss[i, :] - X_ss[j, :]) / ranges
+                ) / np.sum(feature_weights)
+                costs_ss[i, j] = d
+                costs_ss[j, i] = d
+        np.fill_diagonal(costs_ss, 0)
+        max_ss = np.max(costs_ss)
+        return_result["indel"] = 0.5 * max_ss
+        if use_embed:
+            costs = np.zeros((alphsize, alphsize), dtype=np.float64)
+            costs[1 : n_ss + 1, 1 : n_ss + 1] = costs_ss
+            costs[0, 1 : n_ss + 1] = max_ss
+            costs[1 : n_ss + 1, 0] = max_ss
+            costs[0, 0] = 0.0
+        else:
+            costs = np.asarray(costs_ss, dtype=np.float64)
 
     # ================================
     # Process "INDELS" and "INDELSLOG"
