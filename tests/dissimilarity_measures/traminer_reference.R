@@ -61,4 +61,32 @@ suppressMessages({
 })
 write.csv(as.matrix(D_omtspell), file.path(outdir, "ref_omtspell.csv"), row.names = TRUE)
 
+# ----- Part 1b: OM parameter configs (for TraMineR comparison) -----
+# OM + INDELS, norm = "none"
+suppressMessages({
+  D_indels_none <- TraMineR::seqdist(seqdata, method = "OM", sm = "INDELS", indel = "auto", norm = "none")
+})
+write.csv(as.matrix(D_indels_none), file.path(outdir, "ref_om_indels_norm_none.csv"), row.names = TRUE)
+
+# OM + INDELS, indel = 1 (scalar), norm = "maxlength"
+suppressMessages({
+  D_indels_indel1 <- TraMineR::seqdist(seqdata, method = "OM", sm = "INDELS", indel = 1, norm = "maxlength")
+})
+write.csv(as.matrix(D_indels_indel1), file.path(outdir, "ref_om_indels_indel1_maxlength.csv"), row.names = TRUE)
+
+# OM + TRATE, norm = "gmean"
+suppressMessages({
+  D_trate_gmean <- TraMineR::seqdist(seqdata, method = "OM", sm = sc_tr$sm, indel = sc_tr$indel, norm = "gmean")
+})
+write.csv(as.matrix(D_trate_gmean), file.path(outdir, "ref_om_trate_gmean.csv"), row.names = TRUE)
+
+# OMtspell with expcost = 0.3 and 0.7
+for (expcost_val in c(0.3, 0.7)) {
+  suppressMessages({
+    D_ec <- TraMineR::seqdist(seqdata, method = "OMspell", sm = sc_tr$sm, indel = sc_tr$indel,
+      norm = "YujianBo", expcost = expcost_val, opt.args = list(tokdep.coeff = tokdep_coeff))
+  })
+  write.csv(as.matrix(D_ec), file.path(outdir, sprintf("ref_omtspell_expcost%02.0f.csv", expcost_val * 10)), row.names = TRUE)
+}
+
 cat("Reference matrices written to", outdir, "\n")

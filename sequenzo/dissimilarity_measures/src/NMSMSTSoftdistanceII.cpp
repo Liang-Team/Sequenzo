@@ -121,7 +121,8 @@ public:
             for (int j = 0; j < n; j++) {
                 int ij = IDX(i, j, rowsize);
                 int seqj = ptr_seq(js, j);
-                double sf = ptr_sm(seqi, seqj);
+                // State codes are 1-based (1..alphasize); softmatch is 0-based indexed
+                double sf = ptr_sm(seqi - 1, seqj - 1);
                 e1[ij] = sf;
                 e[ij] = sf;
                 s += sf;

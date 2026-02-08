@@ -11,7 +11,7 @@
  * @Time    : 2026/02/07 15:07
  * @Desc    : 
  * Reference: TraMineR src/TWEDdistance.cpp, seqdist.R method="TWED".
- * Cross-check: tests/test_twed_traminer.py vs tests/traminer_twed_reference.R.
+ * Cross-check: tests/dissimilarity_measures/new_measures/test_dissimilarity_measures_traminer.py (Part 3 TWED) vs tests/dissimilarity_measures/twed/traminer_twed_reference.R.
  */
 
 #include <pybind11/pybind11.h>

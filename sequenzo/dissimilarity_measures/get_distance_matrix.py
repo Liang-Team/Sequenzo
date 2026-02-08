@@ -153,7 +153,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # check method
     om_methods = ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "OMtspell"]
-    methods = om_methods + ["HAM", "DHD", "CHI2", "EUCLID", "TWED", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]
+    methods = om_methods + ["HAM", "DHD", "CHI2", "EUCLID", "TWED", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]
 
     if method not in methods:
         raise ValueError(f"[!] Invalid 'method': {method}. Expected one of {methods}")
