@@ -1,0 +1,1 @@
+# Tests for OM+INDELS, OM+INDELSLOG, FUTURE, FEATURES, OMtspell vs TraMineR
