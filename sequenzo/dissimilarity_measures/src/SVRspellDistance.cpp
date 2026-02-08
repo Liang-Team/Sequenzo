@@ -130,7 +130,8 @@ public:
             for (int j = 0; j < n; j++) {
                 int ij = IDX(i, j, rowsize);
                 int seqj = ptr_seq(js, j);
-                double sf = ptr_sm(seqi, seqj);
+                // State codes are 1-based (1..alphasize); softmatch is 0-based indexed
+                double sf = ptr_sm(seqi - 1, seqj - 1);
                 double tj = ptr_dur(js, j);
                 e1[ij] = sf;
                 e[ij] = sf;
@@ -234,9 +235,10 @@ public:
             double dist = Ival + Jval - 2.0 * Aval;
             double maxdist = Ival + Jval;
             if (dist < 0.0) dist = 0.0;  // numerical safety
-            double raw_sqrt = std::sqrt(dist);
-            double maxdist_sqrt = (maxdist > 0.0) ? std::sqrt(maxdist) : 0.0;
-            return normalize_distance(raw_sqrt, maxdist_sqrt, Ival, Jval, norm);
+            // Return raw dist (not sqrt); Python layer applies sqrt to match TraMineR (same as NMS/NMSMST).
+            if (norm == 4)
+                return normalize_distance(std::sqrt(dist), (maxdist > 0.0 ? std::sqrt(maxdist) : 0.0), Ival, Jval, norm);
+            return normalize_distance(dist, maxdist, Ival, Jval, norm);
         } catch (const std::exception& e) {
             py::print("Error in SVRspellDistance::compute_distance: ", e.what());
             throw;

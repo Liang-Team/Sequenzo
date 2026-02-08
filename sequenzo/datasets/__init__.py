@@ -3,13 +3,11 @@
 
 def list_datasets():
     """List all available datasets in the `datasets` package."""
-    # Delay imports to avoid circular dependency issues during installation
-    import importlib.resources as pkg_resources
+    from importlib.resources import files
 
-    with pkg_resources.path("sequenzo.datasets", "__init__.py") as datasets_path:
-        datasets_dir = datasets_path.parent  # Get the datasets directory path
-        datasets = [file.stem for file in datasets_dir.iterdir() if file.suffix == ".csv"]
-        return sorted(datasets)  # Sort alphabetically so related datasets are grouped together
+    datasets_dir = files("sequenzo.datasets")
+    datasets = [f.name.removesuffix(".csv") for f in datasets_dir.iterdir() if f.name.endswith(".csv")]
+    return sorted(datasets)  # Sort alphabetically so related datasets are grouped together
 
 
 def load_dataset(name):
@@ -24,17 +22,15 @@ def load_dataset(name):
     """
     # Import pandas only when the function is called, not when the module is loaded
     import pandas as pd
-    import os
-    # Import resources management module
-    import importlib.resources as pkg_resources
+    from importlib.resources import files
 
     available_datasets = list_datasets()  # Get the dynamic dataset list
 
     if name not in available_datasets:
         raise ValueError(f"Dataset '{name}' not found. Available datasets: {available_datasets}")
 
-    # Load the dataset from the package
-    with pkg_resources.open_text("sequenzo.datasets", f"{name}.csv") as f:
+    # Load the dataset from the package (files() is the modern replacement for open_text)
+    with (files("sequenzo.datasets") / f"{name}.csv").open("r", encoding="utf-8") as f:
         return pd.read_csv(f)
 
 
