@@ -31,7 +31,7 @@ class OMtspellDistance {
 public:
     OMtspellDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
                      double timecost, py::array_t<double> seqdur, py::array_t<double> indellist,
-                     py::array_t<int> seqlength, py::array_t<double> tokdeplist)
+                     py::array_t<int> seqlength, py::array_t<double> tokdeplist, py::array_t<int> norm_seqlength)
             : indel(indel), norm(norm), timecost(timecost) {
 
         py::print("[>] Starting Optimal Matching with token-dependent spell (OMtspell)...");
@@ -44,6 +44,7 @@ public:
             this->indellist = indellist;
             this->seqlength = seqlength;
             this->tokdeplist = tokdeplist;
+            this->norm_seqlength = norm_seqlength;
 
             auto seq_shape = sequences.shape();
             nseq = seq_shape[0];
@@ -109,6 +110,7 @@ public:
         try {
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_len = seqlength.unchecked<1>();
+            auto ptr_norm_len = norm_seqlength.unchecked<1>();
             auto ptr_sm = sm.unchecked<2>();
             auto ptr_dur = seqdur.unchecked<2>();
             auto ptr_indel = indellist.unchecked<1>();
@@ -188,9 +190,12 @@ public:
                 std::swap(prev, curr);
             }
 
-            double maxpossiblecost = std::abs(nn - mm) * indel + maxscost * std::min(mm, nn);
-            double ml = double(mm) * indel;
-            double nl = double(nn) * indel;
+            // TraMineR uses original sequence length (number of time points) for normalization, not spell count
+            int mm_norm = ptr_norm_len(is);
+            int nn_norm = ptr_norm_len(js);
+            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
+            double ml = double(mm_norm) * indel;
+            double nl = double(nn_norm) * indel;
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in OMtspell compute_distance: ", e.what());
@@ -256,6 +261,7 @@ private:
     py::array_t<double> seqdur;
     py::array_t<double> indellist;
     py::array_t<double> tokdeplist;
+    py::array_t<int> norm_seqlength;
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;

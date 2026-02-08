@@ -208,14 +208,22 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
                 feature_weights = np.resize(
                     np.atleast_1d(feature_weights), X_ss.shape[1]
                 )
+        # TraMineR uses cluster::daisy(..., metric="gower"). For numeric, Gower = mean of
+        # |x_i - x_j|/range per variable; variables with zero range are excluded (R removes them).
         ranges = np.nanmax(X_ss, axis=0) - np.nanmin(X_ss, axis=0)
-        ranges[ranges == 0] = 1.0
+        valid = (ranges > 0) & ~np.isnan(ranges)
+        weight_sum_valid = np.sum(feature_weights * valid)
+        if weight_sum_valid <= 0:
+            weight_sum_valid = 1.0  # avoid division by zero
         costs_ss = np.zeros((n_ss, n_ss))
         for i in range(n_ss):
             for j in range(i + 1, n_ss):
-                d = np.nansum(
-                    feature_weights * np.abs(X_ss[i, :] - X_ss[j, :]) / ranges
-                ) / np.sum(feature_weights)
+                num = np.where(
+                    valid,
+                    feature_weights * np.abs(X_ss[i, :] - X_ss[j, :]) / np.where(ranges > 0, ranges, 1.0),
+                    0.0,
+                )
+                d = np.nansum(num) / weight_sum_valid
                 costs_ss[i, j] = d
                 costs_ss[j, i] = d
         np.fill_diagonal(costs_ss, 0)
