@@ -1,5 +1,5 @@
 """
-@Author  : Xinyi Li 李欣怡
+@Author  : Xinyi Li 李欣怡, Yuqi Liang 梁彧祺
 @File    : get_distance_matrix.py
 @Time    : 2024/11/10 19:55
 @Desc    : Computes pairwise dissimilarities between sequences or dissimilarity from a reference sequence.
@@ -747,11 +747,16 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         indel = np.max(indellist)
     
     # OM with vector indel: keep indellist for C++ (TraMineR uses state-dependent indel); use max(indel) for normalization.
+    # TraMineR passes indels of length nstates and uses 0-based indexing in C (indellist[state] with state 0..nstates-1).
+    # Our sequences use 1-based state codes (1..nstates). C++ accepts length alphasize-1 and uses indellist[state-1].
     om_indellist = None  # used only when method=="OM" and indel_type=="vector"
     if method == "OM" and indel_type == "vector":
-        om_indellist = np.asarray(indel, dtype=np.float64)
-        if om_indellist.size != nstates + 1:
-            om_indellist = np.resize(np.atleast_1d(om_indellist), nstates + 1)
+        indel_vec = np.asarray(indel, dtype=np.float64)
+        # Pass nstates costs so C++ uses 0-based indexing (indellist[state-1]). If seqcost returned [0, c1..c6], use indel_vec[1:].
+        if len(indel_vec) > nstates:
+            om_indellist = np.asarray(indel_vec[1 : nstates + 1], dtype=np.float64)
+        else:
+            om_indellist = np.asarray(indel_vec[:nstates], dtype=np.float64)
         indel = float(np.max(om_indellist))  # for normalization in C++
 
     # TWED: vector indel not supported, use max(indel) (TraMineR)
