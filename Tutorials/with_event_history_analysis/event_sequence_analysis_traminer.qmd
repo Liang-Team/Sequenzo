@@ -1,0 +1,216 @@
+---
+title: "Event Sequence Analysis — TraMineR (R) counterpart"
+subtitle: "Same workflow as the LSOG tutorial, in R with TraMineR"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+---
+
+## Overview
+
+This document shows the **TraMineR** (R) code that corresponds to the Sequenzo (Python) event sequence analysis tutorial using the **LSOG dyadic_children** data. Code chunks are **evaluated** so the HTML shows results; the data path is relative to this file (`../../sequenzo/datasets/dyadic_children.csv`). If rendering from elsewhere, set `csv_path` in the first chunk. Each section mirrors the tutorial notebook so you can compare API and usage.
+
+TraMineR source code in this repo: `developer/TraMineR-master/` (see `man/seqecreate.Rd`, `seqefsub.Rd`, `seqeconstraint.Rd`, `seqeapplysub.Rd`, `seqecmpgroup.Rd`, `plot.subseqelist.Rd`, `seqpcplot.Rd`).
+
+| Sequenzo (Python) | TraMineR (R) |
+|------------------|--------------|
+| `create_event_sequences()` | `seqecreate()` |
+| `EventSequenceConstraint` | `seqeconstraint()` |
+| `find_frequent_subsequences()` | `seqefsub()` |
+| `count_subsequence_occurrences()` | `seqeapplysub()` |
+| `compare_groups()` | `seqecmpgroup()` |
+| `plot_event_sequences()` | `plot.seqelist()` / `seqpcplot()` |
+| `plot_subsequence_frequencies()` | `plot.subseqelist()` |
+
+## 1. Load LSOG data and create state sequence object
+
+In R we read the same CSV and build a state sequence object with `seqdef()`. The LSOG data has numeric time columns and `dyadID`; states are 1–6.
+
+```{r}
+#| label: load-data
+#| eval: true
+# Path relative to this QMD (Tutorials/with_event_history_analysis/); adjust if you render from repo root
+library(TraMineR)
+csv_path <- "../../sequenzo/datasets/dyadic_children.csv"
+if (!file.exists(csv_path)) csv_path <- "sequenzo/datasets/dyadic_children.csv"
+dat <- read.csv(csv_path, nrows = 50, check.names = FALSE)
+
+# Time columns: numeric names "1", "2", ...
+time_cols <- names(dat)[sapply(names(dat), function(x) suppressWarnings(!is.na(as.numeric(x))))]
+time_cols <- time_cols[order(as.numeric(time_cols))]
+id_col <- "dyadID"
+states <- as.character(1:6)
+
+# State sequence object (TraMineR::seqdef)
+seqdata <- seqdef(dat[, time_cols, drop = FALSE], alphabet = states, id = dat[[id_col]])
+print(dim(seqdata))
+head(dat[, c(id_col, time_cols[1:5])])
+```
+
+## 2. Create event sequences — `seqecreate()`
+
+Convert the state sequence object to an event sequence with **transition** or **state** method. TraMineR: `seqecreate(data, tevent = "transition")` or `tevent = "state"`.
+
+```{r}
+#| label: seqecreate
+#| eval: true
+# Transition method: one event per state change (e.g. "1-2", "2-3")
+eseq <- seqecreate(seqdata, tevent = "transition")
+print(eseq)
+# Event alphabet
+alphabet(eseq)
+# First sequence
+eseq[1]
+```
+
+```{r}
+#| label: seqecreate-state
+#| eval: true
+# Optional: state method (one event per state entry)
+eseq_state <- seqecreate(seqdata, tevent = "state")
+print(eseq_state)
+eseq_state[1]
+```
+
+## 3. Find frequent subsequences — `seqefsub()`
+
+Discover patterns with minimum support (`min.support` = number of sequences, or `pmin.support` = proportion). Time constraints are set with **`seqeconstraint()`**.
+
+### 3.1 Basic: `min.support`
+
+```{r}
+#| label: seqefsub
+#| eval: true
+# Minimum support = at least 2 sequences
+fsub <- seqefsub(eseq, min.support = 2)
+print(fsub)
+head(fsub$data, 10)
+# Subsequence strings (first 5)
+as.character(fsub$subseq)[1:5]
+```
+
+### 3.2 With time constraints — `seqeconstraint()`
+
+```{r}
+#| label: seqeconstraint
+#| eval: true
+# max.gap, window.size, age.min, age.max, count.method (1 = COBJ)
+constraint <- seqeconstraint(
+  max.gap = 5,
+  window.size = 15,
+  age.min = 0,
+  age.max = 50,
+  count.method = 1
+)
+fsub_c <- seqefsub(eseq, min.support = 2, constraint = constraint)
+print(fsub_c)
+head(fsub_c$data)
+```
+
+### 3.3 Search for specific subsequences — `str.subseq`
+
+Subsequences are given as strings: each transition (or event) in parentheses, separated by `-`, e.g. `"(1-2)-(2-3)"` (format depends on `alphabet(eseq)`). Events must be from the alphabet of `eseq`. See `str.seqelist` in TraMineR for the display format.
+
+```{r}
+#| label: str-subseq
+#| eval: true
+# Example: search for specific patterns (use labels from alphabet(eseq))
+alph <- alphabet(eseq)
+str_subseq <- c(
+  paste0("(", alph[1], ")-(", alph[2], ")"),
+  paste0("(", alph[1], ")-(", alph[3], ")")
+)
+fsub_specific <- seqefsub(eseq, str.subseq = str_subseq)
+print(fsub_specific)
+fsub_specific$data
+```
+
+## 4. Count subsequence occurrences — `seqeapplysub()`
+
+Build a matrix: rows = sequences, columns = subsequences.
+
+- **`method = "presence"`**: 0/1 per sequence (like COBJ).
+- **`method = "count"`**: number of distinct occurrences per sequence (like CDIST_O).
+
+```{r}
+#| label: seqeapplysub
+#| eval: true
+# Presence: 1 if sequence contains the pattern, else 0
+msubpres <- seqeapplysub(fsub, method = "presence")
+dim(msubpres)
+unique(c(msubpres))
+
+# Count: number of times each pattern appears in each sequence
+msubcount <- seqeapplysub(fsub, method = "count")
+dim(msubcount)
+msubcount[1, 1:5]
+```
+
+## 5. Compare groups — `seqecmpgroup()`
+
+Find subsequences that discriminate between groups (e.g. by **sex**). Uses chi-square (or Bonferroni); **`pvalue.limit`** filters by significance.
+
+```{r}
+#| label: seqecmpgroup
+#| eval: true
+# Group by sex (must match order of sequences in eseq)
+discr <- seqecmpgroup(fsub, group = dat$sex, method = "chisq", pvalue.limit = 1)
+print(discr)
+head(discr$data, 10)
+# Plot discriminating subsequences (frequencies or residuals)
+# plot(discr[1:10], ptype = "freq")
+# plot(discr[1:10], ptype = "resid")
+```
+
+## 6. Plot event sequences — `plot.seqelist()` / `seqpcplot()`
+
+In TraMineR, the plot method for **`seqelist`** (event sequences) is **parallel coordinates** by default: `plot(eseq)` or `plot(eseq, type = "pc")` calls `seqpcplot()`. You can pass **`group`** for separate panels or coloring.
+
+```{r}
+#| label: plot-seqelist
+#| eval: true
+#| fig-cap: "Event sequences: parallel coordinates (default), and by group (sex)."
+# Parallel coordinate plot (default for seqelist)
+plot(eseq, main = "LSOG event sequences (parallel)")
+
+# By group (e.g. sex)
+plot(eseq, group = dat$sex, main = "LSOG by sex")
+```
+
+*Note: TraMineR does not provide a separate “index” timeline plot for event sequences; the main visualization is the parallel coordinate plot.*
+
+## 7. Plot subsequence frequencies — `plot.subseqelist()`
+
+Bar chart of **Support** (or **Count**) for subsequences. Use **`freq`** to choose what to plot (default is support).
+
+```{r}
+#| label: plot-subseqelist
+#| eval: true
+#| fig-cap: "Subsequence frequencies: by Support and by Count."
+# By support (default)
+plot(fsub[1:15], main = "Top 15 by Support", cex = 1.2)
+
+# By count (frequency)
+plot(fsub[1:15], freq = fsub$data$Count[1:15], main = "Top 15 by Count", cex = 1.2)
+```
+
+## Summary: TraMineR ↔ Sequenzo
+
+| Step | TraMineR (R) | Sequenzo (Python) |
+|------|--------------|-------------------|
+| Load & state sequence | `read.csv` + `seqdef(..., alphabet, id)` | `load_dataset` + `SequenceData(..., time, id_col, states)` |
+| Event sequences | `seqecreate(seqdata, tevent = "transition")` | `create_event_sequences(data=seqdata, tevent="transition")` |
+| Constraints | `seqeconstraint(max.gap, window.size, age.min, age.max, count.method)` | `EventSequenceConstraint(...)` |
+| Frequent subsequences | `seqefsub(eseq, min.support, constraint, str.subseq)` | `find_frequent_subsequences(eseq, min_support, constraint, str_subseq)` |
+| Occurrence matrix | `seqeapplysub(fsub, method = "presence" \| "count")` | `count_subsequence_occurrences(fsub, method="presence" \| "count")` |
+| Group comparison | `seqecmpgroup(fsub, group, method="chisq", pvalue.limit)` | `compare_groups(fsub, group, method="chisq", pvalue_limit)` |
+| Plot event sequences | `plot(eseq)` / `seqpcplot(eseq)`; `plot(eseq, group=...)` | `plot_event_sequences(eseq, type="index" \| "parallel", group=...)` |
+| Plot subseq frequencies | `plot(fsub[1:n])`; `plot(..., freq=Count)` | `plot_subsequence_frequencies(fsub, top_n, use_count)` |
+
+## References (from TraMineR man pages)
+
+- Ritschard, G., Bürgin, R., and Studer, M. (2014), "Exploratory Mining of Life Event Histories", In McArdle, J.J. & Ritschard, G. (eds) *Contemporary Issues in Exploratory Data Mining in the Behavioral Sciences*. New York: Routledge.
+- TraMineR documentation: <http://traminer.unige.ch>
+- Source in this repo: `developer/TraMineR-master/` (R files in `R/`, man in `man/`, e.g. `seqecreate.Rd`, `seqefsub.Rd`, `seqeconstraint.Rd`, `seqeapplysub.Rd`, `seqecmpgroup.Rd`, `plot.subseqelist.Rd`, `seqpcplot.Rd`).
