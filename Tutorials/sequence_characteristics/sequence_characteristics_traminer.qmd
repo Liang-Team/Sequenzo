@@ -1,0 +1,387 @@
+---
+title: "Sequence Characteristics — TraMineR (R) counterpart"
+subtitle: "Same analyses as the LSOG tutorial, in R with TraMineR"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+---
+
+## Overview
+
+This document shows the **TraMineR** (R) code that corresponds to the Sequenzo (Python) **sequence characteristics** tutorial using the **LSOG dyadic_children** data. Each section mirrors the same functions so you can compare APIs. TraMineR source code in this repo: `developer/TraMineR-master/` (R files in `R/`, documentation in `man/`).
+
+| Sequenzo (Python) | TraMineR (R) |
+|------------------|--------------|
+| `get_sequence_length()` | `seqlength()` |
+| `get_spell_durations()` | `seqdur()` |
+| `get_visited_states()` | `seqindic(indic="visited")` or from `seqistatd` + DSS |
+| `get_recurrence()` | `seqindic(indic="recu")` |
+| `get_mean_spell_duration()` | `seqindic(indic="meand")` |
+| `get_duration_standard_deviation()` | `seqindic(indic="dustd")` |
+| `get_number_of_transitions()` | `seqtransn()` |
+| `get_subsequences_all_sequences()` | `seqsubsn()` |
+| `get_state_freq_and_entropy_per_seq()` | `seqistatd()` |
+| `get_within_sequence_entropy()` | `seqient()` |
+| `get_cross_sectional_entropy()` | `seqstatd()` (list with Frequencies, Entropy) |
+| `get_spell_duration_variance()` | `seqivardur()` |
+| `get_turbulence()` | `seqST()` |
+| `get_complexity_index()` | `seqici()` |
+| `get_entropy_difference()` | `seqientdiff()` (or compute from spell durations) |
+| `get_volatility()` | `seqivolatility()` |
+| `get_positive_negative_indicators()` | `seqipos(index="share")` |
+| `get_integration_index()` | `seqintegr()` |
+| `get_badness_index()` | `seqibad()` |
+| `get_degradation_index()` | `seqidegrad()` |
+| `get_precarity_index()` | `seqprecarity()` |
+| `get_insecurity_index()` | `seqinsecurity()` |
+| `get_mean_time_in_states()` | `seqmeant()` |
+| `get_modal_state_sequence()` | `seqmodst()` |
+| `plot_longitudinal_characteristics()` | (combine `seqindic` + custom plot or `seqplot`) |
+| `plot_cross_sectional_characteristics()` | `plot(seqstatd(...), type="Ht")` |
+
+## 1. Load LSOG data and create state sequence object
+
+We read the same CSV and build a state sequence object with `seqdef()`. States are 1–6 (as character in TraMineR).
+
+```{r}
+#| label: load-data
+#| eval: true
+library(TraMineR)
+# Path relative to this QMD (Tutorials/sequence_characteristics/)
+csv_path <- "../../sequenzo/datasets/dyadic_children.csv"
+if (!file.exists(csv_path)) csv_path <- "sequenzo/datasets/dyadic_children.csv"
+dat <- read.csv(csv_path, check.names = FALSE)
+
+# Time columns: numeric names (ages 15–39)
+time_cols <- names(dat)[sapply(names(dat), function(x) suppressWarnings(!is.na(as.numeric(x))))]
+time_cols <- time_cols[order(as.numeric(time_cols))]
+# Ensure character states for seqdef
+seq_matrix <- as.data.frame(lapply(dat[, time_cols], as.character))
+states <- as.character(1:6)
+
+seqdata <- seqdef(seq_matrix, alphabet = states, id = dat$dyadID)
+print(dim(seqdata))
+head(seqdata[, 1:5])
+```
+
+## 2. Basic indicators
+
+### 2.1 Sequence length — `seqlength()`
+
+```{r}
+#| label: seqlength
+#| eval: true
+lgth <- seqlength(seqdata, with.missing = TRUE)
+colnames(lgth) <- "Length"
+head(lgth, 10)
+```
+
+### 2.2 Spell durations — `seqdur()`
+
+```{r}
+#| label: seqdur
+#| eval: true
+durations <- seqdur(seqdata, with.missing = FALSE)
+head(durations[, 1:5], 10)
+```
+
+### 2.3 Visited states, recurrence, mean duration, duration std — `seqindic()`
+
+TraMineR bundles many basic and derived indicators in **`seqindic()`**. Here we request visited states, proportion visited, recurrence, mean spell duration, and duration standard deviation.
+
+```{r}
+#| label: seqindic-basic
+#| eval: true
+basic <- seqindic(seqdata, indic = c("visited", "visitp", "recu", "meand", "dustd"),
+                  with.missing = FALSE)
+head(basic, 10)
+```
+
+## 3. Transitions and subsequences
+
+### 3.1 Number of transitions — `seqtransn()`
+
+```{r}
+#| label: seqtransn
+#| eval: true
+trans <- seqtransn(seqdata, with.missing = FALSE, norm = FALSE)
+trans_norm <- seqtransn(seqdata, with.missing = FALSE, norm = TRUE)
+compare <- cbind(trans, Transitions_norm = trans_norm)
+head(compare, 10)
+```
+
+### 3.2 Number of distinct subsequences — `seqsubsn()`
+
+```{r}
+#| label: seqsubsn
+#| eval: true
+subsn <- seqsubsn(seqdata, DSS = TRUE, with.missing = FALSE)
+head(subsn, 10)
+```
+
+## 4. State frequencies per sequence — `seqistatd()`
+
+```{r}
+#| label: seqistatd
+#| eval: true
+sdist <- seqistatd(seqdata, with.missing = FALSE, prop = TRUE)
+head(sdist, 10)
+```
+
+## 5. Within-sequence entropy — `seqient()`
+
+```{r}
+#| label: seqient
+#| eval: true
+within_ent <- seqient(seqdata, norm = TRUE, with.missing = FALSE)
+head(within_ent, 10)
+```
+
+## 6. Cross-sectional entropy (over time) — `seqstatd()`
+
+**`seqstatd()`** returns a list: `Frequencies` (states × time), `ValidStates`, and `Entropy` (per time point).
+
+```{r}
+#| label: seqstatd
+#| eval: true
+csd <- seqstatd(seqdata, weighted = TRUE, with.missing = FALSE, norm = TRUE)
+# Entropy at each time point
+head(csd$Entropy, 15)
+# Frequencies: rows = states, columns = time
+dim(csd$Frequencies)
+```
+
+## 7. Variance of spell durations, turbulence, complexity
+
+### 7.1 Spell duration variance — `seqivardur()`
+
+```{r}
+#| label: seqivardur
+#| eval: true
+var_dur <- seqivardur(seqdata, type = 1, with.missing = FALSE)
+# Returns a vector; vmax is in attributes
+head(cbind(result = as.vector(var_dur), vmax = attr(var_dur, "vmax")), 10)
+```
+
+### 7.2 Turbulence — `seqST()`
+
+```{r}
+#| label: seqST
+#| eval: true
+turb <- seqST(seqdata, norm = FALSE, with.missing = FALSE, type = 1)
+head(turb, 10)
+```
+
+### 7.3 Complexity index — `seqici()`
+
+```{r}
+#| label: seqici
+#| eval: true
+cplx <- seqici(seqdata, with.missing = FALSE)
+head(cplx, 10)
+```
+
+## 8. Longitudinal-style plot (indicators)
+
+TraMineR does not provide a single “four-panel” longitudinal characteristics plot like Sequenzo’s `plot_longitudinal_characteristics()`. You can use **`seqindic()`** to get several indicators and then plot them (e.g. horizontal barplot of complexity for selected sequences). Example: plot complexity for first 9 sequences.
+
+```{r}
+#| label: plot-longitudinal-style
+#| eval: true
+#| fig-cap: "Complexity index for first 9 sequences (TraMineR)."
+indic <- seqindic(seqdata, indic = c("trans", "entr", "turb2n", "cplx"), with.missing = FALSE)
+# Use Cplx for ordering, show first 9
+o <- order(indic$Cplx, decreasing = TRUE)[1:9]
+barplot(indic$Cplx[o], names.arg = rownames(indic)[o], horiz = TRUE,
+        main = "Complexity (first 9 by Cplx)", las = 1, cex.names = 0.8)
+```
+
+## 9. Entropy difference and volatility
+
+### 9.1 Entropy difference (entropy of spell durations)
+
+TraMineR has **`seqientdiff()`** (entropy of spell duration distribution, Hdss). It may be internal in some builds; if `seqientdiff` is not found, we compute it from spell durations and entropy (same formula as in Sequenzo’s `get_entropy_difference`).
+
+```{r}
+#| label: seqientdiff
+#| eval: true
+# Entropy of spell durations per sequence (Hdss). If seqientdiff is exported:
+if (exists("seqientdiff", mode = "function")) {
+  ent_diff <- seqientdiff(seqdata, norm = TRUE)
+} else {
+  dur <- seqdur(seqdata, with.missing = FALSE)
+  entropydiff <- function(dur_row, norm) {
+    dur_row <- dur_row[!is.na(dur_row) & dur_row > 0]
+    len_seq <- sum(dur_row)
+    if (length(dur_row) == 0 || len_seq == 0) return(0)
+    p <- dur_row / len_seq
+    ent <- -sum(p * log(p))
+    if (ent > 0 && norm) {
+      p0 <- 1 / len_seq
+      entmax <- (-len_seq) * (p0 * log(p0))
+      ent <- ent / entmax
+    }
+    ent
+  }
+  ent_diff <- apply(dur, 1, entropydiff, norm = TRUE)
+  ent_diff <- as.matrix(ent_diff)
+  colnames(ent_diff) <- "Hdss"
+}
+head(ent_diff, 10)
+```
+
+### 9.2 Volatility — `seqivolatility()`
+
+```{r}
+#| label: seqivolatility
+#| eval: true
+volat <- seqivolatility(seqdata, w = 0.5, with.missing = FALSE)
+head(volat, 10)
+```
+
+## 10. Binary indicators: positive vs negative — `seqipos()`
+
+Use **`seqipos()`** with `index = "share"` for the proportion of time in positive states. States must be character (e.g. `"1"`, `"2"`).
+
+```{r}
+#| label: seqipos
+#| eval: true
+pos_states <- c("1", "2", "3")
+neg_states <- c("4", "5", "6")
+pn <- seqipos(seqdata, pos.states = pos_states, neg.states = neg_states,
+              index = "share", dss = FALSE, with.missing = FALSE)
+head(pn, 10)
+```
+
+## 11. Integration index — `seqintegr()`
+
+**`seqintegr(seqdata, state = NULL)`** returns integration for each state (one column per state). Use **`state = "1"`** for a single state.
+
+```{r}
+#| label: seqintegr
+#| eval: true
+integ_all <- seqintegr(seqdata, state = NULL, with.missing = FALSE)
+head(integ_all, 10)
+integ_s1 <- seqintegr(seqdata, state = "1", with.missing = FALSE)
+head(integ_s1, 10)
+```
+
+## 12. Ranked indicators (ordered states)
+
+These assume a state order (e.g. from “best” to “worst”). LSOG states are `"1"`–`"6"`; we use default alphabet order as the order.
+
+### 12.1 Badness — `seqibad()`
+
+```{r}
+#| label: seqibad
+#| eval: true
+bad <- seqibad(seqdata, pow = 1, with.missing = FALSE)
+head(bad, 10)
+```
+
+### 12.2 Degradation — `seqidegrad()`
+
+```{r}
+#| label: seqidegrad
+#| eval: true
+degrad <- seqidegrad(seqdata, method = "RANK", penalized = "BOTH", pow = 1, with.missing = FALSE)
+head(degrad, 10)
+```
+
+### 12.3 Precarity — `seqprecarity()`
+
+```{r}
+#| label: seqprecarity
+#| eval: true
+prec <- seqprecarity(seqdata, method = "TRATEDSS", pow = 1, with.missing = FALSE)
+head(prec, 10)
+```
+
+### 12.4 Insecurity — `seqinsecurity()`
+
+```{r}
+#| label: seqinsecurity
+#| eval: true
+insec <- seqinsecurity(seqdata, method = "RANK", pow = 1, with.missing = FALSE)
+head(insec, 10)
+```
+
+## 13. Cross-sectional indicators
+
+### 13.1 Mean time in states — `seqmeant()`
+
+```{r}
+#| label: seqmeant
+#| eval: true
+mean_time <- seqmeant(seqdata, weighted = TRUE, with.missing = FALSE, prop = TRUE, serr = FALSE)
+print(mean_time)
+```
+
+### 13.2 Modal state sequence — `seqmodst()`
+
+```{r}
+#| label: seqmodst
+#| eval: true
+modal_seq <- seqmodst(seqdata, weighted = TRUE, with.missing = FALSE)
+print(modal_seq)
+attr(modal_seq, "Occurrences")
+head(attr(modal_seq, "Frequencies"), 5)
+```
+
+## 14. Cross-sectional entropy plot — `plot(seqstatd(...), type = "Ht")`
+
+**`seqstatd()`** gives cross-sectional state distribution and entropy; **`plot(..., type = "Ht")`** plots entropy over time.
+
+```{r}
+#| label: plot-cross-sectional
+#| eval: true
+#| fig-cap: "Cross-sectional entropy over time (TraMineR)."
+csd <- seqstatd(seqdata, weighted = TRUE, with.missing = FALSE, norm = TRUE)
+plot(csd, type = "Ht", main = "Cross-sectional entropy over time (LSOG)")
+```
+
+## 15. Quick reference: combine indicators — `seqindic()`
+
+You can request several indicators at once with **`seqindic()`** and merge with ID for further analysis.
+
+```{r}
+#| label: summary-seqindic
+#| eval: true
+tab <- seqindic(seqdata, indic = c("lgth", "trans", "entr", "turb2n", "cplx"), with.missing = FALSE)
+tab <- as.data.frame(tab)
+names(tab)[1] <- "ID"
+head(tab, 10)
+```
+
+## Summary: TraMineR ↔ Sequenzo (sequence characteristics)
+
+| Step | TraMineR (R) | Sequenzo (Python) |
+|------|--------------|-------------------|
+| Load & state sequence | `read.csv` + `seqdef(..., alphabet, id)` | `load_dataset` + `SequenceData(..., time, id_col, states)` |
+| Sequence length | `seqlength(seqdata, with.missing)` | `get_sequence_length(seqdata, with_missing)` |
+| Spell durations | `seqdur(seqdata, with.missing)` | `get_spell_durations(seqdata, with_missing)` |
+| Visited / recurrence / meand / dustd | `seqindic(indic=c("visited","recu","meand","dustd"))` | `get_visited_states`, `get_recurrence`, `get_mean_spell_duration`, `get_duration_standard_deviation` |
+| Transitions | `seqtransn(seqdata, norm=TRUE/FALSE)` | `get_number_of_transitions(seqdata, norm)` |
+| Subsequences | `seqsubsn(seqdata, DSS=TRUE)` | `get_subsequences_all_sequences(seqdata, dss=TRUE)` |
+| State distribution per sequence | `seqistatd(seqdata, prop=TRUE)` | `get_state_freq_and_entropy_per_seq(seqdata, prop=TRUE)` |
+| Within entropy | `seqient(seqdata, norm=TRUE)` | `get_within_sequence_entropy(seqdata, norm=TRUE)` |
+| Cross-sectional (freq + entropy) | `seqstatd(seqdata)` | `get_cross_sectional_entropy(seqdata)` (and plot) |
+| Spell duration variance | `seqivardur(seqdata, type=1)` | `get_spell_duration_variance(seqdata, type=1)` |
+| Turbulence | `seqST(seqdata, norm=FALSE, type=1)` | `get_turbulence(seqdata, norm=False, type=1)` |
+| Complexity | `seqici(seqdata)` | `get_complexity_index(seqdata)` |
+| Entropy difference | `seqientdiff(seqdata, norm=TRUE)` | `get_entropy_difference(seqdata, norm=TRUE)` |
+| Volatility | `seqivolatility(seqdata, w=0.5)` | `get_volatility(seqdata, w=0.5)` |
+| Positive/negative share | `seqipos(..., index="share")` | `get_positive_negative_indicators(..., index="share")` |
+| Integration | `seqintegr(seqdata, state=NULL/"1")` | `get_integration_index(seqdata, state=None/1)` |
+| Badness / degradation / precarity / insecurity | `seqibad`, `seqidegrad`, `seqprecarity`, `seqinsecurity` | `get_badness_index`, `get_degradation_index`, `get_precarity_index`, `get_insecurity_index` |
+| Mean time in states | `seqmeant(seqdata, prop=TRUE)` | `get_mean_time_in_states(..., prop=TRUE)` |
+| Modal state sequence | `seqmodst(seqdata)` | `get_modal_state_sequence(seqdata)` |
+| Cross-sectional entropy plot | `plot(seqstatd(seqdata), type="Ht")` | `plot_cross_sectional_characteristics(seqdata)` |
+
+## References
+
+- TraMineR documentation: <http://traminer.unige.ch>
+- Ritschard, G. (2023), "Measuring the nature of individual sequences", *Sociological Methods and Research*, 52(4), 2016-2049.
+- Source in this repo: `developer/TraMineR-master/` (e.g. `R/seqlength.R`, `seqdur.R`, `seqindic.R`, `seqient.R`, `seqST.R`, `seqici.R`, `seqstatd.R`, `seqmeant.R`, `seqmodst.R`, `man/plot.stslist.statd.Rd`).
