@@ -231,6 +231,10 @@ class SequenceData:
         if has_nan_in_data:
             all_data_values.add(np.nan)
         
+        # Known padding values that should be excluded from validation
+        # These are used internally for padding arrays (e.g., -999 for DSS arrays)
+        padding_values = {-999, -99}
+        
         # Validate that states are present in the actual data values
         states_clean = [s for s in self.states if not pd.isna(s)]    # stack() removes nan values, so if states contains np.nan, it will cause an error
         # Normalize states to Python native types for consistent comparison
@@ -240,7 +244,8 @@ class SequenceData:
                 s = s.item()
             states_clean_normalized.append(s)
         
-        unmatched_states = [s for s in data_values_no_nan if s not in states_clean_normalized]
+        # Exclude padding values from validation check
+        unmatched_states = [s for s in data_values_no_nan if s not in states_clean_normalized and s not in padding_values]
         
         if unmatched_states:
             raise ValueError(
@@ -294,6 +299,10 @@ class SequenceData:
         
         # Find data values that are not in states and not missing values
         # Use more robust comparison that handles type mismatches
+        # Known padding values that should be excluded from validation
+        # These are used internally for padding arrays (e.g., -999 for DSS arrays)
+        padding_values = {-999, -99}
+        
         missing_from_states = []
         for dv in all_data_values:
             # Skip if it's a missing value indicator
@@ -305,6 +314,8 @@ class SequenceData:
             elif isinstance(dv, str) and (dv.lower() == 'nan' or dv.lower() == 'missing'):
                 # Double-check: if it's a string "NaN" or "Missing" (case-insensitive), skip it
                 continue
+            elif dv in padding_values:
+                continue  # This is a padding value, skip it
             
             # Check if dv is in states_set (both are now normalized to Python native types)
             if dv not in states_set:

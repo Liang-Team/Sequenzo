@@ -1,93 +1,370 @@
-# Sequenzo Tests
+# Sequenzo Test Suite
 
-本目录包含 Sequenzo 包的测试套件。
+This directory contains the comprehensive test suite for the Sequenzo package. The tests are designed to ensure code quality, functionality correctness, and compatibility with TraMineR reference implementations.
 
-## 测试文件说明
+## Table of Contents
 
-### 基础测试
-- **test_basic.py** - 基本的包导入和版本测试
-- **test_pam_and_kmedoids.py** - PAM 和 K-medoids 聚类算法测试
+- [Test Structure](#test-structure)
+- [Running Tests](#running-tests)
+- [Test Environment Setup](#test-environment-setup)
+- [Test Categories](#test-categories)
+- [CI/CD Integration](#cicd-integration)
+- [Development Guidelines](#development-guidelines)
+- [Troubleshooting](#troubleshooting)
 
-### 集成测试
-- **test_quickstart_integration.py** - 基于 quickstart 教程的完整工作流程测试
-  - 测试数据加载
-  - 测试 SequenceData 对象创建
-  - 测试各种可视化功能
-  - 测试距离矩阵计算
-  - 测试聚类分析
-  - 测试聚类质量评估
-  - 测试完整的用户工作流程
+## Test Structure
 
-### OpenMP 测试
-- **openmp/** - OpenMP 相关的测试和解决方案
+The test suite is organized into several categories:
 
-## 运行测试
+```
+tests/
+├── __init__.py
+├── README.md                          # This file
+├── test_basic.py                       # Basic package tests
+├── test_pam_and_kmedoids.py           # Clustering algorithm tests
+├── test_quickstart_integration.py     # End-to-end integration tests
+├── dissimilarity_measures/            # Distance measure tests
+│   ├── test_dissimilarity_measures_traminer.py
+│   └── ref_*.csv                       # TraMineR reference outputs
+├── sequence_characteristics/          # Sequence characteristic tests
+│   └── test_sequence_characteristics_lsog.py
+└── openmp/                            # OpenMP-related tests and solutions
+    ├── test_apple_silicon_solution.py
+    └── test_solution_simple.py
+```
 
-### 运行所有测试
+## Running Tests
+
+### Prerequisites
+
+Ensure you have the required dependencies installed:
+
+```bash
+pip install pytest
+pip install sequenzo  # Or use: pip install -e . for development mode
+```
+
+### Run All Tests
+
+To run the entire test suite:
+
 ```bash
 pytest tests/ -v
 ```
 
-### 运行特定测试文件
+The `-v` flag enables verbose output, showing each test as it runs.
+
+### Run Specific Test Files
+
+#### Basic Tests
+Tests for package imports, version checks, and basic functionality:
+
 ```bash
-# 运行基础测试
 pytest tests/test_basic.py -v
+```
 
-# 运行集成测试（推荐）
+#### Integration Tests (Recommended)
+End-to-end tests that simulate real user workflows:
+
+```bash
 pytest tests/test_quickstart_integration.py -v -s
+```
 
-# 运行 PAM/K-medoids 测试
+The `-s` flag allows print statements to be displayed, which is useful for debugging.
+
+#### Clustering Algorithm Tests
+Tests for PAM and K-medoids clustering algorithms:
+
+```bash
 pytest tests/test_pam_and_kmedoids.py -v
 ```
 
-### 运行单个测试函数
+#### Distance Measure Tests
+Tests for dissimilarity measures against TraMineR reference outputs:
+
 ```bash
-# 运行完整工作流程测试
+pytest tests/dissimilarity_measures/test_dissimilarity_measures_traminer.py -v
+```
+
+#### Sequence Characteristics Tests
+Tests for sequence characteristic calculations:
+
+```bash
+pytest tests/sequence_characteristics/test_sequence_characteristics_lsog.py -v
+```
+
+### Run Individual Test Functions
+
+You can run a specific test function by specifying its path:
+
+```bash
+# Run complete workflow test
 pytest tests/test_quickstart_integration.py::test_complete_workflow -v -s
 
-# 运行可视化测试
+# Run visualization tests
 pytest tests/test_quickstart_integration.py::test_visualizations_no_save -v -s
+
+# Run a specific sequence characteristic test
+pytest tests/sequence_characteristics/test_sequence_characteristics_lsog.py::test_get_spell_durations -v
 ```
 
-## 测试环境要求
+### Run Tests with Coverage
 
-测试需要安装以下依赖：
+To generate a coverage report:
+
 ```bash
-pip install pytest
-pip install sequenzo  # 或者使用 pip install -e . 进行开发模式安装
+pip install pytest-cov
+pytest tests/ --cov=sequenzo --cov-report=html
 ```
 
-## CI/CD 中的测试
+This generates an HTML coverage report in `htmlcov/index.html`.
 
-在 GitHub Actions 中，我们在构建完 wheel 后会自动运行：
-1. 基本的导入测试
-2. C++ 扩展加载验证
-3. 完整的集成测试（test_quickstart_integration.py）
+## Test Environment Setup
 
-这确保构建的 wheel 包在实际使用场景中能够正常工作。
+### Development Mode Installation
 
-## 集成测试的意义
+For development, install the package in editable mode:
 
-`test_quickstart_integration.py` 模拟了真实用户的使用场景：
-- 加载数据集
-- 创建序列对象
-- 进行可视化
-- 计算距离矩阵
-- 执行聚类分析
-- 评估聚类质量
-
-这些测试帮助我们在发布前发现用户可能遇到的问题，而不是等到用户反馈才知道。
-
-## 开发建议
-
-当你修改代码后，建议运行：
 ```bash
-# 快速测试
-pytest tests/test_basic.py
-
-# 完整测试
-pytest tests/test_quickstart_integration.py -v -s
+pip install -e .
 ```
 
-如果所有测试都通过，说明你的修改没有破坏现有功能。
+This allows you to modify the source code and see changes immediately without reinstalling.
 
+### Virtual Environment (Recommended)
+
+It's recommended to use a virtual environment to isolate dependencies:
+
+```bash
+# Create virtual environment
+python -m venv sequenzo_test
+
+# Activate virtual environment
+# On macOS/Linux:
+source sequenzo_test/bin/activate
+# On Windows:
+sequenzo_test\Scripts\activate
+
+# Install dependencies
+pip install -e .
+pip install pytest pytest-cov
+```
+
+## Test Categories
+
+### 1. Basic Tests (`test_basic.py`)
+
+**Purpose**: Verify fundamental package functionality
+
+**Tests**:
+- Package import verification
+- Version number checks
+- Basic object instantiation
+- C++ extension loading
+
+**When to run**: After any code changes to ensure basic functionality still works.
+
+### 2. Integration Tests (`test_quickstart_integration.py`)
+
+**Purpose**: Simulate real-world user workflows end-to-end
+
+**Tests**:
+- Dataset loading from various sources
+- `SequenceData` object creation and validation
+- Visualization functions (sequence plots, state distribution plots, etc.)
+- Distance matrix calculation with various methods
+- Clustering analysis (hierarchical, PAM, K-medoids)
+- Clustering quality assessment metrics
+- Complete user workflow from data loading to results
+
+**When to run**: Before committing major changes or before releases.
+
+**Why it matters**: These tests catch integration issues that unit tests might miss, ensuring the package works correctly in real usage scenarios.
+
+### 3. Clustering Tests (`test_pam_and_kmedoids.py`)
+
+**Purpose**: Validate clustering algorithm implementations
+
+**Tests**:
+- PAM (Partitioning Around Medoids) algorithm correctness
+- K-medoids clustering functionality
+- Cluster assignment accuracy
+- Algorithm parameter handling
+
+### 4. Distance Measure Tests (`dissimilarity_measures/`)
+
+**Purpose**: Ensure distance calculations match TraMineR reference implementations
+
+**Tests**:
+- Multiple distance methods (OM, LCS, NMS, TWED, etc.)
+- Comparison against TraMineR reference outputs (`ref_*.csv`)
+- Parameter variations (indel costs, normalization, etc.)
+- Edge cases and boundary conditions
+
+**Reference Files**: The `ref_*.csv` files contain expected outputs from TraMineR R package, ensuring our Python implementation produces identical results.
+
+### 5. Sequence Characteristics Tests (`sequence_characteristics/`)
+
+**Purpose**: Validate sequence characteristic calculations
+
+**Tests**:
+- Basic indicators (sequence length, spell durations, visited states)
+- Diversity indicators (entropy difference)
+- Complexity indicators (volatility)
+- Binary indicators (positive/negative indicators, integration index)
+- Ranked indicators (badness, degradation, precarity, insecurity indices)
+- Cross-sectional indicators (mean time in states, modal state sequence)
+
+**Dataset**: Uses the `dyadic_children` (lsog) dataset for comprehensive testing.
+
+### 6. OpenMP Tests (`openmp/`)
+
+**Purpose**: Verify OpenMP parallelization works correctly
+
+**Tests**:
+- Apple Silicon compatibility
+- Multi-threading correctness
+- Performance improvements
+
+**Documentation**: See `openmp/for_users_APPLE_SILICON_GUIDE.md` and `openmp/for_developers_OPENMP_SOLUTION_SUMMARY.md` for detailed information.
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
+
+The test suite is automatically run in GitHub Actions CI/CD pipeline:
+
+1. **Build Phase**: Creates wheel packages for multiple platforms
+2. **Test Phase**: Runs automated tests:
+   - Basic import tests
+   - C++ extension loading verification
+   - Full integration test suite (`test_quickstart_integration.py`)
+   - Distance measure validation against TraMineR references
+
+### Why This Matters
+
+Automated testing ensures that:
+- Built wheel packages work correctly in real scenarios
+- Code changes don't break existing functionality
+- Cross-platform compatibility is maintained
+- Issues are caught before users encounter them
+
+## Development Guidelines
+
+### Before Committing Code
+
+Always run tests before committing:
+
+```bash
+# Quick sanity check
+pytest tests/test_basic.py -v
+
+# Full test suite (recommended)
+pytest tests/ -v
+```
+
+### Writing New Tests
+
+When adding new features, follow these guidelines:
+
+1. **Add unit tests** for new functions/classes
+2. **Add integration tests** if the feature affects user workflows
+3. **Update reference files** if distance measures change
+4. **Document test purpose** in docstrings
+
+### Test Naming Conventions
+
+- Test files: `test_<module_name>.py`
+- Test functions: `test_<functionality_description>`
+- Test classes: `Test<ClassName>`
+
+### Example Test Structure
+
+```python
+def test_feature_name(seqdata):
+    """
+    Test description explaining what this test validates.
+    
+    Args:
+        seqdata: Fixture providing SequenceData object
+    """
+    # Arrange
+    expected_result = ...
+    
+    # Act
+    result = function_to_test(seqdata)
+    
+    # Assert
+    assert result.equals(expected_result)
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Import Errors
+
+**Problem**: `ModuleNotFoundError: No module named 'sequenzo'`
+
+**Solution**: 
+```bash
+pip install -e .
+```
+
+#### C++ Extension Loading Failures
+
+**Problem**: Tests fail with C++ extension import errors
+
+**Solution**:
+1. Ensure C++ extensions are built: `python setup.py build_ext --inplace`
+2. Check that required system libraries are installed
+3. Verify compiler compatibility
+
+#### Test Failures After Code Changes
+
+**Problem**: Tests that previously passed now fail
+
+**Solution**:
+1. Review your code changes for breaking changes
+2. Check if test data or expected outputs need updating
+3. Run tests in verbose mode (`-v`) to see detailed error messages
+4. Check if reference files (`ref_*.csv`) need regeneration
+
+#### Slow Test Execution
+
+**Problem**: Tests take too long to run
+
+**Solution**:
+- Run specific test files instead of the full suite during development
+- Use `pytest -x` to stop at first failure
+- Use `pytest --lf` to run only failed tests from last run
+
+### Getting Help
+
+If you encounter issues:
+
+1. Check the error messages carefully - they often contain helpful information
+2. Review the test code to understand what's being tested
+3. Compare your results with TraMineR outputs if testing distance measures
+4. Check the main project documentation for API changes
+
+## Additional Resources
+
+- **Main Documentation**: See the main project README for usage examples
+- **TraMineR Reference**: https://github.com/cran/TraMineR (for understanding expected behavior)
+- **pytest Documentation**: https://docs.pytest.org/ (for advanced testing features)
+
+## Contributing
+
+When contributing to the test suite:
+
+1. **Maintain test coverage**: Ensure new features have corresponding tests
+2. **Keep tests fast**: Optimize slow tests or mark them appropriately
+3. **Update documentation**: Update this README when adding new test categories
+4. **Follow conventions**: Use existing test patterns and naming conventions
+
+---
+
+**Last Updated**: February 2026
+**Author**: Yuqi Liang
+**Maintainer**: Sequenzo Development Team
