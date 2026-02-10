@@ -1,0 +1,4 @@
+// Tree
+digraph {
+	1 [label="Leaf 1\nn=60.0\nvariance=0.278" fillcolor=lightblue shape=box style=filled]
+}

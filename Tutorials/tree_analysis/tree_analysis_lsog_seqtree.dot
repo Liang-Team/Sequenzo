@@ -1,0 +1,12 @@
+digraph distree{
+"node_image.legend"[shape=box, image="tree_analysis_lsog_seqtree.legend.jpg", imagescale=true, label=" "];
+"tree_analysis_lsog_seqtree_none"[shape=box,  image="tree_analysis_lsog_seqtree_none.jpg", imagescale=true,  label=" "];
+"tree_analysis_lsog_seqtree_none_left"[shape=box,  image="tree_analysis_lsog_seqtree_none_left.jpg", imagescale=true,  label=" "];
+"tree_analysis_lsog_seqtree_none_right"[shape=box,  image="tree_analysis_lsog_seqtree_none_right.jpg", imagescale=true,  label=" "];
+"tree_analysis_lsog_seqtree_none_right_left"[shape=box,  image="tree_analysis_lsog_seqtree_none_right_left.jpg", imagescale=true,  label=" "];
+"tree_analysis_lsog_seqtree_none_right_right"[shape=box,  image="tree_analysis_lsog_seqtree_none_right_right.jpg", imagescale=true,  label=" "];
+"tree_analysis_lsog_seqtree_none"->"tree_analysis_lsog_seqtree_none_left";
+"tree_analysis_lsog_seqtree_none"->"tree_analysis_lsog_seqtree_none_right";
+"tree_analysis_lsog_seqtree_none_right"->"tree_analysis_lsog_seqtree_none_right_left";
+"tree_analysis_lsog_seqtree_none_right"->"tree_analysis_lsog_seqtree_none_right_right";
+}
