@@ -58,12 +58,25 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
     auto result = py::array_t<double>({n, n});
     auto result_buf = result.mutable_unchecked<2>();
     
-    // Extract reference distances: d(x, r) for all x
-    // We'll compute them from the distance matrix column
+    // Check input matrix symmetry
+    // If symmetric, we can skip symmetry enforcement; if not, we'll average symmetric positions
+    const double SYMMETRY_TOLERANCE = 1e-10;
+    bool is_symmetric = true;
+    for (int i = 0; i < n && is_symmetric; i++) {
+        for (int j = i + 1; j < n; j++) {
+            if (std::abs(buf(i, j) - buf(j, i)) > SYMMETRY_TOLERANCE) {
+                is_symmetric = false;
+                break;
+            }
+        }
+    }
+    
+    // Compute normalized distances using equation (9)
+    // D_r(x,y) = d(x,y) / ((d(x,y) + d(x,r) + d(y,r)) / 2)
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (i == j) {
-                // D1: d(x,x) = 0
+                // D1: D_r(x,x) = 0 for all x
                 result_buf(i, j) = 0.0;
             } else {
                 double d_xy = buf(i, j);
@@ -84,12 +97,30 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
         }
     }
     
-    // Ensure symmetry (average with transpose)
+    // If input matrix was not symmetric, enforce symmetry by averaging symmetric positions
+    // This ensures the output satisfies distance axioms even if input had minor asymmetries
+    if (!is_symmetric) {
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                double avg = (result_buf(i, j) + result_buf(j, i)) / 2.0;
+                result_buf(i, j) = avg;
+                result_buf(j, i) = avg;
+            }
+        }
+    }
+    
+    // Verify key property: D_r(x,r) = 1 for all x != r
+    const double VERIFICATION_TOLERANCE = 1e-10;
     for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j < n; j++) {
-            double avg = (result_buf(i, j) + result_buf(j, i)) / 2.0;
-            result_buf(i, j) = avg;
-            result_buf(j, i) = avg;
+        if (i != reference_index) {
+            double d_r_value = result_buf(i, reference_index);
+            if (std::abs(d_r_value - 1.0) > VERIFICATION_TOLERANCE) {
+                throw std::runtime_error(
+                    "Verification failed: D_r(" + std::to_string(i) + ", r) = " 
+                    + std::to_string(d_r_value) + " != 1.0. "
+                    "This indicates a bug in the normalization implementation."
+                );
+            }
         }
     }
     
