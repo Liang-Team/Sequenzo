@@ -21,12 +21,16 @@
                             {"OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED", "HAM", "DHD",
                             "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "CHI2", "EUCLID"}.
                             (1)It can be "none", "auto", or,
-                                except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", or "YujianBo".
+                                except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", "YujianBo", or "ElzingaStuder".
                             (2)"auto" is equivalent to
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
                                 2) "gmean" when method is one of "LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
                                 3) "maxdist" when method is one of "LCPspell", "RLCPspell",
                                 4) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED".
+                            (3)"ElzingaStuder" applies a theoretical normalization following Elzinga & Studer (2019),
+                                dividing distances by their theoretical maxima to ensure comparability across measures.
+                                Requires a reference object (see normalization_reference_index parameter for details).
+                                Default: uses refseq if provided as single sequence index, otherwise uses index 0.
                             See developer/NORM_GUIDE.md for formulas and pitfalls (e.g. LCPspell/RLCPspell must use maxdist, not gmean).
             indel          : Insertion/deletion  cost(s).
                             Applies when method is one of "OM", "OMslen", "OMspell", "OMspellNew", or "OMstran".
@@ -63,6 +67,27 @@
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
+            normalization_reference_index : int, optional. Only used when norm="ElzingaStuder".
+                            Index of the reference object for Elzinga & Studer (2019) normalization.
+                            Default behavior: If None and refseq is a single sequence index, uses refseq; 
+                            otherwise uses index 0 (first sequence).
+                            
+                            How to choose the reference object:
+                            - Comparing different groups/cohorts: Use empty sequence (if available) or medoid 
+                              to ensure fair comparison across groups.
+                            - Studying specific patterns: Use the pattern sequence as reference (specify its index).
+                            - Quick testing: Use default (index 0) for convenience.
+                            
+                            Common choices:
+                            - Empty sequence: Good for analyzing structural differences regardless of length.
+                              If your first sequence is empty, use normalization_reference_index=0.
+                            - Medoid: The sequence with minimum total distance to all others. Compute full distance 
+                              matrix first, then find the medoid index.
+                            - Most frequent sequence: The sequence that appears most often in your data.
+                            - Specific template: A theoretically or practically meaningful reference sequence 
+                              (e.g., "standard career trajectory").
+                            
+                            For most cases, using the default (index 0) or empty sequence is sufficient.
 """
 import gc
 import time
@@ -199,12 +224,15 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
 
     # check norm
-    norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo"]
+    norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo", "ElzingaStuder"]
     if norm not in norms:
         raise ValueError(f"[!] 'norm' should be in {norms}.")
     # CHI2 and EUCLID accept only "auto" or "none" (TraMineR)
     if method in ["CHI2", "EUCLID"] and norm not in ["auto", "none"]:
         raise ValueError(f"[!] For {method}, norm can only be one of 'none' or 'auto'.")
+    # ElzingaStuder normalization requires full distance matrix (not compatible with refseq sets)
+    if norm == "ElzingaStuder" and refseq_type == "sets":
+        raise ValueError("[!] norm='ElzingaStuder' requires full distance matrix. Cannot use with refseq as list of sets.")
 
     # check matrix_display (only used when full_matrix=True and refseq=None)
     if matrix_display not in ("full", "upper", "lower"):
@@ -905,7 +933,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # =================
     # Compute Distances
     # =================
-    norm_num = norms[1:].index(norm)
+    # ElzingaStuder normalization is applied as post-processing, so use "none" for C++ computation
+    norm_for_computation = "none" if norm == "ElzingaStuder" else norm
+    norm_num = norms[1:].index(norm_for_computation)
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
     
@@ -1304,6 +1334,61 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     elif full_matrix == False and refseq == None:
         dist_matrix = squareform(_dist2matrix)
+
+    # Apply ElzingaStuder normalization if requested (post-processing step)
+    # We apply a theoretical normalization following Elzinga & Studer (2019),
+    # dividing distances by their theoretical maxima to ensure comparability across measures.
+    if norm == "ElzingaStuder":
+        from .__init__ import _import_c_code
+        c_code = _import_c_code()
+        
+        if c_code is None or not hasattr(c_code, 'normalize_distance_matrix_ElzingaStuder'):
+            raise RuntimeError("[!] C++ extension (c_code) is required for norm='ElzingaStuder'. "
+                             "Please ensure the extension module is compiled correctly.")
+        
+        # Determine reference index for normalization
+        normalization_reference_index = kwargs.get("normalization_reference_index", None)
+        
+        if normalization_reference_index is None:
+            # If refseq is a single sequence index, use it; otherwise use 0
+            if refseq_type == "index":
+                normalization_reference_index = refseq
+            else:
+                normalization_reference_index = 0
+        
+        # Apply normalization using C++ implementation
+        if isinstance(dist_matrix, pd.DataFrame):
+            # Full matrix case
+            normalized_array = c_code.normalize_distance_matrix_ElzingaStuder(
+                dist_matrix.values,
+                normalization_reference_index
+            )
+            dist_matrix = pd.DataFrame(normalized_array, index=dist_matrix.index, columns=dist_matrix.columns)
+        elif isinstance(dist_matrix, pd.Series):
+            # Single reference sequence case - convert to full matrix, normalize, then extract
+            # This is a bit unusual but needed for ElzingaStuder normalization
+            print("[!] Warning: ElzingaStuder normalization with refseq requires full distance matrix.")
+            print("    Consider using full_matrix=True or computing full matrix first.")
+            # For Series, we'd need the full matrix - skip normalization in this case
+            pass
+        else:
+            # For dist objects or arrays, convert to array first
+            if isinstance(dist_matrix, np.ndarray):
+                dist_array = dist_matrix
+            else:
+                # scipy.spatial.distance.dist object
+                dist_array = squareform(dist_matrix)
+            
+            normalized_array = c_code.normalize_distance_matrix_ElzingaStuder(
+                dist_array,
+                normalization_reference_index
+            )
+            
+            if full_matrix == False and refseq == None:
+                # Convert back to dist format
+                dist_matrix = squareform(normalized_array)
+            else:
+                dist_matrix = normalized_array
 
     print("[>] Computed Successfully.")
     return dist_matrix

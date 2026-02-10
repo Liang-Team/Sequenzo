@@ -1,0 +1,543 @@
+Page 1
+<img>Check for updates</img>
+
+Regular Article
+
+Normalization of Distance and Similarity in Sequence Analysis
+Cees H. Elzinga¹,² and Matthias Studer³,⁴
+
+Sociological Methods & Research 2019, Vol. 48(4) 877-904 © The Author(s) 2019 Article reuse guidelines: sagepub.com/journals-permissions DOI: 10.1177/0049124119867849 journals.sagepub.com/home/smr <img>SAGE</img>
+
+Abstract
+We explore the relations between the notion of distance and a feature set-based concept of similarity and show that this concept of similarity has a spatial interpretation that is complementary to distance: it is interpreted as “direction.” Furthermore, we show how proper normalization leads to distances that can be directly interpreted as dissimilarity: Closeness in normalized space implies and is implied by similarity of the same objects, while remoteness implies and is implied by dissimilarity. Finally, we show how, in research into destandardization of the life course, properly normalizing may drastically and unequivocally change our interpretation of intercohortal distances.
+
+Keywords
+distance, similarity, normalization, sequence analysis
+
+¹Netherlands Interdisciplinary Demographic Institute (NIDI), The Hague, the Netherlands ²Department of Sociology, VU University Amsterdam, Amsterdam, the Netherlands ³Faculty of Social Sciences, University of Geneva, Geneva, Switzerland ⁴NCCR “LIVES,” Université de Lausanne, Lausanne, Switzerland
+
+Corresponding Author: Cees H. Elzinga, Netherlands Interdisciplinary Demographic Institute (NIDI), Lange Houtstraat 19, 2511 CV Den Haag, The Hague, the Netherlands. Email: ceeselzinga@gmail.com
+
+Page 2
+<page_number>878</page_number> Sociological Methods & Research 48(4)
+
+Introduction
+In science, the concept of distance is used in two, quite different ways. First and oldest, in physics, distance or length is one of the fundamental dimensions that are used to express physical quantities (see, e.g., Pfanzagl 1968; Krantz et al. 1971). These quantities in turn are used to formulate models of natural phenomena. For example, the gravitational force that two masses exert on each other is inversely proportional to the squared distance between the masses.
+
+In the social and behavioral sciences, spatial concepts are abundantly applied in different methodologies like multidimensional scaling (Borg and Groenen 2005), multivariate linear statistics (Rencher and Cristensen 2012), classification (Shawe-Taylor and Cristianini 2004), clustering (Hennig et al. 2015), and sequence analysis (Blanchard, Bühlmann, and Gauthier 2014). Spatial concepts are used in fields as diverse as clinical psychology, social demography, and political science. However, in these sciences, distance is not one of the fundamental dimensions of theory. Instead, social scientists and psychologist calculate distances between personalities, political programs, or labor market careers with the objective to judge or gauge the similarity between their objects of interest, eventually sorting or grouping these objects into more or less homogeneous subsets or projecting the objects onto a limited number of dimensions. In doing so, these colleagues assume that similarity is the opposite of distance: the more distant, the less similar and vice versa. This way of using distances is not unique for the social sciences; for example, chemists calculate distances between graph representations of molecules (see, e.g., Borgwardt 2011) with the objective of finding similar but cheaper or more effective variants.
+
+However, the relation between distance and similarity is not obvious as distance relations derive from spatial considerations and similarity relations derive from considering common and noncommon feature sets (see, e.g., Tversky 1977). For a qualitative review of the concept of similarity, the reader is referred to Decock and Douven (2011).
+
+So, grouping objects on the basis of distance may not result in groups of objects that are similar. Peeking around the corner at the issues dealt with in the next sections, we plotted distances versus similarities for the same pairs of objects in Figure 1.
+
+Indeed, distance and similarity are not simply antimonotone, and equal distance does not imply nor is implied by equal similarity. On the other hand, given a distance $d$, we can always calculate a similarity $s = h(d)$, and the reverse is also possible: Given a similarity $s$, we can construct¹ a distance $d$
+
+Page 3
+Elzinga and Studer <page_number>879</page_number>
+
+<img> Figure 1. Upper panel: scatterplot of distances (horizontal axis, metric: optimal matching) versus similarities (vertical axis). Pearson’s r = −.29. Lower panel: scatterplot of distances (horizontal axis) versus normalized distance. Pearson’s r = .75. Darker areas contain more points. The data used in both panels were published in McVicar and Anyadike-Danes (2002). </img>
+
+from it through $s = h'(d)$. However, these calculations are not very intuitive. Fortunately, when we properly convert a distance $d$ into a normalized distance $D$, we will obtain a normalized similarity $S$ through the intuitive $S = 1 - D$. This latter transformation is the most simple and straightforward expression that formalizes the widely held beliefs that close objects are similar, that dissimilar objects are remote, and so on. But apparently, we first have to normalize either the distance or the similarity before we can apply such an intuitive transform. In Figure 2, we illustrate the conceptual relations between (normalized) distance and similarity.
+
+In this article, we build on what was discussed in, for example, Chen, Ma, and Zhang (2009); Elzinga et al. (2011); and Elzinga (2014a). The discussion is quite general in the sense that it pertains to all measures of distance, whichever the context or application. However, we will focus on sequence analysis and to illustrate, we will use a data set that is well known in sequence
+
+Page 4
+<page_number>880</page_number> Sociological Methods & Research 48(4)
+
+<img>A diagram showing formal relations between distance d, similarities s, and their normalized versions D and S. The diagram includes arrows indicating mappings: g : s ↦ S, f : d ↦ D, h : d ↦ s, and h' : s ↦ d. It also shows that S = 1 - D.</img>
+
+Figure 2. Formal relations between distance d, similarities s, and their normalized versions D and S. Neither of the mappings f, g, h, nor h' is I-I. Therefore, we do not write h⁻¹ = h'.
+
+analysis and use measures of distance that have become popular in that context. For an introduction to sequence analysis, the reader is referred to Martin and Wiggins (2009) or Cornwell (2015); an overview of distance measures used in this context is provided in Studer and Ritschard (2016). For now, it suffices to define a sequence as an ordered set of labeled states or events that, depending on the specific application, may have an associated “time stamp.” In the case of states like “living single” or “being unemployed,” the time stamp is interpreted as “duration” and in case of events like “becoming a parent” or “starting parental leave,” the time stamp is interpreted as a date or amount of lapsed time.
+
+The purpose of this article is threefold. First, we will explore the relations between distance as a spatial concept and similarity as a feature set–based concept. We will conclude that the spatial interpretation of similarity is “direction” or angle, similar objects being located in (almost) the same direction, relative to some arbitrary but fixed reference object. This interpretation allows us to consider distance and similarity as complementary in the spatial structuring of a set of objects.
+
+Second, we will discuss normalization as a means to transform the object space in such a way that distance and similarity become opposites in the sense that similar objects are close and remote objects are dissimilar, and so on.
+
+Third, we will show that normalization may affect the way that we interpret differences between life courses of different age cohorts.
+
+The article is structured as follows: In the second section, we discuss the concepts of distance and similarity and illustrate them by discussing classes of distance measures that have become popular in the context of sequence analysis. In its final From Distance to Similarity and Back subsection, we
+
+Page 5
+Elzinga and Studer <page_number>88 |</page_number>
+
+deal with the spatial interpretation of similarity through discussing transforms from distance to similarity and vice versa. In third section, we discuss normalization, and in fourth section, we will apply normalization and discuss some of its effects. In fifth section, we make some concluding remarks.
+
+Distance and Similarity
+Distance
+We briefly discuss the formal concept of distance. A function $d : X \times X \mapsto \mathbb{R}$ that maps pairs of objects from an object set $X$ onto non-negative (real) numbers is called a “distance” or, equivalently, a “(distance) metric” if it satisfies the following conditions or axioms for all triples of elements from the object set:
+
+D1: $d(x,x) = 0$	“One location per object”
+D2: $d(x,y) > 0$	“One object per location”
+D3: $d(x,y) = d(y,x)$	Symmetry
+D4: $d(x,y) \leq d(x,z) + d(z,y)$	Triangular inequality (TI)
+The first three axioms are quite intuitive to most readers so we only elaborate on D4, the TI. Axiom D4 says that if two objects $x$ and $y$ are close to a third object, say $z$, the objects cannot be far apart. At the same time, this is a way of saying that the space, that is, the set of objects structured by $d$, cannot be irregular in the sense that all distances are confined to boundaries imposed by other distances. From the TI, it follows that, for all triples of objects $(x,y,z)$, we have
+
+$$|d(x,z) - d(z,y)| \leq d(x,y) \leq d(x,z) + d(z,y). \quad (1)$$
+
+Hence, the distance between a particular pair $(x,y)$ is bounded by the distances $d(x,z)$ and $d(z,y)$ for all possible objects $z$ in $X - {x,y}$ (see, e.g., Elzinga and Studer 2015). Without such boundaries, actually gauging distances between objects would not be very informative since, when presented with a new object, we would have no idea about its possible distance to the objects already known, that is, $d$ would not impose much structure on the object set.
+
+The reader notes that the axioms D1–D4 only restrict the method of actually measuring distances, they do not specify or favor any method in particular; they just formalize our intuitions about a particular spatial relation.
+
+Page 6
+<page_number>882</page_number> Sociological Methods & Research 48(4)
+
+Distances for Sequences
+Here, we discuss two broad classes of distance measures that are often used in the context of sequence analysis. For a detailed overview of such measures, the reader is referred to Deza and Deza (2014), Studer (2012), Studer and Ritschard (2016).
+
+The first class, and by far the most popular one in applications of sequence analysis, is the class of so-called edit distances: An edit distance is a function that counts the minimum number of (weighted) edit operations that is necessary to turn one sequence into a perfect copy of the other sequence (see, e.g., Navarro 2001). The smaller this number, the smaller the distance between the sequences. In the social sciences, edit distances were introduced by Abbott and Forrest (1986) and are known as “OM distances,” “OM” being the acronym for “optimal matching.” Quite a variety of edit distances have been proposed, each variant defining a distinct way of weighing the edit operations and the pairs of characters involved. Here, we will denote an edit distance by writing $d_E$.
+
+An alternative class of distance functions for sequences has been proposed by Elzinga and Studer (2015), derives from representing sequences as non-negative, infinite-dimensional vectors, and defines the distance between the sequences as the Euclidean distance between the vector representations. Formally, let $X{x,y,...}$ denote a set of sequences and let $\mathbf{X}={\mathbf{x},\mathbf{y},...}$ denote the set of vectors, representing the sequences in $X$. Furthermore, let $\mathbf{x}'\mathbf{y}$ denote an inner product of the vectors in $\mathbf{X}$. Then, the distance $d_K$ is defined (see, e.g., Golub and Van Loan 2013) as the Euclidean vector distance
+
+$$d_K(x,y) = \sqrt{\mathbf{x}'\mathbf{x} + \mathbf{y}'\mathbf{y} - 2\mathbf{x}'\mathbf{y}}. \quad (2)$$
+
+Within the class, distance measures differ because of the different methods used to define the vectors and/or the inner vector product. The algorithms required to evaluate the inner products are called “kernels” (see, e.g., Shawe-Taylor and Cristianini 2004), and hence, the distances obtained from such algorithms are subscripted as $d_K$.
+
+Similarity
+Similarity too is a function that maps pairs of objects to a the real numbers, but its properties do not derive from spatial relations. Instead, they derive from the general notion that similarity between objects is determined by the number of features that the objects share. A function $s:X\times X\rightarrow\mathbb{R}$ that
+
+Page 7
+Elzinga and Studer <page_number>883</page_number>
+
+maps pairs² of objects to nonnegative real numbers is a similarity if it satisfies, for all triples of objects $x, y, z \in X$:
+
+S1 $s(x,y) \geq 0$	Nonnegativity
+S2 $s(x,y) \leq \min\{s(x,x), s(y,y)\}$	“Bounded by self-similarity”
+S3 $s(x,y) = s(y,x)$	Symmetry
+S4 $s(x,y) + s(z,z) \geq s(x,z) + s(z,y)$	Covering inequality (CI)
+Here, we elaborate on S2 and S4. If similarity somehow depends on sets of common and noncommon features, S2 states that the set of features that $x$ and $y$ have in common cannot be bigger than the smallest of the feature sets of each of $x$ and $y$. S4 is an inequality that, like TI, regularizes or smoothes the similarity space since similarities are bounded by other sums of similarities. Together, axioms S2 and S4 imply, for all triples $x, y, z \in X$, that $s(x,y)$ satisfies
+
+$$\min{s(x,x), s(y,y)} \geq s(x,y) \geq s(x,z) + s(z,y) - s(z,z). \quad (3)$$
+
+Two issues deserve some comment. The first pertains to “self-similarity” $s(x,x)$. Unlike D1: $d(x,x) = 0$, the system S1–S4 only limits $s(x,x)$ in S2 and allows for $0 < s(x,x) \neq s(y,y)$. At first sight, this may seem counterintuitive: “$x$ is more (or less) similar to itself than $y$.” In spatial models of similarity (see, e.g., Torgerson 1965), this representational issue does not arise since $d(x,x) = 0$ for all objects. The system S1–S4 is based on the counting of feature sets and the result is the possibility of nonidentical self-similarities: similarity depends on the set of common features. If however we interpret such counts as “description lengths” or “complexities” (Elzinga 2010; Gabadinho et al. 2010), unequal self-similarities become quite natural and if $x$ has more features than $y$, we have that $s(x,x) > s(y,y)$. We will come back on this in our discussion of the spatial interpretation of similarity (Similarity as Angle or Direction subsection) and the issue will be resolved when we discuss normalized similarity in The Normalization of Similarity subsection.
+
+The second issue pertains to S3, the symmetry of similarity. We know that this axiom often fails when $s$ is interpreted as perceived similarity, perhaps due to “context switching” (see, e.g., Gärdenfors 2000). Here, we consider models of cognitive similarity as irrelevant, although we are aware of the fact that the concept of similarity should not be fully decoupled from its role in our everyday experience.
+
+For a more detailed account of the axiomatization of the concept of similarity, the reader is referred to Chen et al. (2009) or Elzinga (2014a).
+
+Page 8
+<page_number>884</page_number> Sociological Methods & Research 48(4)
+
+We confine to discussing two simple similarities, one edit based and one kernel based.
+
+An edit-based similarity. The concept of similarity has been widely ignored among those applying sequence analysis, probably because of two reasons. First, most sequence analysis software generates distances, not similarities. Second, there is a generally held belief that remoteness implies dissimilarity and that closeness implies similarity. But despite this belief, it is not clear if and how similarity and distance are related. However, when we calculate the length $\ell$ of the longest common subsequence (lcs), then (Wagner and Fisher 1974, section 5):
+
+$$\ell(x,y) = \frac{1}{2}(|x| + |y| - d_E(x,y)), \quad (4)$$
+
+and $\ell(x,y)$ satisfies the similarity axioms S1–S4. Here, $|x|$ denotes the length of sequence $x$, and $d_E(x,y)$ denotes the edit distance based on unit insertion and deletion cost. It is almost immediate that $\ell$ satisfies axioms S1–S3, but it is not trivial to see that $\ell$ satisfies S4 too. A proof of this claim is presented in the Online Appendix 1. Hence, although there are many faster algorithms to calculate $\ell$ (see, e.g., Bergrøth, Hakonen, and Raita 2000; Bergrøth, Hakonen, and Väisänen 2003), it can be considered as an edit-based similarity. Later, we will generalize equation 4 to the general case of a metric edit-cost structure.
+
+Kernel-based similarity. Kernel algorithms evaluate inner products of vectors, that is, they evaluate $x'y = \sum_i x_i y_i$ for vectors $x = (x_1, x_2, \ldots)$ and $y = (y_1, y_2, \ldots)$ without directly using the vectors themselves. Thus, if we want to use kernels to define and/or evaluate similarities, we first have to represent objects by vectors, the so-called feature vectors. Let $F = {u, v, \ldots}$ denote a set of features and when an object $x$ possesses a feature $u$, we denote this fact by writing $u \sqsubseteq x$. To construct feature vectors, we first index the features by assigning to each and every feature $u$ a unique positive integer $r(u)$ that is as small as possible. So, with $n$ distinct features, the features will be indexed by the integers $1, \ldots, n$. Now, we may construct a vector representation $x \mapsto x = (x_1, x_2, \ldots)$ for an object $x$ by assigning to each coordinate a nonnegative value through
+
+$$x_{r(u)} = \begin{cases} c(u) & \text{if } u \sqsubseteq x \ 0 & \text{otherwise} \end{cases}. \quad (5)$$
+
+Page 9
+Elzinga and Studer <page_number>885</page_number>
+
+This in effect means that we assign a value $c(u)$ to the ith coordinate if the object $x$ possesses the ith feature $u$ and if $x$ does not possess that feature, the coordinate is set to zero. If, for example, $c(u) = 1$ for all features, the resulting binary vector shows which features are or are not possessed by the object represented. The inner product of such binary vectors is then a count of the features that the two objects have in common. If $c(u)$ varies with the features, the inner product evaluates a weighted count of common features. In all cases where the coordinate values only depend on the features, the resulting inner product $\mathbf{x}^{\prime}\mathbf{y}$ is a similarity, that is, $s(x,y) = \mathbf{x}^{\prime}\mathbf{y}$ satisfies the similarity axioms S1–S4. In the context of sequence analysis, the set of features can be taken to be the set of all possible subsequences (see, e.g., Elzinga and Studer 2015), in which case an inner product counts the number of distinct common subsequences.
+
+To actually calculate the inner product of feature vectors that use the possible subsequences as coordinates, kernel algorithms have been designed that allow for calculation times that are roughly proportional to the third power of the length of the sequences involve. These kernels have been described and analyzed in, for example, Elzinga and Wang (2013), Elzinga and Studer (2015), and Shawe-Taylor and Cristianini (2004). If however the coordinate values not only depend on the features as such but also depend on the way these features are “embedded” in the pertaining sequences, that is, when
+
+$$\mathbf{x}_{r(u)} = \begin{cases} c(u,x) & \text{if } u \sqsubseteq x \ 0 & \text{otherwise} \end{cases}, \quad (6)$$
+
+the inner products do not necessarily satisfy the axioms of similarity. For example, if $c(u,x)$ is a value that depends on the embedding frequency or the duration of $u$ in $x$, $\mathbf{x}^{\prime}\mathbf{y}$ will not satisfy the axioms of similarity.3 Therefore, in the next subsection, we discuss how to construct a similarity given a distance and vice versa.
+
+From Distance to Similarity and Back
+
+We already discussed a particular construction of a similarity from a distance: In equation 4, we transformed an edit-based distance $d_E$ into an edit-based similarity $\ell(x,y)$. Unfortunately, there is no general and explicit solution to this problem, that is, there is no (known) general specification of the map $h : d \mapsto s$, nor is there a general solution for the reverse problem—constructing a similarity from a distance. Some quite broad classes of solutions were derived by Chen et al. (2009) and some results of Yianilos (2002)
+
+Page 10
+<page_number>886</page_number> Sociological Methods & Research 48(4)
+
+are useful too. Here, we discuss simple instances of these classes: one instance of $h(d) = s$ and one instance of $h'(s) = d$. For most applications, these examples will suffice.
+
+First, we discuss a solution to $s = h(d)$: let $X = {x, y, z, r, \ldots}$ denote an object set and $d$ a metric on $X \times X$. Then, for an arbitrary but fixed reference object $r$,
+
+$$s(x, y) = d(x, r) + d(y, r) - d(x, y), \quad (7)$$
+
+is a similarity.4 To see that this is true indeed, we check if the axioms S1–S4 hold.
+
+Because of $d(x, y) \leq d(x, r) + d(y, r)$ (TI), $s(x, y) \geq 0$ so S1 holds. Using inequality (1) and the above equation 7, we derive
+
+$$\begin{align*} s(x, y) &\leq d(x, r) + d(y, r) - |d(x, r) - d(y, r)| \ &= 2\min{d(x, r), d(y, r)} \ &= \min{s(x, x), s(y, y)}, \end{align*}$$
+
+so $s(x, y)$ is bounded by self-similarity (S2). Symmetry is trivial (S3) and the CI (S4) follows from the TI. Apparently, $s$ as constructed through equation 7 is a similarity.
+
+A way to construct a distance $d$ from a similarity $s$ is through (Chen et al. 2009):
+
+$$d(x, y) = s(x, x) + s(y, y) - 2s(x, y). \quad (8)$$
+
+$d$ is a distance that depends on the size of the symmetric set difference $|\Delta(X, Y)|$. That it is a proper distance is checked by verifying the distance axioms D1–D4. Clearly, $d(x, x) = 0$ and if $d(x, y) = 0$, we must have that $x = y$ because of S2. S2 also ensures that $d(x, y) > 0$ (D2) and symmetry (D3) is trivial. That $d$ satisfies the TI immediately follows from the CI.
+
+However, this formal reasoning does not clarify the conceptual relations between the spatial concept of distance and the set-based concept of similarity. Therefore, in the next subsection, we will provide for a spatial interpretation of similarity and show how the spatial and set-based concepts touch through binary feature vectors.
+
+Similarity as Angle or Direction
+To spatially interpret the concept of similarity, equation 7 is a good starting point and to explore its behavior, we constructed Figure 3.
+
+Figure 3 shows a plane5 in which we fixed two objects $r$ and $y$ at distance $d(r, y)$. Furthermore, we presumed a third object $x$ at distance $d(r, x)$. This latter
+
+Page 11
+Elzinga and Studer <page_number>887</page_number>
+
+<img>A diagram showing a circle with center $r$ and radius $d(r,x)$. Points $x$, $y$, $a$, $b$, and $c$ are marked on the circle's circumference. The angle $\varphi$ between lines $L(r,x)$ and $L(r,y)$ is indicated. Distances $d(x,y)$, $d(r,y)$, and $d(r,x)$ are labeled.</img>
+
+Figure 3. The similarity $s(x,y)$ is determined by the (fixed) distances $d(x,r) + d(y,r)$ and the obtuse angle $\varphi$ between the lines $L(r,y)$ and $L(r,x)$. See text for a detailed explanation.
+
+assumption determines a circle around $r$ that includes $x$. Having drawn that circle, we fixed an $x$ on it, therewith fixing $d(y,x)$ too. The picture then contains enough information to determine $s(x,y)$ according to equation 7. Furthermore, we determined the obtuse angle $\varphi$ between the lines $L(r,x)$ and $L(r,y)$.
+
+When we now move the object $x$ along the circle in the direction of location $b$, $\varphi$ will decrease and $s(x,y)$ decreases since $d(x,r)$ and $d(y,r)$ are fixed and $d(x,y)$ increases. Once $x$ has reached location $c$, $\varphi$ will attain its minimum value: passing $c$ will cause the obtuse and the acute angle to flip. Also, $d(x,y)$ will reach its maximum value and $s(x,y) = 0$ since, at $c$, $d(x,y) = d(x,r) + d(r,y)$. Moving $x$ clockwise from $c$ will increase the obtuse $\varphi$ and, since $d(x,y)$ will get smaller, $s(x,y)$ will increase too. At $a$, $\varphi$ will reach its maximum value and $s(x,y)$ will be maximal too.
+
+So it seems that $\varphi$ is monotone with $s(x,y)$: when $s(x,y)$ is maximal, $\varphi$ is maximal and when $s(x,y)$ is minimal, then $x$ and $y$ are opposite relative to $r$ and $\varphi$ is minimal. However, in Figure 3, $\varphi$ is anti-monotone with $d(x,y)$, but this is not necessary. In Figure 4, we fixed the objects $x$ and $y$ and move the reference relative to the line $L(x,y)$. We see that when the reference moves away from the line $L(x,y)$, the obtuse angle $\varphi_i$ between the lines $L(r_i,x)$ and $L(r_i,y)$ gets bigger and, simultaneously, $s(x,y)$ gets bigger since $d(r_i,x)$ and $d(r_i,y)$ get bigger, while $d(x,y)$ remains fixed.
+
+From Figures 3 and 4, we conclude that $s(x,y)$ is monotone with the angle $\varphi$: the bigger it gets, the more similar the objects. Equivalently, we could say
+
+Page 12
+<page_number>888</page_number> Sociological Methods & Research 48(4)
+
+<img>A diagram showing three circles (r₁, r₂, r₃) with points on their diameters. The x-axis is at the bottom, and the y-axis is vertical. Dashed lines connect each circle to the x-axis and y-axis, forming angles φ₁, φ₂, φ₃. The similarity sᵣᵢ(x,y) is measured as the distance from the reference rᵢ to the line L between x and y.</img>
+
+Figure 4. The similarity $s_{r_i}(x,y)$ is measured as the distance from the reference $r_i$ to the line $L$ between $x$ and $y$, that is, as monotone with the obtuse angle between the lines $L(r_i,x)$ and $L(r_i,y)$. See text for a detailed explanation.
+
+that $x$ and $y$ are similar to the degree that the directions of the lines $L(r,x)$ and $L(r,y)$ coincide.
+
+The difference $d(x,r_i) + d(y,r_i) - d(x,y) = s_{r_i}$ measures the distance of $r_i$ to the line $L$ between $x$ and $y$. If this distance equals zero, $x$ and $y$ are opposite relative to $r_i$ and hence $s_{r_i} = 0$. The greater the distance of $r_i$ to $L$, the greater the similarity $s_{r_i}$ the more the directions of $x$ and $y$, relative to $r_i$ coincide.
+
+In the above interpretation, we did not assume anything about the properties of the object space $(X,d)$. However, when we assume that the space is a Euclidean coordinate space and we take $\mathbf{0} = (0,0,\ldots)$ as our reference, equation 7 implies that
+
+$$s(x,y) = ||\mathbf{x}|| + ||\mathbf{y}|| - ||\mathbf{x}-\mathbf{y}||,$$
+
+where $||\mathbf{x}||$ denotes the “length” of the vector $\mathbf{x}$, or, equivalently, the distance of $\mathbf{x}$ to the reference $\mathbf{0}$, that is, for $\mathbf{x} = (x_1,x_2,\ldots)$, $||\mathbf{x}|| = \sqrt{\sum_i x_i^2}$. Hence in a Euclidean vector space, $s(x,y)$ equals the sum of the lengths of $\mathbf{x}$ and $\mathbf{y}$ in as far as this sum is not due to the distance between $\mathbf{x}$ and $\mathbf{y}$ (see Figure 5).
+
+When the vectors are binary feature vectors, the spatial and set-based interpretation of similarity coincide. For let ${\mathcal{X},\mathcal{Y},\ldots}$ denote the feature sets of the objects ${x,y,\ldots}$ and ${\mathbf{x},\mathbf{y},\ldots}$ their representing vectors, then we have that $||\mathbf{x}|| = \sqrt{|\mathcal{X}|}$ and $||\mathbf{x}-\mathbf{y}|| = \sqrt{|\Delta(\mathcal{X},\mathcal{Y})|}$ with $\Delta(X,Y) = (X-Y) \cup (Y-X)$ and hence that
+
+Page 13
+Elzinga and Studer <page_number>889</page_number>
+
+<img>A diagram showing two points x and y in a 2D space. The distance between x and y is labeled ||x-y||. The distances from x and y to the origin are labeled ||x|| and ||y|| respectively.</img>
+
+Figure 5. Illustration of $s(x,y) = ||x|| + ||y|| - ||x-y||$, which holds when sequences x and y are represented in Euclidean vector space and $\mathbf{0}$ is used as the reference object. In such cases, the similarity is interpreted as the sum of the lengths of the representations x and y in as far as this sum is not due to the distance between the two.
+
+$$s(x,y) = \sqrt{|X|} + \sqrt{|Y|} - \sqrt{|\Delta(X,Y)|}.$$
+
+So, for binary feature vectors, the similarity defined by equation 7 depends in a nonlinear way on the size of the set of features common to both x and y.
+
+Normalizing Distance and Similarity
+As will appear later, once we have constructed a normalized distance, denoted as D, the evaluation of a normalized similarity S simply amounts to evaluating the quantity $S = 1 - D$. So, once we have distances available and know how to normalize them, the calculation of similarity is easy.
+
+The simple relation between normalized distances and similarities is the main, but not the only reason to discuss the subject of normalizing distances. The other reason is that normalizing greatly facilitates the interpretation of the numbers generated by the algorithm or procedure that generates the distance measurements.
+
+The Normalization of Distance
+Normalizing a distance(-scale) not only requires that we divide out units and map to a closed interval but also that the normalized scale still adheres to the metric axioms D1–D4. Simultaneously imposing these three requirements is not trivial. A simple normalization⁶ of distance is provided by the transform:
+
+[6] This normalization is discussed in detail in the next section.
+
+Page 14
+<page_number>890</page_number> Sociological Methods & Research 48(4)
+
+<img>A diagram showing a unit sphere with a reference point r at the bottom left. Several points are plotted on the sphere, including a red point at (1,0) and other black points. Arrows indicate distances between these points. The equation "∀x ≠ r : D_r(x,r) = 1" is written near the top right.</img>
+
+Figure 6. Normalization amounts to projecting all objects on an $r$-centered unit sphere. The reader notes that $D_r$ may produce a different ordering of pairs of objects than $d$. Normalization is a way to control for variation among the distances to the reference $r$.
+
+$$D_r(x,y) = \frac{d(x,y)}{\left(d(x,y) + d(x,r) + d(y,r)\right)/2}. \quad (9)$$
+
+The choice of $r$ affects the scale $D_r$. The effect of normalization can be understood through looking at the quantities $D_r(x,r)$: according to equation 9, we have that $D_r(x,x) = 1$ since $d(r,r) = 0$. Because this holds for all $x \neq r$, normalization according to equation 9 has the effect of projecting all objects other than $r$ on a unit sphere with $r$ at the center and gauging distances between the objects through evaluating distances between the projections. This geometrical interpretation is illustrated in Figure 6.
+
+The effect of remoteness from the reference object can also be understood as follows: assume that both $d(x,r)$ and $d(y,r)$ are equal to, say, $\frac{1}{2}a$. Then $D_r(x,y)$ reduces to
+
+$$D_r(x,y) = \frac{d(x,y)}{(d(x,y) + a)/2}. \quad (10)$$
+
+In Figure 7, we plot this function for an arbitrary but fixed distance $d(x,y)$ and $a \geq d(x,y)$. The plot shows that the normalized distance $D_r$ gets smaller, the more remote $x$ and $y$ are from $r$, that is, the bigger $a$ gets.
+
+A proof that $D_r$ satisfies the axioms D1–D4 is presented in the Online Appendix. Summarizing, we have that $D_r$ satisfies the axioms of distance D1–D4 and $0 < D_r(x,y) \leq 1$ if and only if $x \neq y$.
+
+Page 15
+Elzinga and Studer <page_number>891</page_number>
+
+<img>A graph showing the effect of normalizing a fixed distance d(x,y) with respect to a reference at a distance ½a from x and y. The horizontal axis is labeled 'a', and the vertical axis is labeled 'd(x,y)/(d(x,y)+a)/2'. The red curve starts at (0,1) and decreases as 'a' increases.</img>
+
+Figure 7. The effect of normalizing a fixed distance $d(x,y)$ with respect to a reference at a distance $\frac{1}{2}a$ from x and y: the bigger $a$ gets, the smaller the normalized distance $D(x,y)=\frac{d(x,y)}{(d(x,y)+a)/2}$ (vertical axis) gets.
+
+Finally, we note that $D_r$ is compressive with respect to $d$ in the sense that differences between big $d$-distances tend to be smaller on the $D_r$-scale (see Figure 8).
+
+We now have discussed normalization of distances, thereby confining ourselves to just one technique: the one embodied in equation 9. The reader might be interested in different ways of normalizing distance and indeed, alternatives to equation 9 can be found in Chen et al. (2009) or Elzinga (2014a). The behavior of the resulting scales is roughly the same as the properties that we discussed here, so we leave it to the interested reader to explore these alternatives. We now turn our attention to the normalization of similarity.
+
+The Normalization of Similarity
+There are two ways to obtain a normalized similarity, the direct and the indirect way. The indirect route is via a normalized distance according to the simple formula:
+
+$$S_r(x,y) = 1 - D_r(x,y), \quad (11)$$
+
+and the direct way uses “raw” or nonnormalized similarity through one of the many transforms that yield a normalization. Here we start discussing the indirect way, that is, via equation 11, since it is simple and because it directly connects similarity to any normalized distance. Thereafter, we will just
+
+Page 16
+<page_number>892</page_number> Sociological Methods & Research 48(4)
+
+$D_r(x,y) = \frac{d(x,y)}{(d(x,y)+d(x,r)+d(y,r))/2}$
+
+<img>A plot showing $D_r(x,y)$ on the y-axis against $d(x,y)$ on the x-axis. The plot is a red curve starting at (0,0) and increasing to approximately (1,1). A horizontal line at y=1 is also shown.</img>
+
+Figure 8. Plot of $D_r$ versus $d$, showing that normalizing is compressive. Because of the triangular inequality, the domain (horizontal axis) is limited to $d(x,r) + d(y,r)$.
+
+discuss just one of the many possibilities to normalize a similarity, a generalization of the Tanimoto coefficient. Again, we confine ourselves to just one technique because we believe that discussing more different techniques will not be very productive for social science sequence analysts and again, the interested reader is referred to Elzinga (2014a) for different techniques and more literature.
+
+Using equation 11, the axioms D’1–D’4 can be written in terms of $S_r$:
+
+S’1:	$S_r(x,x) = 1$ for all x,
+S’2:	$1 > S_r(x,y) \geq 0$ if and only if $x \neq y$,
+S’3:	$S_r(x,y) = S_r(y,x)$,
+S’4:	$S_r(x,y) + 1 \geq S_r(x,z) + S_r(z,y)$.
+Comparing the system S’1–S’4 with the system S1–S4 reveals that S’1–S’4 is a special case of S1–S4: S2 states that a similarity can never exceed the self-similarity of the pertaining sequences while the same is implied in
+
+Page 17
+Elzinga and Studer <page_number>893</page_number>
+
+S’1–S’2. Only S’1–S’2 is more explicit through specifying a uniform upper boundary for all self-similarities and this is reflected in the difference between S’4 and S4. So we conclude that $S_r(x,y)$ as defined in equation 11 is a normalized similarity: It adheres to the axioms of similarity and it is dimensionless and bounded in [0,1] because $D_r$ is dimensionless and bounded in the same interval.
+
+The reader notes that, since $D_r(x,r) = 1$ for all $x \neq r$, $S_r(x,r) = 0$ for all $x \neq r$, again expressing that normalizing with respect to a reference implies “controlling for differences in distance/similarity to the reference object $r$.”
+
+Next, we turn our attention to normalizing similarity without explicitly using a reference object. This is possible, given a nonnormalized similarity $s$, through evaluating,
+
+$$S(x,y) = \frac{s(x,y)}{s(x,x) + s(y,y) - s(x,y)}. \quad (12)$$
+
+This formulation generalizes Tanimoto’s coefficient (see, e.g., Duda, Hart, and Stork 2001) for similarity in biological taxonomy: If $s(x,y)$ is interpreted as a count of common features, $S(x,y)$ expresses this count as a fraction of the total number of features of $x$ and $y$.
+
+In Online Appendix A3, we show that $S$ as defined in equation 12 satisfies the CI S’4.
+
+Normalizing similarity does not involve a reference object, at least not according to equation 12. But equation 12 does not say how the similarity $s$ was constructed; if $s$ does not directly derive from a (weighted) set count, $s$ will be derived from a scale that derives from some spatial concept. But then the concept of “direction” will require a reference object: direction is always relative to some fixed point in space.
+
+We discuss one example: we write $\text{l}c\text{s}(x,y)$ for the “length of the longest common subsequence of $x$ and $y$” and then we set $s(x,y) = \text{l}c\text{s}(x,y)$. Hence we obtain
+
+$$S(x,y) = \frac{\text{l}c\text{s}(x,y)}{|x| + |y| - \text{l}c\text{s}(x,y)}, \quad (13)$$
+
+since $\text{l}c\text{s}(x,x) = |x|$, the length of the sequence $x$. This formulation shows that normalized similarity can be computed in an edit-oriented sequence analysis. Using equation 4, we elaborate the above expression to
+
+$$S(x,y) = \frac{|x| + |y| - d_{OM}(x,y)}{|x| + |y| + d_{OM}(x,y)}, \quad (14)$$
+
+Page 18
+<page_number>894</page_number> Sociological Methods & Research 48(4)
+
+expressing the normalized coefficient directly in terms of OM distances. Distances, plural, since |x| = dOM(x, λ), the sum of unit deletion costs when transforming x into λ, the empty sequence. However, when a cost-metric other than the standard unit-cost is used, we have that dOM(x, λ) = ∑ic(xi, −) where c(xi, −) denotes the deletion cost of the i th character of x. This leads to a generalization of llcs to the general OM context with any metric cost structure. Thereto, we define δ(x) = dOM(x, λ) and introduce the concept of the “cost of a most expensive common subsequence,” abbreviated as cmcs. Formally,
+
+cmcs(x, y) = max{δ(u) : u ⊆ (x, y)}. (15)
+
+Clearly, cmcs(x, λ) = δ(x) and δ(x) = |x| in case of unit indel cost. Just like llcs, cmcs is a similarity and it can be computed through
+
+cmcs(x, y) = ½(δ(x) + δ(y) − dOM(x, y)) (16)
+
+or through a variant of an algorithm to evaluate llcs(x, y). To normalize cmcs, we apply
+
+S(x, y) = cmcs(x, y) / (δ(x) + δ(y) − cmcs(x, y)). (17)
+
+The Use of Normalization in Sequence Analysis
+
+In the sequence analysis literature, little attention has been paid to normalization, although it has been used by several authors. We mention a few examples.
+
+In a paper on gendered trajectories on the labor market and household status, Levy, Gauthier, and Widmer (2006) applied a form of normalization to compensate for the very different lengths of their sequences and thus to avoid clustering on the basis of the lengths of the trajectories: For each pair of trajectories, they divided the distance by the length of the longest sequence:
+
+d*E(x, y) = dE(x, y) / max{|x|, |y|}. (18)
+
+This is not a proper normalization since it does not map to [0, 1] and it does not satisfy TI. Furthermore, normalization should not be used to mask or compensate for unequal censoring of the trajectories: If sequences differ in length due to differences in censoring, there is a problem caused by missing data and that should be handled by appropriate imputation methods.
+
+Page 19
+Elzinga and Studer <page_number>895</page_number>
+
+Unfortunately, the frequently occurring problem of missing data has hardly received attention (but see Halpin 2012).
+
+Elzinga and Liefbroer (2007) and Bras, Liefbroer, and Elzinga (2010) proposed to use,
+
+$$s_K^*(x,y) = \frac{x'y}{\sqrt{x'x \cdot y'y}},$$
+
+to compare average similarities of family formation trajectories from different countries or different epochs. Indeed, this index is bounded by [0, 1], but it is not a proper similarity since it fails to satisfy the CI (see Elzinga 2014a).
+
+Gabadinho et al. (2011) proposed to use,
+
+$$d^*(x,y) = \frac{d(x,y)}{d(x,r) + d(y,r)},$$
+
+with $r = \lambda$. This maps to [0, 1], but it fails to satisfy TI unless $d$ is a Euclidean distance (see Yianilos 2002).
+
+Finally, in a comparative study of distance metrics for sequence analysis, Ritschard, Bürgin and Studer (2014) proposed to use equation 9.
+
+How can we use proper normalization in sequence analysis, other than for creating a scale that can be interpreted both as a similarity and as a distance? We see three possibilities.
+
+First, normalization can be used when analyzing sequences while ignoring durations, that is, analyzing the sequence of distinct subsequent subsequences (DSS). As Studer and Ritschard (2016) demonstrate, such analysis can be very useful when one wants to focus on order of states or events. However, such sequences will be of very different lengths. For example, a sequence on the labor market that just consists of uninterrupted unemployment then has only one element, while a sequence that consists of an alteration of employment and unemployment may consist of many states and thus constitutes a (much) longer sequence. Normalization may be used to weigh the differences by the length of such DSS’s by choosing the empty sequence as the reference object.
+
+Second, normalization can be used to compare scales. For example, when we want to compare average distances or similarities between object from different regions or different epochs as was done, for example, in the study of Bras et al. (2010).
+
+Finally, normalization can be used to focus on the deviations from a particular template sequence, for example, uninterrupted employment or a career that uses the full length of legally facilitated parental leave (see, e.g.,
+
+Page 20
+<page_number>896</page_number> Sociological Methods & Research 48(4)
+
+Zhelyazkova 2015). Using such a template will enlarge the various kinds of ways in which the objects differ from the reference. An alternative is to pick a medoid sequence⁷ as the reference object, therewith simultaneously enlarging the various ways in which the sequences differ from this medoid.
+
+In the next subsection, we will demonstrate some of the effects mentioned. However, the reader should be aware that such effects, with different data, may not show up when the topological structure of the distance matrix is equal to or very close to the topological structure of the similarity matrix.
+
+Balancing Distance and Similarity Through Normalizing
+In this section, we demonstrate how normalizing can be used to compare data from different cohorts. Thereto, we use data on family formation in the Netherlands as collected in the 2008-wave of the Family Formation Research Program (CBS 2008) by Statistics Netherlands. The data pertain to the retrospective household histories of 5,287 Dutch, born between 1945 and 1989. We encoded these histories using eight different states: single and childless living in the parental home, living in the parental home in all other circumstances, living single, single with child, cohabiting with child(ren), cohabiting without child(ren), married with child(ren), and married without child(ren). Ignoring durations, we used the OM-metric with unit cost to calculate the distance between trajectories.
+
+We distinguished three birth cohorts as shown in the leftmost column of Table 1. If indeed destandardization of the life course (see, e.g., Brückner and Mayer 2005) took place, one would expect that, on the average, distances between the household histories of younger Dutch are greater than the distances between the trajectories of the older ones. Table 1 shows the averages and bootstrapped standard errors⁸ of these estimates. We also calculated similarities (according to equation 7) between the household trajectories, the averages of which are also shown in the middle column of Table 1. According to the same hypothesis of destandardization, one would expect that average similarity would increase with cohortal age.
+
+Surprisingly, Table 1 shows that the average distance and the average similarity decrease with cohortal age. One would expect an increase of similarity but a decrease of distance. How can we explain these results? How can we explain their apparent contradiction? Stated in terms of common and non-common features, the results show that both the number of common and the number of noncommon features increase with younger cohorts, implying that the total number of features also increased. In other words, we observe an
+
+Birth Cohort	Average Distance	Bootstrapped Standard Error	Average Similarity	Bootstrapped Standard Error
+1945-1949	0.32	0.01	0.60	0.01
+1950-1954	0.29	0.01	0.57	0.01
+1955-1959	0.27	0.01	0.54	0.01
+Table 1. Average Distance and Average Similarity Between Household Trajectories of Three Birth Cohorts.
+
+Page 21
+Elzinga and Studer <page_number>897</page_number>
+
+Table 1. Average OM Distances, Similarities (Equation 7), and Normalized Distances between the Household Trajectories of Three Different Cohorts.
+
+Cohortal Birth Year	Distance	SE	Similarity	SE	Normalized Distance	SE
+<1955	2.24	.052	4.90	.053	.43	.008
+1955–1964	2.93	.045	4.95	.056	.51	.006
+1965–1974	3.44	.047	5.21	.062	.54	.005
+Note. The columns labeled with “SE” show the corresponding bootstrapped standard errors of these quantities. OM = optimal matching.
+
+increase in the number of common features (revealed by the increase of similarity) in a general context of an increasing number of features. This result is interesting. The destandardization could have been the result of the emergence of new phenomena like unmarried cohabitation with or without children and/or because divorce has become much more common than it was in the past (Shanahan 2000). These phenomena apparently have resulted in longer, more complex sequences, with, on the average, more features. Indeed, the average complexity index (see, e.g., Gabadinho et al. 2010) of the sequences significantly increases (figures not shown) for younger cohorts.
+
+By normalizing the distances according to equation 9 and using the empty sequence as the reference, we take the total number of features and therefore the complexity of the sequences into account. Average normalized distance measures the evolution of the number of noncommon features, while taking into account that the maximum (potential) number of features, which is not necessarily the same in every context. The results are shown in the rightmost column of Table 1. Now it appears that the average normalized distances, and thus the normalized similarities, again are significantly different in the direction predicted by the assumption of destandardization. This implies that the increase of the number of common features was less important than the increase of the number of noncommon features.
+
+Conclusions
+In the previous sections, we have explored the relation between the concepts of distance and similarity and shown that adopting the axiomatic definition of similarity as presented here leads to a spatial interpretation of similarity as “direction,” complementary to distance.
+
+We also discussed normalization as a means to create distances that may directly be interpreted as similarities in the sense that similarity is
+
+Page 22
+<page_number>898</page_number> Sociological Methods & Research 48(4)
+
+linearly anti-monotone with distance: the more remote, the less similar and vice versa.
+
+Now there are a number of questions that can be put up. First of all, the question of why we need this axiomatic concept of similarity at all. And if we really need this concept of similarity, does it really matter, whether or not we apply it, will it lead to new interpretations and new insights about our data? Below, we will discuss these matters one by one.
+
+In research into choice behavior and decision-making, similarity of (sets of) stimuli has long been dealt with through spatial representation of the objects and analyzing distances as if these distances were actually gauging similarity. This long tradition originates from the seminal work of Torgerson (1965), Guttman (1968), and Lingoes (1968) on multidimensional scaling. It rests on the idea that, given the multidimensional representation is precise enough, the number of significant dimensions is limited and the dimensions can be assigned a rigorous substantive interpretation in terms of meaningful properties of the stimulus- or item set, similarity and (lack of) distance coincide. Some even considered the Minkowski-metrics, in particular for the exponent values 1, 2, and ∞, as formalizations of psychological composition rules for the generation of preferences, similarity judgments and item correlations, to mention only a few of the variety of object sets and applications studied in this tradition.
+
+However, in the context of sequence analysis, the dimensions of the spatial representations created through applying an edit-based or kernel-based algorithm are hard to isolate. Edit-distances are not defined through an equation that relates to a notion of dimension. Kernel-based algorithms evaluate inner products in high-dimensional vector spaces where each and every feature, for example, a particular subsequence, defines its own dimension. In general, it does not make much sense to try to substantively and separately interpret these dimensions. Therefore, directly interpreting distance as similarity is hard to justify in the context of sequence analysis applications.
+
+The alternative is a feature-based approach and it would have been appealing to adopt an axiomatization like Tversky’s. However, Tversky’s axioms allow for an asymmetric similarity, therewith cutting the possibility of a structural bond between distance and similarity. Therefore, we adopted an approach embodied in the axioms S1–S4: It retains Tversky’s matching condition, stating that similarity is a function of both common and noncommon feature sets and it has a direct connection to spatial representations. However, we do not claim that the axioms S1–S4 constitute a unique solution to the problem. Perhaps a relaxation of the system, for example, by replacing
+
+Page 23
+Elzinga and Studer <page_number>899</page_number>
+
+S2 with the weaker $s(x,y) \leq \max{s(x,x), s(y,y)}$, would be interesting in some applications. Here, we will not pursue such an alternative.
+
+Several researchers have published interesting results despite the fact that they used distance measures or normalizations that (potentially) violate the TI. Understandably, the question has been put up why we need such formal restrictions at all when, without them, we seem to have interesting results too. Some (e.g., Gauthier 2015, Lesnard 2006) even doubt that a formal, axiomatic approach is necessary at all. We believe that an axiomatic approach helps us to better understand the methods that we apply, either to explore data structures for patterns or to test hypothesis about these patterns. Axioms like the TI (D4) or the CI (S4) allow us to map relations onto real or rational numbers and assure that the spatial structure is “smooth” in the sense that new data points are restricted by the ones that we already observed (Elzinga and Studer 2015). Applying methods that violate such axioms not necessarily are invalid, but we cannot trust them to be generalizable beyond the data collected and the representation constructed from them.
+
+Declaration of Conflicting Interests
+
+The author(s) declared no potential conflicts of interest with respect to the research, authorship, and/or publication of this article.
+
+Funding
+
+The author(s) disclosed receipt of the following financial support for the research, authorship, and/or publication of this article: Matthias Studer benefited from the support of a postdoctoral fellowship granted by the Swiss National Science Foundation at the VU University of Amsterdam. This publication is part of the research Matthias Studer conducted at the Swiss National Center of Competence in Research “LIVES—Overcoming vulnerability: life course perspectives,” which is financed by the Swiss National Science Foundation.
+
+Supplemental Material
+
+Supplemental material for this article is available online.
+
+Notes
+
+It should be noted that $h' \neq h^{-1}$. It will appear that neither $h$ nor $h'$ is a 1-1 function: Different distances may be mapped onto the same similarity and different similarities may be mapped onto the same distance.
+Similarity between more than two objects is dealt with in, for example, Elzinga et al. (2011).
+Page 24
+<page_number>900</page_number> Sociological Methods & Research 48(4)
+
+As an example, we define $c(u,x)$ as the embedding frequency of the subsequence $u$ of sequence $x$. Consider the sequences $x = aabab$ and $y = aabb$. Then, for example, we have that $c(ab,x) = 5$ and $c(abb,y) = 4 = c(abb,x)$. Now the inner product $\mathbf{x}^{\prime}\mathbf{y}$ can be computed through $\mathbf{x}^{\prime}\mathbf{y} = \sum_{u} c(u,x)c(u,y)$.
+By constructing a table that lists all common subsequences of $x$ and $y$ their embedding frequencies, the reader will discover that $\mathbf{x}^{\prime}\mathbf{y} = 47$, that $\mathbf{x}^{\prime}\mathbf{x} = 83$, and that $\mathbf{y}^{\prime}\mathbf{y} = 35$. Taking the inner product for a similarity would violate axiom S2 since $\mathbf{x}^{\prime}\mathbf{y} > \mathbf{y}^{\prime}\mathbf{y}$.
+
+We should take the reference object $r$ into account in our notation by writing $s_r(\cdot,\cdot)$, but we do not since in this article, the simpler notation does not lead to ambiguities.
+
+Not necessarily a coordinated plane.
+
+In the sequel, we will write $D$ instead of $d$ to denote a normalized distance.
+
+A medoid is an observed object of which the sum of distances to all other sequences is minimal; thus, a medoid may not be unique—the centroid may not have been observed or even may not be an observable object. On the other hand, given a full distance matrix, the distances to the centroid are always computable (see Elzinga et al. 2011, section 5.3).
+
+The standard errors have been computed as follows: We took 500 samples (with replacement) of 1,000 individuals each and for each of these samples, we computed the average distance. The standard deviation ($SE$) of these estimates is the standard error reported here. By sampling individuals, the estimated SEs are bigger than when sampling distances from the original distance matrix since therein, the distances are correlated; sampling individuals instead of distances avoids this problem. The time required for this procedure is limited to the sampling time as the required distances, given the sampled individuals, can be taken from the original distance matrix. The computation time for this procedure is negligible. For an introduction to bootstrapping techniques, the reader is referred to Davison and Hinkley (1997).
+
+References
+
+Abbott, Andrew and John Forrest. 1986. “Optimal Matching Methods for Historical Sequences.” Journal of Interdisciplinary History 16(3):471-94. Bergroth, Lasse, Harri Hakonen, and Timo Raita. 2000. “A Survey of Longest Common Subsequence Algorithms.” Pp. 39-48 in Proceedings of the Seventh International Symposium on String Processing and Information Retrieval (SPIRE’00). Washington, DC: IEEE Computer Society. Bergroth, Lasse, Harri Hakonen, and Juri Väisänen. 2003. “New Refinement Techniques for Longest Common Subsequence Algorithms.” Pp. 287-303 in String Processing and Information Retrieval, 10th International Symposium, SPIRE
+
+Page 25
+Elzinga and Studer <page_number>901</page_number>
+
+2003, edited by Mario A. Nascimento, Edleno Silva de Moura, and Arlindo L. Oliveira. New York, NY: Springer.
+
+Blanchard, Philippe, Felix Bühlmann, and Jaques-Antoine Gauthier. 2014. Advances in Sequence Analysis: Theory, Method, Applications. Life Course Research and Social Policies. New York, NY: Springer.
+
+Borg, Ingwer and Patrick J. F. Groenen. 2005. Modern Multidimensional Scaling: Theory and Applications. Springer Series in Statistics. 2nd ed. New York, NY: Springer.
+
+Borgwardt, K. M. 2011. “Kernel Methods in Bioinformatics.” Pp. 317-34 in Handbook of Statistical Bioinformatics, edited by Henry Horng-Shing Lu, Bernhard Schölkopf, and Hongyu Zhao, Springer Handbooks of Computational Statistics, Chap. 15. New York, NY: Springer.
+
+Bras, Hilde, Aart C. Liefbroer, and Cees H. Elzinga. 2010. “Standardization of Pathways to Adulthood? An Analysis of Dutch Cohorts Born Between 1850 and 1900.” Demography 47:1013-34.
+
+Brückner, Hannah and Karl-Ulrich Mayer. 2005. “De-standardization of the Life Course: What Might It Mean? And If It Means Anything, Whether It Actually Took Place.” Pp. 27-53 in The Structure of the Life Course: Standardized? Individualized? Differentiated? (Advances in Life Course Research, Vol. 9), edited by R. Macmillan. Amsterdam, the Netherlands: Elsevier.
+
+CBS. 2008. Onderzoek Gezinsvorming 2008. The Hague, the Netherlands: Data Archiving and Network Services (DANS). Retrieved August 1, 2019 (https://easy.dans.knaw.nl/ui/datasets/id/easy-dataset:39585).
+
+Chen, Shihyen, Bin Ma, and Kaizhong Zhang. 2009. “On the Similarity Metric and the Distance Metric.” Theoretical Computer Science 410:2365-76.
+
+Cornwell, Benjamin. 2015. Social Sequence Analysis: Methods and Applications. Structural Analysis in the Social Sciences. New York, NY: Cambridge University Press.
+
+Davison, Anthony C. and David V. Hinkley. 1997. Bootstrap Methods and Their Applications. Cambridge Series in Statistical and Probabilistic Mathematics. Cambridge, MA: Cambridge University Press.
+
+Decock, Lieven and Igor Douven. 2011. “Similarity after Goodman.” Review of Philosophy and Psychology 2:61-75.
+
+Deza, Michel Marie and Elena Deza. 2014. Encyclopedia of Distances. 3rd ed. Berlin, Germany: Springer.
+
+Duda, Richard O., Peter E. Hart, and David G. Stork. 2001. Pattern Classification. Chichester, UK: Wiley.
+
+Elzinga, Cees H. 2010. “Complexity in Categorical Time Series.” Sociological Methods & Research 38:463-81.
+
+Elzinga, Cees H. 2014a. “Distance, Similarity and Sequence Comparison.” Pp. 51-73 in Advances in Sequence Analysis: Theory, Method, Applications, edited by
+
+Page 26
+<page_number>902</page_number> Sociological Methods & Research 48(4)
+
+Philippe Blanchard, Felix Bühlmann, and Jaqces-Antoine Gauthier. Number 2 in Life Course Research and Social Policies, Chap. 4. New York, NY: Springer. Elzinga, Cees H. 2014b. “Sequence A152072.” The On-line Encyclopedia of Integer Sequences (2014). Retrieved August 1, 2019 (http://oeis.org). Elzinga, Cees H. and Aart C. Liefbroer. 2007. “De-standardization and Differentiation of Family Life Trajectories of Young Adults: A Cross-national Comparison Using Sequence Analysis.” European Journal of Population 23:225-50. Elzinga, Cees H. and Matthias Studer. 2015. “Spell Sequences, State Proximities and Distance Metrics.” Sociological Methods & Research 44(1):3-47. Elzinga, Cees H. and Hui Wang. 2013. “Versatile String Kernels.” Theoretical Computer Science 495:50-65. Elzinga, Cees H., Hui Wang, Zhiwei Lin, and Yash Kumar. 2011. “Concordance and Consensus.” Information Sciences 181(12):2529-49. Gabadinho, Alexis, Gilbert Ritschard, Studer Matthias, and Nicolas M. Müller. 2010. “Indice de complexité pour le tri et la comparaison de séquences catégorielles.” Revue des Nouvelles Technologies de l’Information E-19:61-66. Gabadinho, Alexis, Gilbert Ritschard, Nicolas S. Müller, and Matthias Studer. 2011. “Analyzing and Visualizing State Sequences in R with TraMineR.” Journal of Statistical Software 40(4):1-37. Gärdenfors, P. 2000. Conceptual Spaces: The Geometry of Thought. Cambridge: MIT Press. Gauthier, Jacques-Antoine. 2015. “Comment: How to Make a Long Story Short.” Sociological Methodology 45(1):1-3. Golub, Gene H. and Charles H. Van Loan. 2013. Matrix Computations. Johns Hopkins Studies in the Mathematical Sciences. 4th ed. Baltimore, MD: The Johns Hopkins University Press. Guttman, Louis. 1968. “A General Nonmetric Technique for Finding the Smallest Coordinate Space for a Configuration of Points.” Psychometrika 33(4):341-53. Halpin, Brendan. 2012. “Multiple Imputation for Life-course Sequence Data.” Technical Report, Department of Sociology, University of Limerick, Limerick. Retrieved August 1, 2019 (http://hdl.handle.net/10344/3639). Hennig, Christian M., Marina Meila, Fionn Murtagh, and Roberto Rocci, eds. 2015. Handbook of Cluster Analysis. London, England: Chapman & Hall. Krantz, David H., R. Duncan Luce, Patrick Suppes, and Amos Tversky. 1971. Foundations of Measurement Vol. I: Additive and Polynomial Representations. San Diego, CA: Academic Press. Lesnard, Laurent. 2006. “Optimal Matching and Social Sciences.” Technical Report 01, Institut National de la Statistique et des Etudes Economiques, Paris.
+
+Page 27
+Elzinga and Studer <page_number>903</page_number>
+
+Levy, René, Jacques-Antoine Gauthier, and Eric Widmer. 2006. “Entre contraintes institutionelle et domestique: les parcours de vie masculins et féminins en Suisse.” Canadian Journal of Sociology 31:71-92.
+
+Lingoes, James C. 1968. “The Multivariate Analysis of Qualitative Data.” Multivariate Behavioral Research 3(1):61-94.
+
+Martin, Peter and Richard D. Wiggins. 2009. “Optimal Matching Analysis.” in Sage Handbook of Methodological Innovations, edited by Malcolm Williams and W. Paul Vogt. London, UK: Sage.
+
+McVicar, Duncan and Michael Anyadike-Danes. 2002. “Predicting Successful and Unsuccessful Transitions from School to Work by using Sequence Methods.” Journal of the Royal Statistical Society. Series A 165(2):317-34.
+
+Navarro, Gonzalo. 2001. “A Guided Tour to Approximate String Matching.” ACM Computing Surveys 33(1):31-88.
+
+Pfanzagl, Johann. 1968. Theory of Measurement. Oxford, England: Wiley.
+
+Rencher, Alvin C. and William F. Cristensen. 2012. Methods of Multivariate Analysis. Wiley Series in Probability and Statistics. New York, NY: Wiley.
+
+Ritschard, Gilbert, Reto Bürgin, and Matthias Studer. 2014. “Exploratory Mining of Life Event Histories.” Pp. 221-54 in Contemporary Issues in Exploratory Data Mining in the Social Sciences, edited by J. J. McArdle and G. Ritschard, Quantitative Methodology Series, Chap. 9. New York, NY: Routledge.
+
+Shanahan, Michael J. 2000. “Pathways to Adulthood: Variability and Mechanisms in Life Course Perspective.” Annual Review of Sociology 26:667-92.
+
+Shawe-Taylor, John and Nello Cristianini. 2004. Kernel Methods for Pattern Recognition. Cambridge, MA: Cambridge University Press.
+
+Studer, Matthias. 2012. “Étude des inégalités de genre en début de carrière académique à l’aide de méthodes innovatrices d’analyse de données séquentielles.” PhD thesis. Retrieved August 1, 2019 (https://archive-ouverte.unige.ch/unige:22054).
+
+Studer, Matthias and Gilbert Ritschard. 2016. “What Matters in Differences between Life Trajectories: A Comparative Review of Sequence Dissimilarity Measures.” Journal of the Royal Statistical Society Series A 179(2):481-511.
+
+Torgerson, Warren S. 1965. “Multidimensional Scaling of Similarity.” Psychometrika 30(4):379-93.
+
+Tversky, Amos. 1977. “Features of Similarity.” Psychological Review 84(4):327-52.
+
+Wagner, Robert A. and Michael J. Fisher. 1974. “The String-to-String Correction Problem.” Journal of the ACM 21(1):168-73.
+
+Yianilos, Peter N. 2002. “Normalized Forms for Two Common Metrics.” Technical Report 91-082-3-9027-1 Rev 7/7/2002, NEC Research Institute, Princeton, NJ.
+
+Zhelyazkova, Nevena. 2015. “Work–Family Reconciliation and Use of Parental Leave in Luxembourg. Empirical Analysis of Administrative Records.” PhD thesis, Maastricht University, Maastricht, the Netherlands.
+
+Page 28
+<page_number>904</page_number> Sociological Methods & Research 48(4)
+
+Author Biographies
+Cees H. Elzinga is a full professor in pattern recognition of the Faculty of Social Sciences of the VU University in Amsterdam and a research fellow of the Netherlands Interdisciplinary Demographical Institute (NIDI) in The Hague. He is especially interested in historical demography, life-course research, social networks, computer science, and, in particular, pattern recognition and machine learning. Recent publications appeared in Advances in Life Course Research and in Sociological Methods & Research, Pattern Recognition Letters, and Information Sciences.
+
+Matthias Studer is a lecturer at the Faculty of Social Sciences of the University of Geneva and a senior researcher at the Swiss NCCR program “LIVES overcoming vulnerability: life course perspectives.” He worked on sequence analysis, gendered career inequalities, labor market, and social policy evaluation. He recently published on Discrepancy Analysis in Sociological Methods & Research and a comparison of sequence analysis distance measures in the Journal of the Royal Statistical Society: Series A.
