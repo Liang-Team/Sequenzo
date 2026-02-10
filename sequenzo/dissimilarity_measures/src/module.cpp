@@ -18,6 +18,7 @@
 #include "NMSMSTdistance.cpp"
 #include "NMSMSTSoftdistanceII.cpp"
 #include "TWEDdistance.cpp"
+#include "normalization_ElzingaStuder.cpp"
 
 namespace py = pybind11;
 
@@ -117,4 +118,18 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, double, double, py::array_t<int>, py::array_t<int>>())
             .def("compute_all_distances", &TWEDdistance::compute_all_distances)
             .def("compute_refseq_distances", &TWEDdistance::compute_refseq_distances);
+    
+    // Reference-based normalization functions (Elzinga & Studer 2019)
+    // We apply a theoretical normalization following Elzinga & Studer (2019),
+    // dividing distances by their theoretical maxima to ensure comparability across measures.
+    m.def("normalize_distance_matrix_ElzingaStuder", 
+          &normalize_distance_matrix_ElzingaStuder,
+          "Normalize distance matrix using reference-based normalization (equation 9)",
+          py::arg("distance_matrix"),
+          py::arg("reference_index"));
+    
+    m.def("normalize_similarity_from_distance_ElzingaStuder",
+          &normalize_similarity_from_distance_ElzingaStuder,
+          "Convert normalized distance matrix to similarity matrix (equation 11)",
+          py::arg("normalized_distance_matrix"));
 }
