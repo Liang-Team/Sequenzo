@@ -1,0 +1,11 @@
+digraph distree{
+"tree_analysis_lsog_disstree_none"[shape=box,  label=" "];
+"tree_analysis_lsog_disstree_none_left"[shape=box,  label=" "];
+"tree_analysis_lsog_disstree_none_right"[shape=box,  label=" "];
+"tree_analysis_lsog_disstree_none_right_left"[shape=box,  label=" "];
+"tree_analysis_lsog_disstree_none_right_right"[shape=box,  label=" "];
+"tree_analysis_lsog_disstree_none"->"tree_analysis_lsog_disstree_none_left";
+"tree_analysis_lsog_disstree_none"->"tree_analysis_lsog_disstree_none_right";
+"tree_analysis_lsog_disstree_none_right"->"tree_analysis_lsog_disstree_none_right_left";
+"tree_analysis_lsog_disstree_none_right"->"tree_analysis_lsog_disstree_none_right_right";
+}

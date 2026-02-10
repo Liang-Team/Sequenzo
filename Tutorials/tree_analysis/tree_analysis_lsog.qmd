@@ -1,0 +1,697 @@
+---
+title: "Tree Analysis Tutorial: Understanding Sequence Patterns with Regression Trees"
+subtitle: "Step-by-step guide using LSOG dyadic_children dataset - TraMineR (R) Implementation"
+author: "Sequenzo Tutorial"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    theme: cosmo
+  pdf:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+  error: false
+  output: true
+---
+
+# Introduction
+
+Welcome to the **Tree Analysis** tutorial using **TraMineR (R)**! 🌳
+
+This tutorial demonstrates how to use **regression trees** in TraMineR to understand how different factors (like age, gender, education) explain differences in sequence patterns. This R-based tutorial corresponds to the Python Sequenzo implementation.
+
+## What You'll Learn
+
+By the end of this tutorial, you'll know how to use TraMineR to:
+
+1. **Compute basic statistics** - Calculate variance (`dissvar`) and test associations (`dissassoc`)
+2. **Build trees** - Create regression trees (`disstree`, `seqtree`)
+3. **Extract insights** - Get classification rules (`disstree.get.rules`) and assign sequences (`disstree.assign`)
+4. **Visualize results** - Plot and print trees
+
+## Dataset: LSOG Dyadic Children
+
+We'll use the **dyadic_children** dataset from the LSOG (Life Stories of Generations) study. This dataset contains sequences showing how children's living arrangements change from age 15 to 39. States represent different living situations (e.g., living with parents, alone, with partner).
+
+## Prerequisites
+
+- Basic R knowledge
+- TraMineR package installed
+- Familiarity with sequence data
+
+Let's get started! 🚀
+
+# Setup and Data Loading
+
+First, let's load the necessary R libraries and our data.
+
+```{r}
+#| label: load-libraries
+#| echo: true
+#| output: true
+#| eval: true
+
+# Load TraMineR library
+library(TraMineR)
+
+# Set seed for reproducibility
+set.seed(12345)
+
+# Define project root path (relative to this file location)
+project_root <- normalizePath("../../")
+data_path <- file.path(project_root, "sequenzo/datasets/dyadic_children.csv")
+
+cat("✅ TraMineR loaded successfully!\n")
+cat("TraMineR version:", as.character(packageVersion("TraMineR")), "\n")
+cat("Project root:", project_root, "\n")
+cat("Data path:", data_path, "\n")
+```
+
+```{r}
+#| label: load-data
+#| echo: true
+#| output: true
+#| eval: true
+
+# Load the dyadic_children dataset
+# Use check.names=FALSE to preserve numeric column names (15, 16, etc.)
+# Use absolute path relative to project root
+df <- read.csv(data_path, 
+               stringsAsFactors = FALSE, 
+               check.names = FALSE)
+
+# For this tutorial, we'll use the first 60 rows for faster computation
+df <- df[1:60, ]
+
+cat("Dataset loaded:\n")
+cat("  Rows:", nrow(df), "\n")
+cat("  Columns:", ncol(df), "\n")
+cat("\nFirst few rows:\n")
+head(df[, 1:10])
+```
+
+```{r}
+#| label: extract-time-columns
+#| echo: true
+#| output: true
+#| eval: true
+
+# Extract time columns (ages 15-39)
+# Columns that are pure numbers (like "15", "16", etc.)
+time_cols <- names(df)[sapply(names(df), function(x) {
+    # Remove "X" prefix if present (R adds this for numeric column names)
+    clean_x <- sub("^X", "", x)
+    # Check if column name is a pure number
+    num_val <- suppressWarnings(as.numeric(clean_x))
+    !is.na(num_val) && clean_x != "" && x != "dyadID" && x != "sex"
+})]
+
+# Extract numeric values and sort
+time_nums <- sort(as.numeric(sub("^X", "", time_cols)))
+time_cols <- as.character(time_nums)  # Use clean numeric names
+
+# If R added "X" prefix, use those column names
+if (any(paste0("X", time_cols) %in% names(df))) {
+    time_cols <- paste0("X", time_cols)
+}
+
+cat(sprintf("Found %d time columns: %s ... %s\n", 
+            length(time_cols), time_cols[1], time_cols[length(time_cols)]))
+```
+
+```{r}
+#| label: create-seqdata
+#| echo: true
+#| output: true
+#| eval: true
+
+# Create sequence object using seqdef
+# States are coded as 1-6 (different living arrangements)
+seqdata <- seqdef(df[, time_cols], 
+                  alphabet = 1:6, 
+                  states = c("1", "2", "3", "4", "5", "6"))
+
+cat("✅ Sequence object created!\n")
+cat("  Number of sequences:", nrow(seqdata), "\n")
+cat("  Sequence length:", ncol(seqdata), "\n")
+cat("  States:", alphabet(seqdata), "\n")
+```
+
+```{r}
+#| label: create-predictors
+#| echo: true
+#| output: true
+#| eval: true
+
+# Create predictor variables (covariates)
+# These are the factors we want to test: do they explain differences in sequences?
+set.seed(42)  # For reproducibility
+
+predictors <- data.frame(
+    gender = factor(sample(c("M", "F"), size = nrow(df), replace = TRUE)),
+    age_group = factor(sample(c("young", "middle", "old"), size = nrow(df), replace = TRUE)),
+    education = factor(sample(c("low", "medium", "high"), size = nrow(df), replace = TRUE)),
+    income = rnorm(nrow(df)) * 10000 + 50000  # Continuous variable
+)
+
+cat("✅ Predictors created:\n")
+print(head(predictors))
+cat("\nPredictor types:\n")
+str(predictors)
+```
+
+# Basic Utility Functions
+
+Before building trees, let's learn about two fundamental TraMineR functions that help us understand sequence variability and associations.
+
+## Compute Pseudo-Variance (`dissvar`)
+
+**What it does**: Measures how "spread out" sequences are in terms of their distances from each other. Think of it like variance, but for sequences!
+
+**When to use**: When you want to know how diverse or similar your sequences are overall.
+
+**Corresponds to Sequenzo**: `compute_pseudo_variance()`
+
+```{r}
+#| label: compute-distance-matrix
+#| echo: true
+#| output: true
+#| eval: true
+
+# First, compute a distance matrix
+# This tells us how "different" each pair of sequences is
+cat("[>] Computing distance matrix using LCS method...\n")
+dist_matrix <- seqdist(seqdata, method = "LCS", norm = "auto")
+
+cat("✅ Distance matrix computed:\n")
+cat("  Dimensions:", dim(dist_matrix), "\n")
+cat("  Class:", class(dist_matrix), "\n")
+```
+
+```{r}
+#| label: dissvar-unweighted
+#| echo: true
+#| output: true
+#| eval: true
+
+# Compute pseudo-variance (unweighted)
+variance <- dissvar(dist_matrix, weights = NULL, squared = FALSE)
+
+cat("Pseudo-variance (unweighted):", variance, "\n")
+cat("\nInterpretation: This value represents the average 'spread' of sequences.\n")
+cat("Higher values = more diverse sequences\n")
+cat("Lower values = more similar sequences\n")
+```
+
+```{r}
+#| label: dissvar-weighted
+#| echo: true
+#| output: true
+#| eval: true
+
+# Compute pseudo-variance with weights
+# This is useful when some sequences are more important than others
+weights <- rep(2.0, nrow(seqdata))
+
+variance_weighted <- dissvar(dist_matrix, weights = weights, squared = FALSE)
+
+cat("Pseudo-variance (weighted, all weights=2):", variance_weighted, "\n")
+cat("\nNote: With equal weights, weighted variance ≈ unweighted variance\n")
+```
+
+```{r}
+#| label: dissvar-squared
+#| echo: true
+#| output: true
+#| eval: true
+
+# Compute pseudo-variance with squared distances
+# Squaring emphasizes larger differences
+variance_squared <- dissvar(dist_matrix, weights = NULL, squared = TRUE)
+
+cat("Pseudo-variance (squared):", variance_squared, "\n")
+cat("Pseudo-variance (normal):", variance, "\n")
+cat("\nNote: Squared variance is typically larger because it emphasizes big differences\n")
+```
+
+## Compute Distance Association (`dissassoc`)
+
+**What it does**: Tests whether a grouping variable (like gender or age group) explains differences in sequence patterns. It's like ANOVA, but for sequences!
+
+**When to use**: When you want to know if sequences in different groups (e.g., men vs. women) are significantly different.
+
+**Corresponds to Sequenzo**: `compute_distance_association()`
+
+```{r}
+#| label: dissassoc-basic
+#| echo: true
+#| output: true
+#| eval: true
+
+# Test association between sequences and gender
+# This tells us: do men and women have different sequence patterns?
+groups <- predictors$gender
+
+# Run dissassoc
+assoc_result <- dissassoc(dist_matrix, groups, 
+                          weights = NULL, 
+                          R = 100,  # Number of permutations (smaller for speed)
+                          weight.permutation = "none", 
+                          squared = FALSE)
+
+cat("=== Association Test Results ===\n")
+cat("Pseudo F-statistic:", assoc_result$stat["Pseudo F", "t0"], "\n")
+cat("Pseudo R²:", assoc_result$stat["Pseudo R2", "t0"], "\n")
+cat("P-value:", assoc_result$stat["Pseudo F", "p.value"], "\n")
+cat("\nInterpretation:\n")
+cat("- Pseudo R²:", round(assoc_result$stat["Pseudo R2", "t0"] * 100, 1), 
+    "% of variance explained by gender\n")
+cat("- P-value:", ifelse(assoc_result$stat["Pseudo F", "p.value"] < 0.05, 
+                         "Significant", "Not significant"), "(p < 0.05)\n")
+```
+
+```{r}
+#| label: dissassoc-details
+#| echo: true
+#| output: true
+#| eval: true
+
+# Look at detailed results
+cat("\n=== Statistics Table ===\n")
+print(assoc_result$stat)
+
+cat("\n=== Group Information ===\n")
+print(assoc_result$groups)
+```
+
+# Building Regression Trees
+
+Now for the exciting part! We'll build regression trees that automatically find which factors best explain differences in sequences.
+
+## Build Distance Tree (`disstree`)
+
+**What it does**: Builds a tree from a pre-computed distance matrix. Use this when you already have distances calculated.
+
+**When to use**: When you want to reuse a distance matrix or have computed distances using a specific method.
+
+**Corresponds to Sequenzo**: `build_distance_tree()`
+
+```{r}
+#| label: build-disstree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Build a distance tree
+# The tree will automatically find the best splits based on predictors
+# Convert distance matrix to dist object for disstree
+dist_obj <- as.dist(dist_matrix)
+
+tree <- disstree(dist_obj ~ gender + age_group + education + income, 
+                 data = predictors,
+                 weights = NULL,
+                 min.size = 0.1,  # Minimum 10% of sequences in each node
+                 max.depth = 3,   # Maximum 3 levels deep
+                 R = 100,         # Permutations for significance testing
+                 pval = 0.1,      # Only keep splits with p-value < 0.1
+                 weight.permutation = "none",
+                 squared = FALSE)
+
+cat("✅ Tree built successfully!\n")
+cat("\nTree structure:\n")
+print(tree)
+```
+
+```{r}
+#| label: tree-info
+#| echo: true
+#| output: true
+#| eval: true
+
+# Look at tree information
+cat("\n=== Tree Information ===\n")
+cat("Total sequences:", tree$info$n, "\n")
+cat("Number of leaves:", length(unique(tree$fitted[, 1])), "\n")
+cat("Global R²:", tree$info$R2, "\n")
+cat("\nParameters:\n")
+print(tree$info$parameters)
+```
+
+```{r}
+#| label: tree-fitted
+#| echo: true
+#| output: true
+#| eval: true
+
+# Look at which sequences belong to which leaf nodes
+cat("\n=== Sequence Assignments ===\n")
+cat("Each sequence is assigned to a leaf node:\n")
+print(head(tree$fitted, 10))
+
+cat("\nLeaf distribution:\n")
+print(table(tree$fitted[, 1]))
+```
+
+## Build Sequence Tree (`seqtree`)
+
+**What it does**: Builds a tree directly from sequence data. It automatically computes distances for you!
+
+**When to use**: When you want a simpler workflow - just pass sequences and predictors.
+
+**Corresponds to Sequenzo**: `build_sequence_tree()`
+
+```{r}
+#| label: build-seqtree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Build a sequence tree
+# This is easier - we don't need to compute distances first!
+seqtree_result <- seqtree(seqdata ~ gender + age_group + education + income, 
+                          data = predictors,
+                          weighted = TRUE,  # Use weights from seqdata if available
+                          min.size = 0.1,
+                          max.depth = 3,
+                          R = 100,
+                          pval = 0.1,
+                          weight.permutation = "replicate",
+                          seqdist.args = list(method = "LCS", norm = "auto"))
+
+cat("✅ Sequence tree built successfully!\n")
+cat("\nTree structure:\n")
+print(seqtree_result)
+```
+
+```{r}
+#| label: seqtree-info
+#| echo: true
+#| output: true
+#| eval: true
+
+# Look at sequence tree information
+cat("\n=== Sequence Tree Information ===\n")
+cat("Total sequences:", seqtree_result$info$n, "\n")
+cat("Number of leaves:", length(unique(seqtree_result$fitted[, 1])), "\n")
+cat("Global R²:", seqtree_result$info$R2, "\n")
+```
+
+# Extracting Information from Trees
+
+Once you've built a tree, you'll want to extract useful information from it!
+
+## Get Leaf Membership (`disstreeleaf`)
+
+**What it does**: Gets which leaf node each sequence belongs to. You can get either numeric IDs or human-readable labels.
+
+**When to use**: When you want to know which group each sequence belongs to.
+
+**Corresponds to Sequenzo**: `get_leaf_membership()`
+
+```{r}
+#| label: leaf-membership-ids
+#| echo: true
+#| output: true
+#| eval: true
+
+# Get leaf IDs (numeric)
+leaf_ids <- disstreeleaf(tree)
+
+cat("Leaf IDs (first 10 sequences):\n")
+print(leaf_ids[1:10])
+cat("\nUnique leaves:", length(unique(leaf_ids)), "\n")
+cat("\nDistribution:\n")
+print(table(leaf_ids))
+```
+
+```{r}
+#| label: leaf-membership-labels
+#| echo: true
+#| output: true
+#| eval: true
+
+# Get leaf labels (human-readable)
+leaf_labels <- disstreeleaf(tree, label = TRUE)
+
+cat("Leaf labels (first 10 sequences):\n")
+print(head(leaf_labels, 10))
+cat("\nUnique labels:\n")
+print(unique(leaf_labels))
+```
+
+## Get Classification Rules (`disstree.get.rules`)
+
+**What it does**: Converts the tree structure into R-readable rules. Each rule tells you what conditions lead to each leaf node.
+
+**When to use**: When you want to understand or explain the tree structure, or assign new sequences to leaves.
+
+**Corresponds to Sequenzo**: `get_classification_rules()`
+
+```{r}
+#| label: classification-rules
+#| echo: true
+#| output: true
+#| eval: true
+
+# Get classification rules
+rules <- disstree.get.rules(tree, collapse = "; ")
+
+cat("Number of rules:", length(rules), "\n")
+cat("\nClassification Rules:\n")
+for (i in 1:min(5, length(rules))) {
+    cat(sprintf("\nRule %d:\n", i))
+    cat("  ", rules[i], "\n")
+    cat("  Interpretation: Sequences matching this rule belong to leaf", i, "\n")
+}
+```
+
+## Assign to Leaves (`disstree.assign`)
+
+**What it does**: Uses classification rules to assign new sequences (or existing ones) to leaf nodes based on their predictor values.
+
+**When to use**: When you want to classify new sequences or verify assignments.
+
+**Corresponds to Sequenzo**: `assign_to_leaves()`
+
+```{r}
+#| label: assign-to-leaves
+#| echo: true
+#| output: true
+#| eval: true
+
+# Assign sequences to leaves using rules
+# This uses the same predictors we used to build the tree
+assignments <- disstree.assign(rules, predictors)
+
+cat("Assignments (first 10 sequences):\n")
+print(assignments[1:10])
+cat("\nNote: Each number corresponds to a rule/leaf node\n")
+cat("NA means the sequence doesn't match any rule\n")
+```
+
+```{r}
+#| label: verify-assignments
+#| echo: true
+#| output: true
+#| eval: true
+
+# Verify that assignments match the tree's fitted values
+tree_assignments <- tree$fitted[, 1]
+
+cat("Comparing assignments:\n")
+cat("From tree:", tree_assignments[1:5], "\n")
+cat("From rules:", assignments[1:5], "\n")
+cat("\nMatch:", all(tree_assignments == assignments, na.rm = TRUE), "\n")
+```
+
+# Visualizing Trees
+
+Visualization is crucial for understanding tree structures! TraMineR provides several ways to visualize trees.
+
+## Print Tree (`print.disstree`)
+
+**What it does**: Prints a text-based representation of the tree in your console.
+
+**When to use**: Quick visualization, or when you want a simple text output.
+
+**Corresponds to Sequenzo**: `print_tree()`
+
+```{r}
+#| label: print-tree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Print tree structure
+print(tree, digits = 3, medoid = FALSE)
+```
+
+## Plot Tree (`seqtreedisplay` / `disstreedisplay`)
+
+**What it does**: Creates a graphical visualization of the tree using GraphViz.
+
+**When to use**: When you want a visual representation for presentations or papers.
+
+**Note**: Requires GraphViz to be installed. For sequence trees, use `seqtreedisplay()`. For distance trees, use `disstreedisplay()`.
+
+**Corresponds to Sequenzo**: `plot_tree()`
+
+```{r}
+#| label: plot-seqtree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Plot sequence tree using seqtreedisplay
+# This creates a graphical visualization using GraphViz
+cat("[>] Creating graphical visualization of sequence tree...\n")
+seqtreedisplay(seqtree_result, filename = NULL, show.tree = TRUE)
+cat("✅ Sequence tree visualization created!\n")
+```
+
+```{r}
+#| label: plot-disstree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Plot distance tree using disstreedisplay
+# This creates a graphical visualization using GraphViz
+cat("[>] Creating graphical visualization of distance tree...\n")
+disstreedisplay(tree, filename = NULL, show.tree = TRUE)
+cat("✅ Distance tree visualization created!\n")
+```
+
+
+## Export to DOT (`disstree2dot` / `seqtree2dot`)
+
+**What it does**: Exports the tree to GraphViz DOT format, which can be rendered as high-quality images.
+
+**When to use**: When you need publication-quality figures or want to customize the visualization.
+
+**Note**: Requires GraphViz to be installed. For sequence trees, use `seqtree2dot()`. For distance trees, use `disstree2dot()`.
+
+**Corresponds to Sequenzo**: `export_tree_to_dot()`
+
+```{r}
+#| label: export-dot-seqtree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Export sequence tree to DOT format
+cat("[>] Exporting sequence tree to DOT format...\n")
+seqtree2dot(seqtree_result, filename = "tree_analysis_lsog_seqtree", show.depth = FALSE)
+cat("✅ DOT file created: tree_analysis_lsog_seqtree.dot\n")
+cat("To render: dot -Tpng tree_analysis_lsog_seqtree.dot -o tree_analysis_lsog_seqtree.png\n")
+```
+
+```{r}
+#| label: export-dot-disstree
+#| echo: true
+#| output: true
+#| eval: true
+
+# Export distance tree to DOT format
+cat("[>] Exporting distance tree to DOT format...\n")
+disstree2dot(tree, filename = "tree_analysis_lsog_disstree", show.depth = FALSE)
+cat("✅ DOT file created: tree_analysis_lsog_disstree.dot\n")
+cat("To render: dot -Tpng tree_analysis_lsog_disstree.dot -o tree_analysis_lsog_disstree.png\n")
+```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+run_terminal_cmd
+
+# Complete Workflow Example
+
+Let's put it all together! Here's a complete example showing the typical workflow:
+
+```{r}
+#| label: complete-workflow
+#| echo: true
+#| output: true
+#| eval: true
+
+# Step 1: Load and prepare data
+# Use the data_path defined earlier
+df <- read.csv(data_path, 
+               stringsAsFactors = FALSE, check.names = FALSE)
+df <- df[1:60, ]
+
+time_cols <- names(df)[sapply(names(df), function(x) {
+    clean_x <- sub("^X", "", x)
+    num_val <- suppressWarnings(as.numeric(clean_x))
+    !is.na(num_val) && clean_x != "" && x != "dyadID" && x != "sex"
+})]
+time_nums <- sort(as.numeric(sub("^X", "", time_cols)))
+time_cols <- as.character(time_nums)
+if (any(paste0("X", time_cols) %in% names(df))) {
+    time_cols <- paste0("X", time_cols)
+}
+
+seqdata <- seqdef(df[, time_cols], alphabet = 1:6, 
+                  states = c("1", "2", "3", "4", "5", "6"))
+
+# Step 2: Create predictors
+set.seed(42)
+predictors <- data.frame(
+    gender = factor(sample(c("M", "F"), size = nrow(df), replace = TRUE)),
+    education = factor(sample(c("low", "medium", "high"), size = nrow(df), replace = TRUE))
+)
+
+# Step 3: Build tree
+tree <- seqtree(seqdata ~ gender + education, data = predictors,
+                min.size = 0.1, max.depth = 3, R = 100, pval = 0.1)
+
+# Step 4: Extract information
+leaf_ids <- disstreeleaf(tree)
+rules <- disstree.get.rules(tree)
+
+# Step 5: Visualize
+print(tree)
+
+cat("\n✅ Complete workflow finished!\n")
+cat("Tree has", length(unique(leaf_ids)), "leaf nodes\n")
+cat("Found", length(rules), "classification rules\n")
+```
+
+# Summary and Next Steps
+
+Congratulations! 🎉 You've learned how to use TraMineR to:
+
+1. ✅ Compute pseudo-variance to measure sequence diversity (`dissvar`)
+2. ✅ Test associations between groups and sequence patterns (`dissassoc`)
+3. ✅ Build regression trees from distance matrices and sequence data (`disstree`, `seqtree`)
+4. ✅ Extract leaf memberships and classification rules (`disstreeleaf`, `disstree.get.rules`)
+5. ✅ Visualize trees using text and plots (`print`, `plot`)
+
+## Key Takeaways
+
+- **Pseudo-variance** (`dissvar`) tells you how diverse your sequences are
+- **Association tests** (`dissassoc`) tell you if groups differ significantly
+- **Trees** (`disstree`, `seqtree`) automatically find which factors explain sequence differences
+- **Rules** (`disstree.get.rules`) help you understand and explain tree structures
+- **Visualization** (`print`, `plot`) makes trees easy to understand and present
+
+## What's Next?
+
+- Try different distance measures (OM, HAM, DHD)
+- Experiment with different predictor variables
+- Adjust tree parameters (min.size, max.depth, pval)
+- Compare results with Sequenzo Python implementation
+- Explore other TraMineR modules!
+
+## Further Reading
+
+- TraMineR documentation: https://traminer.unige.ch/
+- Studer et al. (2011): Discrepancy analysis of state sequences
+- TraMineR User's Guide: Available in R with `vignette("TraMineR")`
+
+Happy analyzing! 🌳✨
