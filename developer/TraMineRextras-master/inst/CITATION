@@ -1,0 +1,50 @@
+citHeader("To cite TraMineRextras in publications please use:")
+
+p1 <- person("Alexis", "Gabadinho", email = "alexis.gabadinho@wanadoo.fr")
+p2 <- person("Gilbert", "Ritschard", email = "gilbert.ritschard@unige.ch")
+p3 <- person("Matthias", "Studer", email = "matthias.studer@unige.ch")
+p4 <- person("Nicolas S.", "M\u00FCller", email = "nsmuller@gmail.com")
+p5 <- person("Reto", "B\u00FCrgin", email = "rbuergin@gmx.ch")
+p6 <- person("Tim", "Liao", email = "tfliao@illinois.edu")
+p7 <- person("Patrick", "Rousset")
+p8 <- person("Pierre-Alexandre", "Fonta")
+
+
+bibentry(bibtype="techreport",
+  author = c(p2, p3, p5, p6, p1, p8, p4, p7),
+  title = "Package {T}ra{M}ine{R}extras",
+  institution = "Comprehensive R Archive Network (CRAN)",
+  type = "Reference manual",
+  year = "2024",
+
+  textVersion="Ritschard, G., Studer, M., B\u00FCgin, R., Liao, T., Gabadinho, A., Fonta, P.-A., M\u00FCller, N.S.,  & Rousset, P. (2024),
+  Package TraMineRextras, Comprehensive R Archive Network (CRAN)"
+)
+
+bibentry(bibtype="incollection",
+  author = c(p2, p5, p3),
+  title = "Exploratory Mining of Life Event Histories",
+  year = "2013",
+  pages = "221-253",
+  booktitle = "Contemporary Issues in Exploratory Data Mining in the Behavioral Sciences",
+  editor = "McArdle, J.J. and G. Ritschard",
+  publisher = "Routeledge",
+  address = "New York",
+
+  textVersion="Ritschard, G., B\u00FCgin, R., and Studer, M. (2013), Exploratory Mining of Life Event Histories, In McArdle J.J. and G. Ritschard (eds)
+  Contemporary Issues in Exploratory Data Mining in the Behavioral Sciences, pp. 221-253, New York: Routeledge",
+  header="For event sequences:"
+)
+
+
+bibentry(bibtype="article",
+  author = c(p3, p4, p2, p1),
+  title = "Classer, discriminer et visualiser des s\u00E9quences d'\u00E9v\u00E9nements",
+  journal = "Revue des nouvelles technologies de l'information (RNTI)",
+  year = "2010",
+  volume = "E-19",
+  pages = "37-48",
+  booktitle = "Extraction et gestion des connaissances (EGC 2010)",
+
+  textVersion="Studer, M., M\u00FCller, N.S., Ritschard, G. & Gabadinho, A. (2010), Classer, discriminer et visualiser des s\u00E9quences d'\u00E9v\u00E9nements, In Extraction et gestion des connaissances (EGC 2010), Revue des nouvelles technologies de l'information RNTI. Vol. E-19, pp. 37-48. "
+)

@@ -1,0 +1,404 @@
+                CHANGES IN TraMineRextras VERSION 0.7.8 [2024-08-17]
+                
+New function:
+    o   dissCompare() comparison of two groups of data represented by 
+        a pairwise dissimilarity matrix.
+        
+Bug fixes
+    o   seqCompare() caused an error when only one group occurs in 
+        one of the sets. Now returns NA for such sets.
+    o   internal seq.comp() renamed as seqxcomp().
+    o   missing package anchors for Rd link targets. 
+                           
+                
+                CHANGES IN TraMineRextras VERSION 0.6.7 [2024-01-08]
+
+Changes in existing functions:
+    o   All TraMineRextras plot functions: improved support of 
+        graphical parameters. (E.g., las and cex.axis can 
+        now be used to control the display of tick labels.)
+        
+Bug fixes:
+    o   seqimplic.Rd: lack of description for argument 'ylim'.
+    o   seqpolyads(): time reported when core > 1 was not reliable.
+    o   convert.g(): error when path=NULL.
+    o   convert.g() adapted to changes in ImageMagick.
+    
+
+                CHANGES IN TraMineRextras VERSION 0.6.6 [2023-03-07]
+
+New functions:
+    o   dissindic() case indicators to select observations that are typical, atypical, 
+	    illustrative of or counterexample of a statistical association between trajectories 
+		and a covariate/typology.
+
+Changes in existing functions:
+    o   seqsplot(), argument `axes` is deprecated and replaced by `xaxis`.
+        Argument `yaxis` can now also be one of "all" or "left".
+    o   seqsplot(), ylab can be a vector of labels by group level.
+    o   seqsplot() supports arguments of legend among the ... list.
+    o   plot.stslist.surv(), plot method for objects returned by seqsurv displays
+        the ylab closer from the y-axis when yaxis=FALSE. It also recognizes the `cex.lab` argument.
+    o   seqsplot(), seqplot.tentrop(), seqplot.tentrop.m(), seqedplot(), plot.dynin(),
+        and plot.stslist.surv(): default value of main is now "auto" and NULL suppresses
+        the titles as expected.
+    o   seqplot.tentrop.m() now in namespace.
+    o   seqedplot()} argument names and behavior made conformable with those of TraMineR:::seqplot.
+
+Misc.:
+    o   Depends on TraMineR >= 2.2-5 (link to `seqrf` in `seqplot.rf` help page)
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.5 [2022-10-09]
+
+Changes in existing functions:
+    o   seqplot.rf() argument 'plus.one' renamed 'grp.meth'
+
+Bug fixes:
+    o   seqplot.rf() which.plot = "diss.to.med" did not work.
+    o   seqplot.rf() issue with unwanted ":" in plot title.
+    o   sorti() possible conflict between column names of seqdata and arguments passed to order.
+    o   issue with non UTF-8 commented line in TraMineRextras.Rd
+
+Misc.:
+    o   Replaced `permute(.)` with `sample(.)` in `seqCompare` to remove dependence
+        on gtools that has become orphaned.
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.4 [2022-06-13]
+
+Changes in existing functions:
+    o   seqplot.rf() gains a new argument 'plus.one' to control which
+        group sizes to increase when number of sequences is not a multiple of number of groups.
+
+Bug fixes:
+    o   seqindic.dyn() checked whether fstat is a function by comparing class with a string. Now uses inherits.
+    o   Issue with example in seqtabstocc.Rd.
+    o   Issue with non literal item name in seqsamm.Rd.
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.3 [2022-01-19]
+
+New functions:
+    o   seqcta() organizes data for CTA analysis (Studer et al., ALCR 2018).
+    o   seqsamm(), seqsammseq(), seqsammeha() organize and retrieve data for SAMM analysis (Studer et al., Soc. Meth. 2018).
+    o   plot.SAMM() plot of SAMM object returned by seqsamm.
+    o   seqsha() organizes data for SHA analysis (Rossignon et al., in Ritschard & Studer, 2018).
+
+Misc.:
+    o   Updated description and some Rd files.
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.2 [2021-06-23]
+
+Changes in existing functions:
+    o   seqindic.dyn() gains two arguments: 'wstep' to control
+        spacing between successive windows and
+        'endmiss.as.void' to control whether sequences end at
+        first ending missing value or at the first void.
+    o   plot.dynin() (plot method for objects produced by
+        seqindic.dyn) can now plot series of summary values
+        that end with missing values.
+    o   plot.dynin()} 'conf' can now be logical or the confidence
+        probability, TRUE being equivalent to 0.95.
+    o   TSE_to_STS() now checks that tmin > 0.
+    o   seqplot.rf() now returns (invisibly) group memberships.
+
+Bug fixes:
+    o   plot.dynin() issue with check of fstat.
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.1 [2021-01-20]
+
+New functions:
+    o   seqindic.dyn() dynamic individual indicator values.
+    o   plot.dynin() plot method for dynin objects produced
+        by seqindic.dyn.
+    o   seqpolyads() degree of similarities between polyadic members
+        (contributed by Tim Liao)
+    o   polyads example data set
+
+Changes in existing functions:
+    o   seqplot.tentrop() default color now set using
+        qualitative_hcl from colorspace with the 'Dark 3' palette.
+
+
+                CHANGES IN TraMineRextras VERSION 0.6.0 [2020-04-08]
+
+New functions
+    o   seqCompare() BIC and Likelihood ratio test (LRT) for comparing
+        two sets of sequences.
+    o   seqLRT() LRT for comparing two sets of sequences.
+    o   seqBIC() BIC for comparing sequence data.
+
+Changes in existing functions
+    o   seqgranularity(): two new methods "first.valid" and
+        "last.valid" for sequences with missing values.
+    o   seqplot-rf() gains a new argument 'which.plot'.
+
+Bug fixes
+    o   seqgranularity() did not return a proper stslist object
+        when \code{method="mostfreq"}.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.7 [2020-03-02]
+
+Bug fixes
+    o   seqedplot(): Issue with color selection when only one event.
+    o   seqedplot(): Now calls plot.survfit with by default
+        conf.int=FALSE instead of "none" (advised by Terry Therneau).
+
+Misc.
+    o   seqprecarity(), seqprecorr(), seqprecstart() deleted. These
+        functions are in TraMineR since v 2.0-13.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.6 [2019-05-06]
+
+Changes in existing functions
+    o   seqedplot(): argument 'title' is deprecated, use 'main' instead.
+    o   seqedplot(): when type = 'survival', now supports the 'conf.int'
+        argument of plot.survfit to control the display of confidence
+        intervals.
+
+Bug fixes
+    o   seqedplot(): An issue with the joint use of the 'xmax' and
+        'xlim' arguments when calling plot.survfit raised a warning
+        since Survival v3.0.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.5 [2019-05-06]
+
+Changes in existing functions
+    o   seqprecarity() and seqprecstart() gain a argument 'with.missing'.
+    o   seqprecarity()}: there is now a print method for the generated
+        'seqprec' object that prevents the printing of all its attributes.
+    o   seqprecorr(): new 'border.effect' argument. To avoid a border
+        effect, when method is 'FREQ', 'TRATEDSS', or 'TRATE', the
+        computed transition frequencies or probabilities p are adjusted
+        as p - p/border.effect when any p > 1 - .1/border.effect.
+    o   seqtabstocc() gains an argument 'with.missing'.
+
+Bug fixes
+    o   seqprecorr(): method='TRATE' now works as expected.
+    o   seqprecarity(), seqprecorr(), and seqprecstart(): errors due
+        to bad handling of missing states.
+    o   seqedplot() called plot.survfit with a firstx argument
+        that has been suppressed (non documented in survival news);
+        now uses xlim instead.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.4 [2018-12-14]
+
+Changes in existing functions
+    o   plot.stslist.surv(): new 'xlab' argument.
+    o   seqprecarity(), seqprecorr(), and seqprecstart(): Important
+        code cleaning.
+    o   seqprecarity(), seqprecorr(): New argument 'method' that
+        replaces 'tr.type' to select the type of transition weights.
+        Two additional methods have been implemented, namely 'RANK'
+        (for rank-based transition weights) and 'ONE' for
+        non-weighted transitions. Also new argument 'stprec' to allow
+        specifying rank values for method='RANK'.
+
+Bug fixes
+    o   seqsurv(): levels of spell$states were not ordered conformably
+        with the alphabet of the state sequence object, which
+        caused plot.ststlist.surv() to use wrong colors for the
+        survival curves when 'per.state=FALSE'.
+    o   seqsplot(): color synchronization failed when one of
+        the states selected was unobserved in one of the groups.
+    o   seqprecorr(): identification of non-comparable states did
+        not work as expected.
+    o   seqprecstart(): did not work as expected when equiv class
+        included incomparable states.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.3 [2018-08-22]
+
+Changes in existing functions
+    o   seqsplot() now supports the 'ncol' argument for controlling
+        the number of columns in the color legend.
+    o   plot.stslist.surv(), seqplot.tentrop(), seqplot.tentrop.m(),
+        plot.seqimplic(), print.seqimplic(): new argument 'tick.last'
+        that when set as TRUE allows to enforce a tick mark at
+        the last position on the time x-axis. Has no effect when
+        the last position is 1 + a multiple of xtstep.
+        Default is to use the 'tick.last' attribute of the state
+        sequence object.
+    o   seqrep.grp() an error is raised when one of the groups has less than two cases.
+
+Bug fixes
+    o   seqgen.missing(): the number of left and right
+        elements to be turned into missings were inverted.
+
+Misc
+    o   Function seqeordplot() suppressed. It is superseded by the
+        function seqpcplot() of the TraMineR package.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.2 [2018-02-01]
+
+New functions
+    o   seqprecarity(): computes the sequence precarity index from
+        a provided partial state order. The index is a
+        corrected complexity index. See documentation page.
+    o   seqprecorr(): determines the correction factor used by
+        seqprecarity().
+    o   seqprecstart(): determines the starting precarity level
+        of the sequence from the partial state order.
+    o   seqsurv(): fits survival curves for states in state sequences.
+        There is a plot method for objects returned by seqsurv().
+    o   seqsplot(): specific version of the TraMineR seqplot() function
+        to plotting survival curves of states in sequences.
+
+Changes in existing functions
+    o   seqrep.grp() renamed argument names for consistency with TraMineR.
+    o   seqrep.grp(): when 'diss=NULL', the dissimilarity matrix is now
+        computed by calling seqdist with the 'method' and possibly
+        related parameters specified among the '...' arguments.
+        An error is raised when 'diss=NULL' and no 'method' is provided.
+
+Bug fixes
+    o   seqtabstocc(): label synchronization issue.
+
+Misc
+    o   Uses function \code{TraMineR.check.depr.args()} introduced
+        in TraMineR v 2.0-8. So, depends now on version >= 2.0-8.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.1 [2017-08-16]
+
+Changes in existing functions
+    o   STS_to_SPELL(): Deleted. Converting to the "SPELL" format is now a
+        feature of seqformat() in TraMineR 2.0-6+.
+    o   seqrep.grp(): Added argument 'with.missing' to allow computing
+        the default distances (when diss = NULL) for sequences with
+        missing values.
+
+Misc
+    o   Replaced deprecated argument names in example of seqrep.grp().
+    o   Now imports from RColorBrewer, survival, and cluster instead of
+        depending on those packages.
+    o   Suppressed unused import from combinat.
+    o   ini.c file.
+
+
+                CHANGES IN TraMineRextras VERSION 0.4.0 [2017-05-13]
+
+Note
+    o   TraMineRextras has been adapted to and requires now TraMineR 2.0-5+.
+
+Bug Fixes
+    o   TSE_to_STS(): The two last sequences were not converted and
+        unexpected outcome in case of a single sequence.
+
+Changes in existing functions
+    o   seqplot.rf(), seqplot.tentrop(), seqrep.grp(), dissvar.grp(),
+        plot.seqimplic(): adjusted argument names (e.g., main, with.legend,
+        legend.pos, diss, ...) to conform to the TraMineR 2 naming convention.
+
+Misc
+    o   seqrep.grp(): Removed 'with.missing=TRUE' in a help example as biofam.seq
+        doesn't contain missing values and to conform to TraMineR 2.0-5+.
+    o   seqeformat(), seqentrans(), seqerulesdisc(): Renamed 'seqe' to 'eseq'
+        in internal code to conform to TraMineR 2.0-5+.
+    o   Adjusted examples in help files to conform to TraMineR 2.0-5+.
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.6 [2017-03-01]
+
+Misc
+
+    o   Function ctplot() suppressed. It is superseded by the
+        function seqpcplot() of the TraMineR package.
+    o   C++ routines are now registered.
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.5 [2016-11-10]
+
+New functions
+
+    o   seqimplic(): Identifies position wise typical states
+        of groups of sequences when compared with all the others. There
+        are also plot and print methods for the outcome of the function.
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.4 [2015-07-23]
+
+New functions
+
+    o   seqplot.rf(): Implements the Relative Frequency Sequence Plots
+        introduced in Fasang and Liao (2014).
+
+Misc
+
+    o   revised help page for seqemlt() (distance of Rousset et al. 2012)
+
+    o   Added required basic packages to the import statements to
+        comply with R v3.3 requirements.
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.3 [2015-01-27]
+
+New functions
+
+    o   seqtabstocc(): frequencies of state co-occurrence patterns
+
+Changes in existing functions
+
+    o   seqgranularity(): new method "mostfreq"
+
+    o   seqedplot(): replaced calls of TraMineR internal functions seqeage
+        and TraMineR.legend with respectively
+        TraMineRInternalSeqeage and TraMineRInternalLegend
+        (should be transparent to the end user).
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.2 [2013-10-30]
+
+    o   Fixed issue with calling Rinternals from within extern "C" {}
+        in seqstart.cpp (request of B. Ripley)
+
+
+                CHANGES IN TraMineRextras VERSION 0.2.1 [2013-03-15]
+
+General
+
+    o   NEWS now uses basic formatting rules and is saved as inst/NEWS
+
+Bug Fixes
+
+    o   FCE_to_TSE(): Events were not properly chronologically sorted.
+
+    o   TSE_to_STS(): produced inconsistent results when events were
+        not chronologically sorted by cases.
+
+
+                CHANGES IN TraMineRextras VERSION 0.2 [2012-12-06]
+
+General:
+
+    o   First release on CRAN
+
+Changes in existing functions:
+
+    o   seqplot.tentrop() and seqplot.tentrop.m(): new argument 'cex.legend'
+        for controlling legend scaling factor.
+
+    o   seqentrans(): new option 'avg.occ'; when set as TRUE the table is
+        completed with average number of occurrences of the subsequences
+        in each sequence. The latter differs from the support for
+        counting methods other than COBJ. Requires TraMineR 1.8-5 or higher.
+
+    o   dissvar.grp() and seqrep.grp() now also accept distance object as
+        'mdis' argument.
+
+    o   group.p has now a 'weights' argument.
+
+Bug Fixes
+
+    o   seqedist(): fixed a mix between norm and interval arguments.
+
+    o   fixed build warning generated by calls of foreign functions.
+

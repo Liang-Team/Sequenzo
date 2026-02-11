@@ -102,6 +102,16 @@ from .sequence_characteristics import (
 
 )
 
+# Sequence comparison and difference analysis
+from .compare_differences import (
+    compare_groups_across_positions,
+    plot_group_differences_across_positions,
+    print_group_differences_across_positions,
+    compare_groups_overall,
+    compute_likelihood_ratio_test,
+    compute_bayesian_information_criterion_test,
+)
+
 # Event History Analysis (SAMM)
 from .with_event_history_analysis import (
     SAMM,
@@ -247,6 +257,14 @@ __all__ = [
     "get_cross_sectional_entropy",
     "plot_longitudinal_characteristics",
     "plot_cross_sectional_characteristics",
+    
+    # Sequence comparison and difference analysis
+    "compare_groups_across_positions",
+    "plot_group_differences_across_positions",
+    "print_group_differences_across_positions",
+    "compare_groups_overall",
+    "compute_likelihood_ratio_test",
+    "compute_bayesian_information_criterion_test",
 
     # Event History Analysis (SAMM)
     "SAMM",

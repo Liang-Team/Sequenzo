@@ -378,8 +378,9 @@
    - `seqrep()` 和 `dissrep()` 功能
    - RF组中位数序列
 
-4. **序列差异分析** - 完全缺失
-   - `seqdiff()` ANOVA-like分析
+4. **序列差异分析** - ✅ 已实现
+   - `seqdiff()` ANOVA-like分析 (位于 `sequenzo/compare_differences/`)
+   - `seqcompare()`, `seqLRT()`, `seqBIC()` 序列比较测试 (来自TraMineRextras)
 
 5. **高级可视化** - 部分缺失
    - 平行坐标图
