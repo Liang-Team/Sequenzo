@@ -73,6 +73,7 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
     
     // Compute normalized distances using equation (9)
     // D_r(x,y) = d(x,y) / ((d(x,y) + d(x,r) + d(y,r)) / 2)
+    const double DISTANCE_TOLERANCE = 1e-10;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (i == j) {
@@ -83,15 +84,27 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
                 double d_xr = buf(i, reference_index);
                 double d_yr = buf(j, reference_index);
                 
-                // Denominator: (d(x,y) + d(x,r) + d(y,r)) / 2
-                double denominator = (d_xy + d_xr + d_yr) / 2.0;
-                
-                if (denominator == 0.0) {
-                    // Edge case: all distances are zero
+                // Special case: if x is identical to r (d(x,r) = 0), then D_r(x,r) = 0
+                // This happens when sequences are deduplicated and multiple original sequences
+                // map to the same unique sequence
+                if (j == reference_index && d_xr < DISTANCE_TOLERANCE) {
+                    // x is identical to r, so D_r(x,r) = 0 (same as D_r(x,x))
+                    result_buf(i, j) = 0.0;
+                } else if (i == reference_index && d_yr < DISTANCE_TOLERANCE) {
+                    // y is identical to r, so D_r(r,y) = 0 (same as D_r(y,y))
                     result_buf(i, j) = 0.0;
                 } else {
-                    // Apply equation (9): D_r(x,y) = d(x,y) / denominator
-                    result_buf(i, j) = d_xy / denominator;
+                    // Standard case: apply equation (9)
+                    // Denominator: (d(x,y) + d(x,r) + d(y,r)) / 2
+                    double denominator = (d_xy + d_xr + d_yr) / 2.0;
+                    
+                    if (denominator < DISTANCE_TOLERANCE) {
+                        // Edge case: all distances are zero (x, y, and r are all identical)
+                        result_buf(i, j) = 0.0;
+                    } else {
+                        // Apply equation (9): D_r(x,y) = d(x,y) / denominator
+                        result_buf(i, j) = d_xy / denominator;
+                    }
                 }
             }
         }
@@ -109,18 +122,26 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
         }
     }
     
-    // Verify key property: D_r(x,r) = 1 for all x != r
+    // Verify key property: D_r(x,r) = 1 for all x != r where d(x,r) > 0
+    // Skip verification for sequences identical to r (d(x,r) = 0)
     const double VERIFICATION_TOLERANCE = 1e-10;
     for (int i = 0; i < n; i++) {
         if (i != reference_index) {
-            double d_r_value = result_buf(i, reference_index);
-            if (std::abs(d_r_value - 1.0) > VERIFICATION_TOLERANCE) {
-                throw std::runtime_error(
-                    "Verification failed: D_r(" + std::to_string(i) + ", r) = " 
-                    + std::to_string(d_r_value) + " != 1.0. "
-                    "This indicates a bug in the normalization implementation."
-                );
+            double d_xr = buf(i, reference_index);
+            // Only verify if d(x,r) > 0 (sequences are not identical)
+            if (d_xr > DISTANCE_TOLERANCE) {
+                double d_r_value = result_buf(i, reference_index);
+                if (std::abs(d_r_value - 1.0) > VERIFICATION_TOLERANCE) {
+                    throw std::runtime_error(
+                        "Verification failed: D_r(" + std::to_string(i) + ", r) = " 
+                        + std::to_string(d_r_value) + " != 1.0 (d(" + std::to_string(i) 
+                        + ", r) = " + std::to_string(d_xr) + "). "
+                        "This indicates a bug in the normalization implementation."
+                    );
+                }
             }
+            // If d(x,r) = 0, then D_r(x,r) should be 0 (x is identical to r)
+            // This is already handled in the computation above
         }
     }
     

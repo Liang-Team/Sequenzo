@@ -1,0 +1,89 @@
+import(TraMineR)
+importFrom("utils", "packageDescription", "packageVersion", "combn")
+importFrom("graphics", "abline", "axis", "box", "layout", "legend", "lines", "polygon", "par", "plot", "points", "rect", "segments", "text", "title", "boxplot","strheight", "strwidth")
+importFrom("grDevices", "col2rgb", "hsv", "rgb", "rgb2hsv")
+importFrom("stats", "ave", "chisq.test", "pchisq", "cutree", "glm", "princomp", "reshape", "runif", "xtabs", "as.dist", "binomial", "cmdscale", "hclust","pnorm", "qnorm", "sd", "weighted.mean", "pt", "relevel", "complete.cases", "model.frame", "model.matrix", "na.pass")
+importFrom("cluster", "daisy", "pam", "agnes")
+##importFrom("combinat", "permn")
+importFrom("RColorBrewer","brewer.pal")
+importFrom("colorspace", "qualitative_hcl")
+importFrom("survival","survfit", "coxph", "Surv")
+##importFrom("gtools","permute")
+importFrom("doParallel","registerDoParallel")
+importFrom("parallel","makePSOCKcluster","stopCluster")
+importFrom("foreach","foreach","%dopar%")
+
+export(
+    group.p,
+    convert.g,
+    pamward,
+    rowmode,
+    seqplot.tentrop,
+    seqplot.tentrop.m,
+    seqplot.rf,
+    sorti,
+    sortv,
+    toPersonPeriod,
+    FCE_to_TSE,
+    HSPELL_to_STS,
+    seqe2stm,
+    TSE_to_STS,
+    seqedist,
+    seqedplot,
+    createdatadiscrete,
+	seqcta,
+	seqsha,
+	seqsamm,
+	seqsammseq,
+	seqsammeha,
+    seqerulesdisc,
+    seqstart,
+    ##seqeordplot,
+    seqrep.grp,
+    dissvar.grp,
+    seqgen.missing,
+    seqgranularity,
+    seqauto,
+    seqentrans,
+    seqemlt,
+    seqimplic,
+    seqtabstocc,
+    seqsurv,
+    seqsplot,
+    dissCompare,
+    seqCompare,
+    seqBIC,
+    seqLRT,
+    seqindic.dyn,
+    seqpolyads,
+	dissindic
+)
+
+## emlt methods
+S3method(plot, emlt)
+S3method(print, emlt)
+
+## seqimplic methods
+S3method(plot, seqimplic)
+S3method(print, seqimplic)
+
+## seqimplic methods
+S3method(plot, seqimplic)
+S3method(print, seqimplic)
+
+## stlist.surv methods
+S3method(plot, stslist.surv)
+
+## dynin methods
+S3method(plot, dynin)
+S3method(print, dynin)
+
+## SAMM metehods
+S3method(plot, SAMM)
+
+
+useDynLib(TraMineRextras,
+  .registration = TRUE,
+  TMREXTRAS_tmrextrasseqstart=tmrextrasseqstart
+)
+

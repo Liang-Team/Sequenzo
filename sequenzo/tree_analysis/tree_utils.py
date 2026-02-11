@@ -365,9 +365,50 @@ def compute_distance_association(
     discrepancy = compute_pseudo_variance(distance_matrix, weights=weights, squared=squared)
     SCtot = discrepancy * totweights
     
+    # Compute distance to center for Levene test (Pseudo W)
+    # Import disscenter from tree_analysis - but avoid circular import
+    try:
+        from ..clustering.clustering_c_code import WeightedInertiaContrib
+        has_c_code = True
+    except ImportError:
+        has_c_code = False
+    
+    # Compute disscenter for all sequences
+    # This is needed for Levene test (Pseudo W statistic)
+    dist_center = np.zeros(n)
+    for i in range(k):
+        group_mask = (group_int == (i + 1))
+        group_indices = np.where(group_mask)[0]
+        if len(group_indices) == 0:
+            continue
+        
+        # Compute distance to center for this group
+        group_dist_matrix = distance_matrix[np.ix_(group_indices, group_indices)]
+        group_w = weights[group_indices]
+        
+        # For each element in group, compute weighted sum of distances to all group members
+        for idx, global_idx in enumerate(group_indices):
+            weighted_sum = np.sum(group_w * group_dist_matrix[idx, :])
+            dist_center[global_idx] = weighted_sum
+        
+        # Center by subtracting weighted mean for this group
+        group_dist_center = dist_center[group_indices]
+        weighted_mean = np.sum(group_w * group_dist_center) / np.sum(group_w)
+        dist_center[group_indices] = group_dist_center - weighted_mean / 2
+    
+    # Compute total sum of squared distances to center (for Levene)
+    disscSCtot = np.sum(weights * (dist_center ** 2))
+    
     # Compute within-group variances and residual sum of squares
     SCres = 0.0
     groups_data = []
+    
+    # Additional stats for Bartlett and Levene
+    lns = 0.0
+    nlnvi = 0.0
+    FBFdenomin = 0.0
+    sumz = 0.0  # For Levene test
+    s1ni = 0.0  # For Bartlett correction
     
     for i in range(k):
         # Find sequences in this group
@@ -398,6 +439,24 @@ def compute_distance_association(
             group_var = compute_pseudo_variance(group_dist, weights=group_weights, squared=squared)
             # Then SCresi = discrepancy * group_size (matching TraMineR's formula)
             group_ss = group_var * group_size
+            
+            # Additional calculations for Bartlett and Pseudo Fbf
+            ni = group_size
+            vari = group_var  # group_ss / ni
+            
+            # For Bartlett test
+            if vari > 0 and ni > 1:
+                lns += (ni - 1) * (vari / (totweights - k))
+                nlnvi += (ni - 1) * np.log(vari)
+                s1ni += 1.0 / (ni - 1)
+            
+            # For Pseudo Fbf (F with Bonferroni correction)
+            FBFdenomin += (1 - ni / totweights) * vari
+            
+            # For Levene test (Pseudo W)
+            # Sum of squared distances to center within this group
+            group_dist_center = dist_center[group_indices]
+            sumz += np.sum(group_weights * (group_dist_center ** 2))
         else:
             group_var = 0.0
             group_ss = 0.0
@@ -424,12 +483,47 @@ def compute_distance_association(
     SCexp = SCtot - SCres
     
     # Compute pseudo F and R²
-    if k > 1:
-        pseudo_f = (SCexp / (k - 1)) / (SCres / (totweights - k))
+    if k > 1 and (totweights - k) > 0:
+        # Check for division by zero or very small denominator
+        # Use a small epsilon to avoid numerical instability
+        epsilon = np.finfo(float).eps * 10
+        denominator = SCres / (totweights - k)
+        if denominator > epsilon:
+            pseudo_f = (SCexp / (k - 1)) / denominator
+        else:
+            # If SCres is zero or very small, pseudo F is undefined
+            # Set to NaN to indicate invalid result
+            pseudo_f = np.nan
         pseudo_r2 = SCexp / SCtot if SCtot > 0 else 0.0
+        
+        # Compute Pseudo Fbf (F with Bonferroni correction)
+        # FPF = SCexp / FBFdenomin
+        if FBFdenomin > 0:
+            pseudo_fbf = SCexp / FBFdenomin
+        else:
+            pseudo_fbf = np.nan
+        
+        # Compute Bartlett test statistic
+        # Bartlett = Tcalc / Ccalc
+        if lns > 0 and nlnvi != 0:
+            Tcalc = (totweights - k) * np.log(lns) - nlnvi
+            Ccalc = 1 + 1 / (3 * (k - 1)) * (s1ni - 1 / (totweights - k))
+            bartlett = Tcalc / Ccalc if Ccalc > 0 else np.nan
+        else:
+            bartlett = np.nan
+        
+        # Compute Levene test statistic (Pseudo W)
+        # PseudoW = ((disscSCtot - sumz) / (k-1)) / (sumz / (totweights-k))
+        if sumz > 0:
+            levene = ((disscSCtot - sumz) / (k - 1)) / (sumz / (totweights - k))
+        else:
+            levene = np.nan
     else:
         pseudo_f = 0.0
         pseudo_r2 = 0.0
+        pseudo_fbf = np.nan
+        bartlett = np.nan
+        levene = np.nan
     
     # Create ANOVA table
     anova_data = {
@@ -461,10 +555,25 @@ def compute_distance_association(
     else:
         pseudo_f_pval = np.nan
     
+    # Build statistics DataFrame to match TraMineR's output format
+    # TraMineR returns: Pseudo F, Pseudo Fbf, Pseudo R2, Bartlett, Levene
+    stats_data = {
+        'Value': [pseudo_f, pseudo_fbf, pseudo_r2, bartlett, levene],
+        'p-value': [pseudo_f_pval, np.nan, np.nan, np.nan, np.nan]
+    }
+    stats_df = pd.DataFrame(
+        stats_data,
+        index=['Pseudo F', 'Pseudo Fbf', 'Pseudo R2', 'Bartlett', 'Levene']
+    )
+    
     return {
         'pseudo_f': pseudo_f,
+        'pseudo_fbf': pseudo_fbf,
         'pseudo_r2': pseudo_r2,
+        'bartlett': bartlett,
+        'levene': levene,
         'pseudo_f_pval': pseudo_f_pval,
+        'stat': stats_df,  # Add formatted stats DataFrame
         'groups': groups_df,
         'anova_table': anova_df,
         'R': R,

@@ -1,0 +1,511 @@
+---
+title: "Sequence Comparison and Difference Analysis — TraMineR (R) counterpart"
+subtitle: "Same analyses as the LSOG tutorial, in R with TraMineR and TraMineRextras"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+---
+
+## Overview
+
+This document shows the **TraMineR** and **TraMineRextras** (R) code that corresponds to the Sequenzo (Python) **compare_differences** tutorial using the **LSOG dyadic_children** data. Each section mirrors the same functions so you can compare APIs.
+
+The `compare_differences` module provides two main types of analysis:
+
+1. **Position-wise Discrepancy Analysis** (`seqdiff()`): Analyzes how differences between groups of sequences evolve along the positions using sliding windows.
+
+2. **Sequence Comparison Tests** (`seqCompare()`, `seqLRT()`, `seqBIC()`): Performs likelihood ratio tests and Bayesian information criterion tests to compare two groups of sequences.
+
+| Sequenzo (Python) | TraMineR/TraMineRextras (R) |
+|------------------|----------------------------|
+| `compare_groups_across_positions()` | `seqdiff()` |
+| `plot_group_differences_across_positions()` | `plot.seqdiff()` |
+| `print_group_differences_across_positions()` | `print.seqdiff()` |
+| `compare_groups_overall()` | `seqCompare()` |
+| `compute_likelihood_ratio_test()` | `seqLRT()` |
+| `compute_bayesian_information_criterion_test()` | `seqBIC()` |
+
+TraMineR source code in this repo: `developer/TraMineR-master/` and `developer/TraMineRextras-master/` (R files in `R/`, documentation in `man/`).
+
+## 1. Load LSOG data and create state sequence object
+
+We read the same CSV and build a state sequence object with `seqdef()`. States are 1–6 (as character in TraMineR).
+
+```{r}
+#| label: load-data
+#| eval: true
+library(TraMineR)
+library(TraMineRextras)
+
+# Path relative to this QMD (Tutorials/compare_differences/)
+csv_path <- "../../sequenzo/datasets/dyadic_children.csv"
+if (!file.exists(csv_path)) csv_path <- "sequenzo/datasets/dyadic_children.csv"
+dat <- read.csv(csv_path, check.names = FALSE)
+
+# Time columns: numeric names (ages 15–39)
+time_cols <- names(dat)[sapply(names(dat), function(x) suppressWarnings(!is.na(as.numeric(x))))]
+time_cols <- time_cols[order(as.numeric(time_cols))]
+
+# Ensure character states for seqdef
+seq_matrix <- as.data.frame(lapply(dat[, time_cols], as.character))
+states <- as.character(1:6)
+
+seqdata <- seqdef(seq_matrix, alphabet = states, id = dat$dyadID)
+print(dim(seqdata))
+head(seqdata[, 1:5])
+```
+
+## 2. Create grouping variable
+
+For comparing groups, we need a grouping variable. We'll use the `sex` variable from the dataset, or create a simple two-group split for demonstration.
+
+```{r}
+#| label: create-group
+#| eval: true
+# Option 1: Use sex variable (if available)
+if ("sex" %in% names(dat)) {
+  group <- factor(dat$sex)
+  print(table(group))
+} else {
+  # Option 2: Create a simple two-group split (first half vs second half)
+  group <- factor(rep(c("A", "B"), length.out = nrow(dat)))
+  print(table(group))
+}
+
+# Show first few group assignments
+head(group, 10)
+```
+
+## 3. Position-wise Discrepancy Analysis — `seqdiff()`
+
+The `seqdiff()` function analyzes how differences between groups evolve across positions using sliding windows. At each position t, it computes distances over a time-window and derives the explained discrepancy.
+
+### 3.1 Basic usage with default parameters
+
+```{r}
+#| label: seqdiff-basic
+#| eval: true
+# Basic seqdiff with cmprange=(0, 1), method='LCS', norm='auto'
+diff_result <- seqdiff(seqdata, 
+                       group = group, 
+                       cmprange = c(0, 1),
+                       seqdist.args = list(method = "LCS", norm = "auto"),
+                       with.missing = FALSE, 
+                       weighted = TRUE, 
+                       squared = FALSE)
+
+# Print summary
+print(diff_result)
+
+# View statistics
+head(diff_result$stat, 10)
+```
+
+### 3.2 Understanding the output
+
+The `seqdiff()` function returns a list with two components:
+
+- **`stat`**: A matrix/DataFrame with statistics (Pseudo F, Pseudo Fbf, Pseudo R2, Bartlett, Levene) for each position
+- **`discrepancy`**: A matrix/DataFrame with discrepancy values per group and total
+
+```{r}
+#| label: seqdiff-output
+#| eval: true
+# Statistics DataFrame
+stat_df <- diff_result$stat
+print("Statistics (first 10 rows):")
+print(head(stat_df, 10))
+
+# Discrepancy DataFrame
+discrepancy_df <- diff_result$discrepancy
+print("\nDiscrepancy (first 10 rows):")
+print(head(discrepancy_df, 10))
+
+# Summary statistics
+cat("\nSummary of Pseudo R2:\n")
+summary(stat_df$`Pseudo R2`)
+```
+
+### 3.3 Different sliding window ranges
+
+The `cmprange` parameter controls the sliding window size. A larger window provides more stable estimates but less temporal resolution.
+
+```{r}
+#| label: seqdiff-cmprange
+#| eval: true
+# Compare with different window sizes
+# cmprange=(0, 1): Compare position t with t+1
+diff_01 <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                   seqdist.args = list(method = "LCS", norm = "auto"),
+                   with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# cmprange=(-1, 1): Centered window of length 3
+diff_centered3 <- seqdiff(seqdata, group = group, cmprange = c(-1, 1),
+                          seqdist.args = list(method = "LCS", norm = "auto"),
+                          with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# cmprange=(-2, 2): Centered window of length 5
+diff_centered5 <- seqdiff(seqdata, group = group, cmprange = c(-2, 2),
+                          seqdist.args = list(method = "LCS", norm = "auto"),
+                          with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# Compare Pseudo R2 values
+cat("Pseudo R2 with cmprange=(0, 1):\n")
+print(head(diff_01$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 with cmprange=(-1, 1):\n")
+print(head(diff_centered3$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 with cmprange=(-2, 2):\n")
+print(head(diff_centered5$stat$`Pseudo R2`, 5))
+```
+
+### 3.4 Different distance methods
+
+You can use different distance methods: LCS (Longest Common Subsequence), OM (Optimal Matching), HAM (Hamming), etc.
+
+```{r}
+#| label: seqdiff-methods
+#| eval: true
+# LCS method (default)
+diff_lcs <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                    seqdist.args = list(method = "LCS", norm = "auto"),
+                    with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# OM method (requires substitution matrix)
+diff_om <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                   seqdist.args = list(method = "OM", norm = "auto", sm = "TRATE"),
+                   with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# HAM method
+diff_ham <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                    seqdist.args = list(method = "HAM", norm = "auto"),
+                    with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# Compare Pseudo R2
+cat("Pseudo R2 with LCS:\n")
+print(head(diff_lcs$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 with OM:\n")
+print(head(diff_om$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 with HAM:\n")
+print(head(diff_ham$stat$`Pseudo R2`, 5))
+```
+
+### 3.5 Squared vs non-squared distances
+
+The `squared` parameter controls whether to use squared distances in the analysis.
+
+```{r}
+#| label: seqdiff-squared
+#| eval: true
+# Non-squared distances (default)
+diff_unsquared <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                          seqdist.args = list(method = "LCS", norm = "auto"),
+                          with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# Squared distances
+diff_squared <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                        seqdist.args = list(method = "LCS", norm = "auto"),
+                        with.missing = FALSE, weighted = TRUE, squared = TRUE)
+
+# Compare Pseudo R2
+cat("Pseudo R2 (non-squared):\n")
+print(head(diff_unsquared$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 (squared):\n")
+print(head(diff_squared$stat$`Pseudo R2`, 5))
+```
+
+### 3.6 Weighted vs unweighted
+
+The `weighted` parameter controls whether to use sequence weights in the analysis.
+
+```{r}
+#| label: seqdiff-weighted
+#| eval: true
+# Weighted (default)
+diff_weighted <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                          seqdist.args = list(method = "LCS", norm = "auto"),
+                          with.missing = FALSE, weighted = TRUE, squared = FALSE)
+
+# Unweighted
+diff_unweighted <- seqdiff(seqdata, group = group, cmprange = c(0, 1),
+                           seqdist.args = list(method = "LCS", norm = "auto"),
+                           with.missing = FALSE, weighted = FALSE, squared = FALSE)
+
+# Compare Pseudo R2
+cat("Pseudo R2 (weighted):\n")
+print(head(diff_weighted$stat$`Pseudo R2`, 5))
+
+cat("\nPseudo R2 (unweighted):\n")
+print(head(diff_unweighted$stat$`Pseudo R2`, 5))
+```
+
+### 3.7 Plotting results — `plot.seqdiff()`
+
+Visualize how group differences evolve across positions.
+
+```{r}
+#| label: plot-seqdiff
+#| eval: true
+#| fig-cap: "Pseudo R2 over positions showing group differences"
+# Plot Pseudo R2
+plot(diff_result, stat = "Pseudo R2", 
+     main = "Group Differences Across Positions (Pseudo R2)")
+```
+
+```{r}
+#| label: plot-seqdiff-f
+#| eval: true
+#| fig-cap: "Pseudo F statistic over positions"
+# Plot Pseudo F
+plot(diff_result, stat = "Pseudo F",
+     main = "Group Differences Across Positions (Pseudo F)")
+```
+
+```{r}
+#| label: plot-seqdiff-discrepancy
+#| eval: true
+#| fig-cap: "Discrepancy per group over positions"
+# Plot discrepancy
+plot(diff_result, stat = "discrepancy",
+     main = "Discrepancy per Group Across Positions")
+```
+
+```{r}
+#| label: plot-seqdiff-dual
+#| eval: true
+#| fig-cap: "Dual y-axis plot: Pseudo R2 and Levene statistic"
+# Plot two statistics on dual y-axes
+plot(diff_result, stat = c("Pseudo R2", "Levene"),
+     main = "Group Differences: Pseudo R2 and Levene")
+```
+
+## 4. Overall Sequence Comparison — `seqCompare()`
+
+The `seqCompare()` function compares two groups of sequences using likelihood ratio tests (LRT) and Bayesian Information Criterion (BIC).
+
+### 4.1 Basic usage — all statistics
+
+```{r}
+#| label: seqcompare-basic
+#| eval: true
+# Compare groups with all statistics (LRT and BIC)
+set.seed(36963)  # For reproducibility
+compare_result <- seqCompare(seqdata, 
+                             group = group,
+                             s = 100,           # Bootstrap sample size
+                             seed = 36963,
+                             stat = "all",      # Compute both LRT and BIC
+                             squared = "LRTonly",
+                             weighted = TRUE,
+                             method = "LCS")
+
+# Print results
+print(compare_result)
+
+# Results are in a matrix with columns: LRT, p-value, Delta BIC, Bayes Factor
+colnames(compare_result) <- c("LRT", "p-value", "Delta BIC", "Bayes Factor")
+print(compare_result)
+```
+
+### 4.2 Likelihood Ratio Test only — `seqLRT()`
+
+```{r}
+#| label: seqLRT
+#| eval: true
+# Compute LRT only
+set.seed(36963)
+lrt_result <- seqLRT(seqdata, 
+                      group = group,
+                      s = 100,
+                      seed = 36963,
+                      squared = "LRTonly",
+                      weighted = TRUE,
+                      method = "LCS")
+
+# Print results
+print(lrt_result)
+
+# Interpret results
+cat("\nInterpretation:\n")
+cat(sprintf("LRT statistic: %.4f\n", lrt_result[1, 1]))
+cat(sprintf("p-value: %.4f\n", lrt_result[1, 2]))
+if (lrt_result[1, 2] < 0.05) {
+  cat("Groups are significantly different (p < 0.05)\n")
+} else {
+  cat("Groups are not significantly different (p >= 0.05)\n")
+}
+```
+
+### 4.3 Bayesian Information Criterion only — `seqBIC()`
+
+```{r}
+#| label: seqBIC
+#| eval: true
+# Compute BIC only
+set.seed(36963)
+bic_result <- seqBIC(seqdata, 
+                     group = group,
+                     s = 100,
+                     seed = 36963,
+                     squared = "LRTonly",
+                     weighted = TRUE,
+                     method = "LCS")
+
+# Print results
+print(bic_result)
+
+# Interpret results
+cat("\nInterpretation:\n")
+cat(sprintf("Delta BIC: %.4f\n", bic_result[1, 1]))
+cat(sprintf("Bayes Factor: %.4f\n", bic_result[1, 2]))
+if (bic_result[1, 2] > 10) {
+  cat("Strong evidence for group differences (Bayes Factor > 10)\n")
+} else if (bic_result[1, 2] > 3) {
+  cat("Moderate evidence for group differences (Bayes Factor 3-10)\n")
+} else if (bic_result[1, 2] > 1) {
+  cat("Weak evidence for group differences (Bayes Factor 1-3)\n")
+} else {
+  cat("No evidence for group differences (Bayes Factor < 1)\n")
+}
+```
+
+### 4.4 Different distance methods
+
+```{r}
+#| label: seqcompare-methods
+#| eval: true
+# LCS method
+set.seed(36963)
+compare_lcs <- seqCompare(seqdata, group = group, s = 100, seed = 36963,
+                           stat = "all", squared = "LRTonly", weighted = TRUE,
+                           method = "LCS")
+
+# OM method (requires substitution matrix)
+set.seed(36963)
+compare_om <- seqCompare(seqdata, group = group, s = 100, seed = 36963,
+                          stat = "all", squared = "LRTonly", weighted = TRUE,
+                          method = "OM", sm = "TRATE")
+
+# HAM method
+set.seed(36963)
+compare_ham <- seqCompare(seqdata, group = group, s = 100, seed = 36963,
+                           stat = "all", squared = "LRTonly", weighted = TRUE,
+                           method = "HAM")
+
+# Compare results
+cat("LCS method:\n")
+print(compare_lcs)
+
+cat("\nOM method:\n")
+print(compare_om)
+
+cat("\nHAM method:\n")
+print(compare_ham)
+```
+
+### 4.5 Different sample sizes
+
+The `s` parameter controls bootstrap sampling. Use `s=0` for no sampling (use all sequences).
+
+```{r}
+#| label: seqcompare-sampling
+#| eval: true
+# No sampling (s=0) - use all sequences
+set.seed(36963)
+compare_s0 <- seqCompare(seqdata, group = group, s = 0, seed = 36963,
+                          stat = "all", squared = "LRTonly", weighted = TRUE,
+                          method = "LCS")
+
+# Small sample (s=50)
+set.seed(36963)
+compare_s50 <- seqCompare(seqdata, group = group, s = 50, seed = 36963,
+                           stat = "all", squared = "LRTonly", weighted = TRUE,
+                           method = "LCS")
+
+# Larger sample (s=200)
+set.seed(36963)
+compare_s200 <- seqCompare(seqdata, group = group, s = 200, seed = 36963,
+                            stat = "all", squared = "LRTonly", weighted = TRUE,
+                            method = "LCS")
+
+# Compare results
+cat("s=0 (no sampling):\n")
+print(compare_s0)
+
+cat("\ns=50:\n")
+print(compare_s50)
+
+cat("\ns=200:\n")
+print(compare_s200)
+```
+
+### 4.6 Weighted vs unweighted
+
+```{r}
+#| label: seqcompare-weighted
+#| eval: true
+# Weighted (default)
+set.seed(36963)
+compare_weighted <- seqCompare(seqdata, group = group, s = 100, seed = 36963,
+                                 stat = "all", squared = "LRTonly", weighted = TRUE,
+                                 method = "LCS")
+
+# Unweighted
+set.seed(36963)
+compare_unweighted <- seqCompare(seqdata, group = group, s = 100, seed = 36963,
+                                   stat = "all", squared = "LRTonly", weighted = FALSE,
+                                   method = "LCS")
+
+# Compare results
+cat("Weighted:\n")
+print(compare_weighted)
+
+cat("\nUnweighted:\n")
+print(compare_unweighted)
+```
+
+## 5. Interpretation Guide
+
+### 5.1 Position-wise Analysis (`seqdiff`)
+
+- **Pseudo R2**: Proportion of discrepancy explained by groups (0-1). Higher values indicate stronger group differences at that position.
+- **Pseudo F**: F-statistic for testing group differences. Higher values indicate more significant differences.
+- **Bartlett & Levene**: Tests for homogeneity of variances. Significant values suggest unequal variances between groups.
+
+### 5.2 Overall Comparison (`seqCompare`)
+
+- **LRT**: Likelihood ratio test statistic. Higher values indicate more different groups.
+- **p-value**: Probability under null hypothesis. Values < 0.05 indicate significant differences.
+- **Delta BIC**: BIC difference. Positive values indicate evidence for differences.
+- **Bayes Factor**: Strength of evidence for group differences:
+  - 1-3: Weak evidence
+  - 3-10: Moderate evidence
+  - >10: Strong evidence
+
+## 6. Summary: TraMineR ↔ Sequenzo (compare_differences)
+
+| Step | TraMineR/TraMineRextras (R) | Sequenzo (Python) |
+|------|----------------------------|-------------------|
+| Load & state sequence | `read.csv` + `seqdef(..., alphabet, id)` | `load_dataset` + `SequenceData(..., time, id_col, states)` |
+| Position-wise analysis | `seqdiff(seqdata, group, cmprange, seqdist.args)` | `compare_groups_across_positions(seqdata, group, cmprange, seqdist_args)` |
+| Plot position-wise | `plot.seqdiff(result, stat)` | `plot_group_differences_across_positions(result, stat)` |
+| Print position-wise | `print.seqdiff(result)` | `print_group_differences_across_positions(result)` |
+| Overall comparison | `seqCompare(seqdata, group, method, s, stat)` | `compare_groups_overall(seqdata, group, method, s, stat)` |
+| LRT only | `seqLRT(seqdata, group, method, s)` | `compute_likelihood_ratio_test(seqdata, group, method, s)` |
+| BIC only | `seqBIC(seqdata, group, method, s)` | `compute_bayesian_information_criterion_test(seqdata, group, method, s)` |
+
+## References
+
+- Studer, M., Ritschard, G., Gabadinho, A., & Müller, N. S. (2011). Discrepancy analysis of state sequences. *Sociological methods & research*, 40(3), 471-510.
+
+- Liao, T. F., & Fasang, A. E. (2021). Comparing groups of life-course sequences using the Bayesian information criterion and the likelihood-ratio test. *Sociological Methodology*, 51(1), 44-85.
+
+- TraMineR documentation: <http://traminer.unige.ch>
+
+- Source in this repo: `developer/TraMineR-master/` (e.g. `R/seqdiff.R`, `man/seqdiff.Rd`) and `developer/TraMineRextras-master/` (e.g. `R/seqCompare.R`, `R/seqLRT.R`, `R/seqBIC.R`).

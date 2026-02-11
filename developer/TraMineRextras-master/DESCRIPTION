@@ -1,0 +1,37 @@
+Package: TraMineRextras
+Version: 0.6.8
+Date: 2024-08-17
+Title: TraMineR Extension
+Authors@R: c(
+  person("Gilbert", "Ritschard", role = c("aut", "cre", "ths", "cph"),
+  email = "gilbert.ritschard@unige.ch", comment = c(ORCID = "0000-0001-7776-0903")),
+  person("Matthias", "Studer", role = "aut", comment = c(ORCID = "0000-0002-6269-1412")),
+  person("Reto", "Buergin", role = "aut",
+        comment = c(ORCID = "0000-0002-6212-1567")),
+  person("Tim F.", "Liao", role = "ctb",
+        comment = c(ORCID = "0000-0002-1296-7660")),
+  person("Alexis", "Gabadinho", role = "ctb"),
+  person("Pierre-Alexandre", "Fonta", role = "ctb"),
+  person("Nicolas S.", "Muller", role = "ctb"),
+  person("Patrick", "Rousset", role = "ctb"))
+Depends: R (>= 3.5.0), TraMineR (>= 2.2-5)
+Imports: grDevices, graphics, stats, survival, cluster, RColorBrewer,
+        colorspace, doParallel, parallel, foreach
+Description: Collection of ancillary functions and utilities to be used in conjunction with the 'TraMineR' package for sequence data exploration. Includes, among others, specific functions such as state survival plots, position-wise group-typical states, dynamic sequence indicators, and dissimilarities between event sequences. Also includes contributions by non-members of the TraMineR team such as methods for polyadic data and for the comparison of groups of sequences.
+License: GPL (>= 2)
+URL: http://traminer.unige.ch/
+Encoding: UTF-8
+Maintainer: Gilbert Ritschard <gilbert.ritschard@unige.ch>
+NeedsCompilation: yes
+Packaged: 2024-08-17 07:50:01 UTC; grits
+Author: Gilbert Ritschard [aut, cre, ths, cph]
+    (<https://orcid.org/0000-0001-7776-0903>),
+  Matthias Studer [aut] (<https://orcid.org/0000-0002-6269-1412>),
+  Reto Buergin [aut] (<https://orcid.org/0000-0002-6212-1567>),
+  Tim F. Liao [ctb] (<https://orcid.org/0000-0002-1296-7660>),
+  Alexis Gabadinho [ctb],
+  Pierre-Alexandre Fonta [ctb],
+  Nicolas S. Muller [ctb],
+  Patrick Rousset [ctb]
+Repository: CRAN
+Date/Publication: 2024-08-17 08:20:02 UTC
