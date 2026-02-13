@@ -102,6 +102,13 @@ from .sequence_characteristics import (
 
 )
 
+# Weighted statistics utilities
+from .utils import (
+    weighted_mean,
+    weighted_variance,
+    weighted_five_number_summary
+)
+
 # Sequence comparison and difference analysis
 from .compare_differences import (
     compare_groups_across_positions,
@@ -257,6 +264,11 @@ __all__ = [
     "get_cross_sectional_entropy",
     "plot_longitudinal_characteristics",
     "plot_cross_sectional_characteristics",
+    
+    # Weighted statistics utilities
+    "weighted_mean",
+    "weighted_variance",
+    "weighted_five_number_summary",
     
     # Sequence comparison and difference analysis
     "compare_groups_across_positions",
