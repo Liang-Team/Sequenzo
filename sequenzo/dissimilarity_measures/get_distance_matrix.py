@@ -1486,7 +1486,7 @@ if __name__ == '__main__':
     # print(f"[>] Total time: {end_time - start_time:.2f} seconds")
     # print(om)
 
-    df = load_dataset('country_co2_emissions_global_deciles')
+    df = load_dataset("country_co2_emissions_global_deciles")
     time_list = list(df.columns)[1:]
     states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
     sequence_data = SequenceData(df,
@@ -1494,5 +1494,6 @@ if __name__ == '__main__':
                                  id_col="country",
                                  states=states,
                                  labels=states)
-    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="CONSTANT", indel=1)
-    diss
+    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=0.5)
+
+    print(diss)

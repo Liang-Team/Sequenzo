@@ -126,24 +126,13 @@ public:
             auto ptr_len = seqlength.unchecked<1>();
             int m_full = ptr_len(is);
             int n_full = ptr_len(js);
-            int mSuf = m_full + 1, nSuf = n_full + 1;
-            int prefix = 0;
+            int prefix = 0;  // TraMineR OMVIdistance does NOT skip prefix/suffix
 
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_sm = sm.unchecked<2>();
 
-            // Skipping common prefix
-            int ii = 1, jj = 1;
-            while (ii < mSuf && jj < nSuf && ptr_seq(is, ii-1) == ptr_seq(js, jj-1)) {
-                ii++; jj++; prefix++;
-            }
-            // Skipping common suffix
-            while (mSuf > ii && nSuf > jj && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
-                mSuf--; nSuf--;
-            }
-
-            int m = mSuf - prefix;
-            int n = nSuf - prefix;
+            int m = m_full;
+            int n = n_full;
 
             // 预处理
             if (m == 0 && n == 0)
@@ -160,82 +149,65 @@ public:
                 return normalize_distance(cost, maxpossiblecost, double(m) * indel, 0.0, norm);
             }
 
-            // Initialize DP matrix: fmat[0][0] = 0
-            prev[0] = 0.0;
-            
-            // Get first state index for context (as in R code: firststate = imax2(prefix-1, 0))
+            // Initialize DP matrix: F[0][0] = 0
+            // TraMineR uses column-major fmat; we use prev=row i-1, curr=row i
             int firststate = std::max(prefix - 1, 0);
-            
-            // Initialize first row: deletions from sequence is
-            // For each position in sequence is, we need context from sequence js
-            // R code: fmat[ii-prefix, 0] = fmat[ii-prefix-1, 0] + getIndel(sequences[is, ii-1], prev_jstate, j_state)
-            // Context from sequence js remains constant for the first row
+
+            // First column F[i][0]: deletions from sequence is (stored for curr[0] each row)
             int prev_jstate = ptr_seq(js, prefix);
             int j_state = ptr_seq(js, firststate);
-            
-            for (int ii = prefix + 1; ii < mSuf; ++ii) {
+            prev[0] = 0.0;
+            for (int ii = 1; ii <= m; ++ii) {
                 int i_state_del = ptr_seq(is, ii - 1);
-                prev[ii - prefix] = prev[ii - prefix - 1] + getIndel(i_state_del, prev_jstate, j_state);
+                prev[ii] = prev[ii - 1] + getIndel(i_state_del, prev_jstate, j_state);
             }
-            
-            // Initialize first column: insertions into sequence js
-            // For each position in sequence js, we need context from sequence is
-            // R code: fmat[0, ii-prefix] = fmat[0, ii-prefix-1] + getIndel(sequences[js, ii-1], prev_istate, i_state)
+            // prev[0..m] now holds F[0][0], F[1][0], ..., F[m][0] (first column)
+
+            // First row F[0][j]: insertions into sequence js
             int prev_istate = ptr_seq(is, prefix);
             int i_state = ptr_seq(is, firststate);
-            
-            curr[0] = prev[0];
-            for (int ii = prefix + 1; ii < nSuf; ++ii) {
-                int j_state_ins = ptr_seq(js, ii - 1);
-                curr[ii - prefix] = curr[ii - prefix - 1] + getIndel(j_state_ins, prev_istate, i_state);
+            curr[0] = 0.0;
+            for (int jj = 1; jj <= n; ++jj) {
+                int j_state_ins = ptr_seq(js, jj - 1);
+                curr[jj] = curr[jj - 1] + getIndel(j_state_ins, prev_istate, i_state);
             }
-            
-            // Main DP loop: iterate row by row (i), then column by column (j)
-            // This matches R code logic but uses row-major order for efficiency
-            prev_istate = ptr_seq(is, prefix);
-            i_state = ptr_seq(is, firststate);
-            
-            for (int i = prefix + 1; i < mSuf; ++i) {
+            // curr[0..n] now holds F[0][0], F[0][1], ..., F[0][n] (first row)
+
+            // Swap: prev = first row (F[0][*]), curr = first column (F[*][0])
+            std::swap(prev, curr);
+            // Now prev[0..n]=F[0][j], curr[0..m]=F[i][0]. curr gets overwritten in j-loop, so
+            // we recompute F[i][0] each row (cumulative deletion cost).
+
+            // Main DP loop: row by row. prev = row i-1, curr = row i
+            prev_istate = ptr_seq(is, firststate);
+            i_state = ptr_seq(is, prefix);
+            prev_jstate = ptr_seq(js, prefix);
+            j_state = ptr_seq(js, firststate);
+            for (int i = 1; i <= m; ++i) {
                 int i_state_curr = ptr_seq(is, i - 1);
-                
-                // Reset for this row
-                prev_jstate = ptr_seq(js, prefix);
-                j_state = ptr_seq(js, firststate);
-                
-                for (int j = prefix + 1; j < nSuf; ++j) {
+
+                curr[0] = 0.0;
+                for (int k = 0; k < i; ++k)
+                    curr[0] += getIndel(ptr_seq(is, k), prev_jstate, j_state);
+                for (int j = 1; j <= n; ++j) {
                     int j_state_curr = ptr_seq(js, j - 1);
-                    
-                    // Deletion cost: delete i_state_curr, context from j sequence
-                    // R code: minimum = fmat[fmat_ij_prefix-1] + getIndel(i_state, prev_jstate, j_state)
-                    double del_cost = prev[j - prefix] + getIndel(i_state_curr, prev_jstate, j_state);
-                    
-                    // Insertion cost: insert j_state_curr, context from i sequence
-                    // R code: j_indel = fmat[fmat_ij_prefix-fmatsize] + getIndel(j_state, prev_istate, i_state)
-                    double ins_cost = curr[j - prefix - 1] + getIndel(j_state_curr, prev_istate, i_state_curr);
-                    
-                    // Substitution cost
-                    double sub_cost;
-                    if (i_state_curr == j_state_curr) {
-                        sub_cost = prev[j - prefix - 1];
-                    } else {
-                        sub_cost = prev[j - prefix - 1] + ptr_sm(i_state_curr, j_state_curr);
-                    }
-                    
-                    curr[j - prefix] = std::min({del_cost, ins_cost, sub_cost});
-                    
-                    // Update context for next iteration in this row
+
+                    double del_cost = prev[j] + getIndel(i_state_curr, prev_jstate, j_state);
+                    double ins_cost = curr[j - 1] + getIndel(j_state_curr, prev_istate, i_state_curr);
+                    double sub_cost = (i_state_curr == j_state_curr)
+                        ? prev[j - 1] : prev[j - 1] + ptr_sm(i_state_curr, j_state_curr);
+
+                    curr[j] = std::min({del_cost, ins_cost, sub_cost});
+
                     prev_jstate = j_state_curr;
                     j_state = (j < n_full) ? ptr_seq(js, j) : ptr_seq(js, j - 1);
                 }
-                
-                // Update context for next row
                 prev_istate = i_state_curr;
                 i_state = (i < m_full) ? ptr_seq(is, i) : ptr_seq(is, i - 1);
-                
                 std::swap(prev, curr);
             }
 
-            double final_cost = prev[nSuf - 1 - prefix];
+            double final_cost = prev[n];
             // For normalization, use standard OM formula
             // maxpossiblecost = |n-m|*indel + maxscost*min(m,n)
             // But for OMloc, indel varies, so we use average indel approximation
