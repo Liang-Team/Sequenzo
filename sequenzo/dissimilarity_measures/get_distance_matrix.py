@@ -1421,13 +1421,16 @@ if __name__ == '__main__':
     # ===============================
     #             Sohee
     # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
+    # df = pd.read_csv('/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
     # time_list = list(df.columns)[1:133]
     # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
     # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
+    # start = time.time()
     # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
+    # end = time.time()
+    # print("time = ", end-start)
 
     # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
 
@@ -1486,7 +1489,7 @@ if __name__ == '__main__':
     # print(f"[>] Total time: {end_time - start_time:.2f} seconds")
     # print(om)
 
-    df = load_dataset("country_co2_emissions_global_deciles")
+    df = load_dataset("country_life_expectancy_global_deciles")
     time_list = list(df.columns)[1:]
     states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
     sequence_data = SequenceData(df,
@@ -1494,6 +1497,6 @@ if __name__ == '__main__':
                                  id_col="country",
                                  states=states,
                                  labels=states)
-    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=0.5)
+    diss = get_distance_matrix(seqdata=sequence_data, method="OMloc", sm="TRATE", indel="auto")
 
     print(diss)
