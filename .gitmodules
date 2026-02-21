@@ -1,6 +1,3 @@
 [submodule "sequenzo/dissimilarity_measures/src/xsimd"]
     path = sequenzo/dissimilarity_measures/src/xsimd
     url = https://github.com/xtensor-stack/xsimd.git
-[submodule "Sequenzo/original_datasets_and_cleaning/archive_test/r_version/TraMineR"]
-	path = Sequenzo/original_datasets_and_cleaning/archive_test/r_version/TraMineR
-	url = https://github.com/cran/TraMineR.git

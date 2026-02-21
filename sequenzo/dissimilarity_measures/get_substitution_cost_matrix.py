@@ -21,6 +21,13 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
         print("[!] 'with_missing' has been removed and is ignored.")
         print("    Missing values are always included by default, consistent with TraMineR.")
 
+    # TODO : TraMineR 的这步处理有待考量
+    # if (isTRUE(with.missing) & & !any(seqdata == attr(seqdata, "nr"))) {
+    # with.missing < - FALSE
+    # msg.warn("seqcost: 'with.missing' set as FALSE as 'seqdata' has no non-void missing values")
+    # }
+    with_missing = False
+
     # ================
     # Check Parameters
     # ================
@@ -297,7 +304,7 @@ def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, tim
     # =================================
     # Process the Cost of Missing Value
     # =================================
-    if seqdata.ismissing and miss_cost_fixed:
+    if with_missing and miss_cost_fixed:
         if time_varying:
             costs[:, alphsize - 1, :alphsize - 1] = miss_cost
             costs[:, :alphsize - 1, alphsize - 1] = miss_cost

@@ -1,6 +1,9 @@
 # MacOS system files
 .DS_Store
 
+# Ignore experiment outputs / generated sequences
+original_datasets_and_cleaning/archive_test/xinyi_test/expe_tanat/random-sequences-generation/
+
 # IDE settings
 .idea/
 .vscode/
