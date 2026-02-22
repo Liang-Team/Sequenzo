@@ -241,11 +241,13 @@ def build_omstran_substitution_matrix(seqdata, newseqdata, sm, indel, transindel
                     indels[i] += transweight * rawtransindel
     
     # Build substitution matrix
-    compare_state_idx = 2 if previous else 1  # Index of state to compare
+    # TraMineR uses 1-based indexing, but `sm` and `indel` here are 0-based.
+    # Therefore, we subtract 1 from the original code to obtain indices 0 and 1.
+    compare_state_idx = 1 if previous else 0  # Index of state to compare
     
     for i in range(alphabet_size - 1):
         states_i = newalph[i].split(sep)
-        if len(states_i) < compare_state_idx + 1:
+        if len(states_i) <= compare_state_idx + 1:
             continue
         
         try:
@@ -259,7 +261,7 @@ def build_omstran_substitution_matrix(seqdata, newseqdata, sm, indel, transindel
         
         for j in range(i + 1, alphabet_size):
             states_j = newalph[j].split(sep)
-            if len(states_j) < compare_state_idx + 1:
+            if len(states_j) <= compare_state_idx + 1:
                 continue
             
             try:
