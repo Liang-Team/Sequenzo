@@ -127,7 +127,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         tpow = opts.get('tpow') or 1.0
         expcost = opts.get('expcost') or 0.5
         weighted = opts.get('weighted') or True
-        check_max_size = opts.get('check_max_size') or True
         matrix_display = opts.get('matrix_display') or "full"
 
     if 'with_missing' in kwargs:
@@ -327,12 +326,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in ["LCPspell", "RLCPspell"] and expcost < 0:
         raise ValueError("[x] 'expcost' must be non-negative for LCPspell/RLCPspell (use 0 to ignore duration).")
 
-    # 2. DHD
+    # 4. DHD
     elif method == "DHD":
         if sm_type == "method" and sm == "CONSTANT":
             raise ValueError("[!] 'sm = \"CONSTANT\"' is not relevant for DHD, consider HAM instead.")
 
-    # TWED: nu (stiffness) and h (lambda, gap penalty) required
+    # 5. TWED: nu (stiffness) and h (lambda, gap penalty) required
     elif method == "TWED":
         nu = kwargs.get("nu", None)
         h_twed = kwargs.get("h", 0.5)
@@ -343,7 +342,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if not isinstance(h_twed, (int, float)) or h_twed < 0:
             raise ValueError("[x] 'h' must be a number greater than or equal to 0 for TWED.")
 
-    # 3. HAM, DHD
+    # 6. HAM, DHD
     if method in ["HAM", "DHD"]:
         if seqs_dlens.shape[0] > 1:
             raise ValueError(f"[x] {method} is not defined for sequences of different length.")
@@ -598,6 +597,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Pre-Process Data (Part 1/2)
     # ===========================
     # OMstran: Transform sequences to transition states first
+    is_from_OMstran = False # This is to distinguish whether the OM is the one used by OMstran or the OM specified by the user.
     if method == "OMstran":
         from .measures_implemented_with_python.omstran import create_transition_sequences, build_omstran_substitution_matrix
         
@@ -609,18 +609,24 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         
         if transindel not in ["constant", "prob", "subcost"]:
             raise ValueError(f"[!] 'transindel' must be one of 'constant', 'prob', or 'subcost', got '{transindel}'.")
+
+        if not isinstance(otto, (float, int)) or otto < 0 or otto > 1:
+            raise ValueError(f"[!] 'otto' must be of type float between 0 and 1, got '{otto}'.")
+
+        is_from_OMstran = True
         
         # Ensure sm is a matrix (not a method string)
         if sm_type == "method":
             # Build sm using the specified method
+            # (Commented out because `sm` has already been computed earlier and should not be recalculated here)
             # sm_result = get_substitution_cost_matrix(seqdata, method=sm, weighted=weighted)
             # sm = sm_result['sm']
-            # if indel_type == "auto":
-            #     indel = sm_result.get('indel', np.max(sm) / 2)
-            #     if isinstance(indel, np.ndarray):
-            #         indel_type = "vector"
-            #     else:
-            #         indel_type = "number"
+            if indel_type == "auto":
+                indel = np.max(sm) / 2
+                if isinstance(indel, np.ndarray):
+                    indel_type = "vector"
+                else:
+                    indel_type = "number"
             sm_type = "matrix"
         
         # Convert sm DataFrame to numpy array if needed
@@ -664,8 +670,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Update variables for OM computation
         seqdata = new_seqdata
         sm = newsm
-        indel = np.max(newindels)  # Use max indel for OM computation
-        indel_type = "number"
+        # indel = np.max(newindels)  # Use max indel for OM computation
+        # indel_type = "number"
+        indels = newindels
         
         # Update nstates
         nstates = len(newalph)
@@ -996,7 +1003,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         refseq_id = np.array(refseq_id, dtype=int)
 
         if method == "OM":
-            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+            if is_from_OMstran:
+                indellist_arg = indels
+            else:
+                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMdistance(dseqs_num,
                                     sm,
                                     indel,
@@ -1159,7 +1169,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         refseq_id = np.array([-1, -1])
 
         if method == "OM":
-            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+            if is_from_OMstran:
+                indellist_arg = indels
+            else:
+                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMdistance(dseqs_num,
                                     sm,
                                     indel,
@@ -1489,14 +1502,25 @@ if __name__ == '__main__':
     # print(f"[>] Total time: {end_time - start_time:.2f} seconds")
     # print(om)
 
-    df = load_dataset("country_life_expectancy_global_deciles")
+    # df = load_dataset("country_life_expectancy_global_deciles")
+    # time_list = list(df.columns)[1:]
+    # states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+    # sequence_data = SequenceData(df,
+    #                              time=time_list,
+    #                              id_col="country",
+    #                              states=states,
+    #                              labels=states)
+    # diss = get_distance_matrix(seqdata=sequence_data, method="OMloc", sm="TRATE", indel="auto")
+    #
+    # print(diss)
+
+    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/biofam_subset.csv")
     time_list = list(df.columns)[1:]
-    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+    states = [0, 1, 2, 3, 4, 5, 6, 7]
     sequence_data = SequenceData(df,
                                  time=time_list,
-                                 id_col="country",
-                                 states=states,
-                                 labels=states)
-    diss = get_distance_matrix(seqdata=sequence_data, method="OMloc", sm="TRATE", indel="auto")
+                                 id_col="id",
+                                 states=states)
+    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=.3, transindel="subcost")
 
     print(diss)
