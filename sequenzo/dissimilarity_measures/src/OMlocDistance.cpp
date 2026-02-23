@@ -53,7 +53,7 @@ class OMlocDistance {
 public:
     OMlocDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, 
                   py::array_t<int> seqlength, py::array_t<int> refseqS,
-                  double expcost, double context)
+                  double expcost, double context, py::array_t<double> indellist = py::array_t<double>())
             : indel(indel), norm(norm) {
 
         py::print("[>] Starting Optimal Matching with localized indel costs (OMloc)...");
@@ -72,23 +72,33 @@ public:
             seqlen = seq_shape[1];
             alphasize = sm.shape()[0];
 
+            use_indellist = (indellist.size() == static_cast<py::ssize_t>(alphasize) || indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
+            indellist_0based = (indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
+            if (use_indellist)
+                this->indellist = indellist;
+
             dist_matrix = py::array_t<double>({nseq, nseq});
 
-            fmatsize = seqlen + 1;
+            // When use_indellist we do not skip prefix/suffix, so DP size is (seqlen+1)x(seqlen+1); prev/curr need seqlen+2 elements.
+            fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
 
             // ==================
             // initialize maxcost
             // ==================
             auto ptr = sm.mutable_unchecked<2>();
             maxscost = 0.0;
-            for(int i = 0; i < alphasize; i++){
-                for(int j = i+1; j < alphasize; j++){
-                    if(ptr(i, j) > maxscost){
-                        maxscost = ptr(i, j);
+            if (norm == 4){
+                maxscost = 2 * indel;
+            }else{
+                for(int i = 0; i < alphasize; i++){
+                    for(int j = i+1; j < alphasize; j++){
+                        if(ptr(i, j) > maxscost){
+                            maxscost = ptr(i, j);
+                        }
                     }
                 }
+                maxscost = std::min(maxscost, 2 * indel);
             }
-            maxscost = std::min(maxscost, 2 * indel);
 
             // Calculate timecost = expcost * maxscost (as in R code)
             timecost = expcost * maxscost;
@@ -115,6 +125,12 @@ public:
     // Get context-dependent indel cost
     // Formula: timecost + localcost * (scost[prev,state] + scost[next,state]) / 2
     inline double getIndel(int state, int prev, int next) {
+        if (use_indellist) {
+            auto ptr = indellist.unchecked<1>();
+            // state from sequence is 1-based (1..nstates). TraMineR passes indels of length nstates and uses indellist[state] with 0-based state in C.
+            int idx = indellist_0based ? (state - 1) : state;
+            return ptr(idx);
+        }
         auto ptr_sm = sm.unchecked<2>();
         double scost_prev = ptr_sm(prev, state);
         double scost_next = ptr_sm(next, state);
@@ -134,7 +150,7 @@ public:
             int m = m_full;
             int n = n_full;
 
-            // 预处理
+            // pre-processing
             if (m == 0 && n == 0)
                 return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
             if (m == 0) {
@@ -274,6 +290,9 @@ private:
     py::array_t<double> sm;
     double indel;
     int norm;
+    bool use_indellist = false;
+    bool indellist_0based = false;  // true: indellist[state-1]; false: indellist[state]
+    py::array_t<double> indellist;
     int nseq;
     int seqlen;
     int alphasize;

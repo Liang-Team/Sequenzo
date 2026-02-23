@@ -90,7 +90,10 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_refseq_distances", &OMdistance::compute_refseq_distances);
 
     py::class_<OMlocDistance>(m, "OMlocDistance")
-            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<int>, double, double>())
+            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<int>, double, double, py::array_t<double>>(),
+                 py::arg("sequences"), py::arg("sm"), py::arg("indel"), py::arg("norm"), py::arg("seqlength"), py::arg("refseqS"),
+                 py::arg("expcost"), py::arg("context"),
+                 py::arg("indellist") = py::array_t<double>())
             .def("compute_all_distances", &OMlocDistance::compute_all_distances)
             .def("compute_refseq_distances", &OMlocDistance::compute_refseq_distances);
 
