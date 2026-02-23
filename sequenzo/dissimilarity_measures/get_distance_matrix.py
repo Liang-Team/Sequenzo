@@ -476,21 +476,31 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if sm_type == "matrix":
             if method in om_methods + ["OMloc", "TWED"]:
                 # TODO : checkcost()
-                # Add a NaN column at the beginning and a NaN row at the top
-                # This ensures that indexing starts from 1
-                nan_col = np.full((sm.shape[0], 1), np.nan)
-                sm = np.hstack([nan_col, sm])
-                nan_row = np.full((1, sm.shape[1]), np.nan)
-                sm = np.vstack([nan_row, sm])
-                pass
+                if sm.shape[0] == len(seqdata.states):
+                    # Add a NaN column at the beginning and a NaN row at the top
+                    # This ensures that indexing starts from 1
+                    nan_col = np.full((sm.shape[0], 1), np.nan)
+                    sm = np.hstack([nan_col, sm])
+                    nan_row = np.full((1, sm.shape[1]), np.nan)
+                    sm = np.vstack([nan_row, sm])
+                elif sm.shape[0] == len(seqdata.states) + 1:
+                    pass
+                else:
+                    raise ValueError(
+                        "[!] The dimension of the provided `sm` matrix does not match the number of states.")
 
             elif method == "HAM":
                 # TODO : checkcost()
-                nan_col = np.full((sm.shape[0], 1), np.nan)
-                sm = np.hstack([nan_col, sm])
-                nan_row = np.full((1, sm.shape[1]), np.nan)
-                sm = np.vstack([nan_row, sm])
-                pass
+                if sm.shape[0] == len(seqdata.states):
+                    nan_col = np.full((sm.shape[0], 1), np.nan)
+                    sm = np.hstack([nan_col, sm])
+                    nan_row = np.full((1, sm.shape[1]), np.nan)
+                    sm = np.vstack([nan_row, sm])
+                elif sm.shape[0] == len(seqdata.states) + 1:
+                    pass
+                else:
+                    raise ValueError(
+                        "[!] The dimension of the provided `sm` matrix does not match the number of states.")
 
             else:
                 raise ValueError(f"[x] No known 'sm' check for {method}.")
@@ -596,8 +606,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # ===========================
     # Pre-Process Data (Part 1/2)
     # ===========================
+    # OMloc optional indellist: set when coming from OMstran (per-state indel costs); otherwise None
+    omloc_indellist = None
     # OMstran: Transform sequences to transition states first
-    is_from_OMstran = False # This is to distinguish whether the OM is the one used by OMstran or the OM specified by the user.
     if method == "OMstran":
         from .measures_implemented_with_python.omstran import create_transition_sequences, build_omstran_substitution_matrix
         
@@ -605,7 +616,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         transindel = kwargs.get("transindel", "prob")  # "constant", "prob", or "subcost"
         otto = kwargs.get("otto", 0.5)  # Weight for substitution vs transition indel
         previous = kwargs.get("previous", False)  # Whether to include previous state
-        add_column = kwargs.get("add_column", False)  # Whether to add an extra column
+        add_column = kwargs.get("add_column", True)  # Whether to add an extra column; Default is True (this is consistent with TraMineR).
         
         if transindel not in ["constant", "prob", "subcost"]:
             raise ValueError(f"[!] 'transindel' must be one of 'constant', 'prob', or 'subcost', got '{transindel}'.")
@@ -613,8 +624,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if not isinstance(otto, (float, int)) or otto < 0 or otto > 1:
             raise ValueError(f"[!] 'otto' must be of type float between 0 and 1, got '{otto}'.")
 
-        is_from_OMstran = True
-        
         # Ensure sm is a matrix (not a method string)
         if sm_type == "method":
             # Build sm using the specified method
@@ -670,9 +679,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Update variables for OM computation
         seqdata = new_seqdata
         sm = newsm
-        # indel = np.max(newindels)  # Use max indel for OM computation
-        # indel_type = "number"
-        indels = newindels
+        indel = np.max(newindels)  # Use max indel for OMloc normalization
+        indel_type = "number"
+        omloc_indellist = newindels
         
         # Update nstates
         nstates = len(newalph)
@@ -683,9 +692,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         nan_row = np.full((1, sm.shape[1]), np.nan)
         sm = np.vstack([nan_row, sm])
         
-        # Change method to OM for distance computation
-        method = "OM"
-    
+        # Change method to OMloc for distance computation
+        method = "OMloc"
+        if norm == "auto":
+            norm = "YujianBo"
+
     seqdata_num = seqdata.values   # it's numpy
 
     if refseq_type == "sets":
@@ -1003,10 +1014,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         refseq_id = np.array(refseq_id, dtype=int)
 
         if method == "OM":
-            if is_from_OMstran:
-                indellist_arg = indels
-            else:
-                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMdistance(dseqs_num,
                                     sm,
                                     indel,
@@ -1024,6 +1032,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         elif method == "OMloc":
             context = kwargs.get("context", 1.0 - 2.0 * expcost)
+            omloc_indellist_arg = np.asarray(omloc_indellist, dtype=np.float64) if omloc_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMlocDistance(dseqs_num,
                                       sm,
                                       indel,
@@ -1031,7 +1040,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       lengths,
                                       refseq_id,
                                       expcost,
-                                      context)
+                                      context,
+                                      omloc_indellist_arg)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMspell":
@@ -1169,10 +1179,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         refseq_id = np.array([-1, -1])
 
         if method == "OM":
-            if is_from_OMstran:
-                indellist_arg = indels
-            else:
-                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMdistance(dseqs_num,
                                     sm,
                                     indel,
@@ -1190,6 +1197,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         elif method == "OMloc":
             context = kwargs.get("context", 1.0 - 2.0 * expcost)
+            omloc_indellist_arg = np.asarray(omloc_indellist, dtype=np.float64) if omloc_indellist is not None else np.array([], dtype=np.float64)
             om = c_code.OMlocDistance(dseqs_num,
                                       sm,
                                       indel,
@@ -1197,7 +1205,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       lengths,
                                       refseq_id,
                                       expcost,
-                                      context)
+                                      context,
+                                      omloc_indellist_arg)
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMspell":
@@ -1521,6 +1530,6 @@ if __name__ == '__main__':
                                  time=time_list,
                                  id_col="id",
                                  states=states)
-    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=.3, transindel="subcost")
+    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=.3, transindel="prob", norm="YujianBo")
 
     print(diss)

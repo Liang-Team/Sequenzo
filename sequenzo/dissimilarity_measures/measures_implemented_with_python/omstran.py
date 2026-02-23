@@ -14,7 +14,7 @@ from sequenzo.dissimilarity_measures.utils.get_sm_trate_substitution_cost_matrix
 from sequenzo.dissimilarity_measures.utils.seqlength import seqlength
 
 
-def create_transition_sequences(seqdata, previous=False, add_column=False):
+def create_transition_sequences(seqdata, previous=False, add_column=True):
     """
     Create transition states from sequences.
     

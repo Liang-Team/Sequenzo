@@ -2,10 +2,11 @@
 # @File    : traminer_reference.R
 # @Time    : 2026/02/08 13:14
 # @Desc    :
-# TraMineR reference distances for: OM+INDELS, OM+INDELSLOG, OM+FUTURE, OM+FEATURES, OMtspell.
+# TraMineR reference distances for: OM+INDELS, OM+INDELSLOG, OM+FUTURE, OM+FEATURES, OMtspell, OMstran.
 # Usage: Rscript traminer_reference.R <path_to_dyadic_children.csv> [nrows] [outdir]
 # Example: Rscript traminer_reference.R ../../../sequenzo/datasets/dyadic_children.csv 10 .
-# Writes: ref_om_indels.csv, ref_om_indelslog.csv, ref_om_future.csv, ref_om_features.csv, ref_omtspell.csv
+# Writes: ref_om_indels.csv, ref_om_indelslog.csv, ref_om_future.csv, ref_om_features.csv,
+#         ref_omtspell.csv, ref_omstran*.csv
 
 if (!requireNamespace("TraMineR", quietly = TRUE)) {
   stop("TraMineR required: install.packages('TraMineR')")
@@ -56,11 +57,10 @@ write.csv(as.matrix(D_features), file.path(outdir, "ref_om_features.csv"), row.n
 
 # ----- OMtspell (OMspell with tokdep.coeff; TraMineR opt.args) -----
 # tokdep.coeff same length as indel; seqdist expands scalar indel to nstates before check
+nstates <- length(states)
+tokdep_coeff <- rep(1, nstates)
 suppressMessages({
-  sc_tr <- TraMineR::seqcost(seqdata, method = "TRATE", with.missing = FALSE)
-  nstates <- length(states)
-  tokdep_coeff <- rep(1, nstates)
-  D_omtspell <- TraMineR::seqdist(seqdata, method = "OMspell", sm = sc_tr$sm, indel = sc_tr$indel,
+  D_omtspell <- TraMineR::seqdist(seqdata, method = "OMspell", sm = "TRATE", indel = "auto",
     norm = "YujianBo", expcost = 0.5, opt.args = list(tokdep.coeff = tokdep_coeff))
 })
 write.csv(as.matrix(D_omtspell), file.path(outdir, "ref_omtspell.csv"), row.names = TRUE)
@@ -80,17 +80,81 @@ write.csv(as.matrix(D_indels_indel1), file.path(outdir, "ref_om_indels_indel1_ma
 
 # OM + TRATE, norm = "gmean"
 suppressMessages({
-  D_trate_gmean <- TraMineR::seqdist(seqdata, method = "OM", sm = sc_tr$sm, indel = sc_tr$indel, norm = "gmean")
+  D_trate_gmean <- TraMineR::seqdist(seqdata, method = "OM", sm = "TRATE", indel = "auto", norm = "gmean")
 })
 write.csv(as.matrix(D_trate_gmean), file.path(outdir, "ref_om_trate_gmean.csv"), row.names = TRUE)
 
 # OMtspell with expcost = 0.3 and 0.7
 for (expcost_val in c(0.3, 0.7)) {
   suppressMessages({
-    D_ec <- TraMineR::seqdist(seqdata, method = "OMspell", sm = sc_tr$sm, indel = sc_tr$indel,
+    D_ec <- TraMineR::seqdist(seqdata, method = "OMspell", sm = "TRATE", indel = "auto",
       norm = "YujianBo", expcost = expcost_val, opt.args = list(tokdep.coeff = tokdep_coeff))
   })
   write.csv(as.matrix(D_ec), file.path(outdir, sprintf("ref_omtspell_expcost%02.0f.csv", expcost_val * 10)), row.names = TRUE)
 }
+
+# ----- Part 1c: OMstran (OM of transition sequences) -----
+# OMstran: sm=TRATE, indel=auto, transindel=constant, otto=0.5, previous=FALSE, add.column=TRUE, norm=YujianBo
+suppressMessages({
+  D_omstran <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.5, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran), file.path(outdir, "ref_omstran.csv"), row.names = TRUE)
+
+# OMstran transindel=prob
+suppressMessages({
+  D_omstran_prob <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "prob", otto = 0.5, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_prob), file.path(outdir, "ref_omstran_prob.csv"), row.names = TRUE)
+
+# OMstran transindel=subcost
+suppressMessages({
+  D_omstran_subcost <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "subcost", otto = 0.5, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_subcost), file.path(outdir, "ref_omstran_subcost.csv"), row.names = TRUE)
+
+# OMstran otto=0.3
+suppressMessages({
+  D_omstran_otto03 <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.3, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_otto03), file.path(outdir, "ref_omstran_otto03.csv"), row.names = TRUE)
+
+# OMstran otto=0.7
+suppressMessages({
+  D_omstran_otto07 <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.7, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_otto07), file.path(outdir, "ref_omstran_otto07.csv"), row.names = TRUE)
+
+# OMstran previous=TRUE
+suppressMessages({
+  D_omstran_previous <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.5, previous = TRUE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_previous), file.path(outdir, "ref_omstran_previous.csv"), row.names = TRUE)
+
+# OMstran add.column=FALSE
+suppressMessages({
+  D_omstran_addcol_false <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.5, previous = FALSE, add.column = FALSE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_addcol_false), file.path(outdir, "ref_omstran_addcolumn_false.csv"), row.names = TRUE)
+
+# OMstran norm=none
+suppressMessages({
+  D_omstran_norm_none <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = "auto",
+    transindel = "constant", otto = 0.5, previous = FALSE, add.column = TRUE, norm = "none")
+})
+write.csv(as.matrix(D_omstran_norm_none), file.path(outdir, "ref_omstran_norm_none.csv"), row.names = TRUE)
+
+# OMstran indel=1 (scalar)
+suppressMessages({
+  D_omstran_indel1 <- TraMineR::seqdist(seqdata, method = "OMstran", sm = "TRATE", indel = 1,
+    transindel = "constant", otto = 0.5, previous = FALSE, add.column = TRUE, norm = "YujianBo")
+})
+write.csv(as.matrix(D_omstran_indel1), file.path(outdir, "ref_omstran_indel1.csv"), row.names = TRUE)
 
 cat("Reference matrices written to", outdir, "\n")
