@@ -131,7 +131,7 @@ if __name__ == "__main__":
         cluster = Cluster(
             matrix=mtx, 
             entity_ids=ids, 
-            clustering_method="ward_d2"
+            clustering_method="ward"  # OM 距离 + Ward 聚类
         )  
 
         time_elapsed = time.time() - start

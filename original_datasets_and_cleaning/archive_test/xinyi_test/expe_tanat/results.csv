@@ -1,1 +1,2 @@
 it,method,nb,voc,mean_len,max_dur,metric,cl,prep_time,time,ARI
+TanaT,5000,20,29.9466,84,EditSequenceMetric,10,0.501802921295166,5.742585897445679,0.0
