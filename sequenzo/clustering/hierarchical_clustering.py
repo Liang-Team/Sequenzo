@@ -71,18 +71,18 @@ from matplotlib.ticker import MaxNLocator
 import pandas as pd
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import squareform, pdist
 # sklearn metrics no longer needed - using C++ implementation
 # Import from sequenzo_fastcluster (our custom fastcluster with ward_d and ward_d2 support)
 try:
-    from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage
+    from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector
 except ImportError:
     # Fallback: try absolute import
     try:
-        from sequenzo_fastcluster.fastcluster import linkage
+        from sequenzo_fastcluster.fastcluster import linkage, linkage_vector
     except ImportError:
         # Last resort: try relative import
-        from .sequenzo_fastcluster.fastcluster import linkage
+        from .sequenzo_fastcluster.fastcluster import linkage, linkage_vector
 
 # Import C++ cluster quality functions
 try:
@@ -222,6 +222,9 @@ def _clean_distance_matrix(matrix):
     2. Sets diagonal to zero
     3. Ensures non-negativity
     
+    Uses a fast path when matrix has no NaN/Inf/negative values to avoid
+    unnecessary copy and scans.
+    
     Note: Symmetry is NOT enforced at this stage since distance matrices may legitimately 
     be asymmetric (e.g., directed sequence distances, time-dependent measures, etc.).
     However, symmetrization will be performed later in linkage computation when required 
@@ -237,47 +240,124 @@ def _clean_distance_matrix(matrix):
     np.ndarray
         Cleaned distance matrix
     """
-    matrix = matrix.copy()  # Don't modify the original
-    
+    # Fast path: no NaN/Inf/negative values - skip expensive percentile/scan logic
+    if np.all(np.isfinite(matrix)) and np.all(matrix >= 0):
+        matrix = np.array(matrix, dtype=np.float64, copy=True)
+        np.fill_diagonal(matrix, 0.0)
+        return matrix
+
+    # Full path: handle problematic values
+    matrix = matrix.copy()
+
     # Step 1: Handle NaN/Inf values with percentile-based replacement
     if np.any(np.isnan(matrix)) or np.any(np.isinf(matrix)):
         print("[!] Warning: Distance matrix contains NaN or Inf values.")
-        
-        # Get finite values for percentile calculation
+
         finite_vals = matrix[np.isfinite(matrix)]
-        
         if len(finite_vals) > 0:
-            # Use 95th percentile as replacement value (more conservative than max)
             replacement_val = np.percentile(finite_vals, 95)
             print(f"    Replacing with 95th percentile value: {replacement_val:.6f}")
         else:
-            # If no finite values, use 1.0 as default
             replacement_val = 1.0
             print(f"    No finite values found, using default: {replacement_val}")
-        
+
         matrix[~np.isfinite(matrix)] = replacement_val
-    
+
     # Step 2: Force diagonal to be exactly zero (self-distance should be zero)
     np.fill_diagonal(matrix, 0.0)
-    
+
     # Step 3: Ensure non-negativity (distance matrices should be non-negative)
     if np.any(matrix < 0):
         print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
         matrix = np.maximum(matrix, 0.0)
-    
+
     return matrix
 
 
+def _hclust_to_linkage_matrix(linkage_matrix):
+    """
+    Convert an R `hclust` object to a SciPy-compatible linkage matrix.
+
+    This function takes an `hclust` object returned by R (e.g., from
+    `fastcluster::hclust`) and converts it into the standard linkage matrix
+    format used by SciPy (`scipy.cluster.hierarchy.linkage`), which can be
+    used for dendrogram plotting or further clustering analysis in Python.
+
+    Parameters
+    ----------
+    linkage_matrix : rpy2.robjects.ListVector
+        An R `hclust` object. Expected to contain at least the following fields:
+        - 'merge': ndarray of shape (n-1, 2), indicating which clusters are merged
+                   at each step (negative indices for original observations,
+                   positive indices for previously merged clusters).
+        - 'height': ndarray of shape (n-1,), distances at which merges occur.
+        - 'order': ordering of the leaves.
+
+    Returns
+    -------
+    Z : numpy.ndarray, shape (n-1, 4), dtype=float
+        A SciPy-compatible linkage matrix where each row represents a merge:
+        - Z[i, 0] : index of the first cluster (0-based)
+        - Z[i, 1] : index of the second cluster (0-based)
+        - Z[i, 2] : distance between the merged clusters
+        - Z[i, 3] : total number of original samples in the newly formed cluster
+
+    Notes
+    -----
+    - The conversion handles the difference in indexing:
+        - In R's `hclust`, negative numbers in 'merge' indicate original samples
+          and positive numbers indicate previously merged clusters (1-based).
+        - In the returned SciPy linkage matrix, all indices are converted to 0-based.
+    - The function iteratively tracks cluster sizes to populate the fourth column
+      (sample counts) required by SciPy.
+    """
+
+    n = len(linkage_matrix.rx2("order"))  # 样本数
+    merge = np.array(linkage_matrix.rx2("merge"), dtype=int)  # (n-1, 2)
+    height = np.array(linkage_matrix.rx2("height"), dtype=float)
+
+    cluster_sizes = np.ones(n, dtype=int)  # 单个样本初始大小 = 1
+    Z = np.zeros((n - 1, 4), dtype=float)
+
+    for i in range(n - 1):
+        a, b = merge[i]
+
+        # R hclust 编号负数表示原始样本
+        if a < 0:
+            idx1 = -a - 1  # 转成 0-based
+            size1 = 1
+        else:
+            idx1 = n + a - 1  # 已合并簇，0-based
+            size1 = cluster_sizes[idx1]
+
+        if b < 0:
+            idx2 = -b - 1
+            size2 = 1
+        else:
+            idx2 = n + b - 1
+            size2 = cluster_sizes[idx2]
+
+        Z[i, 0] = idx1
+        Z[i, 1] = idx2
+        Z[i, 2] = height[i]
+        Z[i, 3] = size1 + size2
+
+        # 更新 cluster_sizes，用于后续簇
+        cluster_sizes = np.append(cluster_sizes, size1 + size2)
+
+    return Z
+
 class Cluster:
     def __init__(self,
-                 matrix,
-                 entity_ids,
+                 matrix=None,
+                 entity_ids=None,
                  clustering_method="ward",
-                 weights=None):
+                 weights=None,
+                 X_features=None):
         """
         A class to handle hierarchical clustering operations using fastcluster for improved performance.
 
-        :param matrix: Precomputed distance matrix (full square form).
+        :param matrix: Precomputed distance matrix (full square form). Required when X_features is None.
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
         :param clustering_method: Clustering algorithm to use. Options include:
             - "ward" or "ward_d": Classic Ward method (squared Euclidean distances ÷ 2) [default]
@@ -288,42 +368,11 @@ class Cluster:
             - "centroid": Centroid linkage
             - "median": Median linkage
         :param weights: Optional array of weights for each entity (default: None for equal weights).
+        :param X_features: Optional (n x d) feature matrix for Euclidean Ward clustering. When provided
+            with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)), same as
+            sklearn/TanaT. If both matrix and X_features are provided, X_features takes precedence for
+            Ward methods.
         """
-        # Ensure entity_ids is a numpy array for consistent processing
-        self.entity_ids = np.array(entity_ids)
-
-        # Check if entity_ids is valid
-        if len(self.entity_ids) != len(matrix):
-            raise ValueError("Length of entity_ids must match the size of the matrix.")
-
-        # Optional: Check uniqueness of entity_ids
-        if len(np.unique(self.entity_ids)) != len(self.entity_ids):
-            raise ValueError("entity_ids must contain unique values.")
-
-        # Initialize and validate weights
-        if weights is not None:
-            self.weights = np.array(weights, dtype=np.float64)
-            if len(self.weights) != len(matrix):
-                raise ValueError("Length of weights must match the size of the matrix.")
-            if np.any(self.weights < 0):
-                raise ValueError("All weights must be non-negative.")
-            if np.sum(self.weights) == 0:
-                raise ValueError("Sum of weights must be greater than zero.")
-        else:
-            # Default to equal weights (all ones)
-            self.weights = np.ones(len(matrix), dtype=np.float64)
-
-        # Convert matrix to numpy array if it's a DataFrame
-        if isinstance(matrix, pd.DataFrame):
-            print("[>] Converting DataFrame to NumPy array...")
-            self.full_matrix = matrix.values
-        else:
-            self.full_matrix = matrix
-
-        # Verify matrix is in square form
-        if len(self.full_matrix.shape) != 2 or self.full_matrix.shape[0] != self.full_matrix.shape[1]:
-            raise ValueError("Input must be a full square-form distance matrix.")
-
         self.clustering_method = clustering_method.lower()
 
         # Supported clustering methods
@@ -331,15 +380,99 @@ class Cluster:
         if self.clustering_method not in supported_methods:
             raise ValueError(
                 f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
-        
+
         # Handle backward compatibility: 'ward' maps to 'ward_d' (classic Ward method)
         if self.clustering_method == "ward":
             self.clustering_method = "ward_d"
             print("[>] Note: 'ward' method maps to 'ward_d' (classic Ward method).")
             print("    Use 'ward_d2' for Ward method with squared Euclidean distances.")
 
-        # Compute linkage matrix using fastcluster
-        self.linkage_matrix = self._compute_linkage()
+        # Determine input mode: X_features (linkage_vector) vs matrix (distance matrix)
+        ward_methods = ["ward_d", "ward_d2"]
+        use_vector_path = (
+            X_features is not None
+            and self.clustering_method in ward_methods
+        )
+
+        if use_vector_path:
+            # X_features path: memory-efficient linkage_vector for Ward + Euclidean
+            X = np.asarray(X_features, dtype=np.float64)
+            if X.ndim != 2:
+                raise ValueError("X_features must be a 2D array (n x d).")
+            n = X.shape[0]
+
+            self.entity_ids = np.array(entity_ids) if entity_ids is not None else np.arange(n)
+            if len(self.entity_ids) != n:
+                raise ValueError("Length of entity_ids must match the number of rows in X_features.")
+
+            if len(np.unique(self.entity_ids)) != len(self.entity_ids):
+                raise ValueError("entity_ids must contain unique values.")
+
+            if weights is not None:
+                self.weights = np.array(weights, dtype=np.float64)
+                if len(self.weights) != n:
+                    raise ValueError("Length of weights must match X_features.")
+                if np.any(self.weights < 0) or np.sum(self.weights) == 0:
+                    raise ValueError("All weights must be non-negative and sum > 0.")
+            else:
+                self.weights = np.ones(n, dtype=np.float64)
+
+            self._X_features = X
+            self._full_matrix = None  # Lazy-computed when ClusterQuality needs it
+            self.condensed_matrix = None
+            self.linkage_matrix = self._compute_linkage_from_features()
+        else:
+            # Matrix path: traditional distance matrix input
+            if matrix is None:
+                raise ValueError("Either matrix or X_features (with ward/ward_d2) must be provided.")
+
+            self.entity_ids = np.array(entity_ids)
+            if len(self.entity_ids) != len(matrix):
+                raise ValueError("Length of entity_ids must match the size of the matrix.")
+            if len(np.unique(self.entity_ids)) != len(self.entity_ids):
+                raise ValueError("entity_ids must contain unique values.")
+
+            if weights is not None:
+                self.weights = np.array(weights, dtype=np.float64)
+                if len(self.weights) != len(matrix):
+                    raise ValueError("Length of weights must match the size of the matrix.")
+                if np.any(self.weights < 0) or np.sum(self.weights) == 0:
+                    raise ValueError("All weights must be non-negative and sum > 0.")
+            else:
+                self.weights = np.ones(len(matrix), dtype=np.float64)
+
+            if isinstance(matrix, pd.DataFrame):
+                print("[>] Converting DataFrame to NumPy array...")
+                self._full_matrix = matrix.values
+            else:
+                self._full_matrix = matrix
+
+            if len(self._full_matrix.shape) != 2 or self._full_matrix.shape[0] != self._full_matrix.shape[1]:
+                raise ValueError("Input must be a full square-form distance matrix.")
+
+            self._X_features = None
+            self.linkage_matrix = self._compute_linkage()
+
+    @property
+    def full_matrix(self):
+        """Full distance matrix. Lazy-computed from X_features when using linkage_vector path."""
+        if self._full_matrix is None and self._X_features is not None:
+            self._full_matrix = squareform(pdist(self._X_features, "euclidean"))
+        return self._full_matrix
+
+    @full_matrix.setter
+    def full_matrix(self, value):
+        self._full_matrix = value
+
+    def _compute_linkage_from_features(self):
+        """Compute linkage via linkage_vector (O(ND) memory) for Ward + Euclidean."""
+        X = np.asarray(self._X_features, dtype=np.float64, order="C")
+        # linkage_vector 'ward' produces ward_d2 style; apply correction for ward_d
+        Z = linkage_vector(X, method="ward", metric="euclidean")
+        if self.clustering_method == "ward_d":
+            Z = Z.copy()
+            Z[:, 2] = Z[:, 2] / 2.0
+        return Z
 
     def _compute_linkage(self):
         """
@@ -347,27 +480,37 @@ class Cluster:
         Supports both Ward D (classic) and Ward D2 methods.
         """
         # Clean and validate the distance matrix using robust methods
-        self.full_matrix = _clean_distance_matrix(self.full_matrix)
+        self._full_matrix = _clean_distance_matrix(self._full_matrix)
         
         # Check Ward compatibility and issue one-time warning if needed
         _warn_ward_usage_once(self.full_matrix, self.clustering_method)
 
-        # Check symmetry before converting to condensed form
-        # squareform() requires symmetric matrices
-        if not np.allclose(self.full_matrix, self.full_matrix.T, rtol=1e-5, atol=1e-8):
+        # Check symmetry before converting to condensed form (upper triangle suffices:
+        # M[i,j]=M[j,i] for i<j is equivalent to full symmetry)
+        n = self.full_matrix.shape[0]
+        triu_i, triu_j = np.triu_indices(n, k=1)
+        if not np.allclose(
+            self._full_matrix[triu_i, triu_j],
+            self._full_matrix[triu_j, triu_i],
+            rtol=1e-5,
+            atol=1e-8,
+        ):
             print("[!] Warning: Distance matrix is not symmetric.")
             print("    Hierarchical clustering algorithms require symmetric distance matrices.")
             print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
             print("    If this is not appropriate for your data, please provide a symmetric matrix.")
-            self.full_matrix = (self.full_matrix + self.full_matrix.T) / 2
+            self._full_matrix = (self._full_matrix + self._full_matrix.T) / 2
 
         # Convert square matrix to condensed form
-        self.condensed_matrix = squareform(self.full_matrix)
+        self.condensed_matrix = squareform(self._full_matrix)
 
         # Map our method names to fastcluster's expected method names
         fastcluster_method = self._map_method_name(self.clustering_method)
 
-        linkage_matrix = linkage(self.condensed_matrix, method=fastcluster_method)
+        # preserve_input=False: condensed_matrix is not used after linkage, saves ~50% memory
+        linkage_matrix = linkage(
+            self.condensed_matrix, method=fastcluster_method, preserve_input=False
+        )
 
         return linkage_matrix
 
@@ -539,9 +682,15 @@ class ClusterQuality:
         # Check Ward compatibility and issue one-time warning if needed
         _warn_ward_usage_once(self.matrix, self.clustering_method)
 
-        # Check symmetry before converting to condensed form
-        # squareform() requires symmetric matrices
-        if not np.allclose(self.matrix, self.matrix.T, rtol=1e-5, atol=1e-8):
+        # Check symmetry before converting to condensed form (upper triangle suffices)
+        n = self.matrix.shape[0]
+        triu_i, triu_j = np.triu_indices(n, k=1)
+        if not np.allclose(
+            self.matrix[triu_i, triu_j],
+            self.matrix[triu_j, triu_i],
+            rtol=1e-5,
+            atol=1e-8,
+        ):
             print("[!] Warning: Distance matrix is not symmetric.")
             print("    Hierarchical clustering algorithms require symmetric distance matrices.")
             print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
@@ -554,7 +703,10 @@ class ClusterQuality:
         try:
             # Map our method names to fastcluster's expected method names
             fastcluster_method = self._map_method_name(self.clustering_method)
-            linkage_matrix = linkage(condensed_matrix, method=fastcluster_method)
+            # preserve_input=False: condensed_matrix is local, not used after linkage
+            linkage_matrix = linkage(
+                condensed_matrix, method=fastcluster_method, preserve_input=False
+            )
             
             # Apply Ward D correction if needed
             if self.clustering_method == "ward_d":

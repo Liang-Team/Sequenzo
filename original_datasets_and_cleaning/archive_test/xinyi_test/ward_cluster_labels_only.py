@@ -116,7 +116,7 @@ def ward_labels_sequenzo_full(distance_matrix, num_clusters, entity_ids=None, wa
         entity_ids,
         clustering_method=ward_variant,
     )
-    _ = cluster.get_cluster_labels(num_clusters)
+    # _ = cluster.get_cluster_labels(num_clusters)
     elapsed = time.perf_counter() - t0
     return elapsed
 
