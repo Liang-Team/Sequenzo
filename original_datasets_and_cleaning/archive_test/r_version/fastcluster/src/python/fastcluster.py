@@ -34,8 +34,7 @@ except ImportError:
                           'vector data since the function '
                           'scipy.spatial.distance.pdist could not be  '
                           'imported.')
-# from _fastcluster import linkage_wrap, linkage_vector_wrap
-from _sequenzo_fastcluster import linkage_wrap, linkage_vector_wrap
+from _fastcluster import linkage_wrap, linkage_vector_wrap
 
 def single(D):
     '''Single linkage clustering (alias). See the help on the “linkage”
@@ -62,9 +61,6 @@ def ward(D):
 (alias). See the help on the “linkage” function for further information.'''
     return linkage(D, method='ward')
 
-def ward_d2(D):
-    return linkage(D, method='ward_d2')
-
 def centroid(D):
     '''Hierarchical clustering with the “centroid” distance update formula
 (alias). See the help on the “linkage” function for further information.'''
@@ -81,7 +77,6 @@ mthidx = {'single'   : 0,
           'average'  : 2,
           'weighted' : 3,
           'ward'     : 4,
-          'ward_d2'  : 7,
           'centroid' : 5,
           'median'   : 6 }
 
@@ -236,7 +231,7 @@ and simply ignores the mask.'''
     if X.ndim==1:
         if method=='single':
             preserve_input = False
-        X = array(X, dtype=double, copy=preserve_input,
+        X = array(X, dtype=double, copy=True if preserve_input else None,
                   order='C', subok=True)
         NN = len(X)
         N = int(ceil(sqrt(NN*2)))

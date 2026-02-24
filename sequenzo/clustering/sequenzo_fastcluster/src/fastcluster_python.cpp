@@ -304,8 +304,7 @@ static PyObject *linkage_wrap(PyObject * const, PyObject * const args) {
       members.init(N, 1);
     }
     // Operate on squared distances for these methods.
-    if (method==METHOD_METR_WARD ||
-        method==METHOD_METR_WARD_D2 ||
+    if (method==METHOD_METR_WARD_D2 ||
         method==METHOD_METR_CENTROID ||
         method==METHOD_METR_MEDIAN) {
       for (t_float * DD = D_; DD!=D_+static_cast<std::ptrdiff_t>(N)*(N-1)/2;
@@ -327,8 +326,6 @@ static PyObject *linkage_wrap(PyObject * const, PyObject * const args) {
       NN_chain_core<METHOD_METR_WEIGHTED, t_index>(N, D_, NULL, Z2);
       break;
     case METHOD_METR_WARD:
-      NN_chain_core<METHOD_METR_WARD, t_index>(N, D_, members, Z2);
-      break;
     case METHOD_METR_WARD_D2:
       NN_chain_core<METHOD_METR_WARD_D2, t_index>(N, D_, members, Z2);
       break;
