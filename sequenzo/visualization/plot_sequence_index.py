@@ -510,6 +510,24 @@ def plot_sequence_index(seqdata: SequenceData,
         
         print(f"[>] Creating grouped plots by '{group_by_column}' with {len(unique_values)} categories")
     
+    # Remind when grouping parameters are used in a way that cannot produce grouped plots
+    if group_column_name is not None and group_dataframe is None and group_by_column is None:
+        print(
+            "[>] Reminder: You passed `group_column_name` but not `group_dataframe`.\n"
+            "    • `group_column_name` is used together with `group_dataframe` (e.g. a separate table with cluster membership).\n"
+            "    • To group by a column that is already in your sequence data, use `group_by_column` instead (e.g. group_by_column='cohort').\n"
+            "    Proceeding with a single (ungrouped) plot."
+        )
+        group_column_name = None
+    if group_dataframe is not None and group_column_name is None:
+        print(
+            "[>] Reminder: You passed `group_dataframe` but not `group_column_name`.\n"
+            "    • When using `group_dataframe` you must also specify `group_column_name` (the column that contains group IDs).\n"
+            "    • Alternatively, to group by a column already in your sequence data, use `group_by_column`.\n"
+            "    Proceeding with a single (ungrouped) plot."
+        )
+        group_dataframe = None
+
     # If no grouping information, create a single plot
     if group_dataframe is None or group_column_name is None:
         return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids, show_title, sequence_gap, sequence_rows)

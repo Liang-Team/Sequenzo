@@ -127,8 +127,11 @@ def plot_modal_state(seqdata: SequenceData,
         ax.sharex(axes[0])
         ax.sharey(axes[0])
 
-    # Get colors for states
-    colors = seqdata.color_map_by_label
+    # Get colors for states:
+    # - use integer-coded color map for plotting (keys 1..N)
+    # - keep label-based color map for the legend
+    bar_colors = seqdata.color_map
+    legend_colors = seqdata.color_map_by_label
 
     # Process each group
     for i, group in enumerate(group_labels):
@@ -146,30 +149,28 @@ def plot_modal_state(seqdata: SequenceData,
         group_data = seq_df[group_indices]
         w = w_all[group_indices.to_numpy()]
 
-        # Calculate modal states and their frequencies for each time point
+        # Calculate modal states (numeric codes) and their frequencies for each time point
         modal_states = []
         modal_freqs = []
 
         for col in group_data.columns:
             states_idx = group_data[col].to_numpy()
-            
-            # Calculate weighted counts for each state
+
+            # Calculate weighted counts for each state (numeric encodings 1..N)
             weighted_sum = {}
-            # Use numerical state indices (1, 2, 3, ...) instead of state labels
-            for s_num in range(1, len(seqdata.states) + 1):  # s_num is the integer encoding
+            for s_num in range(1, len(seqdata.states) + 1):
                 weighted_sum[s_num] = float(w[states_idx == s_num].sum())
-            
+
             totw = float(w.sum())
-            
+
             if totw > 0:
-                # Find the state with maximum weighted count
-                modal_s = max(weighted_sum, key=weighted_sum.get)
-                modal_state = inv_state_mapping[modal_s]
-                modal_freq = weighted_sum[modal_s] / totw
+                # Find the state (numeric code) with maximum weighted count
+                modal_state_idx = max(weighted_sum, key=weighted_sum.get)
+                modal_freq = weighted_sum[modal_state_idx] / totw
             else:
-                modal_state, modal_freq = None, 0.0
-            
-            modal_states.append(modal_state)
+                modal_state_idx, modal_freq = None, 0.0
+
+            modal_states.append(modal_state_idx)
             modal_freqs.append(modal_freq)
 
         # Equal width for all bars
@@ -177,10 +178,11 @@ def plot_modal_state(seqdata: SequenceData,
         bar_width = 0.8  # Fixed width for all bars
 
         # Create bars with consistent width
-        for j, (state, freq) in enumerate(zip(modal_states, modal_freqs)):
-            if state is not None:
-                # state is already a label from inv_state_mapping
-                ax.bar(x[j], freq, width=bar_width, color=colors[state],
+        for j, (state_idx, freq) in enumerate(zip(modal_states, modal_freqs)):
+            if state_idx is not None:
+                # state_idx is the numeric encoding (1..N); use bar_colors
+                color = bar_colors.get(state_idx, 'gray')
+                ax.bar(x[j], freq, width=bar_width, color=color,
                        edgecolor='white', linewidth=0.5)
 
         # Set group title with count if requested
@@ -219,10 +221,9 @@ def plot_modal_state(seqdata: SequenceData,
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(main_fig, dpi=dpi)
 
-    # Create a legend
-    # Create standalone legend
+    # Create a legend (label-based colors)
     legend_buffer = create_standalone_legend(
-        colors=colors,
+        colors=legend_colors,
         labels=seqdata.labels,
         ncol=min(5, len(seqdata.states)),
         figsize=(fig_width, 1),

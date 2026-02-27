@@ -158,10 +158,12 @@ def plot_mean_time(seqdata: SequenceData,
         ax.barh(y=i, width=row['MeanTime'], height=0.7,
                 color=row['Color'], edgecolor='white', linewidth=0.5)
 
-    # Set y-axis ticks and labels
-    # Replace 'nan' with 'missing' for display
-    y_labels = mean_time_df['State'].copy()
-    y_labels = y_labels.replace('nan', 'missing')
+    # Set y-axis ticks and labels: use labels (e.g. 'Low', 'Medium', 'High') not raw states (e.g. 'L', 'M', 'H')
+    def _state_to_display_label(s):
+        if pd.isna(s) or (isinstance(s, str) and s.lower() in ('nan', 'missing')):
+            return 'Missing'
+        return seqdata.state_to_label.get(s, str(s))
+    y_labels = mean_time_df['State'].map(_state_to_display_label)
     ax.set_yticks(range(len(mean_time_df)))
     ax.set_yticklabels(y_labels, fontsize=fontsize-2)
 
