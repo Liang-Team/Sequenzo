@@ -1,0 +1,17 @@
+metric,value
+total_rows_input,1723
+rows_dropped_invalid_date,0
+rows_dropped_cohort,390
+rows_dropped_duplicates,17
+rows_dropped_invalid_pss,1
+ids_before_8_filter,127
+ids_dropped_insufficient_weeks,38
+final_N_individuals,89
+final_rows_in_long_output,712
+min_obs_per_id_after_filter,1
+median_obs_per_id_after_filter,12
+max_obs_per_id_after_filter,34
+
+cohort,count
+Fall,55
+Spring,34

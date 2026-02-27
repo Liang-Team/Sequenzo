@@ -1,0 +1,12 @@
+{
+  "method_name": "fixed_thresholds_v1",
+  "boundaries": [
+    1.5,
+    2.5
+  ],
+  "labels": [
+    "L",
+    "M",
+    "H"
+  ]
+}
