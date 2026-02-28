@@ -1,90 +1,77 @@
-participant_id,cohort,1,2,3,4,5,6,7,8
-Fall 100,Fall,M,L,L,L,L,L,H,L
-Fall 101,Fall,M,M,M,M,M,L,L,M
-Fall 102,Fall,M,M,M,M,M,M,L,L
-Fall 103,Fall,L,L,M,L,H,L,M,M
-Fall 104,Fall,L,L,L,L,L,L,M,L
-Fall 24,Fall,M,M,M,M,L,L,L,L
-Fall 26,Fall,M,H,H,M,M,M,H,H
-Fall 27,Fall,H,H,M,M,M,M,M,M
-Fall 28,Fall,L,L,L,L,L,L,M,M
-Fall 29,Fall,M,M,M,M,M,M,L,L
-Fall 30,Fall,H,M,M,M,M,M,M,M
-Fall 31,Fall,M,M,M,M,M,L,M,M
-Fall 32,Fall,L,L,L,L,L,L,L,L
-Fall 33,Fall,L,M,M,L,M,H,M,L
-Fall 34,Fall,H,M,H,H,H,H,M,H
-Fall 35,Fall,L,L,L,M,L,M,L,L
-Fall 36,Fall,L,L,L,L,L,L,L,L
-Fall 37,Fall,H,H,H,H,H,H,H,H
-Fall 39,Fall,L,L,L,L,L,M,M,L
-Fall 40,Fall,L,L,L,L,L,L,L,L
-Fall 41,Fall,M,M,M,M,M,M,M,M
-Fall 42,Fall,L,L,L,L,L,L,L,M
-Fall 43,Fall,M,L,L,M,L,L,L,L
-Fall 45,Fall,H,H,H,H,H,H,H,H
-Fall 48,Fall,L,L,L,L,L,L,L,L
-Fall 49,Fall,M,L,M,M,L,M,M,M
-Fall 51,Fall,M,H,M,H,H,M,H,M
-Fall 53,Fall,M,L,L,L,L,L,L,L
-Fall 54,Fall,M,L,L,M,L,M,M,L
-Fall 56,Fall,M,M,L,M,H,M,H,H
-Fall 57,Fall,M,M,M,H,M,M,M,M
-Fall 58,Fall,L,M,M,M,M,M,M,M
-Fall 59,Fall,L,L,L,L,L,L,M,L
-Fall 60,Fall,M,M,M,M,M,M,M,L
-Fall 61,Fall,L,L,L,L,L,L,L,L
-Fall 62,Fall,M,M,M,M,M,M,M,M
-Fall 63,Fall,M,H,M,H,H,H,H,H
-Fall 64,Fall,M,M,L,L,L,L,L,L
-Fall 68,Fall,L,L,L,L,L,L,L,L
-Fall 70,Fall,L,M,M,M,L,L,L,L
-Fall 73,Fall,M,H,M,H,M,M,H,H
-Fall 75,Fall,H,M,M,H,H,H,M,L
-Fall 79,Fall,M,H,M,M,M,H,H,H
-Fall 81,Fall,M,H,H,M,H,H,M,H
-Fall 84,Fall,M,L,L,L,M,L,L,L
-Fall 86,Fall,M,M,H,M,M,M,M,M
-Fall 88,Fall,L,L,L,M,M,L,L,L
-Fall 89,Fall,L,L,M,M,M,H,H,M
-Fall 91,Fall,M,M,L,L,M,L,L,M
-Fall 92,Fall,M,L,L,M,L,L,L,L
-Fall 93,Fall,L,L,L,L,L,L,L,L
-Fall 94,Fall,M,M,H,M,L,M,M,L
-Fall 95,Fall,M,M,L,M,L,L,L,L
-Fall 96,Fall,M,M,M,M,M,M,H,M
-Fall 99,Fall,M,M,M,M,M,M,M,M
-Spring 105,Spring,M,H,M,H,M,M,M,M
-Spring 107,Spring,H,H,H,H,H,H,H,H
-Spring 108,Spring,M,H,M,M,H,L,M,L
-Spring 110,Spring,M,M,L,L,L,L,L,L
-Spring 111,Spring,L,M,M,L,L,L,L,L
-Spring 112,Spring,M,M,L,M,L,L,L,L
-Spring 114,Spring,H,M,M,M,H,M,M,H
-Spring 115,Spring,M,L,M,L,L,L,L,L
-Spring 116,Spring,L,L,L,M,L,L,L,M
-Spring 117,Spring,M,M,M,L,L,L,M,M
-Spring 118,Spring,L,L,L,L,L,L,L,L
-Spring 120,Spring,L,L,L,L,L,L,L,L
-Spring 122,Spring,L,M,L,M,M,L,L,L
-Spring 123,Spring,M,M,M,H,H,M,M,M
-Spring 124,Spring,M,M,M,M,M,M,L,M
-Spring 126,Spring,L,M,M,M,M,L,M,L
-Spring 127,Spring,L,L,L,L,L,L,L,L
-Spring 128,Spring,L,M,M,L,M,L,H,H
-Spring 130,Spring,M,M,L,M,M,M,M,M
-Spring 131,Spring,M,M,L,L,L,L,L,L
-Spring 132,Spring,L,L,L,M,L,L,L,L
-Spring 134,Spring,M,L,L,H,M,M,L,M
-Spring 135,Spring,L,L,M,M,L,L,H,M
-Spring 137,Spring,M,M,M,L,L,L,M,L
-Spring 139,Spring,L,L,L,L,L,L,L,L
-Spring 142,Spring,L,M,L,L,L,M,L,M
-Spring 143,Spring,H,M,H,H,M,M,H,M
-Spring 144,Spring,L,L,L,L,L,L,L,L
-Spring 147,Spring,M,M,L,L,M,M,L,M
-Spring 149,Spring,M,M,L,L,L,M,M,L
-Spring 15,Spring,H,M,M,M,M,M,M,M
-Spring 150,Spring,L,M,L,L,M,L,M,M
-Spring 170,Spring,H,M,M,M,M,M,M,L
-Spring 7,Spring,M,M,M,M,M,M,L,M
+participant_id,cohort,1,2,3,4,5,6,7,8,gender,income_group,race,avg_study_time
+Fall 101,Fall,M,M,M,M,M,L,L,M,male,Middle ($60k–$150k),Other,Higher (T3)
+Fall 104,Fall,L,L,L,L,L,L,M,L,female,Middle ($60k–$150k),Asian,Higher (T3)
+Fall 24,Fall,M,M,M,M,L,L,L,L,female,Higher ($150k+),White,Lower (T1)
+Fall 26,Fall,M,H,H,M,M,M,H,H,female,Middle ($60k–$150k),Asian,Middle (T2)
+Fall 27,Fall,H,H,M,M,M,M,M,M,male,Middle ($60k–$150k),White,Higher (T3)
+Fall 28,Fall,L,L,L,L,L,L,M,M,male,Higher ($150k+),Asian,Higher (T3)
+Fall 29,Fall,M,M,M,M,M,M,L,L,male,Middle ($60k–$150k),White,Middle (T2)
+Fall 30,Fall,H,M,M,M,M,M,M,M,female,Unknown,White,Lower (T1)
+Fall 31,Fall,M,M,M,M,M,L,M,M,female,Middle ($60k–$150k),Asian,Middle (T2)
+Fall 32,Fall,L,L,L,L,L,L,L,L,female,Unknown,White,Higher (T3)
+Fall 33,Fall,L,M,M,L,M,H,M,L,female,Higher ($150k+),White,Higher (T3)
+Fall 34,Fall,H,M,H,H,H,H,M,H,male,Lower (<$60k),White,Middle (T2)
+Fall 35,Fall,L,L,L,M,L,M,L,L,female,Unknown,White,Higher (T3)
+Fall 36,Fall,L,L,L,L,L,L,L,L,female,Middle ($60k–$150k),White,Lower (T1)
+Fall 37,Fall,H,H,H,H,H,H,H,H,female,Higher ($150k+),Asian,Higher (T3)
+Fall 39,Fall,L,L,L,L,L,M,M,L,male,Higher ($150k+),White,Lower (T1)
+Fall 40,Fall,L,L,L,L,L,L,L,L,male,Middle ($60k–$150k),Asian,Higher (T3)
+Fall 41,Fall,M,M,M,M,M,M,M,M,female,Middle ($60k–$150k),Asian,Higher (T3)
+Fall 42,Fall,L,L,L,L,L,L,L,M,male,Middle ($60k–$150k),White,Middle (T2)
+Fall 43,Fall,M,L,L,M,L,L,L,L,male,Unknown,White,Higher (T3)
+Fall 45,Fall,H,H,H,H,H,H,H,H,female,Unknown,Asian,Higher (T3)
+Fall 48,Fall,L,L,L,L,L,L,L,L,male,Higher ($150k+),White,Middle (T2)
+Fall 49,Fall,M,L,M,M,L,M,M,M,female,Unknown,White,Middle (T2)
+Fall 51,Fall,M,H,M,H,H,M,H,M,female,Middle ($60k–$150k),Asian,Middle (T2)
+Fall 53,Fall,M,L,L,L,L,L,L,L,female,Unknown,Asian,Lower (T1)
+Fall 54,Fall,M,L,L,M,L,M,M,L,female,Higher ($150k+),White,Middle (T2)
+Fall 56,Fall,M,M,L,M,H,M,H,H,female,Middle ($60k–$150k),White,Lower (T1)
+Fall 57,Fall,M,M,M,H,M,M,M,M,female,Middle ($60k–$150k),White,Middle (T2)
+Fall 58,Fall,L,M,M,M,M,M,M,M,male,Higher ($150k+),White,Higher (T3)
+Fall 59,Fall,L,L,L,L,L,L,M,L,female,Middle ($60k–$150k),White,Middle (T2)
+Fall 60,Fall,M,M,M,M,M,M,M,L,female,Middle ($60k–$150k),Asian,Middle (T2)
+Fall 61,Fall,L,L,L,L,L,L,L,L,female,Middle ($60k–$150k),White,Middle (T2)
+Fall 62,Fall,M,M,M,M,M,M,M,M,female,Middle ($60k–$150k),White,Middle (T2)
+Fall 63,Fall,M,H,M,H,H,H,H,H,female,Lower (<$60k),Asian,Higher (T3)
+Fall 64,Fall,M,M,L,L,L,L,L,L,female,Middle ($60k–$150k),Asian,Middle (T2)
+Fall 68,Fall,L,L,L,L,L,L,L,L,female,Higher ($150k+),White,Higher (T3)
+Fall 70,Fall,L,M,M,M,L,L,L,L,female,Middle ($60k–$150k),White,Lower (T1)
+Fall 73,Fall,M,H,M,H,M,M,H,H,female,Lower (<$60k),Prefer not to answer,Higher (T3)
+Fall 75,Fall,H,M,M,H,H,H,M,L,female,Higher ($150k+),White,Lower (T1)
+Fall 79,Fall,M,H,M,M,M,H,H,H,female,Middle ($60k–$150k),Black or African American,Middle (T2)
+Fall 81,Fall,M,H,H,M,H,H,M,H,female,Middle ($60k–$150k),White,Middle (T2)
+Fall 84,Fall,M,L,L,L,M,L,L,L,female,Unknown,Asian,Higher (T3)
+Fall 86,Fall,M,M,H,M,M,M,M,M,female,Middle ($60k–$150k),Black or African American,Higher (T3)
+Fall 88,Fall,L,L,L,M,M,L,L,L,female,Lower (<$60k),Asian,Lower (T1)
+Fall 89,Fall,L,L,M,M,M,H,H,M,female,Middle ($60k–$150k),Asian,Higher (T3)
+Fall 91,Fall,M,M,L,L,M,L,L,M,male,Middle ($60k–$150k),Prefer not to answer,Higher (T3)
+Fall 93,Fall,L,L,L,L,L,L,L,L,female,Middle ($60k–$150k),White,Higher (T3)
+Fall 95,Fall,M,M,L,M,L,L,L,L,female,Higher ($150k+),Asian,Middle (T2)
+Fall 96,Fall,M,M,M,M,M,M,H,M,female,Higher ($150k+),White,Middle (T2)
+Fall 99,Fall,M,M,M,M,M,M,M,M,female,Unknown,Asian,Higher (T3)
+Spring 105,Spring,M,H,M,H,M,M,M,M,male,Higher ($150k+),Asian,Lower (T1)
+Spring 107,Spring,H,H,H,H,H,H,H,H,female,Middle ($60k–$150k),Prefer not to answer,Higher (T3)
+Spring 108,Spring,M,H,M,M,H,L,M,L,male,Unknown,Asian,Higher (T3)
+Spring 110,Spring,M,M,L,L,L,L,L,L,female,Higher ($150k+),Asian,Higher (T3)
+Spring 112,Spring,M,M,L,M,L,L,L,L,male,Higher ($150k+),White,Middle (T2)
+Spring 114,Spring,H,M,M,M,H,M,M,H,female,Unknown,White,Middle (T2)
+Spring 115,Spring,M,L,M,L,L,L,L,L,female,Lower (<$60k),White,Middle (T2)
+Spring 116,Spring,L,L,L,M,L,L,L,M,male,Middle ($60k–$150k),White,Middle (T2)
+Spring 117,Spring,M,M,M,L,L,L,M,M,male,Middle ($60k–$150k),Asian,Higher (T3)
+Spring 118,Spring,L,L,L,L,L,L,L,L,female,Middle ($60k–$150k),White,Lower (T1)
+Spring 120,Spring,L,L,L,L,L,L,L,L,female,Lower (<$60k),Asian,Lower (T1)
+Spring 122,Spring,L,M,L,M,M,L,L,L,male,Higher ($150k+),White,Middle (T2)
+Spring 124,Spring,M,M,M,M,M,M,L,M,female,Middle ($60k–$150k),White,Middle (T2)
+Spring 126,Spring,L,M,M,M,M,L,M,L,male,Lower (<$60k),Asian,Higher (T3)
+Spring 127,Spring,L,L,L,L,L,L,L,L,male,Middle ($60k–$150k),White,Middle (T2)
+Spring 128,Spring,L,M,M,L,M,L,H,H,female,Middle ($60k–$150k),White,Middle (T2)
+Spring 130,Spring,M,M,L,M,M,M,M,M,female,Unknown,White,Middle (T2)
+Spring 131,Spring,M,M,L,L,L,L,L,L,female,Higher ($150k+),Asian,Higher (T3)
+Spring 132,Spring,L,L,L,M,L,L,L,L,female,Lower (<$60k),Other,Lower (T1)
+Spring 134,Spring,M,L,L,H,M,M,L,M,male,Middle ($60k–$150k),White,Lower (T1)
+Spring 137,Spring,M,M,M,L,L,L,M,L,male,Unknown,White,Middle (T2)
+Spring 139,Spring,L,L,L,L,L,L,L,L,male,Higher ($150k+),White,Middle (T2)
+Spring 143,Spring,H,M,H,H,M,M,H,M,female,Middle ($60k–$150k),White,Middle (T2)
+Spring 144,Spring,L,L,L,L,L,L,L,L,male,Unknown,White,Middle (T2)
+Spring 147,Spring,M,M,L,L,M,M,L,M,female,Unknown,Prefer not to answer,Lower (T1)
+Spring 149,Spring,M,M,L,L,L,M,M,L,female,Higher ($150k+),White,Higher (T3)

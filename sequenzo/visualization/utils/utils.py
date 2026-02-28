@@ -233,9 +233,8 @@ def determine_layout(num_items: int,
 
     # Automatic layout
     if layout == 'column':
-        # Use up to 3 columns, but never exceed the number of items.
-        # This avoids allocating invisible (but space-occupying) subplots
-        # that cause extra blank space on the right when num_items < 3.
+        # Use up to 3 columns per row; never exceed the number of items for ncols.
+        # Extra grid slots (if any) are hidden by plot_sequence_index.
         ncols = int(min(3, max(1, num_items)))
         nrows = (num_items + ncols - 1) // ncols
     elif layout == 'grid':

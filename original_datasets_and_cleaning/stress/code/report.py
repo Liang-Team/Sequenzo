@@ -25,6 +25,8 @@ def build_report_df(report, df_final=None):
         ("rows_dropped_invalid_pss", report.get("rows_dropped_invalid_pss", "")),
         ("ids_before_8_filter", report.get("ids_before_8_filter", "")),
         ("ids_dropped_insufficient_weeks", report.get("ids_dropped_insufficient_weeks", "")),
+        ("N_before_demographic_filter", report.get("N_before_demographic_filter", "")),
+        ("ids_dropped_no_demographic", report.get("ids_dropped_no_demographic", "")),
         ("final_N_individuals", report.get("final_N", "")),
         ("final_rows_in_long_output", report.get("final_N", "") * 8 if report.get("final_N") is not None else ""),
         ("min_obs_per_id_after_filter", report.get("min_obs_per_id", "")),
