@@ -15,8 +15,9 @@ from pathlib import Path
 CODE_DIR = Path(__file__).resolve().parent
 STRESS_DIR = CODE_DIR.parent
 DATA_DIR = STRESS_DIR
+DATA_SOURCE_DIR = STRESS_DIR / "data_source"
 
-INPUT_CSV = DATA_DIR / "PANAS_PSS.csv"
+INPUT_CSV = DATA_SOURCE_DIR / "PANAS_PSS.csv"
 OUTPUT_DIR = DATA_DIR / "cleaned_data"  # all pipeline outputs go here
 
 OUTPUT_WIDE = OUTPUT_DIR / "stress_sequence_wide.csv"

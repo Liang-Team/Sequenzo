@@ -637,8 +637,19 @@ def plot_sequence_index(seqdata: SequenceData,
         groups = list(group_dataframe[group_column_name].unique())
     else:
         raise ValueError(f"Invalid sort_groups value: {sort_groups}. Use 'auto', 'numeric', 'alpha', or 'none'.")
-    
+
+    # Keep only groups that have at least one matching sequence (avoids empty subplots)
+    groups_with_data = []
+    for g in groups:
+        group_ids = group_dataframe[group_dataframe[group_column_name] == g][id_col_name].values
+        if np.any(np.isin(seqdata.ids, group_ids)):
+            groups_with_data.append(g)
+        else:
+            print(f"[>] Skipping group '{g}' (no matching sequences).")
+    groups = groups_with_data
     num_groups = len(groups)
+    if num_groups == 0:
+        raise ValueError("No groups have matching sequences in the data. Cannot create grouped plot.")
 
     # Calculate figure size and layout based on number of groups and specified layout
     nrows, ncols = determine_layout(num_groups, layout=layout, nrows=nrows, ncols=ncols)
@@ -683,7 +694,8 @@ def plot_sequence_index(seqdata: SequenceData,
             figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows),
             gridspec_kw={'wspace': 0.15, 'hspace': hspace_value}
         )
-        axes = axes.flatten()
+        # When nrows=ncols=1, plt.subplots returns single Axes (no .flatten()); ensure 1D array
+        axes = np.atleast_1d(axes).flatten()
 
     # Dictionary to store sorted IDs for each group (if return_sorted_ids is True)
     # Use OrderedDict or list to maintain group order
@@ -903,8 +915,9 @@ def plot_sequence_index(seqdata: SequenceData,
 
     # Hide unused subplots (not needed for proportional scaling with column layout)
     if not (proportional_scaling and layout == 'column'):
-        for j in range(i + 1, len(axes)):
+        for j in range(num_groups, len(axes)):
             axes[j].set_visible(False)
+            axes[j].axis('off')
 
     # Add a common title if provided and show_title is True
     if title and show_title:
