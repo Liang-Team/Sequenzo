@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺, Xinyi Li 李欣怡
 @File    : plot_relative_frequency.py
 @Time    : 06/02/2025 10:17
 @Desc    :
@@ -107,17 +107,16 @@ def plot_relative_frequency(seqdata: SequenceData,
     ax.set_xlabel("Time", fontsize=fontsize)
     ax.set_ylabel("Frequency Group", fontsize=fontsize)
 
-    # X-axis labels
-    # TODO 权宜之计，不然 index plot 里面没有，但是这里有但是在 quickstart 和 multidomain main_tutorial 里面
-    # 因为time一个数字一个string导致不一样，太麻烦了
+    # X-axis labels: place ticks at the *center* of each time interval (rectangle is [t, t+1])
     # 仅显示一部分 xticks，避免过于密集
     xtick_positions = np.arange(len(seqdata.cleaned_time))
     skip = max(1, len(seqdata.cleaned_time) // 8)  # 每隔几个显示一个（可调）
-    visible_positions = xtick_positions[::skip]
-    visible_labels = [seqdata.cleaned_time[i] for i in visible_positions]
+    visible_indices = xtick_positions[::skip]
+    visible_positions = visible_indices + 0.5  # center of each interval
+    visible_labels = [seqdata.cleaned_time[i] for i in visible_indices]
 
     ax.set_xticks(visible_positions)
-    ax.set_xticklabels(visible_labels, fontsize=fontsize-2, rotation=0, ha='right', color='gray')
+    ax.set_xticklabels(visible_labels, fontsize=fontsize-2, rotation=0, ha='center', color='gray')
 
     # Y-axis labels
     ax.set_yticks(range(1, num_groups + 1, max(1, num_groups // 10)))
