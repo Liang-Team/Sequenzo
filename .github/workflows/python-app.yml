@@ -516,7 +516,7 @@ jobs:
             echo ""
             echo "=== Testing Sequenzo import ==="
             python - <<'PY'
-            import importlib
+            import importlib.util
             import sys
             import os
             import numpy as np
@@ -623,7 +623,7 @@ jobs:
           # Linux/other platforms test command (original)
           CIBW_TEST_COMMAND: |
             python - <<'PY'
-            import importlib
+            import importlib.util
             import sys
             import numpy as np
 
@@ -722,7 +722,7 @@ jobs:
             echo "Testing Sequenzo wheel on Windows"
             echo "" > test_sequenzo_ci.py
             Add-Content test_sequenzo_ci.py @"
-            import importlib, sys
+            import importlib.util, sys
             import numpy as np
             import sequenzo
             print('Sequenzo import successful')
@@ -867,7 +867,7 @@ jobs:
           python -c "
           import os
           import sys
-          import importlib
+          import importlib.util
 
           # 设置标准输出编码为 UTF-8 以避免 Windows 编码问题
           if sys.platform == 'win32':
