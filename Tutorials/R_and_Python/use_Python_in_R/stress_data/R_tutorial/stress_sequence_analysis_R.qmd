@@ -45,9 +45,29 @@ We will use the built-in dataset `students_stress_states_by_week`, which is the 
 
 The tutorial assumes only basic familiarity with R (data frames, packages) and no prior experience with Python.
 
+::: {.callout-tip}
+## How to preview this tutorial in the format of HTML
+
+*Note: It is very important to learn command lines and terminal if you would like to be more technical and understand the underlying mechanics of coding and computer.*
+
+Run Quarto from the folder that contains this file (`R_tutorial`), or pass the full path to the file.
+
+- **Option A: use command line `cd` (meaning change directory) to the folder first:**  
+  `cd path/to/R_tutorial`  
+  `quarto preview stress_sequence_analysis_R.qmd`  
+  (Replace `path/to/R_tutorial` with your path, e.g. `Tutorials/R_and_Python/use_Python_in_R/stress_data/R_tutorial` from the project root.)
+
+- **Option B: use the full path:**  
+  `quarto preview /full/path/to/R_tutorial/stress_sequence_analysis_R.qmd`
+
+A browser window will open with the rendered HTML. To only build the HTML file without opening a browser, use `quarto render stress_sequence_analysis_R.qmd` (from the same folder or with full path); the output is `stress_sequence_analysis_R.html`.
+
+If you would like to have a PDF version of this tutorial, you can open the HTML file in your Chrome browser, and then save or print it as a PDF. It is a lot easier than trying to render the PDF directly in Quarto as Quarto uses LaTeX under the hood for PDF generation and you might encounter a lot of errors (LaTeX not found, pdflatex not found, etc.).
+:::
+
 ### When do we use R code, and when do we use Python code?
 
-**Rule of thumb:** This document is an **R (Quarto) document**. So every code chunk is R code. It means that you are always writing and running R. We never switch to a separate Python script or notebook. When we need Sequenzo (a Python library), we **call it from R** using the **`{reticulate}`** package. So “R vs Python” here really means: “plain R” vs “R code that calls Python.”
+**Rule of thumb:** This document is an R (Quarto) document. So every code chunk is R code. It means that you are always writing and running R. We never switch to a separate Python script or notebook. When we need Sequenzo (a Python library), we **call it from R** using the **`{reticulate}`** package. So “R vs Python” here really means: “plain R” vs “R code that calls Python.”
 
 | What you see in the chunk | What it is | Example |
 |---------------------------|------------|--------|
@@ -69,7 +89,6 @@ First, make sure you have the necessary R packages. We will use:
 
 - `{pacman}` for easy package loading/installation
 - `{reticulate}` to call Python from R
-- `{tictoc}` to time longer computations (e.g. distance matrix)
 - `{tidyverse}` for basic data wrangling and summaries
 
 ```{r packages}
@@ -81,7 +100,6 @@ library(pacman)
 pacman::p_load(
   knitr,      # tables
   reticulate, # R interface to Python
-  tictoc,     # simple timing
   tidyverse   # data wrangling and plotting
 )
 ```
