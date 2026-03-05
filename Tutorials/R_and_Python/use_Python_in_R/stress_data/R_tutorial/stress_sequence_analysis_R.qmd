@@ -3,7 +3,7 @@ title: "Stress Sequences with Sequenzo in R"
 subtitle: "Using the DEPRESS students_stress_states_by_week dataset from R via reticulate"
 date: today
 author:
-  - name: "Yuqi Liang"
+  - name: "Yuqi Liang; Yapeng Wei"
 format:
   html:
     toc: true
