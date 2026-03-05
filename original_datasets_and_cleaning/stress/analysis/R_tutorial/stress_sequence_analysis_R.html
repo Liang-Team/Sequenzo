@@ -3026,7 +3026,8 @@ vertical-align: -.125em;
     <h2 id="toc-title">Contents</h2>
    
   <ul>
-  <li><a href="#setup" id="toc-setup" class="nav-link active" data-scroll-target="#setup"><span class="header-section-number">1</span> Setup</a>
+  <li><a href="#when-do-we-use-r-code-and-when-do-we-use-python-code" id="toc-when-do-we-use-r-code-and-when-do-we-use-python-code" class="nav-link active" data-scroll-target="#when-do-we-use-r-code-and-when-do-we-use-python-code"><span class="header-section-number">0.1</span> When do we use R code, and when do we use Python code?</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup"><span class="header-section-number">1</span> Setup</a>
   <ul class="collapse">
   <li><a href="#install-and-load-r-packages" id="toc-install-and-load-r-packages" class="nav-link" data-scroll-target="#install-and-load-r-packages"><span class="header-section-number">1.1</span> Install and load R packages</a></li>
   <li><a href="#one-time-python-sequenzo-installation-if-needed" id="toc-one-time-python-sequenzo-installation-if-needed" class="nav-link" data-scroll-target="#one-time-python-sequenzo-installation-if-needed"><span class="header-section-number">1.2</span> One-time Python + Sequenzo installation (if needed)</a></li>
@@ -3046,19 +3047,20 @@ vertical-align: -.125em;
   <li><a href="#visualise-stress-sequences" id="toc-visualise-stress-sequences" class="nav-link" data-scroll-target="#visualise-stress-sequences"><span class="header-section-number">4</span> Visualise stress sequences</a>
   <ul class="collapse">
   <li><a href="#legend" id="toc-legend" class="nav-link" data-scroll-target="#legend"><span class="header-section-number">4.1</span> Legend</a></li>
-  <li><a href="#index-plot-all-sequences" id="toc-index-plot-all-sequences" class="nav-link" data-scroll-target="#index-plot-all-sequences"><span class="header-section-number">4.2</span> Index plot — all sequences</a></li>
-  <li><a href="#state-distribution-plot-all-sequences" id="toc-state-distribution-plot-all-sequences" class="nav-link" data-scroll-target="#state-distribution-plot-all-sequences"><span class="header-section-number">4.3</span> State-distribution plot — all sequences</a></li>
+  <li><a href="#index-plot" id="toc-index-plot" class="nav-link" data-scroll-target="#index-plot"><span class="header-section-number">4.2</span> Index plot</a></li>
+  <li><a href="#state-distribution-plot" id="toc-state-distribution-plot" class="nav-link" data-scroll-target="#state-distribution-plot"><span class="header-section-number">4.3</span> State-distribution plot</a></li>
   <li><a href="#mean-time-in-each-state" id="toc-mean-time-in-each-state" class="nav-link" data-scroll-target="#mean-time-in-each-state"><span class="header-section-number">4.4</span> Mean time in each state</a></li>
   </ul></li>
   <li><a href="#compute-dissimilarities-between-sequences" id="toc-compute-dissimilarities-between-sequences" class="nav-link" data-scroll-target="#compute-dissimilarities-between-sequences"><span class="header-section-number">5</span> Compute dissimilarities between sequences</a></li>
   <li><a href="#cluster-analysis" id="toc-cluster-analysis" class="nav-link" data-scroll-target="#cluster-analysis"><span class="header-section-number">6</span> Cluster analysis</a>
   <ul class="collapse">
   <li><a href="#ward-clustering-and-dendrogram" id="toc-ward-clustering-and-dendrogram" class="nav-link" data-scroll-target="#ward-clustering-and-dendrogram"><span class="header-section-number">6.1</span> Ward clustering and dendrogram</a></li>
-  <li><a href="#cluster-memberships-and-distribution" id="toc-cluster-memberships-and-distribution" class="nav-link" data-scroll-target="#cluster-memberships-and-distribution"><span class="header-section-number">6.2</span> Cluster memberships and distribution</a></li>
+  <li><a href="#cluster-quality-and-choosing-k" id="toc-cluster-quality-and-choosing-k" class="nav-link" data-scroll-target="#cluster-quality-and-choosing-k"><span class="header-section-number">6.2</span> Cluster quality and choosing k</a></li>
+  <li><a href="#cluster-memberships-and-distribution" id="toc-cluster-memberships-and-distribution" class="nav-link" data-scroll-target="#cluster-memberships-and-distribution"><span class="header-section-number">6.3</span> Cluster memberships and distribution</a></li>
   </ul></li>
   <li><a href="#interpreting-clusters-index-and-state-distribution-plots" id="toc-interpreting-clusters-index-and-state-distribution-plots" class="nav-link" data-scroll-target="#interpreting-clusters-index-and-state-distribution-plots"><span class="header-section-number">7</span> Interpreting clusters: index and state-distribution plots</a>
   <ul class="collapse">
-  <li><a href="#prepare-cluster-labels-optional" id="toc-prepare-cluster-labels-optional" class="nav-link" data-scroll-target="#prepare-cluster-labels-optional"><span class="header-section-number">7.1</span> Prepare cluster labels (optional)</a></li>
+  <li><a href="#prepare-cluster-labels" id="toc-prepare-cluster-labels" class="nav-link" data-scroll-target="#prepare-cluster-labels"><span class="header-section-number">7.1</span> Prepare cluster labels</a></li>
   <li><a href="#index-plots-by-cluster" id="toc-index-plots-by-cluster" class="nav-link" data-scroll-target="#index-plots-by-cluster"><span class="header-section-number">7.2</span> Index plots by cluster</a></li>
   <li><a href="#state-distribution-plots-by-cluster" id="toc-state-distribution-plots-by-cluster" class="nav-link" data-scroll-target="#state-distribution-plots-by-cluster"><span class="header-section-number">7.3</span> State-distribution plots by cluster</a></li>
   </ul></li>
@@ -3101,7 +3103,7 @@ vertical-align: -.125em;
 
 </header>
 
-<p>This tutorial shows how to use <a href="https://sequenzo.yuqi-liang.tech/en/"><code>Sequenzo</code></a> from <strong>R</strong> (via the <code>{reticulate}</code> package) to analyze <strong>weekly stress sequences</strong> from the DEPRESS study.</p>
+<p>This tutorial shows how to use <a href="https://sequenzo.yuqi-liang.tech/en/"><code>Sequenzo</code></a> from R (via the <code>{reticulate}</code> package) to analyze weekly stress sequences from the DEPRESS study (Guo et al., 2026). For further details about the DEPRESS study, please refer to <a href="https://sequenzo.yuqi-liang.tech/en/datasets/stress-data">our documentation</a>.</p>
 <p>We will use the built-in dataset <code>students_stress_states_by_week</code>, which is the same data used in the Python notebook <code>stress_typical_workflow.ipynb</code>. The goal is to give a clear, step-by-step introduction that is friendly to R users who are new to Python and to sequence analysis.</p>
 <ul>
 <li><strong>What you will learn</strong>
@@ -3113,8 +3115,54 @@ vertical-align: -.125em;
 <li>How to compute dissimilarities and run a simple cluster analysis (3 stress-pattern clusters)</li>
 </ul></li>
 </ul>
-<p>The tutorial assumes only basic familiarity with R (data frames, packages) and <strong>no prior experience with Python</strong>.</p>
+<p>The tutorial assumes only basic familiarity with R (data frames, packages) and no prior experience with Python.</p>
+<section id="when-do-we-use-r-code-and-when-do-we-use-python-code" class="level3" data-number="0.1">
+<h3 data-number="0.1" class="anchored" data-anchor-id="when-do-we-use-r-code-and-when-do-we-use-python-code"><span class="header-section-number">0.1</span> When do we use R code, and when do we use Python code?</h3>
+<p><strong>Rule of thumb:</strong> This document is an <strong>R (Quarto) document</strong>. So every code chunk is R code. It means that you are always writing and running R. We never switch to a separate Python script or notebook. When we need Sequenzo (a Python library), we <strong>call it from R</strong> using the <strong><code>{reticulate}</code></strong> package. So “R vs Python” here really means: “plain R” vs “R code that calls Python.”</p>
+<table class="table">
+<colgroup>
+<col style="width: 57%">
+<col style="width: 25%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>What you see in the chunk</th>
+<th>What it is</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Normal R syntax</td>
+<td><strong>R code</strong> that runs in R. Load packages, define variables, use R functions.</td>
+<td><code>library(reticulate)</code>, <code>n_clusters &lt;- 3</code>, <code>knitr::include_graphics(&quot;img/...&quot;)</code></td>
+</tr>
+<tr class="even">
+<td><code>something$function_name(...)</code> where <code>something</code> came from Python</td>
+<td><strong>R calling Python</strong>: the object is a Python object living in R; <code>$</code> calls its method or attribute.</td>
+<td><code>sequenzo$load_dataset(&quot;...&quot;)</code>, <code>sequence_data$plot_legend(save_as = &quot;...&quot;)</code></td>
+</tr>
+<tr class="odd">
+<td><code>import(&quot;sequenzo&quot;)</code></td>
+<td><strong>R code</strong> that loads a Python module and gives you an R reference to it. From then on, <code>sequenzo$...</code> is calling Python.</td>
+<td><code>sequenzo &lt;- import(&quot;sequenzo&quot;)</code></td>
+</tr>
+<tr class="even">
+<td><code>r_to_py(x)</code></td>
+<td><strong>R code</strong> that converts an R object <code>x</code> into a Python copy, so we can pass it into Python functions.</td>
+<td><code>stress_py &lt;- r_to_py(stress_seq)</code></td>
+</tr>
+<tr class="odd">
+<td><code>py_run_string(&quot; ... &quot;)</code></td>
+<td><strong>R code</strong> that runs the <strong>string inside the quotes as Python code</strong>. So the content of the string is the only place where you see real Python syntax (e.g. <code>from sequenzo import ...</code>, indentation).</td>
+<td>Used later for a few cluster plots.</td>
+</tr>
+</tbody>
+</table>
+<p>So: <strong>outside</strong> <code>py_run_string(&quot;...&quot;)</code>, everything is R; <strong>inside</strong> the quotes of <code>py_run_string(&quot;...&quot;)</code>, the text is Python. That way you always know “am I reading R or Python?”, and you never leave this R session.</p>
 <hr>
+</section>
 <section id="setup" class="level2" data-number="1">
 <h2 data-number="1" class="anchored" data-anchor-id="setup"><span class="header-section-number">1</span> Setup</h2>
 <section id="install-and-load-r-packages" class="level3" data-number="1.1">
@@ -3223,25 +3271,25 @@ vertical-align: -.125em;
 </div>
 <p>The dataset has:</p>
 <ul>
-<li>one row per <strong>student</strong></li>
+<li>one row per student</li>
 <li>columns:
 <ul>
 <li><code>participant_id</code> (ID)</li>
 <li><code>cohort</code> (Summer / Fall / Spring)</li>
-<li><code>1</code>–<code>8</code>: weekly stress <strong>states</strong> over 8 weeks</li>
+<li><code>1</code>–<code>8</code>: weekly stress states over 8 weeks</li>
 <li>background variables such as <code>gender</code>, <code>income_group</code>, <code>race</code>, and <code>avg_study_time</code></li>
 </ul></li>
 </ul>
 </section>
 <section id="what-do-l-m-h-mean" class="level3" data-number="2.3">
 <h3 data-number="2.3" class="anchored" data-anchor-id="what-do-l-m-h-mean"><span class="header-section-number">2.3</span> What do L / M / H mean?</h3>
-<p>In this cleaned dataset, each week is coded as one of three <strong>stress states</strong>:</p>
+<p>In this cleaned dataset, each week is coded as one of three stress states:</p>
 <ul>
 <li><strong>L</strong> = Low stress</li>
 <li><strong>M</strong> = Medium stress</li>
 <li><strong>H</strong> = High stress</li>
 </ul>
-<p>Each row is therefore a <strong>social sequence</strong> of length 8, e.g.</p>
+<p>Each row is therefore a sequence of length 8, e.g.</p>
 <ul>
 <li><code>M, M, M, M, M, L, L, M</code></li>
 <li><code>L, L, L, L, L, L, M, L</code></li>
@@ -3280,8 +3328,15 @@ vertical-align: -.125em;
 </section>
 <section id="send-the-data-to-python-and-create-sequencedata" class="level3" data-number="3.2">
 <h3 data-number="3.2" class="anchored" data-anchor-id="send-the-data-to-python-and-create-sequencedata"><span class="header-section-number">3.2</span> Send the data to Python and create <code>SequenceData</code></h3>
+<p><strong>What this step does:</strong> Sequenzo is a Python library. Its main entry point is a <strong><code>SequenceData</code></strong> object: a Python object that holds your sequence table plus metadata (time points, state labels, colors). All later steps (plots, distance matrix, clustering) expect this object.</p>
+<p>Right now we have the stress data either as an R data frame or already as a Python DataFrame (from <code>sequenzo$load_dataset()</code>). To create <code>SequenceData</code>, we must call the <strong>Python</strong> constructor and pass it data that Python understands. So we do two things:</p>
+<ol type="1">
+<li><strong>Pass data into Python:</strong> If the table is in R, we use <strong><code>r_to_py(stress_seq)</code></strong> to create a <em>Python</em> copy of it (a pandas DataFrame). If we kept the result of <code>load_dataset()</code> in R, that is already a Python object; in that case we can pass it directly. Here we use <code>r_to_py</code> so that whatever we have is in the right form for Python.</li>
+<li><strong>Call the Python constructor:</strong> <strong><code>sequenzo$SequenceData(...)</code></strong> is the R way of calling Python’s <code>SequenceData(...)</code>. We pass that DataFrame plus options (time indices, state names, labels, colors). The result <strong><code>sequence_data</code></strong> is a Python object that we keep in R and use later with <code>sequence_data$...</code> for plotting and analysis.</li>
+</ol>
+<p>So “send the data to Python” simply means: make sure Python has the table (via <code>r_to_py</code> or by using the DataFrame we already got from <code>load_dataset</code>), then call Sequenzo’s constructor so that we get one <code>SequenceData</code> object to use everywhere below.</p>
 <div class="cell" data-layout-align="center">
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to Python DataFrame</span></span>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure Python has the table: convert R object to a Python (pandas) DataFrame if needed</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>stress_py <span class="ot">&lt;-</span> <span class="fu">r_to_py</span>(stress_seq)</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Define time points and states</span></span>
@@ -3335,19 +3390,16 @@ States: <code>[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]</code></p>
 <p>Visualization is often the <strong>first and most important step</strong> in sequence analysis. We will create:</p>
 <ul>
 <li>a legend for the stress states</li>
-<li>an index plot (all sequences)</li>
+<li>an index plot</li>
 <li>a state-distribution plot (how common each state is at each week)</li>
 <li>mean time spent in each state</li>
 </ul>
-<blockquote class="blockquote">
-<p>Tip: In this tutorial we <strong>save</strong> the plots to files (e.g. <code>index_plot.png</code>) using the <code>save_as</code> argument, and then display them in the document.</p>
-</blockquote>
+<p><strong>How plots are shown here:</strong> Each figure is produced by calling a Sequenzo (Python) plotting function with <code>save_as = &quot;img/...&quot;</code>, which writes a PNG file into the <code>img/</code> folder. We then use <code>knitr::include_graphics(&quot;img/...png&quot;)</code> so that Quarto/knitr reads that file and embeds it in the HTML report. All plots in this section (and the cluster plots later) follow this same pattern—no need to repeat it under each one.</p>
 <section id="legend" class="level3" data-number="4.1">
 <h3 data-number="4.1" class="anchored" data-anchor-id="legend"><span class="header-section-number">4.1</span> Legend</h3>
-<p>In each plotting chunk, the first line asks Sequenzo (Python) to <strong>create and save</strong> a PNG file, and <code>knitr::include_graphics(&quot;...&quot;)</code> then <strong>reads that PNG and shows it inside this HTML report</strong>.</p>
 <div class="cell" data-layout-align="center">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>sequence_data<span class="sc">$</span><span class="fu">plot_legend</span>(<span class="at">save_as =</span> <span class="st">&quot;stress_legend&quot;</span>)</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_legend.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>sequence_data<span class="sc">$</span><span class="fu">plot_legend</span>(<span class="at">save_as =</span> <span class="st">&quot;img/stress_legend&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_legend.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3357,16 +3409,15 @@ States: <code>[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]</code></p>
 </div>
 </div>
 </section>
-<section id="index-plot-all-sequences" class="level3" data-number="4.2">
-<h3 data-number="4.2" class="anchored" data-anchor-id="index-plot-all-sequences"><span class="header-section-number">4.2</span> Index plot — all sequences</h3>
-<p>Again, the <code>save_as</code> argument writes the figure to disk, and <code>knitr::include_graphics()</code> pulls that file back into the document so that the plot appears under the code.</p>
+<section id="index-plot" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="index-plot"><span class="header-section-number">4.2</span> Index plot</h3>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_sequence_index</span>(</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_index_all&quot;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_index_all&quot;</span></span>
 <span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_index_all.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_index_all.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3377,16 +3428,15 @@ States: <code>[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]</code></p>
 </div>
 <p>Each horizontal line is a student; colors show Low / Medium / High stress for weeks 1–8.</p>
 </section>
-<section id="state-distribution-plot-all-sequences" class="level3" data-number="4.3">
-<h3 data-number="4.3" class="anchored" data-anchor-id="state-distribution-plot-all-sequences"><span class="header-section-number">4.3</span> State-distribution plot — all sequences</h3>
-<p>As before, Sequenzo saves the state-distribution figure to <code>&quot;stress_state_dist_all.png&quot;</code>, and <code>knitr::include_graphics()</code> inserts that saved image into the knitted HTML.</p>
+<section id="state-distribution-plot" class="level3" data-number="4.3">
+<h3 data-number="4.3" class="anchored" data-anchor-id="state-distribution-plot"><span class="header-section-number">4.3</span> State-distribution plot</h3>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_state_distribution</span>(</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_state_dist_all&quot;</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_state_dist_all&quot;</span></span>
 <span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_state_dist_all.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_state_dist_all.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3399,14 +3449,12 @@ States: <code>[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]</code></p>
 </section>
 <section id="mean-time-in-each-state" class="level3" data-number="4.4">
 <h3 data-number="4.4" class="anchored" data-anchor-id="mean-time-in-each-state"><span class="header-section-number">4.4</span> Mean time in each state</h3>
-<p>We call <code>sequenzo$plot_mean_time()</code> to ask Sequenzo (in Python) to create the figure and <strong>save it as a PNG file</strong>.<br>
-The second line, <code>knitr::include_graphics(&quot;stress_mean_time.png&quot;)</code>, tells Quarto/knitr to <strong>read that PNG file and display it inside the HTML report</strong>.</p>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_mean_time</span>(</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_mean_time&quot;</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_mean_time&quot;</span></span>
 <span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_mean_time.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_mean_time.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3470,7 +3518,6 @@ The second line, <code>knitr::include_graphics(&quot;stress_mean_time.png&quot;)
 </ul>
 <section id="ward-clustering-and-dendrogram" class="level3" data-number="6.1">
 <h3 data-number="6.1" class="anchored" data-anchor-id="ward-clustering-and-dendrogram"><span class="header-section-number">6.1</span> Ward clustering and dendrogram</h3>
-<p>Here we use the same pattern: Sequenzo computes the dendrogram and saves it as <code>&quot;stress_dendrogram.png&quot;</code>, and <code>knitr::include_graphics()</code> is responsible for actually displaying that saved image in the report.</p>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>cluster <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">Cluster</span>(</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  om,</span>
@@ -3483,9 +3530,9 @@ The second line, <code>knitr::include_graphics(&quot;stress_mean_time.png&quot;)
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>cluster<span class="sc">$</span><span class="fu">plot_dendrogram</span>(</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Students&quot;</span>,</span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylabel  =</span> <span class="st">&quot;Distance&quot;</span>,</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_dendrogram&quot;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_dendrogram&quot;</span></span>
 <span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_dendrogram.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_dendrogram.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3494,27 +3541,22 @@ The second line, <code>knitr::include_graphics(&quot;stress_mean_time.png&quot;)
 </div>
 </div>
 </div>
-<p>)</p>
-<pre><code>
-### Cluster quality and choosing k
-
-`cluster_quality$plot_cqi_scores(..., save_as = &quot;stress_cqi_scores&quot;)` creates a PNG of the cluster-quality indices, and `knitr::include_graphics(&quot;stress_cqi_scores.png&quot;)` embeds that plot in the HTML so readers can see the curve.
-
-::: {.cell layout-align=&quot;center&quot;}
-
-```{.r .cell-code}
-cluster_quality &lt;- sequenzo$ClusterQuality(cluster)
-cluster_quality$compute_cluster_quality_scores()</code></pre>
-<p>:::</p>
+</section>
+<section id="cluster-quality-and-choosing-k" class="level3" data-number="6.2">
+<h3 data-number="6.2" class="anchored" data-anchor-id="cluster-quality-and-choosing-k"><span class="header-section-number">6.2</span> Cluster quality and choosing k</h3>
+<div class="cell" data-layout-align="center">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>cluster_quality <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterQuality</span>(cluster)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>cluster_quality<span class="sc">$</span><span class="fu">compute_cluster_quality_scores</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>cluster_quality<span class="sc">$</span><span class="fu">plot_cqi_scores</span>(</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">norm   =</span> <span class="st">&quot;zscore&quot;</span>,</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_cqi_scores&quot;</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_cqi_scores&quot;</span></span>
 <span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt; &lt;Figure size 2400x1600 with 1 Axes&gt;</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_cqi_scores.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_cqi_scores.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3540,21 +3582,23 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 #&gt; 9     HC              2    0.112005       3.673392</code></pre>
 </div>
 </div>
-<p>In this tutorial we focus on a <strong>3-cluster</strong> solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).</p>
+<p>In this tutorial we focus on a 3-cluster solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).</p>
 <div class="cell" data-layout-align="center">
-<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>n_clusters <span class="ot">&lt;-</span> 3L</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of clusters to use </span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 3 gives interpretable groups, e.g. low / moderate / high stress</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>n_clusters <span class="ot">&lt;-</span> <span class="dv">3</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
-<section id="cluster-memberships-and-distribution" class="level3" data-number="6.2">
-<h3 data-number="6.2" class="anchored" data-anchor-id="cluster-memberships-and-distribution"><span class="header-section-number">6.2</span> Cluster memberships and distribution</h3>
+<section id="cluster-memberships-and-distribution" class="level3" data-number="6.3">
+<h3 data-number="6.3" class="anchored" data-anchor-id="cluster-memberships-and-distribution"><span class="header-section-number">6.3</span> Cluster memberships and distribution</h3>
 <div class="cell" data-layout-align="center">
-<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>cr <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterResults</span>(cluster)</span>
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>cluster_results <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterResults</span>(cluster)</span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Membership table (Python DataFrame)</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>membership_py <span class="ot">&lt;-</span> cr<span class="sc">$</span><span class="fu">get_cluster_memberships</span>(<span class="at">num_clusters =</span> n_clusters)</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>membership_py <span class="ot">&lt;-</span> cluster_results<span class="sc">$</span><span class="fu">get_cluster_memberships</span>(<span class="at">num_clusters =</span> n_clusters)</span>
 <span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution of cluster sizes (printed directly as a pandas DataFrame)</span></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>distribution_py <span class="ot">&lt;-</span> cr<span class="sc">$</span><span class="fu">get_cluster_distribution</span>(<span class="at">num_clusters =</span> n_clusters)</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>distribution_py <span class="ot">&lt;-</span> cluster_results<span class="sc">$</span><span class="fu">get_cluster_distribution</span>(<span class="at">num_clusters =</span> n_clusters)</span>
 <span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>distribution_py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#&gt;    Cluster  Count  Percentage
@@ -3564,12 +3608,12 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 </div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>cr<span class="sc">$</span><span class="fu">plot_cluster_distribution</span>(</span>
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>cluster_results<span class="sc">$</span><span class="fu">plot_cluster_distribution</span>(</span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">num_clusters =</span> n_clusters,</span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">title        =</span> <span class="cn">NULL</span>,</span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as      =</span> <span class="st">&quot;stress_cluster_dist&quot;</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as      =</span> <span class="st">&quot;img/stress_cluster_dist&quot;</span></span>
 <span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_cluster_dist.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_cluster_dist.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3583,9 +3627,9 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 </section>
 <section id="interpreting-clusters-index-and-state-distribution-plots" class="level2" data-number="7">
 <h2 data-number="7" class="anchored" data-anchor-id="interpreting-clusters-index-and-state-distribution-plots"><span class="header-section-number">7</span> Interpreting clusters: index and state-distribution plots</h2>
-<p>To understand <strong>what the clusters mean</strong>, we look at sequences and state-distribution plots <strong>by cluster</strong>.</p>
-<section id="prepare-cluster-labels-optional" class="level3" data-number="7.1">
-<h3 data-number="7.1" class="anchored" data-anchor-id="prepare-cluster-labels-optional"><span class="header-section-number">7.1</span> Prepare cluster labels (optional)</h3>
+<p>To understand what the clusters mean, we look at sequences and state-distribution plots by cluster.</p>
+<section id="prepare-cluster-labels" class="level3" data-number="7.1">
+<h3 data-number="7.1" class="anchored" data-anchor-id="prepare-cluster-labels"><span class="header-section-number">7.1</span> Prepare cluster labels</h3>
 <p>We first pass the membership table to the Python namespace and create some human-readable labels. Here is an example with three descriptive labels that you can adapt to your own data:</p>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># make membership table available as &#39;membership_table&#39; in Python</span></span>
@@ -3613,7 +3657,6 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 </section>
 <section id="index-plots-by-cluster" class="level3" data-number="7.2">
 <h3 data-number="7.2" class="anchored" data-anchor-id="index-plots-by-cluster"><span class="header-section-number">7.2</span> Index plots by cluster</h3>
-<p>In the next two chunks, the Python calls write cluster-specific plots to PNG files, and each <code>knitr::include_graphics(&quot;...&quot;)</code> line is what actually pulls those PNGs into the document so you can see the plots.</p>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
 <span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="st">from sequenzo import plot_sequence_index</span></span>
@@ -3624,10 +3667,10 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 <span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
 <span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
 <span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
-<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;stress_index_clusters&#39;</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;img/stress_index_clusters&#39;</span></span>
 <span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
 <span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
-<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_index_clusters.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_index_clusters.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3650,10 +3693,10 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 <span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
 <span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
 <span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
-<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;stress_state_dist_clusters&#39;</span></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;img/stress_state_dist_clusters&#39;</span></span>
 <span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
 <span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
-<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_state_dist_clusters.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_state_dist_clusters.png&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3689,7 +3732,7 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 <li>explore cross-tabulations of cluster by <code>cohort</code>, <code>gender</code>, etc.</li>
 <li>create your own visualizations with <code>{ggplot2}</code></li>
 </ul>
-<p>Optionally, you can also export a small file with IDs and cluster labels:</p>
+<p>You can also export a small file with IDs and cluster labels:</p>
 <div class="cell" data-layout-align="center">
 <div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
 <span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>  stress_with_clusters <span class="sc">|&gt;</span></span>
@@ -3710,7 +3753,7 @@ cluster_quality$compute_cluster_quality_scores()</code></pre>
 <li>Computed sequence dissimilarities with Optimal Matching and ran a simple cluster analysis.</li>
 <li>Interpreted clusters as typical stress trajectories and merged them back into an R data frame for further analysis.</li>
 </ol>
-<p>The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and (optionally) background variables for later modeling.</p>
+<p>The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and background variables for later modeling.</p>
 <!-- -->
 
 </section>
@@ -4032,482 +4075,491 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <span id="cb41-29"><a href="#cb41-29" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb41-30"><a href="#cb41-30" aria-hidden="true" tabindex="-1"></a><span class="in">```{r setup, include=FALSE}</span></span>
 <span id="cb41-31"><a href="#cb41-31" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span>opts_chunk<span class="sc">$</span><span class="fu">set</span>(<span class="at">comment =</span> <span class="st">&quot;#&gt;&quot;</span>, <span class="at">fig.align =</span> <span class="st">&quot;center&quot;</span>)</span>
-<span id="cb41-32"><a href="#cb41-32" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-33"><a href="#cb41-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-34"><a href="#cb41-34" aria-hidden="true" tabindex="-1"></a>This tutorial shows how to use <span class="co">[</span><span class="ot">`Sequenzo`</span><span class="co">](https://sequenzo.yuqi-liang.tech/en/)</span> from **R** (via the `{reticulate}` package) to analyze **weekly stress sequences** from the DEPRESS study.</span>
-<span id="cb41-35"><a href="#cb41-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-36"><a href="#cb41-36" aria-hidden="true" tabindex="-1"></a>We will use the built-in dataset <span class="in">`students_stress_states_by_week`</span>, which is the same data used in the Python notebook <span class="in">`stress_typical_workflow.ipynb`</span>. The goal is to give a clear, step-by-step introduction that is friendly to R users who are new to Python and to sequence analysis.</span>
-<span id="cb41-37"><a href="#cb41-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-38"><a href="#cb41-38" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**What you will learn**</span>
-<span id="cb41-39"><a href="#cb41-39" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to set up <span class="in">`{reticulate}`</span> and load <span class="in">`sequenzo`</span> in R</span>
-<span id="cb41-40"><a href="#cb41-40" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to load the stress sequence dataset from <span class="in">`sequenzo`</span></span>
-<span id="cb41-41"><a href="#cb41-41" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to define a <span class="in">`SequenceData`</span> object for 8-week stress sequences (Low / Medium / High)</span>
-<span id="cb41-42"><a href="#cb41-42" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to visualize stress trajectories (index plot, state distribution, etc.)</span>
-<span id="cb41-43"><a href="#cb41-43" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to compute dissimilarities and run a simple cluster analysis (3 stress-pattern clusters)</span>
-<span id="cb41-44"><a href="#cb41-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-45"><a href="#cb41-45" aria-hidden="true" tabindex="-1"></a>The tutorial assumes only basic familiarity with R (data frames, packages) and **no prior experience with Python**.</span>
-<span id="cb41-46"><a href="#cb41-46" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-47"><a href="#cb41-47" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-48"><a href="#cb41-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-49"><a href="#cb41-49" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
-<span id="cb41-50"><a href="#cb41-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-51"><a href="#cb41-51" aria-hidden="true" tabindex="-1"></a><span class="fu">### Install and load R packages</span></span>
-<span id="cb41-52"><a href="#cb41-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-53"><a href="#cb41-53" aria-hidden="true" tabindex="-1"></a>First, make sure you have the necessary R packages. We will use:</span>
-<span id="cb41-54"><a href="#cb41-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-55"><a href="#cb41-55" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{pacman}`</span> for easy package loading/installation</span>
-<span id="cb41-56"><a href="#cb41-56" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{reticulate}`</span> to call Python from R</span>
-<span id="cb41-57"><a href="#cb41-57" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{tictoc}`</span> to time longer computations (e.g. distance matrix)</span>
-<span id="cb41-58"><a href="#cb41-58" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{tidyverse}`</span> for basic data wrangling and summaries</span>
+<span id="cb41-32"><a href="#cb41-32" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">&quot;img&quot;</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)  <span class="co"># ensure img/ exists for figure outputs</span></span>
+<span id="cb41-33"><a href="#cb41-33" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-34"><a href="#cb41-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-35"><a href="#cb41-35" aria-hidden="true" tabindex="-1"></a>This tutorial shows how to use <span class="co">[</span><span class="ot">`Sequenzo`</span><span class="co">](https://sequenzo.yuqi-liang.tech/en/)</span> from R (via the <span class="in">`{reticulate}`</span> package) to analyze weekly stress sequences from the DEPRESS study (Guo et al., 2026). For further details about the DEPRESS study, please refer to <span class="co">[</span><span class="ot">our documentation</span><span class="co">](https://sequenzo.yuqi-liang.tech/en/datasets/stress-data)</span>.</span>
+<span id="cb41-36"><a href="#cb41-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-37"><a href="#cb41-37" aria-hidden="true" tabindex="-1"></a>We will use the built-in dataset <span class="in">`students_stress_states_by_week`</span>, which is the same data used in the Python notebook <span class="in">`stress_typical_workflow.ipynb`</span>. The goal is to give a clear, step-by-step introduction that is friendly to R users who are new to Python and to sequence analysis.</span>
+<span id="cb41-38"><a href="#cb41-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-39"><a href="#cb41-39" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**What you will learn**</span>
+<span id="cb41-40"><a href="#cb41-40" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to set up <span class="in">`{reticulate}`</span> and load <span class="in">`sequenzo`</span> in R</span>
+<span id="cb41-41"><a href="#cb41-41" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to load the stress sequence dataset from <span class="in">`sequenzo`</span></span>
+<span id="cb41-42"><a href="#cb41-42" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to define a <span class="in">`SequenceData`</span> object for 8-week stress sequences (Low / Medium / High)</span>
+<span id="cb41-43"><a href="#cb41-43" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to visualize stress trajectories (index plot, state distribution, etc.)</span>
+<span id="cb41-44"><a href="#cb41-44" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>How to compute dissimilarities and run a simple cluster analysis (3 stress-pattern clusters)</span>
+<span id="cb41-45"><a href="#cb41-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-46"><a href="#cb41-46" aria-hidden="true" tabindex="-1"></a>The tutorial assumes only basic familiarity with R (data frames, packages) and no prior experience with Python.</span>
+<span id="cb41-47"><a href="#cb41-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-48"><a href="#cb41-48" aria-hidden="true" tabindex="-1"></a><span class="fu">### When do we use R code, and when do we use Python code?</span></span>
+<span id="cb41-49"><a href="#cb41-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-50"><a href="#cb41-50" aria-hidden="true" tabindex="-1"></a>**Rule of thumb:** This document is an **R (Quarto) document**. So every code chunk is R code. It means that you are always writing and running R. We never switch to a separate Python script or notebook. When we need Sequenzo (a Python library), we **call it from R** using the **`{reticulate}`** package. So “R vs Python” here really means: “plain R” vs “R code that calls Python.”</span>
+<span id="cb41-51"><a href="#cb41-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-52"><a href="#cb41-52" aria-hidden="true" tabindex="-1"></a>| What you see in the chunk | What it is | Example |</span>
+<span id="cb41-53"><a href="#cb41-53" aria-hidden="true" tabindex="-1"></a>|---------------------------|------------|--------|</span>
+<span id="cb41-54"><a href="#cb41-54" aria-hidden="true" tabindex="-1"></a>| Normal R syntax           | **R code** that runs in R. Load packages, define variables, use R functions. | <span class="in">`library(reticulate)`</span>, <span class="in">`n_clusters &lt;- 3`</span>, <span class="in">`knitr::include_graphics(&quot;img/...&quot;)`</span> |</span>
+<span id="cb41-55"><a href="#cb41-55" aria-hidden="true" tabindex="-1"></a>| <span class="in">`something$function_name(...)`</span> where <span class="in">`something`</span> came from Python | **R calling Python**: the object is a Python object living in R; <span class="in">`$`</span> calls its method or attribute. | <span class="in">`sequenzo$load_dataset(&quot;...&quot;)`</span>, <span class="in">`sequence_data$plot_legend(save_as = &quot;...&quot;)`</span> |</span>
+<span id="cb41-56"><a href="#cb41-56" aria-hidden="true" tabindex="-1"></a>| <span class="in">`import(&quot;sequenzo&quot;)`</span>      | **R code** that loads a Python module and gives you an R reference to it. From then on, <span class="in">`sequenzo$...`</span> is calling Python. | <span class="in">`sequenzo &lt;- import(&quot;sequenzo&quot;)`</span> |</span>
+<span id="cb41-57"><a href="#cb41-57" aria-hidden="true" tabindex="-1"></a>| <span class="in">`r_to_py(x)`</span>              | **R code** that converts an R object <span class="in">`x`</span> into a Python copy, so we can pass it into Python functions. | <span class="in">`stress_py &lt;- r_to_py(stress_seq)`</span> |</span>
+<span id="cb41-58"><a href="#cb41-58" aria-hidden="true" tabindex="-1"></a>| <span class="in">`py_run_string(&quot; ... &quot;)`</span>   | **R code** that runs the **string inside the quotes as Python code**. So the content of the string is the only place where you see real Python syntax (e.g. <span class="in">`from sequenzo import ...`</span>, indentation). | Used later for a few cluster plots. |</span>
 <span id="cb41-59"><a href="#cb41-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-60"><a href="#cb41-60" aria-hidden="true" tabindex="-1"></a><span class="in">```{r packages}</span></span>
-<span id="cb41-61"><a href="#cb41-61" aria-hidden="true" tabindex="-1"></a><span class="co"># use (and install if necessary) pacman package</span></span>
-<span id="cb41-62"><a href="#cb41-62" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">require</span>(<span class="st">&quot;pacman&quot;</span>)) <span class="fu">install.packages</span>(<span class="st">&quot;pacman&quot;</span>)</span>
-<span id="cb41-63"><a href="#cb41-63" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pacman)</span>
-<span id="cb41-64"><a href="#cb41-64" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-65"><a href="#cb41-65" aria-hidden="true" tabindex="-1"></a><span class="co"># load and install (if necessary) required packages</span></span>
-<span id="cb41-66"><a href="#cb41-66" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(</span>
-<span id="cb41-67"><a href="#cb41-67" aria-hidden="true" tabindex="-1"></a>  knitr,      <span class="co"># tables</span></span>
-<span id="cb41-68"><a href="#cb41-68" aria-hidden="true" tabindex="-1"></a>  reticulate, <span class="co"># R interface to Python</span></span>
-<span id="cb41-69"><a href="#cb41-69" aria-hidden="true" tabindex="-1"></a>  tictoc,     <span class="co"># simple timing</span></span>
-<span id="cb41-70"><a href="#cb41-70" aria-hidden="true" tabindex="-1"></a>  tidyverse   <span class="co"># data wrangling and plotting</span></span>
-<span id="cb41-71"><a href="#cb41-71" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-72"><a href="#cb41-72" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-73"><a href="#cb41-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-74"><a href="#cb41-74" aria-hidden="true" tabindex="-1"></a><span class="fu">### One-time Python + Sequenzo installation (if needed)</span></span>
-<span id="cb41-75"><a href="#cb41-75" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-76"><a href="#cb41-76" aria-hidden="true" tabindex="-1"></a>If you have **never** installed Python or <span class="in">`sequenzo`</span> on this machine, run the following once in your R console (not inside a knitted document), then comment it out:</span>
-<span id="cb41-77"><a href="#cb41-77" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-78"><a href="#cb41-78" aria-hidden="true" tabindex="-1"></a><span class="in">```{r python-install, eval=FALSE}</span></span>
-<span id="cb41-79"><a href="#cb41-79" aria-hidden="true" tabindex="-1"></a><span class="co"># --- First-time setup (run once in your R console, then comment out) ---</span></span>
-<span id="cb41-80"><a href="#cb41-80" aria-hidden="true" tabindex="-1"></a><span class="co"># reticulate::install_python()                  # install a Miniconda-based Python</span></span>
-<span id="cb41-81"><a href="#cb41-81" aria-hidden="true" tabindex="-1"></a><span class="co"># reticulate::py_install(&quot;sequenzo&quot;, pip = TRUE) # install the sequenzo package</span></span>
-<span id="cb41-82"><a href="#cb41-82" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-83"><a href="#cb41-83" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-84"><a href="#cb41-84" aria-hidden="true" tabindex="-1"></a>After Python and <span class="in">`sequenzo`</span> are installed, you just need to load them in each new R session.</span>
-<span id="cb41-85"><a href="#cb41-85" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-86"><a href="#cb41-86" aria-hidden="true" tabindex="-1"></a><span class="fu">### Import Python modules</span></span>
-<span id="cb41-87"><a href="#cb41-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-88"><a href="#cb41-88" aria-hidden="true" tabindex="-1"></a>Now we import <span class="in">`sequenzo`</span> from Python. We will also import <span class="in">`matplotlib.pyplot`</span> (as <span class="in">`plt`</span>) in case you want to inspect the figures directly in Python, but this is optional.</span>
-<span id="cb41-89"><a href="#cb41-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-90"><a href="#cb41-90" aria-hidden="true" tabindex="-1"></a><span class="in">```{r import-sequenzo}</span></span>
-<span id="cb41-91"><a href="#cb41-91" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reticulate)</span>
+<span id="cb41-60"><a href="#cb41-60" aria-hidden="true" tabindex="-1"></a>So: **outside** `py_run_string(&quot;...&quot;)`, everything is R; **inside** the quotes of <span class="in">`py_run_string(&quot;...&quot;)`</span>, the text is Python. That way you always know “am I reading R or Python?”, and you never leave this R session.</span>
+<span id="cb41-61"><a href="#cb41-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-62"><a href="#cb41-62" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-63"><a href="#cb41-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-64"><a href="#cb41-64" aria-hidden="true" tabindex="-1"></a><span class="fu">## Setup</span></span>
+<span id="cb41-65"><a href="#cb41-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-66"><a href="#cb41-66" aria-hidden="true" tabindex="-1"></a><span class="fu">### Install and load R packages</span></span>
+<span id="cb41-67"><a href="#cb41-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-68"><a href="#cb41-68" aria-hidden="true" tabindex="-1"></a>First, make sure you have the necessary R packages. We will use:</span>
+<span id="cb41-69"><a href="#cb41-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-70"><a href="#cb41-70" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{pacman}`</span> for easy package loading/installation</span>
+<span id="cb41-71"><a href="#cb41-71" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{reticulate}`</span> to call Python from R</span>
+<span id="cb41-72"><a href="#cb41-72" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{tictoc}`</span> to time longer computations (e.g. distance matrix)</span>
+<span id="cb41-73"><a href="#cb41-73" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`{tidyverse}`</span> for basic data wrangling and summaries</span>
+<span id="cb41-74"><a href="#cb41-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-75"><a href="#cb41-75" aria-hidden="true" tabindex="-1"></a><span class="in">```{r packages}</span></span>
+<span id="cb41-76"><a href="#cb41-76" aria-hidden="true" tabindex="-1"></a><span class="co"># use (and install if necessary) pacman package</span></span>
+<span id="cb41-77"><a href="#cb41-77" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">require</span>(<span class="st">&quot;pacman&quot;</span>)) <span class="fu">install.packages</span>(<span class="st">&quot;pacman&quot;</span>)</span>
+<span id="cb41-78"><a href="#cb41-78" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pacman)</span>
+<span id="cb41-79"><a href="#cb41-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-80"><a href="#cb41-80" aria-hidden="true" tabindex="-1"></a><span class="co"># load and install (if necessary) required packages</span></span>
+<span id="cb41-81"><a href="#cb41-81" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(</span>
+<span id="cb41-82"><a href="#cb41-82" aria-hidden="true" tabindex="-1"></a>  knitr,      <span class="co"># tables</span></span>
+<span id="cb41-83"><a href="#cb41-83" aria-hidden="true" tabindex="-1"></a>  reticulate, <span class="co"># R interface to Python</span></span>
+<span id="cb41-84"><a href="#cb41-84" aria-hidden="true" tabindex="-1"></a>  tictoc,     <span class="co"># simple timing</span></span>
+<span id="cb41-85"><a href="#cb41-85" aria-hidden="true" tabindex="-1"></a>  tidyverse   <span class="co"># data wrangling and plotting</span></span>
+<span id="cb41-86"><a href="#cb41-86" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-87"><a href="#cb41-87" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-88"><a href="#cb41-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-89"><a href="#cb41-89" aria-hidden="true" tabindex="-1"></a><span class="fu">### One-time Python + Sequenzo installation (if needed)</span></span>
+<span id="cb41-90"><a href="#cb41-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-91"><a href="#cb41-91" aria-hidden="true" tabindex="-1"></a>If you have **never** installed Python or <span class="in">`sequenzo`</span> on this machine, run the following once in your R console (not inside a knitted document), then comment it out:</span>
 <span id="cb41-92"><a href="#cb41-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-93"><a href="#cb41-93" aria-hidden="true" tabindex="-1"></a><span class="co"># Import Python modules</span></span>
-<span id="cb41-94"><a href="#cb41-94" aria-hidden="true" tabindex="-1"></a>sequenzo <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">&quot;sequenzo&quot;</span>)</span>
-<span id="cb41-95"><a href="#cb41-95" aria-hidden="true" tabindex="-1"></a>plt      <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">&quot;matplotlib.pyplot&quot;</span>, <span class="at">convert =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb41-96"><a href="#cb41-96" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-97"><a href="#cb41-97" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-98"><a href="#cb41-98" aria-hidden="true" tabindex="-1"></a>If this chunk runs without error, you are ready to work with <span class="in">`Sequenzo`</span> from R.</span>
-<span id="cb41-99"><a href="#cb41-99" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-100"><a href="#cb41-100" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-101"><a href="#cb41-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-102"><a href="#cb41-102" aria-hidden="true" tabindex="-1"></a><span class="fu">## Get a first look at the data</span></span>
-<span id="cb41-103"><a href="#cb41-103" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-104"><a href="#cb41-104" aria-hidden="true" tabindex="-1"></a><span class="fu">### Available datasets in Sequenzo</span></span>
-<span id="cb41-105"><a href="#cb41-105" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-106"><a href="#cb41-106" aria-hidden="true" tabindex="-1"></a><span class="in">`Sequenzo`</span> comes with several example datasets. We will check that <span class="in">`students_stress_states_by_week`</span> is available.</span>
+<span id="cb41-93"><a href="#cb41-93" aria-hidden="true" tabindex="-1"></a><span class="in">```{r python-install, eval=FALSE}</span></span>
+<span id="cb41-94"><a href="#cb41-94" aria-hidden="true" tabindex="-1"></a><span class="co"># --- First-time setup (run once in your R console, then comment out) ---</span></span>
+<span id="cb41-95"><a href="#cb41-95" aria-hidden="true" tabindex="-1"></a><span class="co"># reticulate::install_python()                  # install a Miniconda-based Python</span></span>
+<span id="cb41-96"><a href="#cb41-96" aria-hidden="true" tabindex="-1"></a><span class="co"># reticulate::py_install(&quot;sequenzo&quot;, pip = TRUE) # install the sequenzo package</span></span>
+<span id="cb41-97"><a href="#cb41-97" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-98"><a href="#cb41-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-99"><a href="#cb41-99" aria-hidden="true" tabindex="-1"></a>After Python and <span class="in">`sequenzo`</span> are installed, you just need to load them in each new R session.</span>
+<span id="cb41-100"><a href="#cb41-100" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-101"><a href="#cb41-101" aria-hidden="true" tabindex="-1"></a><span class="fu">### Import Python modules</span></span>
+<span id="cb41-102"><a href="#cb41-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-103"><a href="#cb41-103" aria-hidden="true" tabindex="-1"></a>Now we import <span class="in">`sequenzo`</span> from Python. We will also import <span class="in">`matplotlib.pyplot`</span> (as <span class="in">`plt`</span>) in case you want to inspect the figures directly in Python, but this is optional.</span>
+<span id="cb41-104"><a href="#cb41-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-105"><a href="#cb41-105" aria-hidden="true" tabindex="-1"></a><span class="in">```{r import-sequenzo}</span></span>
+<span id="cb41-106"><a href="#cb41-106" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reticulate)</span>
 <span id="cb41-107"><a href="#cb41-107" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-108"><a href="#cb41-108" aria-hidden="true" tabindex="-1"></a><span class="in">```{r list-datasets}</span></span>
-<span id="cb41-109"><a href="#cb41-109" aria-hidden="true" tabindex="-1"></a>available <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">list_datasets</span>()</span>
-<span id="cb41-110"><a href="#cb41-110" aria-hidden="true" tabindex="-1"></a>available</span>
+<span id="cb41-108"><a href="#cb41-108" aria-hidden="true" tabindex="-1"></a><span class="co"># Import Python modules</span></span>
+<span id="cb41-109"><a href="#cb41-109" aria-hidden="true" tabindex="-1"></a>sequenzo <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">&quot;sequenzo&quot;</span>)</span>
+<span id="cb41-110"><a href="#cb41-110" aria-hidden="true" tabindex="-1"></a>plt      <span class="ot">&lt;-</span> <span class="fu">import</span>(<span class="st">&quot;matplotlib.pyplot&quot;</span>, <span class="at">convert =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb41-111"><a href="#cb41-111" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb41-112"><a href="#cb41-112" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-113"><a href="#cb41-113" aria-hidden="true" tabindex="-1"></a>You should see <span class="in">`students_stress_states_by_week`</span> among the dataset names.</span>
+<span id="cb41-113"><a href="#cb41-113" aria-hidden="true" tabindex="-1"></a>If this chunk runs without error, you are ready to work with <span class="in">`Sequenzo`</span> from R.</span>
 <span id="cb41-114"><a href="#cb41-114" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-115"><a href="#cb41-115" aria-hidden="true" tabindex="-1"></a><span class="fu">### Load the stress sequence data</span></span>
+<span id="cb41-115"><a href="#cb41-115" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb41-116"><a href="#cb41-116" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-117"><a href="#cb41-117" aria-hidden="true" tabindex="-1"></a>Now we load the stress data and convert it from a Python DataFrame to an R data frame.</span>
+<span id="cb41-117"><a href="#cb41-117" aria-hidden="true" tabindex="-1"></a><span class="fu">## Get a first look at the data</span></span>
 <span id="cb41-118"><a href="#cb41-118" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-119"><a href="#cb41-119" aria-hidden="true" tabindex="-1"></a><span class="in">```{r load-data}</span></span>
-<span id="cb41-120"><a href="#cb41-120" aria-hidden="true" tabindex="-1"></a><span class="co"># Load dataset from sequenzo (Python)</span></span>
-<span id="cb41-121"><a href="#cb41-121" aria-hidden="true" tabindex="-1"></a>df_py <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">load_dataset</span>(<span class="st">&quot;students_stress_states_by_week&quot;</span>)</span>
+<span id="cb41-119"><a href="#cb41-119" aria-hidden="true" tabindex="-1"></a><span class="fu">### Available datasets in Sequenzo</span></span>
+<span id="cb41-120"><a href="#cb41-120" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-121"><a href="#cb41-121" aria-hidden="true" tabindex="-1"></a><span class="in">`Sequenzo`</span> comes with several example datasets. We will check that <span class="in">`students_stress_states_by_week`</span> is available.</span>
 <span id="cb41-122"><a href="#cb41-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-123"><a href="#cb41-123" aria-hidden="true" tabindex="-1"></a><span class="co"># Keep as a Python DataFrame and preview in-place</span></span>
-<span id="cb41-124"><a href="#cb41-124" aria-hidden="true" tabindex="-1"></a>stress <span class="ot">&lt;-</span> df_py</span>
-<span id="cb41-125"><a href="#cb41-125" aria-hidden="true" tabindex="-1"></a>stress<span class="sc">$</span><span class="fu">head</span>()</span>
+<span id="cb41-123"><a href="#cb41-123" aria-hidden="true" tabindex="-1"></a><span class="in">```{r list-datasets}</span></span>
+<span id="cb41-124"><a href="#cb41-124" aria-hidden="true" tabindex="-1"></a>available <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">list_datasets</span>()</span>
+<span id="cb41-125"><a href="#cb41-125" aria-hidden="true" tabindex="-1"></a>available</span>
 <span id="cb41-126"><a href="#cb41-126" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb41-127"><a href="#cb41-127" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-128"><a href="#cb41-128" aria-hidden="true" tabindex="-1"></a>The dataset has:</span>
+<span id="cb41-128"><a href="#cb41-128" aria-hidden="true" tabindex="-1"></a>You should see <span class="in">`students_stress_states_by_week`</span> among the dataset names.</span>
 <span id="cb41-129"><a href="#cb41-129" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-130"><a href="#cb41-130" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>one row per **student**</span>
-<span id="cb41-131"><a href="#cb41-131" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>columns:</span>
-<span id="cb41-132"><a href="#cb41-132" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`participant_id`</span> (ID)</span>
-<span id="cb41-133"><a href="#cb41-133" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`cohort`</span> (Summer / Fall / Spring)</span>
-<span id="cb41-134"><a href="#cb41-134" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`1`</span>–<span class="in">`8`</span>: weekly stress **states** over 8 weeks</span>
-<span id="cb41-135"><a href="#cb41-135" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>background variables such as <span class="in">`gender`</span>, <span class="in">`income_group`</span>, <span class="in">`race`</span>, and <span class="in">`avg_study_time`</span></span>
-<span id="cb41-136"><a href="#cb41-136" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-137"><a href="#cb41-137" aria-hidden="true" tabindex="-1"></a><span class="fu">### What do L / M / H mean?</span></span>
-<span id="cb41-138"><a href="#cb41-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-139"><a href="#cb41-139" aria-hidden="true" tabindex="-1"></a>In this cleaned dataset, each week is coded as one of three **stress states**:</span>
-<span id="cb41-140"><a href="#cb41-140" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-141"><a href="#cb41-141" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**L** = Low stress</span>
-<span id="cb41-142"><a href="#cb41-142" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**M** = Medium stress</span>
-<span id="cb41-143"><a href="#cb41-143" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**H** = High stress</span>
+<span id="cb41-130"><a href="#cb41-130" aria-hidden="true" tabindex="-1"></a><span class="fu">### Load the stress sequence data</span></span>
+<span id="cb41-131"><a href="#cb41-131" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-132"><a href="#cb41-132" aria-hidden="true" tabindex="-1"></a>Now we load the stress data and convert it from a Python DataFrame to an R data frame.</span>
+<span id="cb41-133"><a href="#cb41-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-134"><a href="#cb41-134" aria-hidden="true" tabindex="-1"></a><span class="in">```{r load-data}</span></span>
+<span id="cb41-135"><a href="#cb41-135" aria-hidden="true" tabindex="-1"></a><span class="co"># Load dataset from sequenzo (Python)</span></span>
+<span id="cb41-136"><a href="#cb41-136" aria-hidden="true" tabindex="-1"></a>df_py <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">load_dataset</span>(<span class="st">&quot;students_stress_states_by_week&quot;</span>)</span>
+<span id="cb41-137"><a href="#cb41-137" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-138"><a href="#cb41-138" aria-hidden="true" tabindex="-1"></a><span class="co"># Keep as a Python DataFrame and preview in-place</span></span>
+<span id="cb41-139"><a href="#cb41-139" aria-hidden="true" tabindex="-1"></a>stress <span class="ot">&lt;-</span> df_py</span>
+<span id="cb41-140"><a href="#cb41-140" aria-hidden="true" tabindex="-1"></a>stress<span class="sc">$</span><span class="fu">head</span>()</span>
+<span id="cb41-141"><a href="#cb41-141" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-142"><a href="#cb41-142" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-143"><a href="#cb41-143" aria-hidden="true" tabindex="-1"></a>The dataset has:</span>
 <span id="cb41-144"><a href="#cb41-144" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-145"><a href="#cb41-145" aria-hidden="true" tabindex="-1"></a>Each row is therefore a **social sequence** of length 8, e.g.</span>
-<span id="cb41-146"><a href="#cb41-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-147"><a href="#cb41-147" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`M, M, M, M, M, L, L, M`</span></span>
-<span id="cb41-148"><a href="#cb41-148" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`L, L, L, L, L, L, M, L`</span></span>
-<span id="cb41-149"><a href="#cb41-149" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`H, H, M, M, M, M, M, M`</span></span>
-<span id="cb41-150"><a href="#cb41-150" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-151"><a href="#cb41-151" aria-hidden="true" tabindex="-1"></a>Our goal is to understand **typical patterns over 8 weeks**, not just individual scores.</span>
-<span id="cb41-152"><a href="#cb41-152" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-153"><a href="#cb41-153" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-154"><a href="#cb41-154" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-155"><a href="#cb41-155" aria-hidden="true" tabindex="-1"></a><span class="fu">## Define sequence data with Sequenzo</span></span>
-<span id="cb41-156"><a href="#cb41-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-157"><a href="#cb41-157" aria-hidden="true" tabindex="-1"></a><span class="in">`Sequenzo`</span> works with a central object called <span class="in">`SequenceData`</span>. We will now:</span>
-<span id="cb41-158"><a href="#cb41-158" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-159"><a href="#cb41-159" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Make sure the weekly columns are characters (not factors or logicals).</span>
-<span id="cb41-160"><a href="#cb41-160" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>Tell <span class="in">`Sequenzo`</span> which column is the ID.</span>
-<span id="cb41-161"><a href="#cb41-161" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Specify the **time points** (1–8) and the **states** (<span class="in">`L`</span>, <span class="in">`M`</span>, <span class="in">`H`</span>) with labels and colors.</span>
-<span id="cb41-162"><a href="#cb41-162" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-163"><a href="#cb41-163" aria-hidden="true" tabindex="-1"></a><span class="fu">### Prepare the R data frame</span></span>
-<span id="cb41-164"><a href="#cb41-164" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-165"><a href="#cb41-165" aria-hidden="true" tabindex="-1"></a><span class="in">```{r prepare-seqdata}</span></span>
-<span id="cb41-166"><a href="#cb41-166" aria-hidden="true" tabindex="-1"></a><span class="co"># For this tutorial we work directly with the Python DataFrame.</span></span>
-<span id="cb41-167"><a href="#cb41-167" aria-hidden="true" tabindex="-1"></a><span class="co"># It already stores weekly states as strings (&#39;L&#39;, &#39;M&#39;, &#39;H&#39;).</span></span>
-<span id="cb41-168"><a href="#cb41-168" aria-hidden="true" tabindex="-1"></a>stress_seq <span class="ot">&lt;-</span> stress</span>
-<span id="cb41-169"><a href="#cb41-169" aria-hidden="true" tabindex="-1"></a>stress_seq<span class="sc">$</span><span class="fu">head</span>()</span>
-<span id="cb41-170"><a href="#cb41-170" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-145"><a href="#cb41-145" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>one row per student</span>
+<span id="cb41-146"><a href="#cb41-146" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>columns:</span>
+<span id="cb41-147"><a href="#cb41-147" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`participant_id`</span> (ID)</span>
+<span id="cb41-148"><a href="#cb41-148" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`cohort`</span> (Summer / Fall / Spring)</span>
+<span id="cb41-149"><a href="#cb41-149" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span><span class="in">`1`</span>–<span class="in">`8`</span>: weekly stress states over 8 weeks</span>
+<span id="cb41-150"><a href="#cb41-150" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>background variables such as <span class="in">`gender`</span>, <span class="in">`income_group`</span>, <span class="in">`race`</span>, and <span class="in">`avg_study_time`</span></span>
+<span id="cb41-151"><a href="#cb41-151" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-152"><a href="#cb41-152" aria-hidden="true" tabindex="-1"></a><span class="fu">### What do L / M / H mean?</span></span>
+<span id="cb41-153"><a href="#cb41-153" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-154"><a href="#cb41-154" aria-hidden="true" tabindex="-1"></a>In this cleaned dataset, each week is coded as one of three stress states:</span>
+<span id="cb41-155"><a href="#cb41-155" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-156"><a href="#cb41-156" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**L** = Low stress</span>
+<span id="cb41-157"><a href="#cb41-157" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**M** = Medium stress</span>
+<span id="cb41-158"><a href="#cb41-158" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**H** = High stress</span>
+<span id="cb41-159"><a href="#cb41-159" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-160"><a href="#cb41-160" aria-hidden="true" tabindex="-1"></a>Each row is therefore a sequence of length 8, e.g.</span>
+<span id="cb41-161"><a href="#cb41-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-162"><a href="#cb41-162" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`M, M, M, M, M, L, L, M`</span></span>
+<span id="cb41-163"><a href="#cb41-163" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`L, L, L, L, L, L, M, L`</span></span>
+<span id="cb41-164"><a href="#cb41-164" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`H, H, M, M, M, M, M, M`</span></span>
+<span id="cb41-165"><a href="#cb41-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-166"><a href="#cb41-166" aria-hidden="true" tabindex="-1"></a>Our goal is to understand **typical patterns over 8 weeks**, not just individual scores.</span>
+<span id="cb41-167"><a href="#cb41-167" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-168"><a href="#cb41-168" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-169"><a href="#cb41-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-170"><a href="#cb41-170" aria-hidden="true" tabindex="-1"></a><span class="fu">## Define sequence data with Sequenzo</span></span>
 <span id="cb41-171"><a href="#cb41-171" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-172"><a href="#cb41-172" aria-hidden="true" tabindex="-1"></a><span class="fu">### Send the data to Python and create `SequenceData`</span></span>
+<span id="cb41-172"><a href="#cb41-172" aria-hidden="true" tabindex="-1"></a><span class="in">`Sequenzo`</span> works with a central object called <span class="in">`SequenceData`</span>. We will now:</span>
 <span id="cb41-173"><a href="#cb41-173" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-174"><a href="#cb41-174" aria-hidden="true" tabindex="-1"></a><span class="in">```{r define-seqdata}</span></span>
-<span id="cb41-175"><a href="#cb41-175" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to Python DataFrame</span></span>
-<span id="cb41-176"><a href="#cb41-176" aria-hidden="true" tabindex="-1"></a>stress_py <span class="ot">&lt;-</span> <span class="fu">r_to_py</span>(stress_seq)</span>
+<span id="cb41-174"><a href="#cb41-174" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Make sure the weekly columns are characters (not factors or logicals).</span>
+<span id="cb41-175"><a href="#cb41-175" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>Tell <span class="in">`Sequenzo`</span> which column is the ID.</span>
+<span id="cb41-176"><a href="#cb41-176" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Specify the **time points** (1–8) and the **states** (<span class="in">`L`</span>, <span class="in">`M`</span>, <span class="in">`H`</span>) with labels and colors.</span>
 <span id="cb41-177"><a href="#cb41-177" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-178"><a href="#cb41-178" aria-hidden="true" tabindex="-1"></a><span class="co"># Define time points and states</span></span>
-<span id="cb41-179"><a href="#cb41-179" aria-hidden="true" tabindex="-1"></a>time_list <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">as.character</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">8</span>))      <span class="co"># weeks 1–8</span></span>
-<span id="cb41-180"><a href="#cb41-180" aria-hidden="true" tabindex="-1"></a>states    <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(<span class="st">&quot;L&quot;</span>, <span class="st">&quot;M&quot;</span>, <span class="st">&quot;H&quot;</span>))       <span class="co"># Low / Medium / High</span></span>
-<span id="cb41-181"><a href="#cb41-181" aria-hidden="true" tabindex="-1"></a>labels    <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(<span class="st">&quot;Low&quot;</span>, <span class="st">&quot;Medium&quot;</span>, <span class="st">&quot;High&quot;</span>))</span>
-<span id="cb41-182"><a href="#cb41-182" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-183"><a href="#cb41-183" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional: choose colors for the three states</span></span>
-<span id="cb41-184"><a href="#cb41-184" aria-hidden="true" tabindex="-1"></a>colors <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(</span>
-<span id="cb41-185"><a href="#cb41-185" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#74C9B4&quot;</span>,  <span class="co"># Low</span></span>
-<span id="cb41-186"><a href="#cb41-186" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#F9E79F&quot;</span>,  <span class="co"># Medium</span></span>
-<span id="cb41-187"><a href="#cb41-187" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#F5B7B1&quot;</span>   <span class="co"># High</span></span>
-<span id="cb41-188"><a href="#cb41-188" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb41-189"><a href="#cb41-189" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-190"><a href="#cb41-190" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize the SequenceData object in Python</span></span>
-<span id="cb41-191"><a href="#cb41-191" aria-hidden="true" tabindex="-1"></a>sequence_data <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">SequenceData</span>(</span>
-<span id="cb41-192"><a href="#cb41-192" aria-hidden="true" tabindex="-1"></a>  stress_py,</span>
-<span id="cb41-193"><a href="#cb41-193" aria-hidden="true" tabindex="-1"></a>  <span class="at">time          =</span> time_list,</span>
-<span id="cb41-194"><a href="#cb41-194" aria-hidden="true" tabindex="-1"></a>  <span class="at">id_col        =</span> <span class="st">&quot;participant_id&quot;</span>,</span>
-<span id="cb41-195"><a href="#cb41-195" aria-hidden="true" tabindex="-1"></a>  <span class="at">states        =</span> states,</span>
-<span id="cb41-196"><a href="#cb41-196" aria-hidden="true" tabindex="-1"></a>  <span class="at">labels        =</span> labels,</span>
-<span id="cb41-197"><a href="#cb41-197" aria-hidden="true" tabindex="-1"></a>  <span class="at">custom_colors =</span> colors</span>
-<span id="cb41-198"><a href="#cb41-198" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-199"><a href="#cb41-199" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-200"><a href="#cb41-200" aria-hidden="true" tabindex="-1"></a>sequence_data</span>
-<span id="cb41-201"><a href="#cb41-201" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-202"><a href="#cb41-202" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-203"><a href="#cb41-203" aria-hidden="true" tabindex="-1"></a>You should see a short summary, for example:</span>
-<span id="cb41-204"><a href="#cb41-204" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-205"><a href="#cb41-205" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Number of sequences: 76</span>  </span>
-<span id="cb41-206"><a href="#cb41-206" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Number of time points: 8</span>  </span>
-<span id="cb41-207"><a href="#cb41-207" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; States: </span><span class="in">`[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]`</span></span>
-<span id="cb41-208"><a href="#cb41-208" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-209"><a href="#cb41-209" aria-hidden="true" tabindex="-1"></a>This confirms that <span class="in">`SequenceData`</span> has been created successfully.</span>
-<span id="cb41-210"><a href="#cb41-210" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-211"><a href="#cb41-211" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-212"><a href="#cb41-212" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-213"><a href="#cb41-213" aria-hidden="true" tabindex="-1"></a><span class="fu">## Visualise stress sequences</span></span>
-<span id="cb41-214"><a href="#cb41-214" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-215"><a href="#cb41-215" aria-hidden="true" tabindex="-1"></a>Visualization is often the **first and most important step** in sequence analysis. We will create:</span>
-<span id="cb41-216"><a href="#cb41-216" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-217"><a href="#cb41-217" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a legend for the stress states</span>
-<span id="cb41-218"><a href="#cb41-218" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>an index plot (all sequences)</span>
-<span id="cb41-219"><a href="#cb41-219" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a state-distribution plot (how common each state is at each week)</span>
-<span id="cb41-220"><a href="#cb41-220" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>mean time spent in each state</span>
-<span id="cb41-221"><a href="#cb41-221" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-222"><a href="#cb41-222" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Tip: In this tutorial we **save** the plots to files (e.g. </span><span class="in">`index_plot.png`</span><span class="at">) using the </span><span class="in">`save_as`</span><span class="at"> argument, and then display them in the document.</span></span>
+<span id="cb41-178"><a href="#cb41-178" aria-hidden="true" tabindex="-1"></a><span class="fu">### Prepare the R data frame</span></span>
+<span id="cb41-179"><a href="#cb41-179" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-180"><a href="#cb41-180" aria-hidden="true" tabindex="-1"></a><span class="in">```{r prepare-seqdata}</span></span>
+<span id="cb41-181"><a href="#cb41-181" aria-hidden="true" tabindex="-1"></a><span class="co"># For this tutorial we work directly with the Python DataFrame.</span></span>
+<span id="cb41-182"><a href="#cb41-182" aria-hidden="true" tabindex="-1"></a><span class="co"># It already stores weekly states as strings (&#39;L&#39;, &#39;M&#39;, &#39;H&#39;).</span></span>
+<span id="cb41-183"><a href="#cb41-183" aria-hidden="true" tabindex="-1"></a>stress_seq <span class="ot">&lt;-</span> stress</span>
+<span id="cb41-184"><a href="#cb41-184" aria-hidden="true" tabindex="-1"></a>stress_seq<span class="sc">$</span><span class="fu">head</span>()</span>
+<span id="cb41-185"><a href="#cb41-185" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-186"><a href="#cb41-186" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-187"><a href="#cb41-187" aria-hidden="true" tabindex="-1"></a><span class="fu">### Send the data to Python and create `SequenceData`</span></span>
+<span id="cb41-188"><a href="#cb41-188" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-189"><a href="#cb41-189" aria-hidden="true" tabindex="-1"></a>**What this step does:** Sequenzo is a Python library. Its main entry point is a **`SequenceData`** object: a Python object that holds your sequence table plus metadata (time points, state labels, colors). All later steps (plots, distance matrix, clustering) expect this object.</span>
+<span id="cb41-190"><a href="#cb41-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-191"><a href="#cb41-191" aria-hidden="true" tabindex="-1"></a>Right now we have the stress data either as an R data frame or already as a Python DataFrame (from <span class="in">`sequenzo$load_dataset()`</span>). To create <span class="in">`SequenceData`</span>, we must call the **Python** constructor and pass it data that Python understands. So we do two things:</span>
+<span id="cb41-192"><a href="#cb41-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-193"><a href="#cb41-193" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Pass data into Python:** If the table is in R, we use **`r_to_py(stress_seq)`** to create a *Python* copy of it (a pandas DataFrame). If we kept the result of <span class="in">`load_dataset()`</span> in R, that is already a Python object; in that case we can pass it directly. Here we use <span class="in">`r_to_py`</span> so that whatever we have is in the right form for Python.</span>
+<span id="cb41-194"><a href="#cb41-194" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Call the Python constructor:** **`sequenzo$SequenceData(...)`** is the R way of calling Python’s `SequenceData(...)`. We pass that DataFrame plus options (time indices, state names, labels, colors). The result **`sequence_data`** is a Python object that we keep in R and use later with <span class="in">`sequence_data$...`</span> for plotting and analysis.</span>
+<span id="cb41-195"><a href="#cb41-195" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-196"><a href="#cb41-196" aria-hidden="true" tabindex="-1"></a>So “send the data to Python” simply means: make sure Python has the table (via <span class="in">`r_to_py`</span> or by using the DataFrame we already got from <span class="in">`load_dataset`</span>), then call Sequenzo’s constructor so that we get one <span class="in">`SequenceData`</span> object to use everywhere below.</span>
+<span id="cb41-197"><a href="#cb41-197" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-198"><a href="#cb41-198" aria-hidden="true" tabindex="-1"></a><span class="in">```{r define-seqdata}</span></span>
+<span id="cb41-199"><a href="#cb41-199" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure Python has the table: convert R object to a Python (pandas) DataFrame if needed</span></span>
+<span id="cb41-200"><a href="#cb41-200" aria-hidden="true" tabindex="-1"></a>stress_py <span class="ot">&lt;-</span> <span class="fu">r_to_py</span>(stress_seq)</span>
+<span id="cb41-201"><a href="#cb41-201" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-202"><a href="#cb41-202" aria-hidden="true" tabindex="-1"></a><span class="co"># Define time points and states</span></span>
+<span id="cb41-203"><a href="#cb41-203" aria-hidden="true" tabindex="-1"></a>time_list <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">as.character</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">8</span>))      <span class="co"># weeks 1–8</span></span>
+<span id="cb41-204"><a href="#cb41-204" aria-hidden="true" tabindex="-1"></a>states    <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(<span class="st">&quot;L&quot;</span>, <span class="st">&quot;M&quot;</span>, <span class="st">&quot;H&quot;</span>))       <span class="co"># Low / Medium / High</span></span>
+<span id="cb41-205"><a href="#cb41-205" aria-hidden="true" tabindex="-1"></a>labels    <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(<span class="st">&quot;Low&quot;</span>, <span class="st">&quot;Medium&quot;</span>, <span class="st">&quot;High&quot;</span>))</span>
+<span id="cb41-206"><a href="#cb41-206" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-207"><a href="#cb41-207" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional: choose colors for the three states</span></span>
+<span id="cb41-208"><a href="#cb41-208" aria-hidden="true" tabindex="-1"></a>colors <span class="ot">&lt;-</span> <span class="fu">as.list</span>(<span class="fu">c</span>(</span>
+<span id="cb41-209"><a href="#cb41-209" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#74C9B4&quot;</span>,  <span class="co"># Low</span></span>
+<span id="cb41-210"><a href="#cb41-210" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#F9E79F&quot;</span>,  <span class="co"># Medium</span></span>
+<span id="cb41-211"><a href="#cb41-211" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;#F5B7B1&quot;</span>   <span class="co"># High</span></span>
+<span id="cb41-212"><a href="#cb41-212" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb41-213"><a href="#cb41-213" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-214"><a href="#cb41-214" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize the SequenceData object in Python</span></span>
+<span id="cb41-215"><a href="#cb41-215" aria-hidden="true" tabindex="-1"></a>sequence_data <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">SequenceData</span>(</span>
+<span id="cb41-216"><a href="#cb41-216" aria-hidden="true" tabindex="-1"></a>  stress_py,</span>
+<span id="cb41-217"><a href="#cb41-217" aria-hidden="true" tabindex="-1"></a>  <span class="at">time          =</span> time_list,</span>
+<span id="cb41-218"><a href="#cb41-218" aria-hidden="true" tabindex="-1"></a>  <span class="at">id_col        =</span> <span class="st">&quot;participant_id&quot;</span>,</span>
+<span id="cb41-219"><a href="#cb41-219" aria-hidden="true" tabindex="-1"></a>  <span class="at">states        =</span> states,</span>
+<span id="cb41-220"><a href="#cb41-220" aria-hidden="true" tabindex="-1"></a>  <span class="at">labels        =</span> labels,</span>
+<span id="cb41-221"><a href="#cb41-221" aria-hidden="true" tabindex="-1"></a>  <span class="at">custom_colors =</span> colors</span>
+<span id="cb41-222"><a href="#cb41-222" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb41-223"><a href="#cb41-223" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-224"><a href="#cb41-224" aria-hidden="true" tabindex="-1"></a><span class="fu">### Legend</span></span>
-<span id="cb41-225"><a href="#cb41-225" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-226"><a href="#cb41-226" aria-hidden="true" tabindex="-1"></a>In each plotting chunk, the first line asks Sequenzo (Python) to **create and save** a PNG file, and `knitr::include_graphics(&quot;...&quot;)` then **reads that PNG and shows it inside this HTML report**.</span>
-<span id="cb41-227"><a href="#cb41-227" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-228"><a href="#cb41-228" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-legend}</span></span>
-<span id="cb41-229"><a href="#cb41-229" aria-hidden="true" tabindex="-1"></a>sequence_data<span class="sc">$</span><span class="fu">plot_legend</span>(<span class="at">save_as =</span> <span class="st">&quot;stress_legend&quot;</span>)</span>
-<span id="cb41-230"><a href="#cb41-230" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_legend.png&quot;</span>)</span>
-<span id="cb41-231"><a href="#cb41-231" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-224"><a href="#cb41-224" aria-hidden="true" tabindex="-1"></a>sequence_data</span>
+<span id="cb41-225"><a href="#cb41-225" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-226"><a href="#cb41-226" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-227"><a href="#cb41-227" aria-hidden="true" tabindex="-1"></a>You should see a short summary, for example:</span>
+<span id="cb41-228"><a href="#cb41-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-229"><a href="#cb41-229" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Number of sequences: 76</span>  </span>
+<span id="cb41-230"><a href="#cb41-230" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Number of time points: 8</span>  </span>
+<span id="cb41-231"><a href="#cb41-231" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; States: </span><span class="in">`[&#39;L&#39;, &#39;M&#39;, &#39;H&#39;]`</span></span>
 <span id="cb41-232"><a href="#cb41-232" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-233"><a href="#cb41-233" aria-hidden="true" tabindex="-1"></a><span class="fu">### Index plot — all sequences</span></span>
+<span id="cb41-233"><a href="#cb41-233" aria-hidden="true" tabindex="-1"></a>This confirms that <span class="in">`SequenceData`</span> has been created successfully.</span>
 <span id="cb41-234"><a href="#cb41-234" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-235"><a href="#cb41-235" aria-hidden="true" tabindex="-1"></a>Again, the <span class="in">`save_as`</span> argument writes the figure to disk, and <span class="in">`knitr::include_graphics()`</span> pulls that file back into the document so that the plot appears under the code.</span>
+<span id="cb41-235"><a href="#cb41-235" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb41-236"><a href="#cb41-236" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-237"><a href="#cb41-237" aria-hidden="true" tabindex="-1"></a><span class="in">```{r index-all}</span></span>
-<span id="cb41-238"><a href="#cb41-238" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_sequence_index</span>(</span>
-<span id="cb41-239"><a href="#cb41-239" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
-<span id="cb41-240"><a href="#cb41-240" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
-<span id="cb41-241"><a href="#cb41-241" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_index_all&quot;</span></span>
-<span id="cb41-242"><a href="#cb41-242" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-243"><a href="#cb41-243" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_index_all.png&quot;</span>)</span>
-<span id="cb41-244"><a href="#cb41-244" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-237"><a href="#cb41-237" aria-hidden="true" tabindex="-1"></a><span class="fu">## Visualise stress sequences</span></span>
+<span id="cb41-238"><a href="#cb41-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-239"><a href="#cb41-239" aria-hidden="true" tabindex="-1"></a>Visualization is often the **first and most important step** in sequence analysis. We will create:</span>
+<span id="cb41-240"><a href="#cb41-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-241"><a href="#cb41-241" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a legend for the stress states</span>
+<span id="cb41-242"><a href="#cb41-242" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>an index plot</span>
+<span id="cb41-243"><a href="#cb41-243" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a state-distribution plot (how common each state is at each week)</span>
+<span id="cb41-244"><a href="#cb41-244" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>mean time spent in each state</span>
 <span id="cb41-245"><a href="#cb41-245" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-246"><a href="#cb41-246" aria-hidden="true" tabindex="-1"></a>Each horizontal line is a student; colors show Low / Medium / High stress for weeks 1–8.</span>
+<span id="cb41-246"><a href="#cb41-246" aria-hidden="true" tabindex="-1"></a>**How plots are shown here:** Each figure is produced by calling a Sequenzo (Python) plotting function with <span class="in">`save_as = &quot;img/...&quot;`</span>, which writes a PNG file into the <span class="in">`img/`</span> folder. We then use <span class="in">`knitr::include_graphics(&quot;img/...png&quot;)`</span> so that Quarto/knitr reads that file and embeds it in the HTML report. All plots in this section (and the cluster plots later) follow this same pattern—no need to repeat it under each one.</span>
 <span id="cb41-247"><a href="#cb41-247" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-248"><a href="#cb41-248" aria-hidden="true" tabindex="-1"></a><span class="fu">### State-distribution plot — all sequences</span></span>
+<span id="cb41-248"><a href="#cb41-248" aria-hidden="true" tabindex="-1"></a><span class="fu">### Legend</span></span>
 <span id="cb41-249"><a href="#cb41-249" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-250"><a href="#cb41-250" aria-hidden="true" tabindex="-1"></a>As before, Sequenzo saves the state-distribution figure to <span class="in">`&quot;stress_state_dist_all.png&quot;`</span>, and <span class="in">`knitr::include_graphics()`</span> inserts that saved image into the knitted HTML.</span>
-<span id="cb41-251"><a href="#cb41-251" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-252"><a href="#cb41-252" aria-hidden="true" tabindex="-1"></a><span class="in">```{r state-dist-all}</span></span>
-<span id="cb41-253"><a href="#cb41-253" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_state_distribution</span>(</span>
-<span id="cb41-254"><a href="#cb41-254" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
-<span id="cb41-255"><a href="#cb41-255" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
-<span id="cb41-256"><a href="#cb41-256" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_state_dist_all&quot;</span></span>
-<span id="cb41-257"><a href="#cb41-257" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-258"><a href="#cb41-258" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_state_dist_all.png&quot;</span>)</span>
-<span id="cb41-259"><a href="#cb41-259" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-260"><a href="#cb41-260" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-261"><a href="#cb41-261" aria-hidden="true" tabindex="-1"></a>This plot shows, for each week, the **proportion of students** in each stress state. It gives a quick overview: for example, is High stress more common at the beginning or later?</span>
-<span id="cb41-262"><a href="#cb41-262" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-263"><a href="#cb41-263" aria-hidden="true" tabindex="-1"></a><span class="fu">### Mean time in each state</span></span>
-<span id="cb41-264"><a href="#cb41-264" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-265"><a href="#cb41-265" aria-hidden="true" tabindex="-1"></a>We call <span class="in">`sequenzo$plot_mean_time()`</span> to ask Sequenzo (in Python) to create the figure and **save it as a PNG file**.  </span>
-<span id="cb41-266"><a href="#cb41-266" aria-hidden="true" tabindex="-1"></a>The second line, <span class="in">`knitr::include_graphics(&quot;stress_mean_time.png&quot;)`</span>, tells Quarto/knitr to **read that PNG file and display it inside the HTML report**.</span>
+<span id="cb41-250"><a href="#cb41-250" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-legend}</span></span>
+<span id="cb41-251"><a href="#cb41-251" aria-hidden="true" tabindex="-1"></a>sequence_data<span class="sc">$</span><span class="fu">plot_legend</span>(<span class="at">save_as =</span> <span class="st">&quot;img/stress_legend&quot;</span>)</span>
+<span id="cb41-252"><a href="#cb41-252" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_legend.png&quot;</span>)</span>
+<span id="cb41-253"><a href="#cb41-253" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-254"><a href="#cb41-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-255"><a href="#cb41-255" aria-hidden="true" tabindex="-1"></a><span class="fu">### Index plot</span></span>
+<span id="cb41-256"><a href="#cb41-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-257"><a href="#cb41-257" aria-hidden="true" tabindex="-1"></a><span class="in">```{r index-all}</span></span>
+<span id="cb41-258"><a href="#cb41-258" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_sequence_index</span>(</span>
+<span id="cb41-259"><a href="#cb41-259" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
+<span id="cb41-260"><a href="#cb41-260" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
+<span id="cb41-261"><a href="#cb41-261" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_index_all&quot;</span></span>
+<span id="cb41-262"><a href="#cb41-262" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-263"><a href="#cb41-263" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_index_all.png&quot;</span>)</span>
+<span id="cb41-264"><a href="#cb41-264" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-265"><a href="#cb41-265" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-266"><a href="#cb41-266" aria-hidden="true" tabindex="-1"></a>Each horizontal line is a student; colors show Low / Medium / High stress for weeks 1–8.</span>
 <span id="cb41-267"><a href="#cb41-267" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-268"><a href="#cb41-268" aria-hidden="true" tabindex="-1"></a><span class="in">```{r mean-time}</span></span>
-<span id="cb41-269"><a href="#cb41-269" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_mean_time</span>(</span>
-<span id="cb41-270"><a href="#cb41-270" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
-<span id="cb41-271"><a href="#cb41-271" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_mean_time&quot;</span></span>
-<span id="cb41-272"><a href="#cb41-272" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-273"><a href="#cb41-273" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_mean_time.png&quot;</span>)</span>
-<span id="cb41-274"><a href="#cb41-274" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-275"><a href="#cb41-275" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-276"><a href="#cb41-276" aria-hidden="true" tabindex="-1"></a>This tells us how many weeks, on average, students spend in each stress level over the 8 weeks.</span>
-<span id="cb41-277"><a href="#cb41-277" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-278"><a href="#cb41-278" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-279"><a href="#cb41-279" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-280"><a href="#cb41-280" aria-hidden="true" tabindex="-1"></a><span class="fu">## Compute dissimilarities between sequences</span></span>
-<span id="cb41-281"><a href="#cb41-281" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-282"><a href="#cb41-282" aria-hidden="true" tabindex="-1"></a>To compare sequences and cluster them, we need a **dissimilarity (distance) matrix**.</span>
-<span id="cb41-283"><a href="#cb41-283" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-284"><a href="#cb41-284" aria-hidden="true" tabindex="-1"></a>Here we use **Optimal Matching (OM)** with transition-rate substitution costs (<span class="in">`TRATE`</span>) and automatically chosen insertion/deletion costs (<span class="in">`indel = &quot;auto&quot;`</span>). This is the same configuration used in other Sequenzo tutorials.</span>
-<span id="cb41-285"><a href="#cb41-285" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-286"><a href="#cb41-286" aria-hidden="true" tabindex="-1"></a><span class="in">```{r om-compute}</span></span>
-<span id="cb41-287"><a href="#cb41-287" aria-hidden="true" tabindex="-1"></a><span class="co">#| cache: true</span></span>
-<span id="cb41-288"><a href="#cb41-288" aria-hidden="true" tabindex="-1"></a>om <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">get_distance_matrix</span>(</span>
-<span id="cb41-289"><a href="#cb41-289" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
-<span id="cb41-290"><a href="#cb41-290" aria-hidden="true" tabindex="-1"></a>  <span class="at">method  =</span> <span class="st">&quot;OM&quot;</span>,</span>
-<span id="cb41-291"><a href="#cb41-291" aria-hidden="true" tabindex="-1"></a>  <span class="at">sm      =</span> <span class="st">&quot;TRATE&quot;</span>,</span>
-<span id="cb41-292"><a href="#cb41-292" aria-hidden="true" tabindex="-1"></a>  <span class="at">indel   =</span> <span class="st">&quot;auto&quot;</span></span>
-<span id="cb41-293"><a href="#cb41-293" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-294"><a href="#cb41-294" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-295"><a href="#cb41-295" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-296"><a href="#cb41-296" aria-hidden="true" tabindex="-1"></a>Inspect the distance matrix in R:</span>
-<span id="cb41-297"><a href="#cb41-297" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-298"><a href="#cb41-298" aria-hidden="true" tabindex="-1"></a><span class="in">```{r om-inspect}</span></span>
-<span id="cb41-299"><a href="#cb41-299" aria-hidden="true" tabindex="-1"></a><span class="co"># `om` is a Python (pandas / NumPy) distance matrix from sequenzo.</span></span>
-<span id="cb41-300"><a href="#cb41-300" aria-hidden="true" tabindex="-1"></a><span class="co"># Show a small 5 x 5 block using Python-style indexing for intuition.</span></span>
-<span id="cb41-301"><a href="#cb41-301" aria-hidden="true" tabindex="-1"></a>om_block <span class="ot">&lt;-</span> om<span class="sc">$</span>iloc[<span class="dv">0</span><span class="sc">:</span><span class="dv">5</span>, <span class="dv">0</span><span class="sc">:</span><span class="dv">5</span>]</span>
-<span id="cb41-302"><a href="#cb41-302" aria-hidden="true" tabindex="-1"></a>om_block</span>
-<span id="cb41-303"><a href="#cb41-303" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-304"><a href="#cb41-304" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-305"><a href="#cb41-305" aria-hidden="true" tabindex="-1"></a>Each entry is the dissimilarity between two students’ stress sequences (larger = more different).</span>
-<span id="cb41-306"><a href="#cb41-306" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-307"><a href="#cb41-307" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-308"><a href="#cb41-308" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-309"><a href="#cb41-309" aria-hidden="true" tabindex="-1"></a><span class="fu">## Cluster analysis</span></span>
+<span id="cb41-268"><a href="#cb41-268" aria-hidden="true" tabindex="-1"></a><span class="fu">### State-distribution plot</span></span>
+<span id="cb41-269"><a href="#cb41-269" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-270"><a href="#cb41-270" aria-hidden="true" tabindex="-1"></a><span class="in">```{r state-dist-all}</span></span>
+<span id="cb41-271"><a href="#cb41-271" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_state_distribution</span>(</span>
+<span id="cb41-272"><a href="#cb41-272" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
+<span id="cb41-273"><a href="#cb41-273" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Week&quot;</span>,</span>
+<span id="cb41-274"><a href="#cb41-274" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_state_dist_all&quot;</span></span>
+<span id="cb41-275"><a href="#cb41-275" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-276"><a href="#cb41-276" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_state_dist_all.png&quot;</span>)</span>
+<span id="cb41-277"><a href="#cb41-277" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-278"><a href="#cb41-278" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-279"><a href="#cb41-279" aria-hidden="true" tabindex="-1"></a>This plot shows, for each week, the **proportion of students** in each stress state. It gives a quick overview: for example, is High stress more common at the beginning or later?</span>
+<span id="cb41-280"><a href="#cb41-280" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-281"><a href="#cb41-281" aria-hidden="true" tabindex="-1"></a><span class="fu">### Mean time in each state</span></span>
+<span id="cb41-282"><a href="#cb41-282" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-283"><a href="#cb41-283" aria-hidden="true" tabindex="-1"></a><span class="in">```{r mean-time}</span></span>
+<span id="cb41-284"><a href="#cb41-284" aria-hidden="true" tabindex="-1"></a>sequenzo<span class="sc">$</span><span class="fu">plot_mean_time</span>(</span>
+<span id="cb41-285"><a href="#cb41-285" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
+<span id="cb41-286"><a href="#cb41-286" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_mean_time&quot;</span></span>
+<span id="cb41-287"><a href="#cb41-287" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-288"><a href="#cb41-288" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_mean_time.png&quot;</span>)</span>
+<span id="cb41-289"><a href="#cb41-289" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-290"><a href="#cb41-290" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-291"><a href="#cb41-291" aria-hidden="true" tabindex="-1"></a>This tells us how many weeks, on average, students spend in each stress level over the 8 weeks.</span>
+<span id="cb41-292"><a href="#cb41-292" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-293"><a href="#cb41-293" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-294"><a href="#cb41-294" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-295"><a href="#cb41-295" aria-hidden="true" tabindex="-1"></a><span class="fu">## Compute dissimilarities between sequences</span></span>
+<span id="cb41-296"><a href="#cb41-296" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-297"><a href="#cb41-297" aria-hidden="true" tabindex="-1"></a>To compare sequences and cluster them, we need a **dissimilarity (distance) matrix**.</span>
+<span id="cb41-298"><a href="#cb41-298" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-299"><a href="#cb41-299" aria-hidden="true" tabindex="-1"></a>Here we use **Optimal Matching (OM)** with transition-rate substitution costs (<span class="in">`TRATE`</span>) and automatically chosen insertion/deletion costs (<span class="in">`indel = &quot;auto&quot;`</span>). This is the same configuration used in other Sequenzo tutorials.</span>
+<span id="cb41-300"><a href="#cb41-300" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-301"><a href="#cb41-301" aria-hidden="true" tabindex="-1"></a><span class="in">```{r om-compute}</span></span>
+<span id="cb41-302"><a href="#cb41-302" aria-hidden="true" tabindex="-1"></a><span class="co">#| cache: true</span></span>
+<span id="cb41-303"><a href="#cb41-303" aria-hidden="true" tabindex="-1"></a>om <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">get_distance_matrix</span>(</span>
+<span id="cb41-304"><a href="#cb41-304" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqdata =</span> sequence_data,</span>
+<span id="cb41-305"><a href="#cb41-305" aria-hidden="true" tabindex="-1"></a>  <span class="at">method  =</span> <span class="st">&quot;OM&quot;</span>,</span>
+<span id="cb41-306"><a href="#cb41-306" aria-hidden="true" tabindex="-1"></a>  <span class="at">sm      =</span> <span class="st">&quot;TRATE&quot;</span>,</span>
+<span id="cb41-307"><a href="#cb41-307" aria-hidden="true" tabindex="-1"></a>  <span class="at">indel   =</span> <span class="st">&quot;auto&quot;</span></span>
+<span id="cb41-308"><a href="#cb41-308" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-309"><a href="#cb41-309" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb41-310"><a href="#cb41-310" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-311"><a href="#cb41-311" aria-hidden="true" tabindex="-1"></a>Next, we perform a simple **cluster analysis** on the dissimilarity matrix. We use:</span>
+<span id="cb41-311"><a href="#cb41-311" aria-hidden="true" tabindex="-1"></a>Inspect the distance matrix in R:</span>
 <span id="cb41-312"><a href="#cb41-312" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-313"><a href="#cb41-313" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Ward’s hierarchical clustering</span>
-<span id="cb41-314"><a href="#cb41-314" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Cluster quality indices (including Average Silhouette Width, ASW)</span>
-<span id="cb41-315"><a href="#cb41-315" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>A 3-cluster solution to illustrate distinct stress-pattern groups</span>
-<span id="cb41-316"><a href="#cb41-316" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-317"><a href="#cb41-317" aria-hidden="true" tabindex="-1"></a><span class="fu">### Ward clustering and dendrogram</span></span>
-<span id="cb41-318"><a href="#cb41-318" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-319"><a href="#cb41-319" aria-hidden="true" tabindex="-1"></a>Here we use the same pattern: Sequenzo computes the dendrogram and saves it as <span class="in">`&quot;stress_dendrogram.png&quot;`</span>, and <span class="in">`knitr::include_graphics()`</span> is responsible for actually displaying that saved image in the report.</span>
-<span id="cb41-320"><a href="#cb41-320" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-321"><a href="#cb41-321" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster}</span></span>
-<span id="cb41-322"><a href="#cb41-322" aria-hidden="true" tabindex="-1"></a>cluster <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">Cluster</span>(</span>
-<span id="cb41-323"><a href="#cb41-323" aria-hidden="true" tabindex="-1"></a>  om,</span>
-<span id="cb41-324"><a href="#cb41-324" aria-hidden="true" tabindex="-1"></a>  sequence_data<span class="sc">$</span>ids,</span>
-<span id="cb41-325"><a href="#cb41-325" aria-hidden="true" tabindex="-1"></a>  <span class="at">clustering_method =</span> <span class="st">&quot;ward_d&quot;</span></span>
-<span id="cb41-326"><a href="#cb41-326" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-313"><a href="#cb41-313" aria-hidden="true" tabindex="-1"></a><span class="in">```{r om-inspect}</span></span>
+<span id="cb41-314"><a href="#cb41-314" aria-hidden="true" tabindex="-1"></a><span class="co"># `om` is a Python (pandas / NumPy) distance matrix from sequenzo.</span></span>
+<span id="cb41-315"><a href="#cb41-315" aria-hidden="true" tabindex="-1"></a><span class="co"># Show a small 5 x 5 block using Python-style indexing for intuition.</span></span>
+<span id="cb41-316"><a href="#cb41-316" aria-hidden="true" tabindex="-1"></a>om_block <span class="ot">&lt;-</span> om<span class="sc">$</span>iloc[<span class="dv">0</span><span class="sc">:</span><span class="dv">5</span>, <span class="dv">0</span><span class="sc">:</span><span class="dv">5</span>]</span>
+<span id="cb41-317"><a href="#cb41-317" aria-hidden="true" tabindex="-1"></a>om_block</span>
+<span id="cb41-318"><a href="#cb41-318" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-319"><a href="#cb41-319" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-320"><a href="#cb41-320" aria-hidden="true" tabindex="-1"></a>Each entry is the dissimilarity between two students’ stress sequences (larger = more different).</span>
+<span id="cb41-321"><a href="#cb41-321" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-322"><a href="#cb41-322" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-323"><a href="#cb41-323" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-324"><a href="#cb41-324" aria-hidden="true" tabindex="-1"></a><span class="fu">## Cluster analysis</span></span>
+<span id="cb41-325"><a href="#cb41-325" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-326"><a href="#cb41-326" aria-hidden="true" tabindex="-1"></a>Next, we perform a simple **cluster analysis** on the dissimilarity matrix. We use:</span>
 <span id="cb41-327"><a href="#cb41-327" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-328"><a href="#cb41-328" aria-hidden="true" tabindex="-1"></a>cluster<span class="sc">$</span><span class="fu">plot_dendrogram</span>(</span>
-<span id="cb41-329"><a href="#cb41-329" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Students&quot;</span>,</span>
-<span id="cb41-330"><a href="#cb41-330" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylabel  =</span> <span class="st">&quot;Distance&quot;</span>,</span>
-<span id="cb41-331"><a href="#cb41-331" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_dendrogram&quot;</span></span>
-<span id="cb41-332"><a href="#cb41-332" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-333"><a href="#cb41-333" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_dendrogram.png&quot;</span>)</span>
-<span id="cb41-334"><a href="#cb41-334" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-335"><a href="#cb41-335" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-336"><a href="#cb41-336" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-337"><a href="#cb41-337" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-338"><a href="#cb41-338" aria-hidden="true" tabindex="-1"></a><span class="in">### Cluster quality and choosing k</span></span>
-<span id="cb41-339"><a href="#cb41-339" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-340"><a href="#cb41-340" aria-hidden="true" tabindex="-1"></a><span class="in">`cluster_quality$plot_cqi_scores(..., save_as = &quot;stress_cqi_scores&quot;)` creates a PNG of the cluster-quality indices, and `knitr::include_graphics(&quot;stress_cqi_scores.png&quot;)` embeds that plot in the HTML so readers can see the curve.</span></span>
-<span id="cb41-341"><a href="#cb41-341" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-342"><a href="#cb41-342" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-quality}</span></span>
-<span id="cb41-343"><a href="#cb41-343" aria-hidden="true" tabindex="-1"></a><span class="in">cluster_quality &lt;- sequenzo$ClusterQuality(cluster)</span></span>
-<span id="cb41-344"><a href="#cb41-344" aria-hidden="true" tabindex="-1"></a><span class="in">cluster_quality$compute_cluster_quality_scores()</span></span>
-<span id="cb41-345"><a href="#cb41-345" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-346"><a href="#cb41-346" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-347"><a href="#cb41-347" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-quality}</span></span>
-<span id="cb41-348"><a href="#cb41-348" aria-hidden="true" tabindex="-1"></a>cluster_quality<span class="sc">$</span><span class="fu">plot_cqi_scores</span>(</span>
-<span id="cb41-349"><a href="#cb41-349" aria-hidden="true" tabindex="-1"></a>  <span class="at">norm   =</span> <span class="st">&quot;zscore&quot;</span>,</span>
-<span id="cb41-350"><a href="#cb41-350" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;stress_cqi_scores&quot;</span></span>
-<span id="cb41-351"><a href="#cb41-351" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-352"><a href="#cb41-352" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_cqi_scores.png&quot;</span>)</span>
-<span id="cb41-353"><a href="#cb41-353" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-354"><a href="#cb41-354" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-355"><a href="#cb41-355" aria-hidden="true" tabindex="-1"></a><span class="in">```{r quality-table}</span></span>
-<span id="cb41-356"><a href="#cb41-356" aria-hidden="true" tabindex="-1"></a>cqi_table <span class="ot">&lt;-</span> cluster_quality<span class="sc">$</span><span class="fu">get_cqi_table</span>()</span>
-<span id="cb41-357"><a href="#cb41-357" aria-hidden="true" tabindex="-1"></a>cqi_table</span>
-<span id="cb41-358"><a href="#cb41-358" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-359"><a href="#cb41-359" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-360"><a href="#cb41-360" aria-hidden="true" tabindex="-1"></a>In this tutorial we focus on a **3-cluster** solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).</span>
-<span id="cb41-361"><a href="#cb41-361" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-362"><a href="#cb41-362" aria-hidden="true" tabindex="-1"></a><span class="in">```{r set-k}</span></span>
-<span id="cb41-363"><a href="#cb41-363" aria-hidden="true" tabindex="-1"></a>n_clusters <span class="ot">&lt;-</span> 3L</span>
-<span id="cb41-364"><a href="#cb41-364" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-365"><a href="#cb41-365" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-366"><a href="#cb41-366" aria-hidden="true" tabindex="-1"></a><span class="fu">### Cluster memberships and distribution</span></span>
-<span id="cb41-367"><a href="#cb41-367" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-368"><a href="#cb41-368" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-results}</span></span>
-<span id="cb41-369"><a href="#cb41-369" aria-hidden="true" tabindex="-1"></a>cr <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterResults</span>(cluster)</span>
+<span id="cb41-328"><a href="#cb41-328" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Ward’s hierarchical clustering</span>
+<span id="cb41-329"><a href="#cb41-329" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Cluster quality indices (including Average Silhouette Width, ASW)</span>
+<span id="cb41-330"><a href="#cb41-330" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>A 3-cluster solution to illustrate distinct stress-pattern groups</span>
+<span id="cb41-331"><a href="#cb41-331" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-332"><a href="#cb41-332" aria-hidden="true" tabindex="-1"></a><span class="fu">### Ward clustering and dendrogram</span></span>
+<span id="cb41-333"><a href="#cb41-333" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-334"><a href="#cb41-334" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster}</span></span>
+<span id="cb41-335"><a href="#cb41-335" aria-hidden="true" tabindex="-1"></a>cluster <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">Cluster</span>(</span>
+<span id="cb41-336"><a href="#cb41-336" aria-hidden="true" tabindex="-1"></a>  om,</span>
+<span id="cb41-337"><a href="#cb41-337" aria-hidden="true" tabindex="-1"></a>  sequence_data<span class="sc">$</span>ids,</span>
+<span id="cb41-338"><a href="#cb41-338" aria-hidden="true" tabindex="-1"></a>  <span class="at">clustering_method =</span> <span class="st">&quot;ward_d&quot;</span></span>
+<span id="cb41-339"><a href="#cb41-339" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-340"><a href="#cb41-340" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-341"><a href="#cb41-341" aria-hidden="true" tabindex="-1"></a>cluster<span class="sc">$</span><span class="fu">plot_dendrogram</span>(</span>
+<span id="cb41-342"><a href="#cb41-342" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlabel  =</span> <span class="st">&quot;Students&quot;</span>,</span>
+<span id="cb41-343"><a href="#cb41-343" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylabel  =</span> <span class="st">&quot;Distance&quot;</span>,</span>
+<span id="cb41-344"><a href="#cb41-344" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_dendrogram&quot;</span></span>
+<span id="cb41-345"><a href="#cb41-345" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-346"><a href="#cb41-346" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_dendrogram.png&quot;</span>)</span>
+<span id="cb41-347"><a href="#cb41-347" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-348"><a href="#cb41-348" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-349"><a href="#cb41-349" aria-hidden="true" tabindex="-1"></a><span class="fu">### Cluster quality and choosing k</span></span>
+<span id="cb41-350"><a href="#cb41-350" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-351"><a href="#cb41-351" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-quality}</span></span>
+<span id="cb41-352"><a href="#cb41-352" aria-hidden="true" tabindex="-1"></a>cluster_quality <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterQuality</span>(cluster)</span>
+<span id="cb41-353"><a href="#cb41-353" aria-hidden="true" tabindex="-1"></a>cluster_quality<span class="sc">$</span><span class="fu">compute_cluster_quality_scores</span>()</span>
+<span id="cb41-354"><a href="#cb41-354" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-355"><a href="#cb41-355" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-356"><a href="#cb41-356" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-quality}</span></span>
+<span id="cb41-357"><a href="#cb41-357" aria-hidden="true" tabindex="-1"></a>cluster_quality<span class="sc">$</span><span class="fu">plot_cqi_scores</span>(</span>
+<span id="cb41-358"><a href="#cb41-358" aria-hidden="true" tabindex="-1"></a>  <span class="at">norm   =</span> <span class="st">&quot;zscore&quot;</span>,</span>
+<span id="cb41-359"><a href="#cb41-359" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as =</span> <span class="st">&quot;img/stress_cqi_scores&quot;</span></span>
+<span id="cb41-360"><a href="#cb41-360" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-361"><a href="#cb41-361" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_cqi_scores.png&quot;</span>)</span>
+<span id="cb41-362"><a href="#cb41-362" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-363"><a href="#cb41-363" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-364"><a href="#cb41-364" aria-hidden="true" tabindex="-1"></a><span class="in">```{r quality-table}</span></span>
+<span id="cb41-365"><a href="#cb41-365" aria-hidden="true" tabindex="-1"></a>cqi_table <span class="ot">&lt;-</span> cluster_quality<span class="sc">$</span><span class="fu">get_cqi_table</span>()</span>
+<span id="cb41-366"><a href="#cb41-366" aria-hidden="true" tabindex="-1"></a>cqi_table</span>
+<span id="cb41-367"><a href="#cb41-367" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-368"><a href="#cb41-368" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-369"><a href="#cb41-369" aria-hidden="true" tabindex="-1"></a>In this tutorial we focus on a 3-cluster solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).</span>
 <span id="cb41-370"><a href="#cb41-370" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-371"><a href="#cb41-371" aria-hidden="true" tabindex="-1"></a><span class="co"># Membership table (Python DataFrame)</span></span>
-<span id="cb41-372"><a href="#cb41-372" aria-hidden="true" tabindex="-1"></a>membership_py <span class="ot">&lt;-</span> cr<span class="sc">$</span><span class="fu">get_cluster_memberships</span>(<span class="at">num_clusters =</span> n_clusters)</span>
-<span id="cb41-373"><a href="#cb41-373" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-374"><a href="#cb41-374" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution of cluster sizes (printed directly as a pandas DataFrame)</span></span>
-<span id="cb41-375"><a href="#cb41-375" aria-hidden="true" tabindex="-1"></a>distribution_py <span class="ot">&lt;-</span> cr<span class="sc">$</span><span class="fu">get_cluster_distribution</span>(<span class="at">num_clusters =</span> n_clusters)</span>
-<span id="cb41-376"><a href="#cb41-376" aria-hidden="true" tabindex="-1"></a>distribution_py</span>
-<span id="cb41-377"><a href="#cb41-377" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-371"><a href="#cb41-371" aria-hidden="true" tabindex="-1"></a><span class="in">```{r set-k}</span></span>
+<span id="cb41-372"><a href="#cb41-372" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of clusters to use </span></span>
+<span id="cb41-373"><a href="#cb41-373" aria-hidden="true" tabindex="-1"></a><span class="co"># 3 gives interpretable groups, e.g. low / moderate / high stress</span></span>
+<span id="cb41-374"><a href="#cb41-374" aria-hidden="true" tabindex="-1"></a>n_clusters <span class="ot">&lt;-</span> <span class="dv">3</span></span>
+<span id="cb41-375"><a href="#cb41-375" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-376"><a href="#cb41-376" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-377"><a href="#cb41-377" aria-hidden="true" tabindex="-1"></a><span class="fu">### Cluster memberships and distribution</span></span>
 <span id="cb41-378"><a href="#cb41-378" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-379"><a href="#cb41-379" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-distribution}</span></span>
-<span id="cb41-380"><a href="#cb41-380" aria-hidden="true" tabindex="-1"></a>cr<span class="sc">$</span><span class="fu">plot_cluster_distribution</span>(</span>
-<span id="cb41-381"><a href="#cb41-381" aria-hidden="true" tabindex="-1"></a>  <span class="at">num_clusters =</span> n_clusters,</span>
-<span id="cb41-382"><a href="#cb41-382" aria-hidden="true" tabindex="-1"></a>  <span class="at">title        =</span> <span class="cn">NULL</span>,</span>
-<span id="cb41-383"><a href="#cb41-383" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as      =</span> <span class="st">&quot;stress_cluster_dist&quot;</span></span>
-<span id="cb41-384"><a href="#cb41-384" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-385"><a href="#cb41-385" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_cluster_dist.png&quot;</span>)</span>
-<span id="cb41-386"><a href="#cb41-386" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-387"><a href="#cb41-387" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-388"><a href="#cb41-388" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-379"><a href="#cb41-379" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-results}</span></span>
+<span id="cb41-380"><a href="#cb41-380" aria-hidden="true" tabindex="-1"></a>cluster_results <span class="ot">&lt;-</span> sequenzo<span class="sc">$</span><span class="fu">ClusterResults</span>(cluster)</span>
+<span id="cb41-381"><a href="#cb41-381" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-382"><a href="#cb41-382" aria-hidden="true" tabindex="-1"></a><span class="co"># Membership table (Python DataFrame)</span></span>
+<span id="cb41-383"><a href="#cb41-383" aria-hidden="true" tabindex="-1"></a>membership_py <span class="ot">&lt;-</span> cluster_results<span class="sc">$</span><span class="fu">get_cluster_memberships</span>(<span class="at">num_clusters =</span> n_clusters)</span>
+<span id="cb41-384"><a href="#cb41-384" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-385"><a href="#cb41-385" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution of cluster sizes (printed directly as a pandas DataFrame)</span></span>
+<span id="cb41-386"><a href="#cb41-386" aria-hidden="true" tabindex="-1"></a>distribution_py <span class="ot">&lt;-</span> cluster_results<span class="sc">$</span><span class="fu">get_cluster_distribution</span>(<span class="at">num_clusters =</span> n_clusters)</span>
+<span id="cb41-387"><a href="#cb41-387" aria-hidden="true" tabindex="-1"></a>distribution_py</span>
+<span id="cb41-388"><a href="#cb41-388" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb41-389"><a href="#cb41-389" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-390"><a href="#cb41-390" aria-hidden="true" tabindex="-1"></a><span class="fu">## Interpreting clusters: index and state-distribution plots</span></span>
-<span id="cb41-391"><a href="#cb41-391" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-392"><a href="#cb41-392" aria-hidden="true" tabindex="-1"></a>To understand **what the clusters mean**, we look at sequences and state-distribution plots **by cluster**.</span>
-<span id="cb41-393"><a href="#cb41-393" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-394"><a href="#cb41-394" aria-hidden="true" tabindex="-1"></a><span class="fu">### Prepare cluster labels (optional)</span></span>
-<span id="cb41-395"><a href="#cb41-395" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-396"><a href="#cb41-396" aria-hidden="true" tabindex="-1"></a>We first pass the membership table to the Python namespace and create some human-readable labels. Here is an example with three descriptive labels that you can adapt to your own data:</span>
-<span id="cb41-397"><a href="#cb41-397" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-398"><a href="#cb41-398" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-labels}</span></span>
-<span id="cb41-399"><a href="#cb41-399" aria-hidden="true" tabindex="-1"></a><span class="co"># make membership table available as &#39;membership_table&#39; in Python</span></span>
-<span id="cb41-400"><a href="#cb41-400" aria-hidden="true" tabindex="-1"></a>py<span class="sc">$</span>membership_table <span class="ot">&lt;-</span> membership_py</span>
-<span id="cb41-401"><a href="#cb41-401" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-402"><a href="#cb41-402" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
-<span id="cb41-403"><a href="#cb41-403" aria-hidden="true" tabindex="-1"></a><span class="st">membership_table[&#39;Cluster&#39;] = membership_table[&#39;Cluster&#39;].astype(int)</span></span>
+<span id="cb41-390"><a href="#cb41-390" aria-hidden="true" tabindex="-1"></a><span class="in">```{r plot-distribution}</span></span>
+<span id="cb41-391"><a href="#cb41-391" aria-hidden="true" tabindex="-1"></a>cluster_results<span class="sc">$</span><span class="fu">plot_cluster_distribution</span>(</span>
+<span id="cb41-392"><a href="#cb41-392" aria-hidden="true" tabindex="-1"></a>  <span class="at">num_clusters =</span> n_clusters,</span>
+<span id="cb41-393"><a href="#cb41-393" aria-hidden="true" tabindex="-1"></a>  <span class="at">title        =</span> <span class="cn">NULL</span>,</span>
+<span id="cb41-394"><a href="#cb41-394" aria-hidden="true" tabindex="-1"></a>  <span class="at">save_as      =</span> <span class="st">&quot;img/stress_cluster_dist&quot;</span></span>
+<span id="cb41-395"><a href="#cb41-395" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-396"><a href="#cb41-396" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_cluster_dist.png&quot;</span>)</span>
+<span id="cb41-397"><a href="#cb41-397" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-398"><a href="#cb41-398" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-399"><a href="#cb41-399" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-400"><a href="#cb41-400" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-401"><a href="#cb41-401" aria-hidden="true" tabindex="-1"></a><span class="fu">## Interpreting clusters: index and state-distribution plots</span></span>
+<span id="cb41-402"><a href="#cb41-402" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-403"><a href="#cb41-403" aria-hidden="true" tabindex="-1"></a>To understand what the clusters mean, we look at sequences and state-distribution plots by cluster.</span>
 <span id="cb41-404"><a href="#cb41-404" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-405"><a href="#cb41-405" aria-hidden="true" tabindex="-1"></a><span class="st">cluster_labels = {</span></span>
-<span id="cb41-406"><a href="#cb41-406" aria-hidden="true" tabindex="-1"></a><span class="st">    1: &#39;Mostly Low Stress&#39;,</span></span>
-<span id="cb41-407"><a href="#cb41-407" aria-hidden="true" tabindex="-1"></a><span class="st">    2: &#39;Medium / Fluctuating&#39;,</span></span>
-<span id="cb41-408"><a href="#cb41-408" aria-hidden="true" tabindex="-1"></a><span class="st">    3: &#39;Consistently High or Rising&#39;</span></span>
-<span id="cb41-409"><a href="#cb41-409" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
-<span id="cb41-410"><a href="#cb41-410" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
-<span id="cb41-411"><a href="#cb41-411" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-412"><a href="#cb41-412" aria-hidden="true" tabindex="-1"></a>cluster_labels_py <span class="ot">&lt;-</span> py<span class="sc">$</span>cluster_labels</span>
-<span id="cb41-413"><a href="#cb41-413" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-414"><a href="#cb41-414" aria-hidden="true" tabindex="-1"></a><span class="co"># R named vector (useful if you later merge back into an R data frame)</span></span>
-<span id="cb41-415"><a href="#cb41-415" aria-hidden="true" tabindex="-1"></a>cluster_labels_r <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb41-416"><a href="#cb41-416" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">1</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Mostly Low Stress&quot;</span>,</span>
-<span id="cb41-417"><a href="#cb41-417" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">2</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Medium / Fluctuating&quot;</span>,</span>
-<span id="cb41-418"><a href="#cb41-418" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">3</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Consistently High or Rising&quot;</span></span>
-<span id="cb41-419"><a href="#cb41-419" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-420"><a href="#cb41-420" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-421"><a href="#cb41-421" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-422"><a href="#cb41-422" aria-hidden="true" tabindex="-1"></a><span class="fu">### Index plots by cluster</span></span>
-<span id="cb41-423"><a href="#cb41-423" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-424"><a href="#cb41-424" aria-hidden="true" tabindex="-1"></a>In the next two chunks, the Python calls write cluster-specific plots to PNG files, and each <span class="in">`knitr::include_graphics(&quot;...&quot;)`</span> line is what actually pulls those PNGs into the document so you can see the plots.</span>
-<span id="cb41-425"><a href="#cb41-425" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-426"><a href="#cb41-426" aria-hidden="true" tabindex="-1"></a><span class="in">```{r index-clusters}</span></span>
-<span id="cb41-427"><a href="#cb41-427" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
-<span id="cb41-428"><a href="#cb41-428" aria-hidden="true" tabindex="-1"></a><span class="st">from sequenzo import plot_sequence_index</span></span>
-<span id="cb41-429"><a href="#cb41-429" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-430"><a href="#cb41-430" aria-hidden="true" tabindex="-1"></a><span class="st">plot_sequence_index(</span></span>
-<span id="cb41-431"><a href="#cb41-431" aria-hidden="true" tabindex="-1"></a><span class="st">    seqdata         = r.sequence_data,</span></span>
-<span id="cb41-432"><a href="#cb41-432" aria-hidden="true" tabindex="-1"></a><span class="st">    group_dataframe = membership_table,</span></span>
-<span id="cb41-433"><a href="#cb41-433" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
-<span id="cb41-434"><a href="#cb41-434" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
-<span id="cb41-435"><a href="#cb41-435" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
-<span id="cb41-436"><a href="#cb41-436" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;stress_index_clusters&#39;</span></span>
-<span id="cb41-437"><a href="#cb41-437" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
-<span id="cb41-438"><a href="#cb41-438" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
-<span id="cb41-439"><a href="#cb41-439" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_index_clusters.png&quot;</span>)</span>
-<span id="cb41-440"><a href="#cb41-440" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-441"><a href="#cb41-441" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-442"><a href="#cb41-442" aria-hidden="true" tabindex="-1"></a>Look at how typical stress trajectories differ across clusters. For example, one cluster may show mostly Low stress, while another shows frequent High stress or increasing stress over time.</span>
-<span id="cb41-443"><a href="#cb41-443" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-444"><a href="#cb41-444" aria-hidden="true" tabindex="-1"></a><span class="fu">### State-distribution plots by cluster</span></span>
-<span id="cb41-445"><a href="#cb41-445" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-446"><a href="#cb41-446" aria-hidden="true" tabindex="-1"></a><span class="in">```{r state-dist-clusters}</span></span>
-<span id="cb41-447"><a href="#cb41-447" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
-<span id="cb41-448"><a href="#cb41-448" aria-hidden="true" tabindex="-1"></a><span class="st">from sequenzo import plot_state_distribution</span></span>
-<span id="cb41-449"><a href="#cb41-449" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-450"><a href="#cb41-450" aria-hidden="true" tabindex="-1"></a><span class="st">plot_state_distribution(</span></span>
-<span id="cb41-451"><a href="#cb41-451" aria-hidden="true" tabindex="-1"></a><span class="st">    seqdata         = r.sequence_data,</span></span>
-<span id="cb41-452"><a href="#cb41-452" aria-hidden="true" tabindex="-1"></a><span class="st">    group_dataframe = membership_table,</span></span>
-<span id="cb41-453"><a href="#cb41-453" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
-<span id="cb41-454"><a href="#cb41-454" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
-<span id="cb41-455"><a href="#cb41-455" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
-<span id="cb41-456"><a href="#cb41-456" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;stress_state_dist_clusters&#39;</span></span>
-<span id="cb41-457"><a href="#cb41-457" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
-<span id="cb41-458"><a href="#cb41-458" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
-<span id="cb41-459"><a href="#cb41-459" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;stress_state_dist_clusters.png&quot;</span>)</span>
-<span id="cb41-460"><a href="#cb41-460" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-461"><a href="#cb41-461" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-462"><a href="#cb41-462" aria-hidden="true" tabindex="-1"></a>These plots show, for each cluster and for each week, the proportion of students in Low / Medium / High stress. This makes it easier to describe each cluster in words (for example, “mostly Low stress throughout” vs. “starts Medium and becomes High”).</span>
-<span id="cb41-463"><a href="#cb41-463" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-464"><a href="#cb41-464" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-465"><a href="#cb41-465" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-466"><a href="#cb41-466" aria-hidden="true" tabindex="-1"></a><span class="fu">## Prepare for further analysis in R</span></span>
-<span id="cb41-467"><a href="#cb41-467" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-468"><a href="#cb41-468" aria-hidden="true" tabindex="-1"></a>Often you will want to relate stress-pattern clusters to background variables (e.g. <span class="in">`cohort`</span>, <span class="in">`gender`</span>, <span class="in">`income_group`</span>, <span class="in">`avg_study_time`</span>) using regression models in **R**.</span>
-<span id="cb41-469"><a href="#cb41-469" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-470"><a href="#cb41-470" aria-hidden="true" tabindex="-1"></a>Here we merge the cluster assignments back into the original R data frame:</span>
-<span id="cb41-471"><a href="#cb41-471" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-472"><a href="#cb41-472" aria-hidden="true" tabindex="-1"></a><span class="in">```{r merge-clusters}</span></span>
-<span id="cb41-473"><a href="#cb41-473" aria-hidden="true" tabindex="-1"></a><span class="co"># For simplicity (and to avoid R/Python conversion issues), we inspect</span></span>
-<span id="cb41-474"><a href="#cb41-474" aria-hidden="true" tabindex="-1"></a><span class="co"># the first rows of the Python membership table directly.</span></span>
-<span id="cb41-475"><a href="#cb41-475" aria-hidden="true" tabindex="-1"></a>membership_py<span class="sc">$</span><span class="fu">head</span>()</span>
-<span id="cb41-476"><a href="#cb41-476" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb41-477"><a href="#cb41-477" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-478"><a href="#cb41-478" aria-hidden="true" tabindex="-1"></a>You can now:</span>
-<span id="cb41-479"><a href="#cb41-479" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-480"><a href="#cb41-480" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>run regression models in R (e.g. multinomial logit) with cluster membership as the outcome</span>
-<span id="cb41-481"><a href="#cb41-481" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>explore cross-tabulations of cluster by <span class="in">`cohort`</span>, <span class="in">`gender`</span>, etc.</span>
-<span id="cb41-482"><a href="#cb41-482" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>create your own visualizations with <span class="in">`{ggplot2}`</span></span>
-<span id="cb41-483"><a href="#cb41-483" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-484"><a href="#cb41-484" aria-hidden="true" tabindex="-1"></a>Optionally, you can also export a small file with IDs and cluster labels:</span>
-<span id="cb41-485"><a href="#cb41-485" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-486"><a href="#cb41-486" aria-hidden="true" tabindex="-1"></a><span class="in">```{r export, eval=FALSE}</span></span>
-<span id="cb41-487"><a href="#cb41-487" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
-<span id="cb41-488"><a href="#cb41-488" aria-hidden="true" tabindex="-1"></a>  stress_with_clusters <span class="sc">|&gt;</span></span>
-<span id="cb41-489"><a href="#cb41-489" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(participant_id, cohort, gender, income_group, Cluster, Cluster_labels),</span>
-<span id="cb41-490"><a href="#cb41-490" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;stress_cluster_memberships.csv&quot;</span>,</span>
-<span id="cb41-491"><a href="#cb41-491" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
-<span id="cb41-492"><a href="#cb41-492" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb41-493"><a href="#cb41-493" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-405"><a href="#cb41-405" aria-hidden="true" tabindex="-1"></a><span class="fu">### Prepare cluster labels </span></span>
+<span id="cb41-406"><a href="#cb41-406" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-407"><a href="#cb41-407" aria-hidden="true" tabindex="-1"></a>We first pass the membership table to the Python namespace and create some human-readable labels. Here is an example with three descriptive labels that you can adapt to your own data:</span>
+<span id="cb41-408"><a href="#cb41-408" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-409"><a href="#cb41-409" aria-hidden="true" tabindex="-1"></a><span class="in">```{r cluster-labels}</span></span>
+<span id="cb41-410"><a href="#cb41-410" aria-hidden="true" tabindex="-1"></a><span class="co"># make membership table available as &#39;membership_table&#39; in Python</span></span>
+<span id="cb41-411"><a href="#cb41-411" aria-hidden="true" tabindex="-1"></a>py<span class="sc">$</span>membership_table <span class="ot">&lt;-</span> membership_py</span>
+<span id="cb41-412"><a href="#cb41-412" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-413"><a href="#cb41-413" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
+<span id="cb41-414"><a href="#cb41-414" aria-hidden="true" tabindex="-1"></a><span class="st">membership_table[&#39;Cluster&#39;] = membership_table[&#39;Cluster&#39;].astype(int)</span></span>
+<span id="cb41-415"><a href="#cb41-415" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-416"><a href="#cb41-416" aria-hidden="true" tabindex="-1"></a><span class="st">cluster_labels = {</span></span>
+<span id="cb41-417"><a href="#cb41-417" aria-hidden="true" tabindex="-1"></a><span class="st">    1: &#39;Mostly Low Stress&#39;,</span></span>
+<span id="cb41-418"><a href="#cb41-418" aria-hidden="true" tabindex="-1"></a><span class="st">    2: &#39;Medium / Fluctuating&#39;,</span></span>
+<span id="cb41-419"><a href="#cb41-419" aria-hidden="true" tabindex="-1"></a><span class="st">    3: &#39;Consistently High or Rising&#39;</span></span>
+<span id="cb41-420"><a href="#cb41-420" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb41-421"><a href="#cb41-421" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
+<span id="cb41-422"><a href="#cb41-422" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-423"><a href="#cb41-423" aria-hidden="true" tabindex="-1"></a>cluster_labels_py <span class="ot">&lt;-</span> py<span class="sc">$</span>cluster_labels</span>
+<span id="cb41-424"><a href="#cb41-424" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-425"><a href="#cb41-425" aria-hidden="true" tabindex="-1"></a><span class="co"># R named vector (useful if you later merge back into an R data frame)</span></span>
+<span id="cb41-426"><a href="#cb41-426" aria-hidden="true" tabindex="-1"></a>cluster_labels_r <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb41-427"><a href="#cb41-427" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">1</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Mostly Low Stress&quot;</span>,</span>
+<span id="cb41-428"><a href="#cb41-428" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">2</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Medium / Fluctuating&quot;</span>,</span>
+<span id="cb41-429"><a href="#cb41-429" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">3</span><span class="st">`</span> <span class="ot">=</span> <span class="st">&quot;Consistently High or Rising&quot;</span></span>
+<span id="cb41-430"><a href="#cb41-430" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-431"><a href="#cb41-431" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-432"><a href="#cb41-432" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-433"><a href="#cb41-433" aria-hidden="true" tabindex="-1"></a><span class="fu">### Index plots by cluster</span></span>
+<span id="cb41-434"><a href="#cb41-434" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-435"><a href="#cb41-435" aria-hidden="true" tabindex="-1"></a><span class="in">```{r index-clusters}</span></span>
+<span id="cb41-436"><a href="#cb41-436" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
+<span id="cb41-437"><a href="#cb41-437" aria-hidden="true" tabindex="-1"></a><span class="st">from sequenzo import plot_sequence_index</span></span>
+<span id="cb41-438"><a href="#cb41-438" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-439"><a href="#cb41-439" aria-hidden="true" tabindex="-1"></a><span class="st">plot_sequence_index(</span></span>
+<span id="cb41-440"><a href="#cb41-440" aria-hidden="true" tabindex="-1"></a><span class="st">    seqdata         = r.sequence_data,</span></span>
+<span id="cb41-441"><a href="#cb41-441" aria-hidden="true" tabindex="-1"></a><span class="st">    group_dataframe = membership_table,</span></span>
+<span id="cb41-442"><a href="#cb41-442" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
+<span id="cb41-443"><a href="#cb41-443" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
+<span id="cb41-444"><a href="#cb41-444" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
+<span id="cb41-445"><a href="#cb41-445" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;img/stress_index_clusters&#39;</span></span>
+<span id="cb41-446"><a href="#cb41-446" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
+<span id="cb41-447"><a href="#cb41-447" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
+<span id="cb41-448"><a href="#cb41-448" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_index_clusters.png&quot;</span>)</span>
+<span id="cb41-449"><a href="#cb41-449" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-450"><a href="#cb41-450" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-451"><a href="#cb41-451" aria-hidden="true" tabindex="-1"></a>Look at how typical stress trajectories differ across clusters. For example, one cluster may show mostly Low stress, while another shows frequent High stress or increasing stress over time.</span>
+<span id="cb41-452"><a href="#cb41-452" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-453"><a href="#cb41-453" aria-hidden="true" tabindex="-1"></a><span class="fu">### State-distribution plots by cluster</span></span>
+<span id="cb41-454"><a href="#cb41-454" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-455"><a href="#cb41-455" aria-hidden="true" tabindex="-1"></a><span class="in">```{r state-dist-clusters}</span></span>
+<span id="cb41-456"><a href="#cb41-456" aria-hidden="true" tabindex="-1"></a><span class="fu">py_run_string</span>(<span class="st">&quot;</span></span>
+<span id="cb41-457"><a href="#cb41-457" aria-hidden="true" tabindex="-1"></a><span class="st">from sequenzo import plot_state_distribution</span></span>
+<span id="cb41-458"><a href="#cb41-458" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-459"><a href="#cb41-459" aria-hidden="true" tabindex="-1"></a><span class="st">plot_state_distribution(</span></span>
+<span id="cb41-460"><a href="#cb41-460" aria-hidden="true" tabindex="-1"></a><span class="st">    seqdata         = r.sequence_data,</span></span>
+<span id="cb41-461"><a href="#cb41-461" aria-hidden="true" tabindex="-1"></a><span class="st">    group_dataframe = membership_table,</span></span>
+<span id="cb41-462"><a href="#cb41-462" aria-hidden="true" tabindex="-1"></a><span class="st">    group_column_name = &#39;Cluster&#39;,</span></span>
+<span id="cb41-463"><a href="#cb41-463" aria-hidden="true" tabindex="-1"></a><span class="st">    group_labels    = cluster_labels,</span></span>
+<span id="cb41-464"><a href="#cb41-464" aria-hidden="true" tabindex="-1"></a><span class="st">    xlabel          = &#39;Week&#39;,</span></span>
+<span id="cb41-465"><a href="#cb41-465" aria-hidden="true" tabindex="-1"></a><span class="st">    save_as         = &#39;img/stress_state_dist_clusters&#39;</span></span>
+<span id="cb41-466"><a href="#cb41-466" aria-hidden="true" tabindex="-1"></a><span class="st">)</span></span>
+<span id="cb41-467"><a href="#cb41-467" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;</span>)</span>
+<span id="cb41-468"><a href="#cb41-468" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">include_graphics</span>(<span class="st">&quot;img/stress_state_dist_clusters.png&quot;</span>)</span>
+<span id="cb41-469"><a href="#cb41-469" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-470"><a href="#cb41-470" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-471"><a href="#cb41-471" aria-hidden="true" tabindex="-1"></a>These plots show, for each cluster and for each week, the proportion of students in Low / Medium / High stress. This makes it easier to describe each cluster in words (for example, “mostly Low stress throughout” vs. “starts Medium and becomes High”).</span>
+<span id="cb41-472"><a href="#cb41-472" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-473"><a href="#cb41-473" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-474"><a href="#cb41-474" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-475"><a href="#cb41-475" aria-hidden="true" tabindex="-1"></a><span class="fu">## Prepare for further analysis in R</span></span>
+<span id="cb41-476"><a href="#cb41-476" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-477"><a href="#cb41-477" aria-hidden="true" tabindex="-1"></a>Often you will want to relate stress-pattern clusters to background variables (e.g. <span class="in">`cohort`</span>, <span class="in">`gender`</span>, <span class="in">`income_group`</span>, <span class="in">`avg_study_time`</span>) using regression models in **R**.</span>
+<span id="cb41-478"><a href="#cb41-478" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-479"><a href="#cb41-479" aria-hidden="true" tabindex="-1"></a>Here we merge the cluster assignments back into the original R data frame:</span>
+<span id="cb41-480"><a href="#cb41-480" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-481"><a href="#cb41-481" aria-hidden="true" tabindex="-1"></a><span class="in">```{r merge-clusters}</span></span>
+<span id="cb41-482"><a href="#cb41-482" aria-hidden="true" tabindex="-1"></a><span class="co"># For simplicity (and to avoid R/Python conversion issues), we inspect</span></span>
+<span id="cb41-483"><a href="#cb41-483" aria-hidden="true" tabindex="-1"></a><span class="co"># the first rows of the Python membership table directly.</span></span>
+<span id="cb41-484"><a href="#cb41-484" aria-hidden="true" tabindex="-1"></a>membership_py<span class="sc">$</span><span class="fu">head</span>()</span>
+<span id="cb41-485"><a href="#cb41-485" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-486"><a href="#cb41-486" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-487"><a href="#cb41-487" aria-hidden="true" tabindex="-1"></a>You can now:</span>
+<span id="cb41-488"><a href="#cb41-488" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-489"><a href="#cb41-489" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>run regression models in R (e.g. multinomial logit) with cluster membership as the outcome</span>
+<span id="cb41-490"><a href="#cb41-490" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>explore cross-tabulations of cluster by <span class="in">`cohort`</span>, <span class="in">`gender`</span>, etc.</span>
+<span id="cb41-491"><a href="#cb41-491" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>create your own visualizations with <span class="in">`{ggplot2}`</span></span>
+<span id="cb41-492"><a href="#cb41-492" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-493"><a href="#cb41-493" aria-hidden="true" tabindex="-1"></a>You can also export a small file with IDs and cluster labels:</span>
 <span id="cb41-494"><a href="#cb41-494" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-495"><a href="#cb41-495" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb41-496"><a href="#cb41-496" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-497"><a href="#cb41-497" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
-<span id="cb41-498"><a href="#cb41-498" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-499"><a href="#cb41-499" aria-hidden="true" tabindex="-1"></a>In this tutorial, you have:</span>
-<span id="cb41-500"><a href="#cb41-500" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-501"><a href="#cb41-501" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Set up <span class="in">`{reticulate}`</span> and called Python’s <span class="in">`sequenzo`</span> package from R.</span>
-<span id="cb41-502"><a href="#cb41-502" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>Loaded the **students_stress_states_by_week** dataset from DEPRESS and created a <span class="in">`SequenceData`</span> object for 8-week stress sequences.</span>
-<span id="cb41-503"><a href="#cb41-503" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Visualized stress trajectories using index plots and state-distribution plots.</span>
-<span id="cb41-504"><a href="#cb41-504" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>Computed sequence dissimilarities with Optimal Matching and ran a simple cluster analysis.</span>
-<span id="cb41-505"><a href="#cb41-505" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>Interpreted clusters as typical stress trajectories and merged them back into an R data frame for further analysis.</span>
-<span id="cb41-506"><a href="#cb41-506" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-507"><a href="#cb41-507" aria-hidden="true" tabindex="-1"></a>The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and (optionally) background variables for later modeling.</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb41-495"><a href="#cb41-495" aria-hidden="true" tabindex="-1"></a><span class="in">```{r export, eval=FALSE}</span></span>
+<span id="cb41-496"><a href="#cb41-496" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb41-497"><a href="#cb41-497" aria-hidden="true" tabindex="-1"></a>  stress_with_clusters <span class="sc">|&gt;</span></span>
+<span id="cb41-498"><a href="#cb41-498" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(participant_id, cohort, gender, income_group, Cluster, Cluster_labels),</span>
+<span id="cb41-499"><a href="#cb41-499" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;stress_cluster_memberships.csv&quot;</span>,</span>
+<span id="cb41-500"><a href="#cb41-500" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb41-501"><a href="#cb41-501" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-502"><a href="#cb41-502" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb41-503"><a href="#cb41-503" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-504"><a href="#cb41-504" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb41-505"><a href="#cb41-505" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-506"><a href="#cb41-506" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb41-507"><a href="#cb41-507" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-508"><a href="#cb41-508" aria-hidden="true" tabindex="-1"></a>In this tutorial, you have:</span>
+<span id="cb41-509"><a href="#cb41-509" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-510"><a href="#cb41-510" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Set up <span class="in">`{reticulate}`</span> and called Python’s <span class="in">`sequenzo`</span> package from R.</span>
+<span id="cb41-511"><a href="#cb41-511" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>Loaded the **students_stress_states_by_week** dataset from DEPRESS and created a <span class="in">`SequenceData`</span> object for 8-week stress sequences.</span>
+<span id="cb41-512"><a href="#cb41-512" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Visualized stress trajectories using index plots and state-distribution plots.</span>
+<span id="cb41-513"><a href="#cb41-513" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>Computed sequence dissimilarities with Optimal Matching and ran a simple cluster analysis.</span>
+<span id="cb41-514"><a href="#cb41-514" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>Interpreted clusters as typical stress trajectories and merged them back into an R data frame for further analysis.</span>
+<span id="cb41-515"><a href="#cb41-515" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-516"><a href="#cb41-516" aria-hidden="true" tabindex="-1"></a>The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and background variables for later modeling.</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
 

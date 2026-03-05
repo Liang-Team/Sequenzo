@@ -29,9 +29,10 @@ execute:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = "#>", fig.align = "center")
+dir.create("img", showWarnings = FALSE)  # ensure img/ exists for figure outputs
 ```
 
-This tutorial shows how to use [`Sequenzo`](https://sequenzo.yuqi-liang.tech/en/) from **R** (via the `{reticulate}` package) to analyze **weekly stress sequences** from the DEPRESS study.
+This tutorial shows how to use [`Sequenzo`](https://sequenzo.yuqi-liang.tech/en/) from R (via the `{reticulate}` package) to analyze weekly stress sequences from the DEPRESS study (Guo et al., 2026). For further details about the DEPRESS study, please refer to [our documentation](https://sequenzo.yuqi-liang.tech/en/datasets/stress-data).
 
 We will use the built-in dataset `students_stress_states_by_week`, which is the same data used in the Python notebook `stress_typical_workflow.ipynb`. The goal is to give a clear, step-by-step introduction that is friendly to R users who are new to Python and to sequence analysis.
 
@@ -42,7 +43,21 @@ We will use the built-in dataset `students_stress_states_by_week`, which is the 
   - How to visualize stress trajectories (index plot, state distribution, etc.)
   - How to compute dissimilarities and run a simple cluster analysis (3 stress-pattern clusters)
 
-The tutorial assumes only basic familiarity with R (data frames, packages) and **no prior experience with Python**.
+The tutorial assumes only basic familiarity with R (data frames, packages) and no prior experience with Python.
+
+### When do we use R code, and when do we use Python code?
+
+**Rule of thumb:** This document is an **R (Quarto) document**. So every code chunk is R code. It means that you are always writing and running R. We never switch to a separate Python script or notebook. When we need Sequenzo (a Python library), we **call it from R** using the **`{reticulate}`** package. So “R vs Python” here really means: “plain R” vs “R code that calls Python.”
+
+| What you see in the chunk | What it is | Example |
+|---------------------------|------------|--------|
+| Normal R syntax           | **R code** that runs in R. Load packages, define variables, use R functions. | `library(reticulate)`, `n_clusters <- 3`, `knitr::include_graphics("img/...")` |
+| `something$function_name(...)` where `something` came from Python | **R calling Python**: the object is a Python object living in R; `$` calls its method or attribute. | `sequenzo$load_dataset("...")`, `sequence_data$plot_legend(save_as = "...")` |
+| `import("sequenzo")`      | **R code** that loads a Python module and gives you an R reference to it. From then on, `sequenzo$...` is calling Python. | `sequenzo <- import("sequenzo")` |
+| `r_to_py(x)`              | **R code** that converts an R object `x` into a Python copy, so we can pass it into Python functions. | `stress_py <- r_to_py(stress_seq)` |
+| `py_run_string(" ... ")`   | **R code** that runs the **string inside the quotes as Python code**. So the content of the string is the only place where you see real Python syntax (e.g. `from sequenzo import ...`, indentation). | Used later for a few cluster plots. |
+
+So: **outside** `py_run_string("...")`, everything is R; **inside** the quotes of `py_run_string("...")`, the text is Python. That way you always know “am I reading R or Python?”, and you never leave this R session.
 
 ------------------------------------------------------------------------
 
@@ -127,22 +142,22 @@ stress$head()
 
 The dataset has:
 
-- one row per **student**
+- one row per student
 - columns:
   - `participant_id` (ID)
   - `cohort` (Summer / Fall / Spring)
-  - `1`–`8`: weekly stress **states** over 8 weeks
+  - `1`–`8`: weekly stress states over 8 weeks
   - background variables such as `gender`, `income_group`, `race`, and `avg_study_time`
 
 ### What do L / M / H mean?
 
-In this cleaned dataset, each week is coded as one of three **stress states**:
+In this cleaned dataset, each week is coded as one of three stress states:
 
 - **L** = Low stress
 - **M** = Medium stress
 - **H** = High stress
 
-Each row is therefore a **social sequence** of length 8, e.g.
+Each row is therefore a sequence of length 8, e.g.
 
 - `M, M, M, M, M, L, L, M`
 - `L, L, L, L, L, L, M, L`
@@ -171,8 +186,17 @@ stress_seq$head()
 
 ### Send the data to Python and create `SequenceData`
 
+**What this step does:** Sequenzo is a Python library. Its main entry point is a **`SequenceData`** object: a Python object that holds your sequence table plus metadata (time points, state labels, colors). All later steps (plots, distance matrix, clustering) expect this object.
+
+Right now we have the stress data either as an R data frame or already as a Python DataFrame (from `sequenzo$load_dataset()`). To create `SequenceData`, we must call the **Python** constructor and pass it data that Python understands. So we do two things:
+
+1. **Pass data into Python:** If the table is in R, we use **`r_to_py(stress_seq)`** to create a *Python* copy of it (a pandas DataFrame). If we kept the result of `load_dataset()` in R, that is already a Python object; in that case we can pass it directly. Here we use `r_to_py` so that whatever we have is in the right form for Python.
+2. **Call the Python constructor:** **`sequenzo$SequenceData(...)`** is the R way of calling Python’s `SequenceData(...)`. We pass that DataFrame plus options (time indices, state names, labels, colors). The result **`sequence_data`** is a Python object that we keep in R and use later with `sequence_data$...` for plotting and analysis.
+
+So “send the data to Python” simply means: make sure Python has the table (via `r_to_py` or by using the DataFrame we already got from `load_dataset`), then call Sequenzo’s constructor so that we get one `SequenceData` object to use everywhere below.
+
 ```{r define-seqdata}
-# Convert to Python DataFrame
+# Ensure Python has the table: convert R object to a Python (pandas) DataFrame if needed
 stress_py <- r_to_py(stress_seq)
 
 # Define time points and states
@@ -215,62 +239,53 @@ This confirms that `SequenceData` has been created successfully.
 Visualization is often the **first and most important step** in sequence analysis. We will create:
 
 - a legend for the stress states
-- an index plot (all sequences)
+- an index plot
 - a state-distribution plot (how common each state is at each week)
 - mean time spent in each state
 
-> Tip: In this tutorial we **save** the plots to files (e.g. `index_plot.png`) using the `save_as` argument, and then display them in the document.
+**How plots are shown here:** Each figure is produced by calling a Sequenzo (Python) plotting function with `save_as = "img/..."`, which writes a PNG file into the `img/` folder. We then use `knitr::include_graphics("img/...png")` so that Quarto/knitr reads that file and embeds it in the HTML report. All plots in this section (and the cluster plots later) follow this same pattern—no need to repeat it under each one.
 
 ### Legend
 
-In each plotting chunk, the first line asks Sequenzo (Python) to **create and save** a PNG file, and `knitr::include_graphics("...")` then **reads that PNG and shows it inside this HTML report**.
-
 ```{r plot-legend}
-sequence_data$plot_legend(save_as = "stress_legend")
-knitr::include_graphics("stress_legend.png")
+sequence_data$plot_legend(save_as = "img/stress_legend")
+knitr::include_graphics("img/stress_legend.png")
 ```
 
-### Index plot — all sequences
-
-Again, the `save_as` argument writes the figure to disk, and `knitr::include_graphics()` pulls that file back into the document so that the plot appears under the code.
+### Index plot
 
 ```{r index-all}
 sequenzo$plot_sequence_index(
   seqdata = sequence_data,
   xlabel  = "Week",
-  save_as = "stress_index_all"
+  save_as = "img/stress_index_all"
 )
-knitr::include_graphics("stress_index_all.png")
+knitr::include_graphics("img/stress_index_all.png")
 ```
 
 Each horizontal line is a student; colors show Low / Medium / High stress for weeks 1–8.
 
-### State-distribution plot — all sequences
-
-As before, Sequenzo saves the state-distribution figure to `"stress_state_dist_all.png"`, and `knitr::include_graphics()` inserts that saved image into the knitted HTML.
+### State-distribution plot
 
 ```{r state-dist-all}
 sequenzo$plot_state_distribution(
   seqdata = sequence_data,
   xlabel  = "Week",
-  save_as = "stress_state_dist_all"
+  save_as = "img/stress_state_dist_all"
 )
-knitr::include_graphics("stress_state_dist_all.png")
+knitr::include_graphics("img/stress_state_dist_all.png")
 ```
 
 This plot shows, for each week, the **proportion of students** in each stress state. It gives a quick overview: for example, is High stress more common at the beginning or later?
 
 ### Mean time in each state
 
-We call `sequenzo$plot_mean_time()` to ask Sequenzo (in Python) to create the figure and **save it as a PNG file**.  
-The second line, `knitr::include_graphics("stress_mean_time.png")`, tells Quarto/knitr to **read that PNG file and display it inside the HTML report**.
-
 ```{r mean-time}
 sequenzo$plot_mean_time(
   seqdata = sequence_data,
-  save_as = "stress_mean_time"
+  save_as = "img/stress_mean_time"
 )
-knitr::include_graphics("stress_mean_time.png")
+knitr::include_graphics("img/stress_mean_time.png")
 ```
 
 This tells us how many weeks, on average, students spend in each stress level over the 8 weeks.
@@ -316,8 +331,6 @@ Next, we perform a simple **cluster analysis** on the dissimilarity matrix. We u
 
 ### Ward clustering and dendrogram
 
-Here we use the same pattern: Sequenzo computes the dendrogram and saves it as `"stress_dendrogram.png"`, and `knitr::include_graphics()` is responsible for actually displaying that saved image in the report.
-
 ```{r cluster}
 cluster <- sequenzo$Cluster(
   om,
@@ -328,16 +341,12 @@ cluster <- sequenzo$Cluster(
 cluster$plot_dendrogram(
   xlabel  = "Students",
   ylabel  = "Distance",
-  save_as = "stress_dendrogram"
+  save_as = "img/stress_dendrogram"
 )
-knitr::include_graphics("stress_dendrogram.png")
-```
-)
+knitr::include_graphics("img/stress_dendrogram.png")
 ```
 
 ### Cluster quality and choosing k
-
-`cluster_quality$plot_cqi_scores(..., save_as = "stress_cqi_scores")` creates a PNG of the cluster-quality indices, and `knitr::include_graphics("stress_cqi_scores.png")` embeds that plot in the HTML so readers can see the curve.
 
 ```{r cluster-quality}
 cluster_quality <- sequenzo$ClusterQuality(cluster)
@@ -347,9 +356,9 @@ cluster_quality$compute_cluster_quality_scores()
 ```{r plot-quality}
 cluster_quality$plot_cqi_scores(
   norm   = "zscore",
-  save_as = "stress_cqi_scores"
+  save_as = "img/stress_cqi_scores"
 )
-knitr::include_graphics("stress_cqi_scores.png")
+knitr::include_graphics("img/stress_cqi_scores.png")
 ```
 
 ```{r quality-table}
@@ -357,39 +366,41 @@ cqi_table <- cluster_quality$get_cqi_table()
 cqi_table
 ```
 
-In this tutorial we focus on a **3-cluster** solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).
+In this tutorial we focus on a 3-cluster solution (k = 3), which is often a good starting point for summarizing typical stress patterns (e.g. low, moderate, high / fluctuating trajectories).
 
 ```{r set-k}
-n_clusters <- 3L
+# Number of clusters to use 
+# 3 gives interpretable groups, e.g. low / moderate / high stress
+n_clusters <- 3
 ```
 
 ### Cluster memberships and distribution
 
 ```{r cluster-results}
-cr <- sequenzo$ClusterResults(cluster)
+cluster_results <- sequenzo$ClusterResults(cluster)
 
 # Membership table (Python DataFrame)
-membership_py <- cr$get_cluster_memberships(num_clusters = n_clusters)
+membership_py <- cluster_results$get_cluster_memberships(num_clusters = n_clusters)
 
 # Distribution of cluster sizes (printed directly as a pandas DataFrame)
-distribution_py <- cr$get_cluster_distribution(num_clusters = n_clusters)
+distribution_py <- cluster_results$get_cluster_distribution(num_clusters = n_clusters)
 distribution_py
 ```
 
 ```{r plot-distribution}
-cr$plot_cluster_distribution(
+cluster_results$plot_cluster_distribution(
   num_clusters = n_clusters,
   title        = NULL,
-  save_as      = "stress_cluster_dist"
+  save_as      = "img/stress_cluster_dist"
 )
-knitr::include_graphics("stress_cluster_dist.png")
+knitr::include_graphics("img/stress_cluster_dist.png")
 ```
 
 ------------------------------------------------------------------------
 
 ## Interpreting clusters: index and state-distribution plots
 
-To understand **what the clusters mean**, we look at sequences and state-distribution plots **by cluster**.
+To understand what the clusters mean, we look at sequences and state-distribution plots by cluster.
 
 ### Prepare cluster labels 
 
@@ -421,8 +432,6 @@ cluster_labels_r <- c(
 
 ### Index plots by cluster
 
-In the next two chunks, the Python calls write cluster-specific plots to PNG files, and each `knitr::include_graphics("...")` line is what actually pulls those PNGs into the document so you can see the plots.
-
 ```{r index-clusters}
 py_run_string("
 from sequenzo import plot_sequence_index
@@ -433,10 +442,10 @@ plot_sequence_index(
     group_column_name = 'Cluster',
     group_labels    = cluster_labels,
     xlabel          = 'Week',
-    save_as         = 'stress_index_clusters'
+    save_as         = 'img/stress_index_clusters'
 )
 ")
-knitr::include_graphics("stress_index_clusters.png")
+knitr::include_graphics("img/stress_index_clusters.png")
 ```
 
 Look at how typical stress trajectories differ across clusters. For example, one cluster may show mostly Low stress, while another shows frequent High stress or increasing stress over time.
@@ -453,10 +462,10 @@ plot_state_distribution(
     group_column_name = 'Cluster',
     group_labels    = cluster_labels,
     xlabel          = 'Week',
-    save_as         = 'stress_state_dist_clusters'
+    save_as         = 'img/stress_state_dist_clusters'
 )
 ")
-knitr::include_graphics("stress_state_dist_clusters.png")
+knitr::include_graphics("img/stress_state_dist_clusters.png")
 ```
 
 These plots show, for each cluster and for each week, the proportion of students in Low / Medium / High stress. This makes it easier to describe each cluster in words (for example, “mostly Low stress throughout” vs. “starts Medium and becomes High”).
@@ -481,7 +490,7 @@ You can now:
 - explore cross-tabulations of cluster by `cohort`, `gender`, etc.
 - create your own visualizations with `{ggplot2}`
 
-Optionally, you can also export a small file with IDs and cluster labels:
+You can also export a small file with IDs and cluster labels:
 
 ```{r export, eval=FALSE}
 write.csv(
@@ -504,5 +513,5 @@ In this tutorial, you have:
 4. Computed sequence dissimilarities with Optimal Matching and ran a simple cluster analysis.
 5. Interpreted clusters as typical stress trajectories and merged them back into an R data frame for further analysis.
 
-The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and (optionally) background variables for later modeling.
+The same workflow can be adapted to your own sequence data: you just need an ID column, a set of time-ordered state columns, and background variables for later modeling.
 
