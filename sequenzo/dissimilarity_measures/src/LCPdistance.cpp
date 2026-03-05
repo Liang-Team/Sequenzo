@@ -69,16 +69,17 @@ public:
             int length = 0;
             auto ptr_seq = sequences.unchecked<2>();
 
-            if(sign > 0){
-                while(ptr_seq(is, length) == ptr_seq(js, length) && length < minimum){
-                    length ++;
+            if (sign > 0) {
+                // Forward LCP: compare from the start, with bounds check first
+                while (length < minimum && ptr_seq(is, length) == ptr_seq(js, length)) {
+                    length++;
                 }
-            } else{
-                length = 1;
-                while(ptr_seq(is, (m - length)) == ptr_seq(js, (n - length)) && length <= minimum){
-                    length ++;
+            } else {
+                // Reverse LCP: compare from the end, with bounds check first
+                while (length < minimum &&
+                       ptr_seq(is, m - 1 - length) == ptr_seq(js, n - 1 - length)) {
+                    length++;
                 }
-                length --;
             }
 
             return normalize_distance(n+m-2.0*length, n+m, m, n, norm);

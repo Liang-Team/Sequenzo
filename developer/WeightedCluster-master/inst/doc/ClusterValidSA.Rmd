@@ -1,0 +1,219 @@
+---
+title: 'Short R Tutorial: Validating Sequence Analysis Typologies Using Parametric Bootstrap'
+author: "Matthias Studer"
+output: rmarkdown::html_vignette
+bibliography: manual.bib 
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Short R Tutorial: Validating Sequence Analysis Typologies Using Parametric Bootstrap}
+  %\VignetteEncoding{UTF-8}
+    
+---
+
+
+# Introduction 
+
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "secs")
+      # return a character string to show the time
+      paste("Time for this code chunk to run:", round(res,
+        2), "seconds")
+    }
+  }
+}))
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"), time_it=TRUE)
+```
+
+This document provides a very quick introduction to the `R` code needed to use parametric bootstraps for typology validation in sequence analysis. Readers interested in the methods and the exact interpretation of the results are referred to:
+
+- Studer, M. (2021). Validating Sequence Analysis Typologies Using Parametric Bootstraps. *Sociological Methodology 51(2)*, 290--318. https://doi.org/10.1177/00811750211014232 
+
+You are kindly asked to cite the above reference if you use the methods presented in this document. 
+
+**Warning!!** To avoid lengthy computations (and overloading the CRAN server), we restricted the number of bootstraps to 50. We recommend using a higher value (i.e., 1000). 
+
+Let's start by setting the seed for reproducible results.
+
+
+```{r, message=FALSE}
+set.seed(1)
+```
+
+# Creating the State Sequence Object
+For this example, we use the `mvad` dataset. Let's start with the creation of the state sequence object.
+
+```{r, message=FALSE}
+## Loading the TraMineR library
+library(TraMineR)
+## Loading the data
+data(mvad)
+
+## State properties
+mvad.alphabet <- c("employment", "FE", "HE", "joblessness", "school", "training")
+mvad.lab <- c("employment", "further education", "higher education", "joblessness", "school", "training")
+mvad.shortlab <- c("EM","FE","HE","JL","SC","TR")
+
+## Creating the state sequence object
+mvad.seq <- seqdef(mvad, 17:86, alphabet = mvad.alphabet, states = mvad.shortlab, labels = mvad.lab, xtstep = 6)
+
+```
+
+
+# Creating the typology
+
+We will now create a typology using cluster analysis. Readers interested in more detail are referred to the `WeightedCluster` library manual (also available as a vignette), which goes into the details of the creation and computation of cluster quality measures. 
+
+We start by computing dissimilarities with the `seqdist` function using the Hamming distance. We then use Ward clustering to create a typology of the trajectories. For this step, we recommend the use of the `fastcluster` library, which considerably speed up the computations.
+
+
+```{r, cache=TRUE, message=FALSE}
+## Using fastcluster for hierarchical clustering
+library(fastcluster)
+## Distance computation
+diss <- seqdist(mvad.seq, method="HAM")
+## Hierarchical clustering
+hc <- hclust(as.dist(diss), method="ward.D")
+```
+
+We can now compute several cluster quality indices using `as.clustrange` function from two to ten groups.
+
+```{r, message=FALSE}
+# Loading the WeightedCluster library
+library(WeightedCluster)
+# Computing cluster quality measures.
+clustqual <- as.clustrange(hc, diss=diss, ncluster=10)
+clustqual
+```
+
+# Parametric Bootstrap
+
+Parametric bootstrap aims to provide baseline values obtained by clustering *similar* but *non-clustered* data [@Studer2021]. This can be computed using the `seqnullcqi` function with the following parameters:
+
+ - `R`: number of bootstraps.
+ - `model`: The null model (see table below
+ - `seqdist.args`: list of arguments passed to `seqdist` (should be identical to first call to seqdist).
+ - `hclust.method`: hierarchical clustering method (should be identical to orginal clustering).
+ - `kmedoid`: If `TRUE`, use PAM (and the `wcKMedRange` function) instead of hierarchical clustering.
+ - `parallel`: If `TRUE`, use parallel computing to speed up the computations.
+
+
+## Combined Randomization
+The following `R` code estimate expected values of the cluster quality indices when clustering similar sequences that are not clustered according to the `"combined"` model, using the Hamming distance and Ward hierarchical clustering. We set `parallel=TRUE` to use parallel computing. You can use `progressbar=TRUE` to show a progress bar and an estimation of the computation remaining time (not meaningful here within a document):
+
+
+```{r}
+bcq.combined <- seqnullcqi(mvad.seq, clustqual, R=50, model="combined", seqdist.args=list(method="HAM"), hclust.method="ward.D", parallel = TRUE)
+```
+ 
+
+Once the parametric bootstrap is computed (may take a while...), the results are stored in the `bcq.combined` object. Printing the object (just by writing its name), already provides several information, the standardized cluster quality indices and the associated inconclusive intervals. Here, 2, 9 and 10 groups stand out.
+
+```{r, size="tiny"}
+bcq.combined
+```
+
+To get non-standardized values, use `norm=FALSE`. Notice that the ASW inconclusive intervals are well below the values recommended by Kaufman and Rousseeuw (over 0.5).
+
+
+```{r, size="tiny"}
+print(bcq.combined, norm=FALSE)
+```
+
+Several plots can then be used to inspect the results using the `plot` command and the `type` argument. First, one can look at the sequences generated by the null model by using `type="seqdplot"`. 
+
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.combined, type="seqdplot")
+```
+
+The overall distribution of the CQI values can be plotted using `type="density"`. In this case, one also needs to specify the CQI to be used. All tested number of groups are found to be significant. Any CQI computed by `as.clustrange()` can be used here. To show the density of the average silhouette width (`"ASW"`), one can use:
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.combined, stat="ASW", type="density")
+```
+
+By using `type="line"`, we plot the obtained and bootstrapped CQI values depending on the number of groups. Here again 
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.combined, stat="ASW", type="line")
+```
+
+
+## Randomized Sequencing
+
+To use another null model, one needs to change the `model` argument of the `seqnullcqi` function. The randomized sequencing keep the duration attached to each state, but randomizes the ordering of the spells. It can be used to uncover sequencing structure of the data. 
+
+```{r}
+bcq.seq <- seqnullcqi(mvad.seq, clustqual, R=50, model="sequencing", seqdist.args=list(method="HAM"), hclust.method="ward.D", parallel = TRUE)
+```
+
+We can then plot the results as before. Notice that solutions between 3 and 6 are below the critical line.
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.seq, stat="ASW", type="line")
+```
+
+
+
+## Randomized Duration
+
+The randomized duration keeps the same ordering of the states, but randomizes the time spent in each spell. It can be used to uncover the duration-related structure of the data. 
+
+```{r}
+bcq.dur <- seqnullcqi(mvad.seq, clustqual, R=50, model="duration", seqdist.args=list(method="HAM"), hclust.method="ward.D", parallel = TRUE)
+```
+
+We can then plot the results as before. The solutions 3 and 4 groups solutions are below the "significance line". Otherwise, the ranking of the solutions is the same. 
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.dur, stat="ASW", type="line")
+```
+
+## State Independence
+
+The state independence null model generates sequence, position by position, independently of the previous state. This is a quite unrealistic assumption for longitudinal data, but a common one in statistical modeling.
+
+
+```{r, cache=TRUE}
+bcq.stateindep <- seqnullcqi(mvad.seq, clustqual, R=50, model="stateindep", seqdist.args=list(method="HAM"), hclust.method="ward.D", parallel = TRUE)
+```
+
+Bootstrapped CQI values are extremely low compared to our clustering, meaning that we have a strong longitudinal structure (not surprising!).
+
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.stateindep, stat="ASW", type="line")
+```
+
+## First-order Markov Null Model
+
+The first-order Markov null model generates sequences using time-invariant transition rates. As a result, the generated sequences are often quite similar to the observed ones. This model can uncover structure stemming from time-dependent transition rates. 
+
+
+```{r, cache=TRUE}
+bcq.Markov <- seqnullcqi(mvad.seq, clustqual, R=50, model="Markov", seqdist.args=list(method="HAM"), hclust.method="ward.D", parallel = TRUE)
+```
+
+
+
+```{r, fig.width=8, fig.height=5, results="hide", dev="png"}
+plot(bcq.Markov, stat="ASW", type="line")
+```
+
+
+# Choosing a Solution 
+
+The various null models lead to the same conclusions and ranking of the solutions. Solutions between 3 and 6 groups were not always above the critical lines (in the sequencing null model for instance), and can be avoided. We generally saw good clustering quality for a clustering in 9 groups. The solution is shown below.
+
+
+```{r, fig.width=10, fig.height=12, results="hide"}
+seqdplot(mvad.seq, clustqual$clustering$cluster9, border=NA)
+```

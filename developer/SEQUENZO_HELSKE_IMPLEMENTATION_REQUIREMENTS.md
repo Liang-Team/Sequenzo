@@ -51,6 +51,19 @@
 - **Soft classification**：**未实现**。文章 Table 1 要求 Fuzzy (FANNY) 得到 membership degree（每行和为 1 的 K 个连续变量），sequenzo 目前无 FANNY。
 - **Pseudoclass**：**未实现**。文章要求基于 FANNY 的成员概率多次抽样、每次用 categorical 变量拟合、再按 Rubin 规则合并，sequenzo 目前无此流程。
 
+### 1.3 与 WeightedCluster (R) 的对比
+
+R 包 **WeightedCluster**（`developer/WeightedCluster-master`）在 `seqclararange`（CLARA 式选 k + 聚类）中实现了部分与 Helske 表 1 对应的功能，对比如下。
+
+| Helske 表 1 方法 | WeightedCluster 是否实现 | 说明（代码位置） |
+|------------------|---------------------------|------------------|
+| **Representativeness** | ✅ 是 | `seqclararange(..., method="representativeness")`；公式 `representativeness <- 1 - diss / max.dist`（`R/clara_clustrange.R` 约 336–342 行），需用户提供 `max.dist`。输出为 n×K 矩阵，与文章 R_i^k 一致。 |
+| **Hard (Crisp)** | ⚠️ 部分 | 有 `method="crisp"`，用 PAM（`wcKMedoids`）得到聚类标签；**没有**“聚类标签 → K−1 个 dummy 变量”的封装函数，回归时需用户自己做 dummy 编码。 |
+| **Soft (Fuzzy)** | ⚠️ 部分 | 有 `method="fuzzy"`，用 `fanny(diss, k, diss=TRUE, memb.exp=m)` 得到 membership；`fuzzyfunc.R` 提供 membership 命名与 `fuzzyseqplot`。**没有**“membership → 省略参考类后的 K−1 个连续变量”的回归用 API。 |
+| **Pseudoclass** | ❌ 否 | 无“按成员概率多次抽样 → 每次用分类变量拟合 → Rubin 规则合并”的流程。RARCAT（Roth et al. 2024）是 bootstrap  typology + 回归的稳健性评估，与 Helske 的 pseudoclass 多重插补式合并不同。 |
+
+结论：WeightedCluster 已实现 **Representativeness**（公式与用法与文章一致），并具备 **Crisp 聚类** 与 **FANNY 成员度**，但未提供 Hard/Soft 的“回归用变量构造”封装，也**未实现 Pseudoclass**。Sequenzo 按本文档实现后，在“序列→变量→回归”的完整链路上与 Helske 表 1 对齐，且提供 Pseudoclass。
+
 ---
 
 ## 2. 实现原则与依赖关系

@@ -1,0 +1,150 @@
+---
+title: 'Short R Tutorial: Sequence Analysis Typologies for Large Databases'
+author: "Matthias Studer"
+output: rmarkdown::html_vignette
+bibliography: manual.bib 
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown} 
+  %\VignetteIndexEntry{Short R Tutorial: Sequence Analysis Typologies for Large Databases}
+  %\VignetteEncoding{UTF-8}
+    
+---
+
+# Introduction 
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "secs")
+      # return a character string to show the time
+      paste("Time for this code chunk to run:", round(res,
+        2), "seconds")
+    }
+  }
+}))
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"), time_it=TRUE)
+```
+
+
+This document provides an introduction to the `R` code to create typologies of trajectories in large databases using the algorithm provided by the `WeightedCluster R` library [@Studer2013]. It also presents methods to evaluate the quality of the resulting clustering in large databases. Readers interested by the methods and looking for more information on the interpretation of the results are referred to:
+
+
+- Studer, M., R. Sadeghi and L. Tochon (2024). Sequence Analysis for Large Databases. *LIVES Working Papers 104*. https://doi.org/10.12682/LIVES.2296-1658.2024.104
+
+You are kindly asked to cite the above reference if you use the methods presented in this document. 
+
+**Warning!!** To avoid lengthy computations (and overloading the CRAN server), we restricted the number of iterations and the sample size. We strongly recommend using much higher values. 
+
+We start by loading the required library and setting the seed. 
+
+
+```{r, message=FALSE}
+set.seed(1)
+library(WeightedCluster)
+```
+
+
+# Data Preparation
+
+We rely on the `biofam` dataset to illustrate the use of the `WeightedCluster` package. This public dataset is distributed with the `TraMineR R` package and code family trajectories of a subsample of the Swiss Household Panel [@SHPGroup2024].
+
+First, we need to prepare the data by creating a state sequence object using the `seqdef` command [@GabadinhoRitschardMullerStuder2011JSS]. This object stores all the information about our trajectories, including the data and associated characteristics, such as state labels. During this step, we further define proper state labels as the original data are coded using numerical values. We then plot the sequences using, for instance, a chronogram. 
+
+```{r seqdefbiofam, warning=FALSE, message=FALSE, fig.width=8, fig.height=5}
+data(biofam) #load illustrative data
+## Defining the new state labels 
+statelab <- c("Parent", "Left", "Married", "Left/Married",  "Child", 
+            "Left/Child", "Left/Married/Child", "Divorced")
+## Creating the state sequence object,
+biofam.seq <- seqdef(biofam[,10:25], alphabet=0:7, states=statelab)
+seqdplot(biofam.seq, legend.prop=0.2)
+```
+
+
+# CLARA Clustering 
+
+CLARA for SA is available in the `seqclararange` function. It is used as follows:
+
+```{r seqclaraex, warning=FALSE, message=FALSE}
+bfclara <- seqclararange(biofam.seq, R = 50, sample.size = 100, kvals = 2:10, 
+						 seqdist.args = list(method = "HAM"), parallel=TRUE, 
+                         stability=TRUE)
+```
+
+
+The function requires us to specify the sequence to cluster (our `biofam.seq` sequence object), the number of iterations (argument `R`, here set to 50 to avoid long computation time, larger values are recommended) and the subsample size (argument `sample.size`, here again set to the low value of 100 for illustrative purpose). The number of groups in our typology is set using the `kvals` arguments, here between 2 and ten groups solutions. We directly specify a range of values that will be considered later on. Finally, we need to specify how to compute the distance between sequences through the `seqdist.args` argument as a `list` object. All the arguments specified here will be directly passed to the `seqdist` function. Therefore, any distance measures available in `seqdist` can be used here. Finally, we set `stability=TRUE` to estimate the stability of the clustering among the subsamples.
+
+Setting `parallel=TRUE`, a default parallel back-end is set up using the future framework [@Bengtsson2021]. However, any parallel back-end previously defined with the `plan` function will be used when `parallel=FALSE`. The parallel protocol can then be adapted to specific environments, for instance some High Performance Computing (HPC) server relies on specific protocols (MPI,...). As implied by the name, setting `progressbar=TRUE` shows information (and estimated computation time) on the progress of the computations.
+
+# Cluster Quality Indices
+The values of the medoid-based CQI are shown when the result is printed, or can be plotted using the `plot` command. When plotting the CQI, standardizing the values makes it easier to identify the best solution [@Studer2013].
+
+
+```{r plotcqi, fig.width=8, fig.height=5}
+bfclara
+plot(bfclara, norm="range")
+```
+
+
+Except the PBM index, all indices favor a five-cluster solution. The resulting clustering is stored in the `clustering` element of the results. It can for instance be used to represent the sequences in each cluster as follows.
+
+The stability of the clustering can also be plotted using either the average value, or the number of recoveries of a similar solution. 
+
+
+```{r plotcqistabilityavg, fig.width=8, fig.height=5}
+plot(bfclara, stat="stabmean")
+```
+
+Here again, the five-cluster solution shows the highest CQI values. However, the absolute number of recoveries is low for more than seven groups. A higher number of iterations is therefore recommended. This is not surprising as we used a low number of iterations.
+
+
+
+```{r plotcqistability, fig.width=8, fig.height=5}
+plot(bfclara, stat="stability")
+```
+
+The `bootclustrange` function can be used to bootstrap the cluster quality measures. It has the following arguments. The first object is the clustering to be evaluated, as a `seqclararange` object, a `data.frame` or a vector. Second, the sequences that were used to create the typology. We should further specify the distance measure to use (as before), the number of bootstraps (`R` argument), and the subsample size (here 100). We would generally use higher values for this last two arguments. Finally, the `parallel` and `progressbar` arguments could be used as before. The resulting object is then printed and the standardized values of the CQI are plotted. The results lead to the same conclusion as for the medoid-based CQI. 
+
+
+```{r bcqi, fig.width=8, fig.height=5}
+	bCQI <- bootclustrange(bfclara, biofam.seq, seqdist.args = list(method = "HAM"), R = 50, sample.size = 100,  parallel=TRUE)
+	bCQI
+  plot(bCQI, norm="zscore")
+```
+
+
+
+
+# Plotting the Typology
+Once a clustering in a given number of groups has been selected, we can plot the sequences by cluster to give a better interpretation. 
+
+
+```{r seqdplotclust, fig.width=8, fig.height=8}
+seqdplot(biofam.seq, group=bfclara$clustering$cluster5)
+```
+
+# Fuzzy Clustering
+
+By setting `method="fuzzy"` in the `seqclararange` function, the fuzzy version of the algorithm is used. It should be noted that the computations are generally longer than for crisp clustering. The CQI values are printed and plotted using the same commands. 
+
+
+
+```{r seqclarafuzzy, warning=FALSE, message=FALSE, fig.width=8, fig.height=5}
+bfclaraf <- seqclararange(biofam.seq, R = 50, sample.size = 100, kvals = 2:10, method="fuzzy",
+							seqdist.args = list(method = "HAM"), parallel=TRUE)
+bfclaraf
+plot(bfclaraf, norm="zscore")
+```
+
+The XB and AMS index favor a four or six cluster solution. Several plots are available to describe fuzzy clustering of trajectories, see @Studer2018 and the `fuzzyseqplot` function. Here, we use sequence index plot ordered by membership strength, with typical trajectories of each cluster represented at the top, leaving aside trajectories with low membership. In this kind of graphic, hybrid trajectories are represented at the bottom. 
+
+
+
+```{r seqdplotclustf, dev="png", fig.width=8, fig.height=8}
+fuzzyseqplot(biofam.seq, group=bfclaraf$clustering$cluster4, type="I", sortv="membership", membership.threashold=0.4)
+```
