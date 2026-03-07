@@ -56,6 +56,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "pseudoclass_regression": ("sequenzo.clustering", "pseudoclass_regression"),
     # multidomain
     "create_idcd_sequence_from_csvs": ("sequenzo.multidomain", "create_idcd_sequence_from_csvs"),
+    "create_idcd_sequence_from_dfs": ("sequenzo.multidomain", "create_idcd_sequence_from_dfs"),
     "compute_cat_distance_matrix": ("sequenzo.multidomain", "compute_cat_distance_matrix"),
     "compute_dat_distance_matrix": ("sequenzo.multidomain", "compute_dat_distance_matrix"),
     "get_interactive_combined_typology": ("sequenzo.multidomain", "get_interactive_combined_typology"),
@@ -228,6 +229,7 @@ __all__ = [
     "soft_classification_variables",
     "pseudoclass_regression",
     "create_idcd_sequence_from_csvs",
+    "create_idcd_sequence_from_dfs",
     "compute_cat_distance_matrix",
     "compute_dat_distance_matrix",
     "get_interactive_combined_typology",

@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """
+@Author  : Yuqi Liang 梁彧祺
+@File    : seqs2vars_utils.py
+@Time    : 24/09/2025 11:17
+@Desc    :
 Ward D vs Ward D2 Methods Demonstration
 
 This script demonstrates the difference between Ward D (classic Ward) and Ward D2 
@@ -10,9 +14,6 @@ Ward D2:          Uses squared Euclidean distances
 
 Both methods produce identical cluster assignments, but different distance values
 in the linkage matrix, which affects dendrogram visualization.
-
-Author: Yuqi Liang
-Date: 24/09/2025
 """
 
 import numpy as np

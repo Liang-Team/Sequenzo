@@ -4,7 +4,7 @@
 @Time    : 14/04/2025 21:40
 @Desc    : 
 """
-from .idcd import create_idcd_sequence_from_csvs
+from .idcd import create_idcd_sequence_from_csvs, create_idcd_sequence_from_dfs
 from .cat import compute_cat_distance_matrix
 from .dat import compute_dat_distance_matrix
 from .combt import get_interactive_combined_typology, merge_sparse_combt_types
@@ -14,6 +14,7 @@ from .linked_polyad import linked_polyadic_sequence_analysis
 
 __all__ = [
     "create_idcd_sequence_from_csvs",
+    "create_idcd_sequence_from_dfs",
     "compute_cat_distance_matrix",
     "compute_dat_distance_matrix",
     "get_interactive_combined_typology",
