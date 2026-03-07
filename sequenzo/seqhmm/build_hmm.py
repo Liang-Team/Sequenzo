@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : build_hmm.py
 @Time    : 2025-11-10 09:05
 @Desc    : Build HMM models from SequenceData
@@ -46,26 +46,27 @@ def build_hmm(
                       If None, will be randomly initialized.
         transition_probs: Optional transition probability matrix (n_states x n_states).
                          If None, will be randomly initialized.
-        emission_probs: Optional emission probability matrix (n_states x n_symbols).
+        emission_probs: Optional emission probability matrix (n_states x n_symbols) for
+                       single-channel, or list of matrices (one per channel) for multichannel.
                        If None, will be randomly initialized.
         state_names: Optional names for hidden states. If None, uses "State 1", "State 2", etc.
-        channel_names: Optional names for channels. Currently only single-channel is supported.
+        channel_names: Optional names for channels (only used for multichannel).
         random_state: Random seed for initialization of random parameters.
-        
+
     Returns:
         HMM: An HMM model object (not yet fitted)
-        
+
     Examples:
         >>> from sequenzo import SequenceData, load_dataset
         >>> from sequenzo.seqhmm import build_hmm
-        >>> 
+        >>>
         >>> # Load example data
         >>> df = load_dataset('mvad')
         >>> seq = SequenceData(df, time=range(15, 86), states=['EM', 'FE', 'HE', 'JL', 'SC', 'TR'])
-        >>> 
+        >>>
         >>> # Build HMM with 4 states, random initialization
         >>> hmm = build_hmm(seq, n_states=4, random_state=42)
-        >>> 
+        >>>
         >>> # Build HMM with custom initial parameters
         >>> init_probs = np.array([0.3, 0.3, 0.2, 0.2])
         >>> trans_probs = np.array([[0.8, 0.1, 0.05, 0.05],
@@ -74,9 +75,13 @@ def build_hmm(
         ...                         [0.05, 0.05, 0.1, 0.8]])
         >>> emission_probs = np.random.rand(4, 6)  # 4 states, 6 symbols
         >>> emission_probs = emission_probs / emission_probs.sum(axis=1, keepdims=True)
-        >>> hmm = build_hmm(seq, initial_probs=init_probs, 
+        >>> hmm = build_hmm(seq, initial_probs=init_probs,
         ...                  transition_probs=trans_probs,
         ...                  emission_probs=emission_probs)
+        >>>
+        >>> # Multichannel example
+        >>> hmm_mc = build_hmm([seq_ch1, seq_ch2, seq_ch3], n_states=5,
+        ...                     channel_names=["Marriage", "Parenthood", "Residence"])
     """
     # Determine number of states
     if n_states is None:
@@ -85,49 +90,111 @@ def build_hmm(
         elif transition_probs is not None:
             n_states = transition_probs.shape[0]
         elif emission_probs is not None:
-            n_states = emission_probs.shape[0]
+            if isinstance(emission_probs, list):
+                n_states = emission_probs[0].shape[0]
+            else:
+                n_states = emission_probs.shape[0]
         else:
             raise ValueError(
                 "n_states must be provided if initial_probs, transition_probs, "
                 "and emission_probs are all None"
             )
-    
-    # Get alphabet size
-    n_symbols = len(observations.alphabet)
-    
-    # Create initial probabilities if not provided
-    if initial_probs is None:
-        initial_probs = create_initial_probs(n_states, method='uniform')
-    
-    # Create transition probabilities if not provided
-    if transition_probs is None:
-        transition_probs = create_transition_probs(
-            n_states, method='random', random_state=random_state
-        )
-    
-    # Create emission probabilities if not provided
-    if emission_probs is None:
-        emission_probs = create_emission_probs(
-            n_states, n_symbols, method='random', random_state=random_state
-        )
-    
-    # Validate dimensions
-    if len(initial_probs) != n_states:
-        raise ValueError(
-            f"initial_probs length ({len(initial_probs)}) must equal n_states ({n_states})"
-        )
-    
-    if transition_probs.shape != (n_states, n_states):
-        raise ValueError(
-            f"transition_probs shape ({transition_probs.shape}) must be ({n_states}, {n_states})"
-        )
-    
-    if emission_probs.shape != (n_states, n_symbols):
-        raise ValueError(
-            f"emission_probs shape ({emission_probs.shape}) must be ({n_states}, {n_symbols})"
-        )
-    
+
+    # ── Detect single-channel vs multichannel ──
+    is_multichannel = isinstance(observations, list)
+
+    if is_multichannel:
+        # Multichannel path
+        channels, ch_names, alphabets = prepare_multichannel_data(observations)
+        n_channels = len(channels)
+        n_symbols_per_ch = [len(alph) for alph in alphabets]
+
+        # Create initial probabilities if not provided
+        if initial_probs is None:
+            initial_probs = create_initial_probs(n_states, method='uniform')
+
+        # Create transition probabilities if not provided
+        if transition_probs is None:
+            transition_probs = create_transition_probs(
+                n_states, method='random', random_state=random_state
+            )
+
+        # Create emission probabilities if not provided (one matrix per channel)
+        if emission_probs is None:
+            emission_probs = []
+            for ch_idx, n_sym in enumerate(n_symbols_per_ch):
+                seed = random_state + ch_idx if random_state is not None else None
+                emission_probs.append(
+                    create_emission_probs(n_states, n_sym, method='random',
+                                          random_state=seed)
+                )
+
+        # Validate dimensions
+        if len(initial_probs) != n_states:
+            raise ValueError(
+                f"initial_probs length ({len(initial_probs)}) must equal n_states ({n_states})"
+            )
+
+        if transition_probs.shape != (n_states, n_states):
+            raise ValueError(
+                f"transition_probs shape ({transition_probs.shape}) must be "
+                f"({n_states}, {n_states})"
+            )
+
+        if isinstance(emission_probs, list):
+            if len(emission_probs) != n_channels:
+                raise ValueError(
+                    f"emission_probs list length ({len(emission_probs)}) must equal "
+                    f"n_channels ({n_channels})"
+                )
+            for ch_idx, (ep, n_sym) in enumerate(zip(emission_probs, n_symbols_per_ch)):
+                if ep.shape != (n_states, n_sym):
+                    raise ValueError(
+                        f"emission_probs[{ch_idx}] shape ({ep.shape}) must be "
+                        f"({n_states}, {n_sym})"
+                    )
+
+    else:
+        # Single-channel path (original logic)
+        n_symbols = len(observations.alphabet)
+
+        # Create initial probabilities if not provided
+        if initial_probs is None:
+            initial_probs = create_initial_probs(n_states, method='uniform')
+
+        # Create transition probabilities if not provided
+        if transition_probs is None:
+            transition_probs = create_transition_probs(
+                n_states, method='random', random_state=random_state
+            )
+
+        # Create emission probabilities if not provided
+        if emission_probs is None:
+            emission_probs = create_emission_probs(
+                n_states, n_symbols, method='random', random_state=random_state
+            )
+
+        # Validate dimensions
+        if len(initial_probs) != n_states:
+            raise ValueError(
+                f"initial_probs length ({len(initial_probs)}) must equal n_states ({n_states})"
+            )
+
+        if transition_probs.shape != (n_states, n_states):
+            raise ValueError(
+                f"transition_probs shape ({transition_probs.shape}) must be "
+                f"({n_states}, {n_states})"
+            )
+
+        if emission_probs.shape != (n_states, n_symbols):
+            raise ValueError(
+                f"emission_probs shape ({emission_probs.shape}) must be "
+                f"({n_states}, {n_symbols})"
+            )
+
     # Create and return HMM object
+    # HMM.__init__ already handles both single and multichannel via
+    # prepare_multichannel_data(), so we just pass everything through.
     hmm = HMM(
         observations=observations,
         n_states=n_states,
@@ -138,5 +205,5 @@ def build_hmm(
         channel_names=channel_names,
         random_state=random_state
     )
-    
+
     return hmm

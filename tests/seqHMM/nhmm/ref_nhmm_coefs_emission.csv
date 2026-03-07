@@ -1,0 +1,7 @@
+"response.state","response.observation","response.coefficient","response.estimate"
+"State 1","A","(Intercept)",0.329951085413788
+"State 1","B","(Intercept)",0.124816296820623
+"State 1","C","(Intercept)",-0.454767382234411
+"State 2","A","(Intercept)",-0.688267235008279
+"State 2","B","(Intercept)",0.163312373259599
+"State 2","C","(Intercept)",0.52495486174868

@@ -1,0 +1,14 @@
+"key","value"
+"n_sequences",100
+"sequence_length",20
+"n_states",2
+"n_symbols",3
+"symbol_freq_A",0.2715
+"symbol_freq_B",0.348
+"symbol_freq_C",0.3805
+"state_freq_1",0.41
+"state_freq_2",0.59
+"emp_trans_0_0",0.70843989769821
+"emp_trans_0_1",0.29156010230179
+"emp_trans_1_0",0.190518783542039
+"emp_trans_1_1",0.809481216457961

@@ -1,0 +1,9 @@
+"state_from","state_to","coefficient","estimate"
+"State 1","State 1","(Intercept)",113.02418605107
+"State 1","State 2","(Intercept)",-113.02418605107
+"State 1","State 1","x",-474.742358500754
+"State 1","State 2","x",474.742358500754
+"State 2","State 1","(Intercept)",4.33901896700296
+"State 2","State 2","(Intercept)",-4.33901896700296
+"State 2","State 1","x",-133.984609252951
+"State 2","State 2","x",133.984609252951

@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : multichannel_em.py
 @Time    : 2025-11-08 13:52
 @Desc    : EM algorithm for multichannel HMM
@@ -166,23 +166,26 @@ def fit_multichannel_hmm(
         
         # Update transition probabilities
         xi_sum = np.zeros((n_states, n_states))
-        gamma_sum = np.zeros(n_states)
-        
+        gamma_sum_trans = np.zeros(n_states)  # only t=0..T-2 for transition denom
+
         for seq_idx in range(n_sequences):
             seq_length = lengths[seq_idx]
             start_idx = lengths[:seq_idx].sum()
             end_idx = start_idx + seq_length
-            
+
             obs_list = [X_ch[start_idx:end_idx, 0] for X_ch in X_list]
-            
+
             # Compute gamma and xi
             for t in range(seq_length):
                 # Gamma: posterior probability of being in state i at time t
                 log_gamma = log_alpha[seq_idx][:, t] + log_beta[seq_idx][:, t]
                 log_gamma -= np.log(np.sum(np.exp(log_gamma)))
                 gamma = np.exp(log_gamma)
-                gamma_sum += gamma
-                
+
+                # Only accumulate for transition denominator when t < T-1
+                if t < seq_length - 1:
+                    gamma_sum_trans += gamma
+
                 if t < seq_length - 1:
                     # Xi: joint probability of state i at t and state j at t+1
                     for i in range(n_states):
@@ -191,7 +194,7 @@ def fit_multichannel_hmm(
                             emission_prob_next = 1.0
                             for ch in range(n_channels):
                                 emission_prob_next *= model.emission_probs[ch][j, obs_list[ch][t+1]]
-                            
+
                             log_xi = (
                                 log_alpha[seq_idx][i, t] +
                                 np.log(model.transition_probs[i, j] + 1e-10) +
@@ -215,48 +218,48 @@ def fit_multichannel_hmm(
                                         log_xi_sum = log_xi_term
                                     else:
                                         log_xi_sum = np.logaddexp(log_xi_sum, log_xi_term)
-                            
+
                             xi = np.exp(log_xi - log_xi_sum)
                             xi_sum[i, j] += xi
-        
+
         # Normalize transition probabilities
         for i in range(n_states):
-            if gamma_sum[i] > 0:
-                model.transition_probs[i, :] = xi_sum[i, :] / gamma_sum[i]
+            if gamma_sum_trans[i] > 0:
+                model.transition_probs[i, :] = xi_sum[i, :] / gamma_sum_trans[i]
             else:
                 model.transition_probs[i, :] = 1.0 / n_states
-        
+
         # Update emission probabilities for each channel
         for ch in range(n_channels):
             n_symbols_ch = model.n_symbols[ch]
             emission_ch = np.zeros((n_states, n_symbols_ch))
             gamma_sum_ch = np.zeros(n_states)
-            
+
             for seq_idx in range(n_sequences):
                 seq_length = lengths[seq_idx]
                 start_idx = lengths[:seq_idx].sum()
                 end_idx = start_idx + seq_length
-                
+
                 obs_ch = X_list[ch][start_idx:end_idx, 0]
-                
+
                 for t in range(seq_length):
                     # Gamma: posterior probability
                     log_gamma = log_alpha[seq_idx][:, t] + log_beta[seq_idx][:, t]
                     log_gamma -= np.log(np.sum(np.exp(log_gamma)))
                     gamma = np.exp(log_gamma)
-                    
+
                     # Update emission counts
                     for i in range(n_states):
                         emission_ch[i, obs_ch[t]] += gamma[i]
                         gamma_sum_ch[i] += gamma[i]
-            
+
             # Normalize
             for i in range(n_states):
                 if gamma_sum_ch[i] > 0:
                     model.emission_probs[ch][i, :] = emission_ch[i, :] / gamma_sum_ch[i]
                 else:
                     model.emission_probs[ch][i, :] = 1.0 / n_symbols_ch
-        
+
         # Check convergence
         if iteration > 0:
             change = total_log_lik - prev_log_likelihood
@@ -265,18 +268,18 @@ def fit_multichannel_hmm(
                 if verbose:
                     print(f"Converged at iteration {iteration + 1}")
                 break
-        
+
         prev_log_likelihood = total_log_lik
-        
+
         if verbose and (iteration + 1) % 10 == 0:
             print(f"Iteration {iteration + 1}: log-likelihood = {total_log_lik:.4f}")
-    
+
     model.log_likelihood = prev_log_likelihood
     model.n_iter = iteration + 1
-    
+
     if not model.converged:
         model.converged = False
         if verbose:
             print(f"Did not converge after {n_iter} iterations")
-    
+
     return model

@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : bootstrap.py
 @Time    : 2025-10-05 08:15
 @Desc    : Bootstrap confidence intervals for HMM model coefficients
@@ -151,16 +151,16 @@ def _resample_sequences(observations: SequenceData, indices: np.ndarray) -> Sequ
     # Reset index to create new sequence IDs
     resampled_df = resampled_df.reset_index(drop=True)
     
-    # Get time columns from original observations
-    # We need to extract the time column names from the original data
-    # This is a bit tricky - we'll use the values attribute
-    time_cols = observations.values.columns.tolist() if hasattr(observations, 'values') else None
-    
-    # If we can't get time columns directly, try to infer from sequence length
-    if time_cols is None:
-        # Get max sequence length
-        max_length = max(len(seq) for seq in observations.sequences)
-        time_cols = list(range(1, max_length + 1))
+    # Get time columns from the DataFrame we already have
+    time_cols = original_df.columns.tolist()
+
+    # to_dataframe() returns integer-coded values (1-indexed),
+    # but SequenceData constructor expects string labels.
+    # Convert back: integer i → alphabet[i-1]
+    alphabet = observations.alphabet
+    int_to_label = {i + 1: label for i, label in enumerate(alphabet)}
+    for col in resampled_df.columns:
+        resampled_df[col] = resampled_df[col].map(int_to_label)
     
     # Create new SequenceData object
     seq_data = SequenceData(
