@@ -1,0 +1,145 @@
+---
+title: "TanaT experiments"
+author: "Thomas Guyet and Arnaud Duvermy"
+date: "feb 2026"
+output: pdf_document
+---
+
+# Introduction
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library, include=FALSE}
+# Load the packages required
+library(xtable)
+library(rjson)
+library(tidyverse)
+library(tibble)
+library(ggplot2)
+library(scmamp)
+library(readr)
+library(future)
+library(furrr)
+library(latex2exp)
+library(kableExtra)
+library(rstatix)
+```
+
+```{r library2, include=FALSE}
+setwd("/home/tguyet/Publications/2026/IJCAI_Demo/exp_cmp/results_save")
+```
+
+
+# Experiments
+
+## ongoing
+
+
+
+```{r message = FALSE, echo=FALSE, warning=FALSE}
+data = read_delim("results.csv")
+
+data['nb']=100*ceiling(data['nb']/100)
+
+data$mean_len[data$mean_len<=8]=8
+data$mean_len[data$mean_len>8]=20
+
+# Tw is 1 if not SWoTTeD
+data = data %>% mutate( metric=replace(metric,metric=="LinearPairwiseSequenceMetric","EUCLID") )%>%
+  mutate( metric=replace(metric,metric=="EditSequenceMetric","OM") ) %>%
+  mutate( metric=replace(metric,metric=="DTWSequenceMetric","TWED") ) %>% 
+  mutate( metric=replace(metric,metric=="LCPSequenceMetric","LCP") ) %>% 
+  mutate( metric=replace(metric,metric=="LCSSequenceMetric","LCS") )
+
+# Definition of the order of appearance of models
+data$model <- factor(data$metric, c("EUCLID", "LCP", "LCS", "OM", "TWED"))
+```
+
+```{r message = FALSE, echo=FALSE, warning=FALSE}
+gdata = data%>%select(nb,time, method, metric, mean_len)%>%filter(metric!="TWED")
+gdata['nb'] <- as.factor(gdata$nb)
+ggplot(gdata, aes(x=nb, y=time, color=method )) + scale_y_continuous(trans='log10') +
+  facet_grid(mean_len ~ metric) +
+  geom_boxplot( ) +
+  #geom_point() +
+  labs(x="Number of examples", y = TeX("log(Time) (s)"))+ 
+  theme_bw() + theme(legend.position = "bottom", 
+                     legend.title = element_blank(), 
+                     panel.grid.minor = element_blank(),
+                     text = element_text(size = 16), axis.title.x = element_blank(),
+                     axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 10),
+                     )
+  #scale_fill_grey(start=0.9, end=0.4)
+```
+```{r message = FALSE, echo=FALSE, warning=FALSE, fig.width=7, fig.height=4}
+gdata = data%>%select(nb,time, method, mean_len, metric)%>%filter(metric!="TWED") %>% filter(mean_len==20)
+ggplot(gdata, aes(x=nb, y=time, color=method )) + scale_y_continuous(trans='log10') +
+  facet_grid(.~ metric) +
+  geom_smooth()+
+  labs(x="Number of examples", y = TeX("log(Time) (s)"))+ 
+  theme_bw() + theme(legend.position = "bottom", 
+                     legend.title = element_blank(), 
+                     panel.grid.minor = element_blank(),
+                     text = element_text(size = 16), axis.title.x = element_blank(),
+                     axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 10),
+                     )
+  #scale_fill_grey(start=0.9, end=0.4)
+ggsave("result_synth_FITX_cmp.pdf", width = 7, height = 4)
+```
+
+
+## EXP1: comparison of TanaT, TraMineR and Sequenzo
+
+
+```{r message = FALSE, echo=FALSE, warning=FALSE}
+data = read_delim("EXP1_LENGTH/results.csv")
+data = read_delim("EXP3_SMALLDUR/results.csv")
+
+data['nb']=100*ceiling(data['nb']/100)
+
+# Tw is 1 if not SWoTTeD
+data = data %>% mutate( metric=replace(metric,metric=="LinearPairwiseSequenceMetric","EUCLID") )%>%
+  mutate( metric=replace(metric,metric=="EditSequenceMetric","OM") ) %>%
+  mutate( metric=replace(metric,metric=="DTWSequenceMetric","TWED") ) %>% 
+  mutate( metric=replace(metric,metric=="LCPSequenceMetric","LCP") ) %>% 
+  mutate( metric=replace(metric,metric=="LCSSequenceMetric","LCS") )
+
+# Definition of the order of appearance of models
+data$model <- factor(data$metric, c("EUCLID", "LCP", "LCS", "OM", "TWED"))
+```
+
+```{r message = FALSE, echo=FALSE, warning=FALSE}
+gdata = data%>%select(nb,time, method, metric)
+gdata['nb'] <- as.factor(gdata$nb)
+ggplot(gdata, aes(x=nb, y=time, color=method )) +
+  facet_grid(. ~ metric) +
+  geom_boxplot( ) +
+  #geom_point() +
+  labs(x="Number of examples", y = TeX("Time (s)"))+ 
+  theme_bw() + theme(legend.position = "bottom", 
+                     legend.title = element_blank(), 
+                     panel.grid.minor = element_blank(),
+                     text = element_text(size = 16), axis.title.x = element_blank(),
+                     axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 10),
+                     )
+  #scale_fill_grey(start=0.9, end=0.4)
+```
+```{r message = FALSE, echo=FALSE, warning=FALSE}
+gdata = data%>%select(nb,time, method, metric)
+ggplot(gdata, aes(x=nb, y=time, color=method )) +
+  facet_grid(. ~ metric) +
+  geom_smooth()+
+  labs(x="Number of examples", y = TeX("Time (s)"))+ 
+  theme_bw() + theme(legend.position = "bottom", 
+                     legend.title = element_blank(), 
+                     panel.grid.minor = element_blank(),
+                     text = element_text(size = 16), axis.title.x = element_blank(),
+                     axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 10),
+                     )
+  #scale_fill_grey(start=0.9, end=0.4)
+```
+
+
+

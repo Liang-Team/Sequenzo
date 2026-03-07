@@ -1,0 +1,20 @@
+#citHeader("To cite WeightedCluster in publications please use:")
+
+bibentry(bibtype="TechReport", header="To cite WeightedCluster in publications please use:",
+		author = person("Matthias", "Studer", email = "matthias.studer@unige.ch"),
+		title = "WeightedCluster Library Manual: A practical guide to creating typologies of trajectories in the social sciences with R",
+		year = "2013",
+		institution="LIVES Working Papers 24",
+		doi="10.12682/lives.2296-1658.2013.24",
+		textVersion="Studer, Matthias (2013). WeightedCluster Library Manual: A practical guide to creating typologies of trajectories in the social sciences with R. LIVES Working Papers, 24. DOI: 10.12682/lives.2296-1658.2013.24."
+)
+
+bibentry(bibtype="TechReport", header="For Clustering in Large Databases:",
+		author = c(person("Matthias", "Studer", email = "matthias.studer@unige.ch"), person("Rojin", "Sadeghi"), person("Louis", "Tochon")),
+		title = "Sequence Analysis for Large Databases",
+		year = "2024",
+		institution="LIVES Working Papers 104",
+		doi="10.12682/LIVES.2296-1658.2024.104",
+		textVersion="Studer, M., R. Sadeghi and L. Tochon (2024). Sequence Analysis for Large Databases. LIVES Working Papers 104. DOI: 10.12682/lives.2296-1658.2024.104"
+)
+

@@ -1,0 +1,190 @@
+---
+title: 'Short R Tutorial: Fuzzy and Property-Based Clustering for Sequence Analysis'
+author: "Matthias Studer"
+output: rmarkdown::html_vignette
+bibliography: [packages.bib,manual.bib]
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Short R Tutorial: Fuzzy and Property-Based Clustering for Sequence Analysis}
+  %\VignetteEncoding{UTF-8}
+    
+---
+
+# Introduction 
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "secs")
+      # return a character string to show the time
+      paste("Time for this code chunk to run:", round(res,
+        2), "seconds")
+    }
+  }
+}))
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"), time_it=TRUE)
+```
+
+
+This document provides an introduction to the `R` code to create typologies of trajectories using fuzzy and property-based clustering in sequence analysis using the `cluster` and `WeightedCluster R` library [@Studer2013]. Readers interested by the methods and looking for more information on the interpretation of the results are referred to:
+
+ - Studer, M. (2018). Divisive Property-Based and Fuzzy Clustering for Sequence Analysis. In G. Ritschard & M. Studer (Eds.), *Sequence Analysis and Related Approaches: Innovative Methods and Applications* (Vol. 10, pp. 223–239). Springer. https://doi.org/10.1007/978-3-319-95420-2_13
+
+You are kindly asked to cite the above reference if you use the methods presented in this document. 
+
+We start by loading the required library and setting the seed. 
+
+
+```{r, message=FALSE}
+set.seed(1)
+library(WeightedCluster)
+```
+
+
+# Data Preparation
+
+We rely on the `biofam` dataset to illustrate the use of the `WeightedCluster` package. This public dataset is distributed with the `TraMineR R` package and code family trajectories of a subsample of the Swiss Household Panel [@SHPGroup2024].
+
+First, we need to prepare the data by creating a state sequence object using the `seqdef` command [@GabadinhoRitschardMullerStuder2011JSS]. This object stores all the information about our trajectories, including the data and associated characteristics, such as state labels. During this step, we further define proper state labels as the original data are coded using numerical values. We then plot the sequences using, for instance, a chronogram. 
+
+```{r seqdefbiofam, warning=FALSE, message=FALSE, fig.width=8, fig.height=5}
+data(biofam) #load illustrative data
+## Defining the new state labels 
+statelab <- c("Parent", "Left", "Married", "Left/Married",  "Child", 
+            "Left/Child", "Left/Married/Child", "Divorced")
+## Creating the state sequence object,
+biofam.seq <- seqdef(biofam[,10:25], alphabet=0:7, states=statelab)
+seqdplot(biofam.seq, legend.prop=0.2)
+```
+
+The clustering algorithms discussed here relies on a distance matrix. We compute one using the `"LCS"` distance. 
+
+```{r, message=FALSE}
+diss <- seqdist(biofam.seq, method="LCS")
+```
+
+
+# Fuzzy Clustering 
+
+In fuzzy clustering, the sequences belong to each cluster with an estimated membership strength. This approach is particularly useful when some sequences are thought to lie in between two (or more) types of sequences (i.e., hybrid-type sequences) or when only weak structure is found in the data. Here, we use the `fanny` fuzzy clustering algorithm [@Kaufman1990,@R-cluster], which is available in the `cluster R` library. It is used as follows:
+
+```{r fannyclust, warning=FALSE, message=FALSE}
+library(cluster) ## Loading the library
+fclust <- fanny(diss, k=5, diss=TRUE, memb.exp=1.5)
+```
+
+The `fanny` function requires us to specify the distance matrix (our `diss` object), the number of groups (argument `k=5`), `diss=TRUE` specifies that we directly provided a distance matrix, and `memb.exp=1.5` the fuzziness parameters (values between 1.5 and 2 are often recommended). 
+
+
+Descriptive statistics of membership strength to each cluster provide useful information. The mean can be interpreted as a relative frequency of each cluster if sequences are weighted according to their membership strength.
+
+```{r}
+summary(fclust$membership)
+```
+
+
+## Plotting the typology
+
+A graphical representation of the typology can be obtained by weighting each sequences according to its membership strength [@Studer2018]. Using this strategy, one can represent distribution plots (see the `seqplot` function of the `TraMineR` package). The `fuzzyseqplot` function from the `WeightedCluster` can be used to do so. 
+
+```{r plotfd, fig.width=8, fig.height=5}
+## Displaying the resulting clustering with membership threshold of 0.4
+fuzzyseqplot(biofam.seq, group=fclust$membership, type="d")
+```
+
+Following a similar strategy, one can further order the sequences according to the membership strength (argument `sortv="membership"`) in an index plot (argument `type="I"`) and remove sequences with low membership strengths (argument `membership.threashold =0.4`). In this plot, each sequence is represented using a thin line. The sequences at the top are the one with the highest membership strength. They therefore describe the best the *full* cluster membership. 
+
+```{r plotf, fig.width=8, fig.height=5}
+## Displaying the resulting clustering with membership threshold of 0.4
+fuzzyseqplot(biofam.seq, group=fclust$membership, type="I", membership.threashold =0.4, sortv="membership")
+```
+## Regression models
+
+Fuzzy clustering membership matrix can be directly included in subsequent regression as an independent variable. To use it as a dependent variable, you mus use Dirichlet or Beta regression (see the full article for more explanation). 
+
+Dirichlet regressions are available in the `DirichletReg` package [@R-DirichletReg]. Here is a sample regression with sex and birth year as independent variables. 
+
+```{r dreg}
+library(DirichletReg)
+##Estimation of Dirichlet Regression
+##Dependent variable formatting
+fmember <- DR_data(fclust$membership)
+## Estimation
+bdirig <- DirichReg(fmember~sex+birthyr|1, data=biofam, model="alternative")
+## Displaying results of Dirichlet regression.
+summary(bdirig)
+```
+
+
+Beta regression is available in the `betareg` package [@R-betareg]. To estimate a beta regression for the third fuzzy type, one can use.
+
+```{r betareg}
+library(betareg)
+## Estimation of beta regression
+breg1 <- betareg(fclust$membership[, 3]~sex+birthyr, data=biofam)
+## Displaying results
+summary(breg1)
+```
+
+
+
+# Property-based clustering
+
+The aim of property-based clustering is to build a sequence typology by identifying well-defined clustering rules that are based on the most relevant properties of the analyzed object. Here, we present the algorithm discussed in [@Studer2018], an extension of the algorithms of @Chavent.etal2007 and @Piccarreta2007. 
+
+Property-based clustering works in two steps. First, sequence properties are extracted. Second, the clustering is created based on the extracted properties. The following table presents the states sequences properties that can be extracted.
+
+
+Name            | Description
+----------------|-----------------------------------------------
+`"state"`       | The state in which an individual is found, at each time position $t$.
+`"spell.age"`   | The age at the beginning of each spell of a given type.
+`"spell.dur"`   | The duration of each of the spells presented above.
+`"duration"`    | The total time spent in each state.
+`"pattern"`     | Count of the frequent subsequences of states in the DSS.
+`"AFpattern"`   | Age at the first occurrence of the above frequent subsequence.
+`"transition"`  | Count of the frequent subsequence of events in each sequence, where each transition is considered another event.
+`"AFtransition"`| Age at the first occurrence of the above frequent subsequence.
+`"Complexity"`  | Complexity index, number of transitions, turbulence.
+
+Second, the clustering algorithm is run. In `R`, the two steps are regrouped in the same function `seqpropclust`. The first argument specifies the state sequence object. Then, the `diss` argument specifies the distance matrix, `maxcluster` the maximum number of clusters to consider, and `properties` the list of properties to consider using the names in the above table. 
+
+```{r}
+pclust <- seqpropclust(biofam.seq, diss=diss, maxcluster=5, properties=c("state", "duration"))
+pclust
+```
+
+
+If GraphViz is installed on the computer, one can use `seqtreedisplay` for a graphical representation of the results (not presented here).
+
+```{r, eval=FALSE}
+seqtreedisplay(pclust, type="d", border=NA, showdepth=TRUE)
+```
+
+
+The cluster quality indices can be computed using the `as.clustrange()` function as for hierarchical clustering algorithms. 
+
+```{r}
+pclustqual <- as.clustrange(pclust, diss=diss, ncluster=5)
+pclustqual
+```
+
+
+
+The clustering solution can then be accessed and plotted using the same procedure as for any cluster algorithms, e.g.:
+
+```{r, fig.width=8, fig.height=5}
+seqdplot(biofam.seq, pclustqual$clustering$cluster4)
+```
+
+```{r, include=FALSE}
+knitr::write_bib(file = 'packages.bib')
+```
+
+
+# References

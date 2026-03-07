@@ -1,0 +1,96 @@
+              CHANGES IN WeightedCluster VERSION 1.8-1
+
+NEW VIGNETTES
+  o BigDataSA: Short R Tutorial on the clustering large databases with sequence analsyis.
+  o ClusterExternalValidSA: Short R Tutorial on the validation of cluster analysis results based on covariates or outcome variables.
+  o ClusterValidSA: Short R Tutorial on the validation of cluster analysis using parametric bootstraps.
+  o FuzzySA: Short R Tutorial on fuzzy clustering and property-based clustering in sequence analysis.
+  
+
+              CHANGES IN WeightedCluster VERSION 1.8-0
+
+NEW FEATURES
+  o seqclararange(): Clustering large databases of sequences data using improved CLARA algorithm.
+  o bootclustrange(): Cluster quality indices estimation using bootstrapping for large databases. 
+
+BUG FIXES
+  o seqnullcqi(): progress bars are now hidden by default to prevent errors when included in RMarkdown/knitr documents.
+
+CODE CLEANING
+  o C++ Headers now define R_NO_REMAP for compliance with upcomming R releases.
+
+              CHANGES IN WeightedCluster VERSION 1.6-4
+
+NEW FEATURES
+  o clustassoc(): compute the share of an association between an object and a covariate reproduced by a clustering solution.
+
+CODE CLEANING
+  o Change order of C++ header inclusion for compatibility with LLVM toolchain.
+
+
+              CHANGES IN WeightedCluster VERSION 1.6-2
+
+NEW FEATURES
+  o seqnullcqi(): added parallel processing support to speed up computation.
+
+BUG FIXES
+  o plot.seqnull(): x and y labels corrected when using boxplots.
+
+CODE CLEANING
+  o Remove set but unused variable and C89 compliance check.
+
+              CHANGES IN WeightedCluster VERSION 1.6-0
+
+NEW FEATURES
+  o seqnull(), seqnullcqi(): Sequence Analysis Typologies Validation Using Parametric Bootstrap.
+
+
+              CHANGES IN WeightedCluster VERSION 1.4-1
+
+BUG FIXES
+  o LTO: corrected declaration in init.c
+
+
+              CHANGES IN WeightedCluster VERSION 1.4
+
+NEW FEATURES
+  o seqpropclust(), wcPropertyClustering(): Monothetic clustering with the DIVCLUS-T algorithm. Automatic sequence properties extraction.
+  o as.clustrange(): Handle monothetic clustering.
+
+              CHANGES IN WeightedCluster VERSION 1.2-1
+SMALL FIXES
+  o Fixed import related notes in RCMD check.
+
+MISC:
+  o Registration of native routines for R 3.4.x and TraMineR >= 2.0-6.
+    See https://stat.ethz.ch/pipermail/r-devel/2017-February/073755.html.
+
+              CHANGES IN WeightedCluster VERSION 1.2
+NEW FEATURES
+  o as.clustrange(), wcKMedRange(): Added bootstrap of cluster quality measures.
+  o wcCmpCluster(): Automatically compute different clustering solutions and associated quality measures to help identifying the best one.
+  o as.clustrange(), wcKMedRange(): Speed and memory handling improvements.
+
+BUG FIXES
+  o wcKMedRange() was internally converting dist objects to matrix. For this reason, it used too much memory. This isn't the case anymore.
+  o Moved the vignettes source to the vignettes folder.
+
+              CHANGES IN WeightedCluster VERSION 1.0
+
+NEW FEATURES
+  o The vignette (English version) has been published in the LIVES Working papers series.
+  o The vignette (manual) has been translated in English.
+  o seqclustname: automatic labeling of clusters using sequence medoids.
+  o Added the WeightedCluster vignette (in French).
+  o It is now possible to plot the "RHC" statistic computed as 1-HC. This way all statistics should be maximized (Requested by Gilbert Ritschard).
+  o It is now possible to specify the colors used by plot.clustrange (Requested by Sandra Ham).
+  o Now testing for correct input in "as.clustrange".
+
+BUG FIXES
+  o PBC, HG, HC, where computed only on the lower triangular part of the distance matrix (instead on the whole one).
+  o Corrected citation informations
+  o Many grammar and spelling corrections in the WeightedClusterPreview vignette (thanks to Nevena Zhelyazkova).
+
+			  CHANGES IN WeightedCluster VERSION 0.9
+
+  o First development release

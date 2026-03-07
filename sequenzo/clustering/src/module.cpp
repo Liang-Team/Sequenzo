@@ -3,422 +3,17 @@
 #include "PAMonce.cpp"
 #include "weightedinertia.cpp"
 #include "cluster_quality.cpp"
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <numeric>
-#include <random>
+#include "binding_common.cpp"
+#include "linkage_tree_utils.cpp"
+#include "distance_prep_utils.cpp"
+
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace py = pybind11;
-
-namespace {
-
-// ============================================================================
-// Shared constants and lightweight helpers
-// ============================================================================
-
-constexpr double kWardTol = 1e-10;
-constexpr double kWardViolationThreshold = 0.1;
-constexpr int kWardSampleCap = 50;
-constexpr int kEigenCheckCap = 100;
-
-class DisjointSet {
-public:
-    explicit DisjointSet(int n) : parent_(n), rank_(n, 0) {
-        std::iota(parent_.begin(), parent_.end(), 0);
-    }
-
-    int find(int x) {
-        if (parent_[x] != x) {
-            parent_[x] = find(parent_[x]);
-        }
-        return parent_[x];
-    }
-
-    void unite(int a, int b) {
-        int ra = find(a);
-        int rb = find(b);
-        if (ra == rb) {
-            return;
-        }
-        if (rank_[ra] < rank_[rb]) {
-            parent_[ra] = rb;
-        } else if (rank_[ra] > rank_[rb]) {
-            parent_[rb] = ra;
-        } else {
-            parent_[rb] = ra;
-            rank_[ra] += 1;
-        }
-    }
-
-private:
-    std::vector<int> parent_;
-    std::vector<int> rank_;
-};
-
-void validate_square_matrix(const py::buffer_info& matrix_buf, const char* msg) {
-    if (matrix_buf.ndim != 2 || matrix_buf.shape[0] != matrix_buf.shape[1]) {
-        throw std::runtime_error(msg);
-    }
-}
-
-void validate_vector_length(ssize_t actual, ssize_t expected, const char* msg) {
-    if (actual != expected) {
-        throw std::runtime_error(msg);
-    }
-}
-
-void validate_condensed_size(ssize_t actual, int n, const char* msg) {
-    const int expected = n * (n - 1) / 2;
-    if (actual != expected) {
-        throw std::runtime_error(msg);
-    }
-}
-
-py::dict build_asw_result(py::array_t<double> asw_i, py::array_t<double> asw_w) {
-    py::dict result;
-    result["asw_individual"] = asw_i;
-    result["asw_weighted"] = asw_w;
-    return result;
-}
-
-void validate_linkage(py::buffer_info& linkage_buf, int n) {
-    if (linkage_buf.ndim != 2 || linkage_buf.shape[1] != 4) {
-        throw std::runtime_error("Linkage matrix must have shape (n-1, 4)");
-    }
-    if (linkage_buf.shape[0] != n - 1) {
-        throw std::runtime_error("Linkage matrix row count must be n-1");
-    }
-}
-
-void compute_labels_from_linkage(
-    const double* linkage_ptr,
-    int n,
-    int nclusters,
-    int* labels_out
-) {
-    if (nclusters < 1 || nclusters > n) {
-        throw std::runtime_error("nclusters must be in [1, n]");
-    }
-
-    if (n == 1) {
-        labels_out[0] = 1;
-        return;
-    }
-
-    const int merges_to_apply = n - nclusters;
-    DisjointSet dsu(n);
-    std::vector<int> node_rep(2 * n - 1, -1);
-    for (int i = 0; i < n; ++i) {
-        node_rep[i] = i;
-    }
-
-    for (int step = 0; step < merges_to_apply; ++step) {
-        const int a = static_cast<int>(linkage_ptr[step * 4 + 0]);
-        const int b = static_cast<int>(linkage_ptr[step * 4 + 1]);
-
-        if (a < 0 || a >= (n + step) || b < 0 || b >= (n + step)) {
-            throw std::runtime_error("Invalid linkage node index encountered");
-        }
-        if (node_rep[a] < 0 || node_rep[b] < 0) {
-            throw std::runtime_error("Invalid linkage topology encountered");
-        }
-
-        dsu.unite(node_rep[a], node_rep[b]);
-        node_rep[n + step] = dsu.find(node_rep[a]);
-    }
-
-    std::unordered_map<int, int> root_to_label;
-    root_to_label.reserve(static_cast<size_t>(nclusters));
-    int next_label = 1;
-
-    for (int i = 0; i < n; ++i) {
-        const int root = dsu.find(i);
-        auto it = root_to_label.find(root);
-        if (it == root_to_label.end()) {
-            root_to_label.emplace(root, next_label);
-            labels_out[i] = next_label;
-            next_label += 1;
-        } else {
-            labels_out[i] = it->second;
-        }
-    }
-}
-
-py::dict stats_vector_to_dict(const std::vector<double>& stats) {
-    py::dict result;
-    result["PBC"] = stats[ClusterQualHPG];
-    result["HG"] = stats[ClusterQualHG];
-    result["HGSD"] = stats[ClusterQualHGSD];
-    result["ASW"] = stats[ClusterQualASWi];
-    result["ASWw"] = stats[ClusterQualASWw];
-    result["CH"] = stats[ClusterQualF];
-    result["R2"] = stats[ClusterQualR];
-    result["CHsq"] = stats[ClusterQualF2];
-    result["R2sq"] = stats[ClusterQualR2];
-    result["HC"] = stats[ClusterQualHC];
-    return result;
-}
-
-double percentile_linear(std::vector<double>& values, double q) {
-    if (values.empty()) {
-        throw std::runtime_error("Cannot compute percentile on empty values");
-    }
-    if (q <= 0.0) {
-        return *std::min_element(values.begin(), values.end());
-    }
-    if (q >= 1.0) {
-        return *std::max_element(values.begin(), values.end());
-    }
-
-    std::sort(values.begin(), values.end());
-    const double pos = q * static_cast<double>(values.size() - 1);
-    const size_t lo = static_cast<size_t>(std::floor(pos));
-    const size_t hi = static_cast<size_t>(std::ceil(pos));
-    if (lo == hi) {
-        return values[lo];
-    }
-    const double alpha = pos - static_cast<double>(lo);
-    return values[lo] * (1.0 - alpha) + values[hi] * alpha;
-}
-
-bool is_finite_ieee(double x) {
-    uint64_t bits = 0;
-    std::memcpy(&bits, &x, sizeof(double));
-    // Exponent all-ones => Inf or NaN.
-    return (bits & 0x7ff0000000000000ULL) != 0x7ff0000000000000ULL;
-}
-
-bool is_nan_ieee(double x) {
-    uint64_t bits = 0;
-    std::memcpy(&bits, &x, sizeof(double));
-    const uint64_t exp_mask = 0x7ff0000000000000ULL;
-    const uint64_t mantissa_mask = 0x000fffffffffffffULL;
-    return ((bits & exp_mask) == exp_mask) && ((bits & mantissa_mask) != 0ULL);
-}
-
-struct EuclideanCheckResult {
-    bool compatible = true;
-    double violation_rate = 0.0;
-    double neg_energy_ratio = 0.0;
-    int sample_n = 0;
-};
-
-enum WarningFlags : int {
-    WARN_NONE = 0,
-    WARN_NONFINITE = 1 << 0,
-    WARN_NEGATIVE = 1 << 1,
-    WARN_SYMMETRIZED = 1 << 2,
-    WARN_WARD_NON_EUCLIDEAN = 1 << 3,
-};
-
-struct PreparedMatrixData {
-    std::vector<double> full;
-    std::vector<double> condensed;
-    bool had_nonfinite = false;
-    bool had_negative = false;
-    bool was_symmetrized = false;
-    double replacement_value = 0.0;
-    ssize_t n = 0;
-    int warning_flags = WARN_NONE;
-};
-
-PreparedMatrixData prepare_distance_matrix_impl(
-    const double* in_ptr,
-    ssize_t n,
-    bool enforce_symmetry,
-    double rtol,
-    double atol,
-    double replacement_quantile
-) {
-    PreparedMatrixData out;
-    out.n = n;
-    const ssize_t nn = n * n;
-    out.full.assign(in_ptr, in_ptr + nn);
-
-    std::vector<double> finite_vals;
-    finite_vals.reserve(static_cast<size_t>(nn));
-
-    for (ssize_t i = 0; i < nn; ++i) {
-        const double v = out.full[static_cast<size_t>(i)];
-        if (is_finite_ieee(v)) {
-            finite_vals.push_back(v);
-            if (v < 0.0) {
-                out.had_negative = true;
-            }
-        } else {
-            out.had_nonfinite = true;
-        }
-    }
-
-    if (out.had_nonfinite) {
-        out.warning_flags |= WARN_NONFINITE;
-        if (!finite_vals.empty()) {
-            out.replacement_value = percentile_linear(finite_vals, replacement_quantile);
-        } else {
-            out.replacement_value = 1.0;
-        }
-        for (ssize_t i = 0; i < nn; ++i) {
-            if (!is_finite_ieee(out.full[static_cast<size_t>(i)])) {
-                out.full[static_cast<size_t>(i)] = out.replacement_value;
-            }
-        }
-    }
-
-    for (ssize_t i = 0; i < n; ++i) {
-        out.full[static_cast<size_t>(i * n + i)] = 0.0;
-    }
-    if (out.had_negative) {
-        out.warning_flags |= WARN_NEGATIVE;
-        for (ssize_t i = 0; i < nn; ++i) {
-            if (out.full[static_cast<size_t>(i)] < 0.0) {
-                out.full[static_cast<size_t>(i)] = 0.0;
-            }
-        }
-    }
-
-    if (enforce_symmetry) {
-        bool is_symmetric = true;
-        for (ssize_t i = 0; i < n && is_symmetric; ++i) {
-            for (ssize_t j = i + 1; j < n; ++j) {
-                const double a = out.full[static_cast<size_t>(i * n + j)];
-                const double b = out.full[static_cast<size_t>(j * n + i)];
-                const double tol = atol + rtol * std::abs(b);
-                if (std::abs(a - b) > tol) {
-                    is_symmetric = false;
-                    break;
-                }
-            }
-        }
-        if (!is_symmetric) {
-            out.was_symmetrized = true;
-            out.warning_flags |= WARN_SYMMETRIZED;
-            for (ssize_t i = 0; i < n; ++i) {
-                for (ssize_t j = i + 1; j < n; ++j) {
-                    const double avg = 0.5 * (
-                        out.full[static_cast<size_t>(i * n + j)] +
-                        out.full[static_cast<size_t>(j * n + i)]
-                    );
-                    out.full[static_cast<size_t>(i * n + j)] = avg;
-                    out.full[static_cast<size_t>(j * n + i)] = avg;
-                }
-            }
-        }
-    }
-
-    const ssize_t condensed_size = n * (n - 1) / 2;
-    out.condensed.resize(static_cast<size_t>(condensed_size));
-    ssize_t idx = 0;
-    for (ssize_t i = 0; i < n; ++i) {
-        for (ssize_t j = i + 1; j < n; ++j) {
-            out.condensed[static_cast<size_t>(idx++)] = out.full[static_cast<size_t>(i * n + j)];
-        }
-    }
-    return out;
-}
-
-EuclideanCheckResult check_euclidean_compatibility_impl(
-    const double* matrix_ptr,
-    ssize_t n,
-    const std::string& method
-) {
-    EuclideanCheckResult out;
-    const std::string m = method;
-    if (m != "ward" && m != "ward_d" && m != "ward_d2") {
-        out.compatible = true;
-        return out;
-    }
-
-    const int sample_size = static_cast<int>(std::min<ssize_t>(kWardSampleCap, n));
-    std::vector<int> indices(static_cast<size_t>(n));
-    std::iota(indices.begin(), indices.end(), 0);
-    if (n > sample_size) {
-        std::mt19937 gen(5489U + static_cast<uint32_t>(n));
-        std::shuffle(indices.begin(), indices.end(), gen);
-        indices.resize(static_cast<size_t>(sample_size));
-    }
-    out.sample_n = static_cast<int>(indices.size());
-    const int s = out.sample_n;
-
-    std::vector<double> sample(static_cast<size_t>(s * s), 0.0);
-    for (int i = 0; i < s; ++i) {
-        for (int j = 0; j < s; ++j) {
-            sample[static_cast<size_t>(i * s + j)] =
-                matrix_ptr[static_cast<size_t>(indices[static_cast<size_t>(i)] * n + indices[static_cast<size_t>(j)])];
-        }
-    }
-
-    long long violations = 0;
-    long long total_checks = 0;
-    for (int i = 0; i < s; ++i) {
-        for (int j = i + 1; j < s; ++j) {
-            for (int k = j + 1; k < s; ++k) {
-                const double dij = sample[static_cast<size_t>(i * s + j)];
-                const double dik = sample[static_cast<size_t>(i * s + k)];
-                const double djk = sample[static_cast<size_t>(j * s + k)];
-                if (dik > dij + djk + kWardTol || dij > dik + djk + kWardTol || djk > dij + dik + kWardTol) {
-                    ++violations;
-                }
-                ++total_checks;
-            }
-        }
-    }
-    if (total_checks > 0) {
-        out.violation_rate = static_cast<double>(violations) / static_cast<double>(total_checks);
-        if (out.violation_rate > kWardViolationThreshold) {
-            out.compatible = false;
-            return out;
-        }
-    }
-
-    // Eigen-based check for small matrices (matching Python heuristic).
-    if (s <= kEigenCheckCap) {
-        try {
-            auto sample_arr = py::array_t<double>({s, s});
-            auto sample_buf = sample_arr.request();
-            auto* sample_ptr = static_cast<double*>(sample_buf.ptr);
-            std::copy(sample.begin(), sample.end(), sample_ptr);
-
-            py::module_ np = py::module_::import("numpy");
-            py::module_ linalg = py::module_::import("numpy.linalg");
-            py::object H = np.attr("eye")(s) - (np.attr("ones")(py::make_tuple(s, s)) / py::float_(static_cast<double>(s)));
-            py::object sq = np.attr("square")(sample_arr);
-            py::object B = py::float_(-0.5) * H.attr("__matmul__")(sq.attr("__matmul__")(H));
-            py::array eigenvals = linalg.attr("eigvalsh")(B).cast<py::array>();
-            auto eig_buf = eigenvals.request();
-            auto* eig_ptr = static_cast<double*>(eig_buf.ptr);
-
-            double neg_energy = 0.0;
-            double total_energy = 0.0;
-            for (ssize_t i = 0; i < eig_buf.size; ++i) {
-                const double ev = eig_ptr[i];
-                if (ev < -kWardTol) {
-                    neg_energy += -ev;
-                }
-                total_energy += std::abs(ev);
-            }
-            if (total_energy > 0.0) {
-                out.neg_energy_ratio = neg_energy / total_energy;
-                if (out.neg_energy_ratio > kWardViolationThreshold) {
-                    out.compatible = false;
-                    return out;
-                }
-            }
-        } catch (const py::error_already_set&) {
-            // Keep compatibility as-is if eig computation fails, same as Python behavior.
-        }
-    }
-
-    out.compatible = true;
-    return out;
-}
-
-}  // namespace
 
 PYBIND11_MODULE(clustering_c_code, m) {
     // =========================================================================
@@ -825,7 +420,8 @@ PYBIND11_MODULE(clustering_c_code, m) {
                                         bool enforce_symmetry,
                                         double rtol,
                                         double atol,
-                                        double replacement_quantile) -> py::dict {
+                                        double replacement_quantile,
+                                        bool include_full_matrix) -> py::dict {
         auto in_buf = matrix.request();
         if (in_buf.ndim != 2 || in_buf.shape[0] != in_buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be square");
@@ -836,16 +432,12 @@ PYBIND11_MODULE(clustering_c_code, m) {
             in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
         );
 
-        auto full = py::array_t<double>({n, n});
-        auto* full_ptr = static_cast<double*>(full.request().ptr);
-        std::copy(prep.full.begin(), prep.full.end(), full_ptr);
-
-        auto condensed = py::array_t<double>(n * (n - 1) / 2);
-        auto* cond_ptr = static_cast<double*>(condensed.request().ptr);
-        std::copy(prep.condensed.begin(), prep.condensed.end(), cond_ptr);
+        auto condensed = vector_to_pyarray_1d(std::move(prep.condensed));
 
         py::dict result;
-        result["full_matrix"] = full;
+        if (include_full_matrix) {
+            result["full_matrix"] = vector_to_pyarray_2d(std::move(prep.full), n, n);
+        }
         result["condensed_matrix"] = condensed;
         result["had_nonfinite"] = prep.had_nonfinite;
         result["had_negative"] = prep.had_negative;
@@ -859,6 +451,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
     py::arg("rtol") = 1e-5,
     py::arg("atol") = 1e-8,
     py::arg("replacement_quantile") = 0.95,
+    py::arg("include_full_matrix") = true,
     "Clean/validate/symmetrize square distance matrix and return condensed form.");
 
     m.def("check_euclidean_compatibility", [](py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
@@ -884,7 +477,9 @@ PYBIND11_MODULE(clustering_c_code, m) {
                                                        bool enforce_symmetry,
                                                        double rtol,
                                                        double atol,
-                                                       double replacement_quantile) -> py::dict {
+                                                       double replacement_quantile,
+                                                       bool include_full_matrix,
+                                                       bool run_ward_check) -> py::dict {
         auto in_buf = matrix.request();
         if (in_buf.ndim != 2 || in_buf.shape[0] != in_buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be square");
@@ -895,34 +490,38 @@ PYBIND11_MODULE(clustering_c_code, m) {
         PreparedMatrixData prep = prepare_distance_matrix_impl(
             in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
         );
-        EuclideanCheckResult eu = check_euclidean_compatibility_impl(
-            prep.full.data(), n, method
-        );
+        EuclideanCheckResult eu;
+        if (run_ward_check) {
+            eu = check_euclidean_compatibility_impl(prep.full.data(), n, method);
+        }
 
-        auto full = py::array_t<double>({n, n});
-        auto* full_ptr = static_cast<double*>(full.request().ptr);
-        std::copy(prep.full.begin(), prep.full.end(), full_ptr);
-
-        auto condensed = py::array_t<double>(n * (n - 1) / 2);
-        auto* cond_ptr = static_cast<double*>(condensed.request().ptr);
-        std::copy(prep.condensed.begin(), prep.condensed.end(), cond_ptr);
+        auto condensed = vector_to_pyarray_1d(std::move(prep.condensed));
 
         py::dict result;
-        result["full_matrix"] = full;
+        if (include_full_matrix) {
+            result["full_matrix"] = vector_to_pyarray_2d(std::move(prep.full), n, n);
+        }
         result["condensed_matrix"] = condensed;
         result["had_nonfinite"] = prep.had_nonfinite;
         result["had_negative"] = prep.had_negative;
         result["was_symmetrized"] = prep.was_symmetrized;
         result["replacement_value"] = prep.replacement_value;
         int warning_flags = prep.warning_flags;
-        if (!eu.compatible && (method == "ward" || method == "ward_d" || method == "ward_d2")) {
+        if (run_ward_check && !eu.compatible && (method == "ward" || method == "ward_d" || method == "ward_d2")) {
             warning_flags |= WARN_WARD_NON_EUCLIDEAN;
         }
         result["warning_flags"] = warning_flags;
-        result["compatible"] = eu.compatible;
-        result["violation_rate"] = eu.violation_rate;
-        result["neg_energy_ratio"] = eu.neg_energy_ratio;
-        result["sample_n"] = eu.sample_n;
+        if (run_ward_check) {
+            result["compatible"] = py::bool_(eu.compatible);
+            result["violation_rate"] = py::float_(eu.violation_rate);
+            result["neg_energy_ratio"] = py::float_(eu.neg_energy_ratio);
+            result["sample_n"] = py::int_(eu.sample_n);
+        } else {
+            result["compatible"] = py::none();
+            result["violation_rate"] = py::none();
+            result["neg_energy_ratio"] = py::none();
+            result["sample_n"] = py::none();
+        }
         return result;
     },
     py::arg("matrix"),
@@ -931,6 +530,8 @@ PYBIND11_MODULE(clustering_c_code, m) {
     py::arg("rtol") = 1e-5,
     py::arg("atol") = 1e-8,
     py::arg("replacement_quantile") = 0.95,
+    py::arg("include_full_matrix") = true,
+    py::arg("run_ward_check") = true,
     "Prepare distance matrix and run Ward Euclidean-compatibility check in one call.");
     };
     register_distance_prep_apis();

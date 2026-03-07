@@ -335,7 +335,12 @@ def _clean_distance_matrix(matrix):
     return matrix
 
 
-def _prepare_distance_matrix_for_linkage(matrix, method=None):
+def _prepare_distance_matrix_for_linkage(
+    matrix,
+    method=None,
+    include_full_matrix=True,
+    run_ward_check=True,
+):
     """
     Prepare square-form distance matrix for hierarchical linkage.
     Returns: (full_matrix, condensed_matrix, was_symmetrized, euclidean_compatible_or_none, warning_flags)
@@ -365,19 +370,27 @@ def _prepare_distance_matrix_for_linkage(matrix, method=None):
             1e-5,
             1e-8,
             0.95,
+            bool(include_full_matrix),
+            bool(run_ward_check),
         )
-        full_matrix = np.asarray(result["full_matrix"], dtype=np.float64)
+        full_matrix = (
+            np.asarray(result["full_matrix"], dtype=np.float64)
+            if include_full_matrix and "full_matrix" in result
+            else None
+        )
         condensed_matrix = np.asarray(result["condensed_matrix"], dtype=np.float64)
 
         warning_flags = int(result.get("warning_flags", 0)) | (_WARN_NONFINITE if had_nonfinite_py else 0)
         if warning_flags & _WARN_NEGATIVE:
             print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
+        compatible = result.get("compatible", True)
+        compatible = None if compatible is None else bool(compatible)
 
         return (
             full_matrix,
             condensed_matrix,
             bool(result.get("was_symmetrized", False)),
-            bool(result.get("compatible", True)),
+            compatible,
             warning_flags,
         )
 
@@ -405,8 +418,13 @@ def _prepare_distance_matrix_for_linkage(matrix, method=None):
             1e-5,   # rtol
             1e-8,   # atol
             0.95,   # replacement_quantile
+            bool(include_full_matrix),
         )
-        full_matrix = np.asarray(result["full_matrix"], dtype=np.float64)
+        full_matrix = (
+            np.asarray(result["full_matrix"], dtype=np.float64)
+            if include_full_matrix and "full_matrix" in result
+            else None
+        )
         condensed_matrix = np.asarray(result["condensed_matrix"], dtype=np.float64)
 
         warning_flags = int(result.get("warning_flags", 0)) | (_WARN_NONFINITE if had_nonfinite_py else 0)
@@ -414,18 +432,18 @@ def _prepare_distance_matrix_for_linkage(matrix, method=None):
             print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
 
         return full_matrix, condensed_matrix, bool(result.get("was_symmetrized", False)), None, warning_flags
-    full_matrix = _clean_distance_matrix(matrix)
-    n = full_matrix.shape[0]
+    full_matrix_work = _clean_distance_matrix(matrix)
+    n = full_matrix_work.shape[0]
     triu_i, triu_j = np.triu_indices(n, k=1)
     was_symmetrized = not np.allclose(
-        full_matrix[triu_i, triu_j],
-        full_matrix[triu_j, triu_i],
+        full_matrix_work[triu_i, triu_j],
+        full_matrix_work[triu_j, triu_i],
         rtol=1e-5,
         atol=1e-8,
     )
     if was_symmetrized:
-        full_matrix = (full_matrix + full_matrix.T) / 2
-    condensed_matrix = squareform(full_matrix)
+        full_matrix_work = (full_matrix_work + full_matrix_work.T) / 2
+    condensed_matrix = squareform(full_matrix_work)
     warning_flags = 0
     if np.any(~np.isfinite(np.asarray(matrix))):
         warning_flags |= _WARN_NONFINITE
@@ -433,7 +451,9 @@ def _prepare_distance_matrix_for_linkage(matrix, method=None):
         warning_flags |= _WARN_NEGATIVE
     if was_symmetrized:
         warning_flags |= _WARN_SYMMETRIZED
-    return full_matrix, condensed_matrix, was_symmetrized, None, warning_flags
+    full_matrix_out = full_matrix_work if include_full_matrix else None
+    compatible = _check_euclidean_compatibility(full_matrix_work, method) if run_ward_check else None
+    return full_matrix_out, condensed_matrix, was_symmetrized, compatible, warning_flags
 
 class Cluster:
     def __init__(self,
@@ -441,7 +461,8 @@ class Cluster:
                  entity_ids=None,
                  clustering_method="ward",
                  weights=None,
-                 X_features=None):
+                 X_features=None,
+                 fast_path=False):
         """
         A class to handle hierarchical clustering operations using fastcluster for improved performance.
 
@@ -460,8 +481,11 @@ class Cluster:
             with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)), same as
             sklearn/TanaT. If both matrix and X_features are provided, X_features takes precedence for
             Ward methods.
+        :param fast_path: If True, skips Ward compatibility checking and avoids returning full_matrix
+            during C++ preprocessing to reduce memory traffic. Default False (strict path).
         """
         self.clustering_method = clustering_method.lower()
+        self.fast_path = bool(fast_path)
 
         # Supported clustering methods
         supported_methods = ["ward", "ward_d", "ward_d2", "single", "complete", "average", "centroid", "median"]
@@ -548,6 +572,8 @@ class Cluster:
         """Full distance matrix. Lazy-computed from X_features when using linkage_vector path."""
         if self._full_matrix is None and self._X_features is not None:
             self._full_matrix = squareform(pdist(self._X_features, "euclidean"))
+        elif self._full_matrix is None and self.condensed_matrix is not None:
+            self._full_matrix = squareform(self.condensed_matrix)
         return self._full_matrix
 
     @full_matrix.setter
@@ -578,6 +604,8 @@ class Cluster:
         ) = _prepare_distance_matrix_for_linkage(
             self._full_matrix,
             self.clustering_method,
+            include_full_matrix=not self.fast_path,
+            run_ward_check=not self.fast_path,
         )
         if was_symmetrized:
             print("[!] Warning: Distance matrix is not symmetric.")
@@ -586,12 +614,13 @@ class Cluster:
             print("    If this is not appropriate for your data, please provide a symmetric matrix.")
 
         # Check Ward compatibility and issue one-time warning if needed
-        _warn_ward_usage_once(
-            self.full_matrix,
-            self.clustering_method,
-            euclidean_compatible=euclidean_compatible,
-            warning_flags=warning_flags,
-        )
+        if not self.fast_path:
+            _warn_ward_usage_once(
+                self.full_matrix,
+                self.clustering_method,
+                euclidean_compatible=euclidean_compatible,
+                warning_flags=warning_flags,
+            )
 
         # Map our method names to fastcluster's expected method names
         fastcluster_method = self._map_method_name(self.clustering_method)
@@ -679,6 +708,60 @@ class Cluster:
         if self.linkage_matrix is None:
             raise ValueError("Linkage matrix is not computed.")
         return _cutree_maxclust(self.linkage_matrix, num_clusters)
+
+
+def ward_labels_only(
+    num_clusters,
+    matrix=None,
+    X_features=None,
+    entity_ids=None,
+    ward_variant="ward_d2",
+    fast_path=True,
+    early_stop=False,
+):
+    """
+    Labels-only API for Ward clustering.
+
+    Default path uses Sequenzo's Cluster with optional fast_path.
+    When early_stop=True and X_features is provided, uses sklearn's
+    AgglomerativeClustering(compute_full_tree=False) for early stopping.
+    """
+    if num_clusters < 1:
+        raise ValueError("num_clusters must be >= 1")
+
+    if early_stop:
+        if X_features is None:
+            raise ValueError("early_stop=True requires X_features input.")
+        from sklearn.cluster import AgglomerativeClustering
+
+        X = np.asarray(X_features, dtype=np.float64)
+        ac = AgglomerativeClustering(
+            n_clusters=int(num_clusters),
+            linkage="ward",
+            metric="euclidean",
+            compute_full_tree=False,
+        )
+        labels = ac.fit_predict(X) + 1  # Keep Sequenzo's 1-based label convention.
+        return labels.astype(np.int32)
+
+    if X_features is None and matrix is None:
+        raise ValueError("Provide either matrix or X_features.")
+
+    if X_features is not None:
+        n = np.asarray(X_features).shape[0]
+    else:
+        n = np.asarray(matrix).shape[0]
+    if entity_ids is None:
+        entity_ids = np.arange(n)
+
+    cluster = Cluster(
+        matrix=matrix,
+        entity_ids=entity_ids,
+        clustering_method=ward_variant,
+        X_features=X_features,
+        fast_path=bool(fast_path),
+    )
+    return cluster.get_cluster_labels(num_clusters)
 
 
 class ClusterQuality:
