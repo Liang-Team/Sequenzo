@@ -19,6 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         include:
           # Linux 配置
@@ -93,6 +94,13 @@ jobs:
             macos-arch: 'arm64'
             macos-group: apple-silicon
 
+    env:
+      PIP_DEFAULT_TIMEOUT: "120"
+      PIP_RETRIES: "10"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout source with submodules
         uses: actions/checkout@v4
@@ -104,14 +112,155 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache pip (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('pyproject.toml', 'setup.py', 'setup.cfg', '.github/workflows/python-app.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-pip-
+            ${{ runner.os }}-pip-
+
+      - name: Cache pip (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/pip
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('pyproject.toml', 'setup.py', 'setup.cfg', '.github/workflows/python-app.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-pip-
+            ${{ runner.os }}-pip-
+
+      - name: Cache pip (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('pyproject.toml', 'setup.py', 'setup.cfg', '.github/workflows/python-app.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-pip-
+            ${{ runner.os }}-pip-
+
+      - name: Cache cibuildwheel virtualenv download (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypa/cibuildwheel/Cache
+            ~/.cache/cibuildwheel
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-cibw-${{ env.CIBW_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-cibw-
+            ${{ runner.os }}-cibw-
+
+      - name: Cache cibuildwheel virtualenv download (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pypa/cibuildwheel/Cache
+            ~/Library/Caches/cibuildwheel
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-cibw-${{ env.CIBW_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-cibw-
+            ${{ runner.os }}-cibw-
+
+      - name: Cache cibuildwheel virtualenv download (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pypa\cibuildwheel\Cache
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-cibw-${{ env.CIBW_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-cibw-
+            ${{ runner.os }}-cibw-
+
+      - name: Warm cibuildwheel virtualenv cache with retry
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          import sys
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          version = "20.30.0"
+          url = f"https://github.com/pypa/get-virtualenv/blob/{version}/public/virtualenv.pyz?raw=true"
+          filename = f"virtualenv-{version}.pyz"
+          home = Path.home()
+
+          candidates = []
+          if os.name == "nt":
+              local_appdata = os.environ.get("LOCALAPPDATA")
+              if local_appdata:
+                  candidates.append(Path(local_appdata) / "pypa" / "cibuildwheel" / "Cache" / filename)
+              candidates.append(home / "AppData" / "Local" / "pypa" / "cibuildwheel" / "Cache" / filename)
+          elif sys.platform == "darwin":
+              candidates.append(home / "Library" / "Caches" / "pypa" / "cibuildwheel" / "Cache" / filename)
+              candidates.append(home / "Library" / "Caches" / "cibuildwheel" / filename)
+          else:
+              candidates.append(home / ".cache" / "pypa" / "cibuildwheel" / "Cache" / filename)
+              candidates.append(home / ".cache" / "cibuildwheel" / filename)
+
+          existing = next((p for p in candidates if p.exists()), None)
+          if existing:
+              print(f"[cache-hit] {existing}")
+              sys.exit(0)
+
+          tmp_file = Path.cwd() / filename
+          for attempt in range(1, 6):
+              try:
+                  print(f"[download] attempt {attempt}/5: {url}")
+                  with urllib.request.urlopen(url, timeout=120) as response:
+                      data = response.read()
+                  tmp_file.write_bytes(data)
+                  print(f"[download] completed, size={len(data)} bytes")
+                  break
+              except Exception as exc:
+                  if attempt == 5:
+                      raise
+                  sleep_s = attempt * 20
+                  print(f"[download] failed: {exc}. retry in {sleep_s}s")
+                  time.sleep(sleep_s)
+
+          for path in candidates:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(tmp_file, path)
+              print(f"[cache-write] {path}")
+
+          tmp_file.unlink(missing_ok=True)
+          PY
+        shell: bash
+
       - name: Ensure setuptools/wheel for macOS
         if: runner.os == 'macOS'
-        run: python -m pip install --upgrade pip setuptools wheel "cibuildwheel==${CIBW_VERSION}"
+        run: python -m pip install --upgrade --retries 10 --timeout 120 pip setuptools wheel "cibuildwheel==${CIBW_VERSION}"
 
       # Add OpenMP support
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
         run: |
+          install_libomp_with_retry() {
+            local brew_cmd="$1"
+            if $brew_cmd list libomp >/dev/null 2>&1; then
+              echo "libomp already installed"
+              return 0
+            fi
+            for attempt in 1 2 3; do
+              if $brew_cmd install libomp; then
+                return 0
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                local sleep_seconds=$((attempt * 30))
+                echo "brew install libomp failed, retrying in ${sleep_seconds}s..."
+                sleep "$sleep_seconds"
+              fi
+            done
+            return 1
+          }
+
           # 检测架构并设置正确的 Homebrew 命令
           if [ "${{ matrix.macos-arch }}" == "x86_64" ]; then
             # Intel macOS - 强制使用 x86_64 架构安装
@@ -126,8 +275,27 @@ jobs:
                 echo 'x86_64 Homebrew already installed'
               fi
           
-              # 使用 x86_64 Homebrew 安装 libomp
-              /usr/local/bin/brew install libomp
+              # 使用 x86_64 Homebrew 安装 libomp（带重试）
+              if /usr/local/bin/brew list libomp >/dev/null 2>&1; then
+                echo 'libomp already installed'
+              else
+                success=0
+                for attempt in 1 2 3; do
+                  if /usr/local/bin/brew install libomp; then
+                    success=1
+                    break
+                  fi
+                  if [ \"\$attempt\" -lt 3 ]; then
+                    sleep_seconds=\$((attempt * 30))
+                    echo \"brew install libomp failed, retrying in \${sleep_seconds}s...\"
+                    sleep \"\$sleep_seconds\"
+                  fi
+                done
+                if [ \"\$success\" -ne 1 ]; then
+                  echo 'Failed to install libomp after 3 attempts'
+                  exit 1
+                fi
+              fi
           
               # 获取 libomp 路径
               LIBOMP_PREFIX=\$(/usr/local/bin/brew --prefix libomp)
@@ -140,7 +308,7 @@ jobs:
           else
             # Apple Silicon macOS - 使用原生架构
             echo "Installing native libomp on Apple Silicon macOS"
-            brew install libomp
+            install_libomp_with_retry brew
             LIBOMP_PREFIX=$(brew --prefix libomp)
             echo "Final LIBOMP_PREFIX for arm64: $LIBOMP_PREFIX"
           fi
@@ -189,11 +357,11 @@ jobs:
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel "cibuildwheel==${CIBW_VERSION}"
+          python -m pip install --upgrade --retries 10 --timeout 120 pip setuptools wheel "cibuildwheel==${CIBW_VERSION}"
           # Use oldest-supported-numpy for builds to ensure forward compatibility
-          pip install oldest-supported-numpy || pip install "numpy>=1.21.0"
-          pip install --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
-          pip install --prefer-binary Cython pybind11 build twine
+          pip install --retries 10 --timeout 120 oldest-supported-numpy || pip install --retries 10 --timeout 120 "numpy>=1.21.0"
+          pip install --retries 10 --timeout 120 --only-binary=all "scipy<1.16" || echo "scipy will be installed in cibuildwheel"
+          pip install --retries 10 --timeout 120 --prefer-binary Cython pybind11 build twine
         shell: bash
 
       - name: Clean before cibuildwheel
@@ -213,12 +381,12 @@ jobs:
       # 修复 NumPy 2.0 和 pybind11 兼容性问题
       - name: Install dependencies with NumPy 2.0 compatibility
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade --retries 10 --timeout 120 pip setuptools wheel
            
           # 为 Python 3.12 特别处理 NumPy 兼容性
           if [ "${{ matrix.python-version }}" == "3.12" ]; then
             echo "Installing NumPy 2.0 compatible dependencies for Python 3.12"
-            pip install "numpy>=2.0.0" "pybind11>=2.12.0"
+            pip install --retries 10 --timeout 120 "numpy>=2.0.0" "pybind11>=2.12.0"
           fi
         shell: bash
 
