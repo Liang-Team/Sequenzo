@@ -184,6 +184,7 @@ pip install .  # Uses pyproject.toml
 * [Yuqi Liang, University of Oxford](https://www.yuqi-liang.tech/)
 * [Xinyi Li, Northeastern University](https://github.com/Fantasy201)
 * [Jan Heinrich Ernst Meyerhoff-Liang, Institute for New Economic Thinking Oxford](https://www.linkedin.com/in/jan-meyerhoff-liang-97999a170/)
+* Yapeng Wei, Oxford Internet Institute
 
 **Package Contributors**
 
@@ -203,6 +204,7 @@ Others
 * Website and related technical support: [Mactavish](https://github.com/mactavishz)
 * Sequence data sources compilation - History: Jingrui Chen
 * Visual design consultant: Changyu Yi
+* Assistance with early-stage performance testing of Sequenzo: Qian Wang, Ruxin Xue, Min Zhao, Tia (Qi Dai)
 
 **Acknowledgements**
 
