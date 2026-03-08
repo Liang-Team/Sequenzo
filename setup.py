@@ -41,6 +41,7 @@ import numpy
 import os
 import sys
 import subprocess
+import shutil
 from glob import glob
 import tempfile
 import importlib.util
@@ -691,7 +692,60 @@ class BuildExt(build_ext):
     """
     Custom build_ext class with enhanced architecture and OpenMP reporting.
     """
+    @staticmethod
+    def _sanitize_windows_path_and_fix_linker(compiler):
+        """Ensure MSVC link.exe is used instead of Git's /usr/bin/link.exe."""
+        if sys.platform != 'win32':
+            return
+
+        # 1) Remove Git usr/bin from PATH to avoid resolving GNU link.exe
+        old_path = os.environ.get("PATH", "")
+        path_parts = [p for p in old_path.split(";") if p]
+        filtered_parts = [
+            p for p in path_parts
+            if "\\git\\usr\\bin" not in p.replace("/", "\\").lower()
+        ]
+        if len(filtered_parts) != len(path_parts):
+            os.environ["PATH"] = ";".join(filtered_parts)
+            print("[SETUP] Removed Git usr/bin from PATH for Windows linker safety")
+
+        # 2) Prefer a non-Git link.exe discovered by `where link`
+        msvc_link = None
+        try:
+            where_out = subprocess.check_output(["where", "link"], text=True, stderr=subprocess.STDOUT)
+            candidates = [line.strip() for line in where_out.splitlines() if line.strip()]
+            for candidate in candidates:
+                lowered = candidate.replace("/", "\\").lower()
+                if "\\git\\usr\\bin\\link.exe" in lowered:
+                    continue
+                if candidate.lower().endswith("\\link.exe") and os.path.exists(candidate):
+                    msvc_link = candidate
+                    break
+        except Exception as exc:
+            print(f"[SETUP] Warning: failed to inspect linker candidates via where: {exc}")
+
+        # 3) Fallback: use current PATH resolution if it's not Git link.exe
+        if not msvc_link:
+            resolved = shutil.which("link.exe")
+            if resolved and "\\git\\usr\\bin\\link.exe" not in resolved.replace("/", "\\").lower():
+                msvc_link = resolved
+
+        if not msvc_link:
+            print("[SETUP] Warning: could not pin MSVC link.exe explicitly; using compiler defaults")
+            return
+
+        # 4) Force distutils/setuptools linker executables to the pinned MSVC linker
+        try:
+            compiler.set_executable("linker_so", [msvc_link])
+            compiler.set_executable("linker_exe", [msvc_link])
+            print(f"[SETUP] Using pinned MSVC linker: {msvc_link}")
+        except Exception as exc:
+            print(f"[SETUP] Warning: unable to set linker executable explicitly: {exc}")
+
     def build_extensions(self):
+        if sys.platform == 'win32':
+            self._sanitize_windows_path_and_fix_linker(self.compiler)
+
         if sys.platform == 'darwin':
             arch = get_mac_arch()
             if isinstance(arch, list):
