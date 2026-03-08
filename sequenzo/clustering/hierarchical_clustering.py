@@ -363,16 +363,19 @@ def _prepare_distance_matrix_for_linkage(
             matrix_cpp = matrix_cpp.copy()
             matrix_cpp[~np.isfinite(matrix_cpp)] = replacement_val
 
-        result = clustering_c_code.prepare_distance_matrix_and_check_ward(
-            matrix_cpp,
-            method.lower(),
-            True,
-            1e-5,
-            1e-8,
-            0.95,
-            bool(include_full_matrix),
-            bool(run_ward_check),
-        )
+        # Guard numerical warnings from internal heuristic Ward compatibility checks.
+        # The compatibility decision is still returned via `result["compatible"]`.
+        with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+            result = clustering_c_code.prepare_distance_matrix_and_check_ward(
+                matrix_cpp,
+                method.lower(),
+                True,
+                1e-5,
+                1e-8,
+                0.95,
+                bool(include_full_matrix),
+                bool(run_ward_check),
+            )
         full_matrix = (
             np.asarray(result["full_matrix"], dtype=np.float64)
             if include_full_matrix and "full_matrix" in result

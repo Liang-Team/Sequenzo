@@ -223,10 +223,26 @@ EuclideanCheckResult check_euclidean_compatibility_impl(
 
     if (s <= kEigenCheckCap) {
         try {
+            // Normalize sampled distances before squaring to avoid overflow/invalid
+            // in NumPy matmul for very large but finite distance values.
+            std::vector<double> sample_for_eigen = sample;
+            double max_abs_sample = 0.0;
+            for (double v : sample_for_eigen) {
+                if (is_finite_ieee(v)) {
+                    max_abs_sample = std::max(max_abs_sample, std::abs(v));
+                }
+            }
+            if (max_abs_sample > 0.0) {
+                const double inv_scale = 1.0 / max_abs_sample;
+                for (double& v : sample_for_eigen) {
+                    v *= inv_scale;
+                }
+            }
+
             auto sample_arr = py::array_t<double>({s, s});
             auto sample_buf = sample_arr.request();
             auto* sample_ptr = static_cast<double*>(sample_buf.ptr);
-            std::copy(sample.begin(), sample.end(), sample_ptr);
+            std::copy(sample_for_eigen.begin(), sample_for_eigen.end(), sample_ptr);
 
             py::module_ np = py::module_::import("numpy");
             py::module_ linalg = py::module_::import("numpy.linalg");
