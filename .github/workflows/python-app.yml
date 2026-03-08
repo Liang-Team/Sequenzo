@@ -1018,6 +1018,13 @@ jobs:
           done
         shell: bash
 
+      - name: Set up Python for wheel verification
+        uses: actions/setup-python@v4
+        with:
+          # cibuildwheel is driven by Python 3.11, but wheel install/import
+          # checks must run on the target interpreter for this matrix entry.
+          python-version: ${{ matrix.python-version }}
+
       - name: Verify OpenMP Support
         run: |
           echo "=== Verifying built wheels ==="
@@ -1051,10 +1058,16 @@ jobs:
         run: |
           echo "=== Verifying built cython modules in wheel ==="
 
-          # 安装轮子
-          WHEEL_FILE=$(ls dist/*.whl | head -1)
+          # 安装与当前 matrix Python 版本匹配的轮子
+          py_tag="cp${{ matrix.python-version-nodot }}"
+          WHEEL_FILE=$(ls dist/*.whl | grep "$py_tag" | head -1 || true)
+          if [ -z "$WHEEL_FILE" ]; then
+            echo "No wheel matches tag $py_tag in dist/"
+            ls -la dist/
+            exit 1
+          fi
           echo "Installing wheel: $WHEEL_FILE"
-          pip install --force-reinstall "$WHEEL_FILE"
+          python -m pip install --force-reinstall "$WHEEL_FILE"
 
           # 检查安装的模块 - 使用 ASCII 字符
           echo "=== Checking installed modules ==="
