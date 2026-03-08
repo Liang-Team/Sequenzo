@@ -335,7 +335,8 @@ class SequenceData:
                 f"    Missing values (NaN or user-specified) are automatically handled, but all other data values must be in 'states'."
             )
 
-        # Validate that no extra states are in the list (every state must appear in data or be a missing indicator)
+        # Allow provided states to be a superset of observed data states.
+        # This is useful for keeping a stable state space across subsets/batches.
         states_not_in_data = [
             s for s in states_clean_normalized
             if s not in data_values_no_nan and s not in missing_indicators
@@ -344,12 +345,10 @@ class SequenceData:
             data_values_display = sorted([v for v in data_values_no_nan if not pd.isna(v)])
             if has_nan_in_data:
                 data_values_display.append("NaN")
-            raise ValueError(
-                f"[!] The following 'states' are not found in your data: {states_not_in_data}\n"
-                f"    Your provided states: {self.states}\n"
-                f"    Unique values actually in data: {data_values_display}\n"
-                f"    Hint: Only list states that appear in the data (or Missing/NaN if you use them).\n"
-                f"    Remove extra states (e.g. {states_not_in_data}) so that 'states' matches the data."
+            print(
+                f"[i] Note: Some provided states are not observed in this dataset: {states_not_in_data}\n"
+                f"    Provided states are allowed to be a superset of observed values.\n"
+                f"    Unique values actually in data: {data_values_display}"
             )
 
         # ----------------
