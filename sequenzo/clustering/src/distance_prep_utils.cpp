@@ -51,7 +51,7 @@ bool is_finite_ieee(double x) {
 
 PreparedMatrixData prepare_distance_matrix_impl(
     const double* in_ptr,
-    ssize_t n,
+    py::ssize_t n,
     bool enforce_symmetry,
     double rtol,
     double atol,
@@ -59,7 +59,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 ) {
     PreparedMatrixData out;
     out.n = n;
-    const ssize_t nn = n * n;
+    const py::ssize_t nn = n * n;
     out.full.resize(static_cast<size_t>(nn));
 
     int had_nonfinite_flag = 0;
@@ -67,7 +67,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 #ifdef _OPENMP
 #pragma omp parallel for reduction(|:had_nonfinite_flag,had_negative_flag) if(nn > 4096)
 #endif
-    for (ssize_t i = 0; i < nn; ++i) {
+    for (py::ssize_t i = 0; i < nn; ++i) {
         const double v = in_ptr[static_cast<size_t>(i)];
         out.full[static_cast<size_t>(i)] = v;
         if (!is_finite_ieee(v)) {
@@ -83,7 +83,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
         out.warning_flags |= WARN_NONFINITE;
         std::vector<double> finite_vals;
         finite_vals.reserve(static_cast<size_t>(nn));
-        for (ssize_t i = 0; i < nn; ++i) {
+        for (py::ssize_t i = 0; i < nn; ++i) {
             const double v = out.full[static_cast<size_t>(i)];
             if (is_finite_ieee(v)) {
                 finite_vals.push_back(v);
@@ -97,14 +97,14 @@ PreparedMatrixData prepare_distance_matrix_impl(
 #ifdef _OPENMP
 #pragma omp parallel for if(nn > 4096)
 #endif
-        for (ssize_t i = 0; i < nn; ++i) {
+        for (py::ssize_t i = 0; i < nn; ++i) {
             if (!is_finite_ieee(out.full[static_cast<size_t>(i)])) {
                 out.full[static_cast<size_t>(i)] = out.replacement_value;
             }
         }
     }
 
-    for (ssize_t i = 0; i < n; ++i) {
+    for (py::ssize_t i = 0; i < n; ++i) {
         out.full[static_cast<size_t>(i * n + i)] = 0.0;
     }
     if (out.had_negative) {
@@ -112,7 +112,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 #ifdef _OPENMP
 #pragma omp parallel for if(nn > 4096)
 #endif
-        for (ssize_t i = 0; i < nn; ++i) {
+        for (py::ssize_t i = 0; i < nn; ++i) {
             if (out.full[static_cast<size_t>(i)] < 0.0) {
                 out.full[static_cast<size_t>(i)] = 0.0;
             }
@@ -121,8 +121,8 @@ PreparedMatrixData prepare_distance_matrix_impl(
 
     if (enforce_symmetry) {
         bool is_symmetric = true;
-        for (ssize_t i = 0; i < n && is_symmetric; ++i) {
-            for (ssize_t j = i + 1; j < n; ++j) {
+        for (py::ssize_t i = 0; i < n && is_symmetric; ++i) {
+            for (py::ssize_t j = i + 1; j < n; ++j) {
                 const double a = out.full[static_cast<size_t>(i * n + j)];
                 const double b = out.full[static_cast<size_t>(j * n + i)];
                 const double tol = atol + rtol * std::abs(b);
@@ -135,8 +135,8 @@ PreparedMatrixData prepare_distance_matrix_impl(
         if (!is_symmetric) {
             out.was_symmetrized = true;
             out.warning_flags |= WARN_SYMMETRIZED;
-            for (ssize_t i = 0; i < n; ++i) {
-                for (ssize_t j = i + 1; j < n; ++j) {
+            for (py::ssize_t i = 0; i < n; ++i) {
+                for (py::ssize_t j = i + 1; j < n; ++j) {
                     const double avg = 0.5 * (
                         out.full[static_cast<size_t>(i * n + j)] +
                         out.full[static_cast<size_t>(j * n + i)]
@@ -148,15 +148,15 @@ PreparedMatrixData prepare_distance_matrix_impl(
         }
     }
 
-    const ssize_t condensed_size = n * (n - 1) / 2;
+    const py::ssize_t condensed_size = n * (n - 1) / 2;
     out.condensed.resize(static_cast<size_t>(condensed_size));
 #ifdef _OPENMP
 #pragma omp parallel for if(n > 256)
 #endif
-    for (ssize_t i = 0; i < n; ++i) {
-        const ssize_t start = (i * (2 * n - i - 1)) / 2;
-        for (ssize_t j = i + 1; j < n; ++j) {
-            const ssize_t local = j - i - 1;
+    for (py::ssize_t i = 0; i < n; ++i) {
+        const py::ssize_t start = (i * (2 * n - i - 1)) / 2;
+        for (py::ssize_t j = i + 1; j < n; ++j) {
+            const py::ssize_t local = j - i - 1;
             out.condensed[static_cast<size_t>(start + local)] =
                 out.full[static_cast<size_t>(i * n + j)];
         }
@@ -166,7 +166,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 
 EuclideanCheckResult check_euclidean_compatibility_impl(
     const double* matrix_ptr,
-    ssize_t n,
+    py::ssize_t n,
     const std::string& method
 ) {
     EuclideanCheckResult out;
@@ -176,7 +176,7 @@ EuclideanCheckResult check_euclidean_compatibility_impl(
         return out;
     }
 
-    const int sample_size = static_cast<int>(std::min<ssize_t>(kWardSampleCap, n));
+    const int sample_size = static_cast<int>(std::min<py::ssize_t>(kWardSampleCap, n));
     std::vector<int> indices(static_cast<size_t>(n));
     std::iota(indices.begin(), indices.end(), 0);
     if (n > sample_size) {
@@ -239,7 +239,7 @@ EuclideanCheckResult check_euclidean_compatibility_impl(
 
             double neg_energy = 0.0;
             double total_energy = 0.0;
-            for (ssize_t i = 0; i < eig_buf.size; ++i) {
+            for (py::ssize_t i = 0; i < eig_buf.size; ++i) {
                 const double ev = eig_ptr[i];
                 if (ev < -kWardTol) {
                     neg_energy += -ev;
@@ -262,14 +262,14 @@ EuclideanCheckResult check_euclidean_compatibility_impl(
     return out;
 }
 
-py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, ssize_t rows, ssize_t cols) {
+py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, py::ssize_t rows, py::ssize_t cols) {
     auto* heap_vec = new std::vector<double>(std::move(data));
     py::capsule free_when_done(heap_vec, [](void* p) {
         delete reinterpret_cast<std::vector<double>*>(p);
     });
     return py::array_t<double>(
         {rows, cols},
-        {static_cast<ssize_t>(sizeof(double) * cols), static_cast<ssize_t>(sizeof(double))},
+        {static_cast<py::ssize_t>(sizeof(double) * cols), static_cast<py::ssize_t>(sizeof(double))},
         heap_vec->data(),
         free_when_done
     );
@@ -281,8 +281,8 @@ py::array_t<double> vector_to_pyarray_1d(std::vector<double>&& data) {
         delete reinterpret_cast<std::vector<double>*>(p);
     });
     return py::array_t<double>(
-        {static_cast<ssize_t>(heap_vec->size())},
-        {static_cast<ssize_t>(sizeof(double))},
+        {static_cast<py::ssize_t>(heap_vec->size())},
+        {static_cast<py::ssize_t>(sizeof(double))},
         heap_vec->data(),
         free_when_done
     );

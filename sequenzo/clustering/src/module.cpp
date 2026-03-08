@@ -377,7 +377,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         }
         std::sort(cluster_ids.begin(), cluster_ids.end());
 
-        const ssize_t m = static_cast<ssize_t>(cluster_ids.size());
+        const py::ssize_t m = static_cast<py::ssize_t>(cluster_ids.size());
         auto out_cluster = py::array_t<int>(m);
         auto out_count = py::array_t<int>(m);
         auto out_pct = py::array_t<double>(m);
@@ -390,7 +390,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         auto* weight_sum_ptr = static_cast<double*>(out_weight_sum.request().ptr);
         auto* weight_pct_ptr = static_cast<double*>(out_weight_pct.request().ptr);
 
-        for (ssize_t i = 0; i < m; ++i) {
+        for (py::ssize_t i = 0; i < m; ++i) {
             const int cid = cluster_ids[i];
             const int cnt = count_map[cid];
             const double wsum = weight_map[cid];
@@ -426,7 +426,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         if (in_buf.ndim != 2 || in_buf.shape[0] != in_buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be square");
         }
-        const ssize_t n = in_buf.shape[0];
+        const py::ssize_t n = in_buf.shape[0];
         auto* in_ptr = static_cast<double*>(in_buf.ptr);
         PreparedMatrixData prep = prepare_distance_matrix_impl(
             in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
@@ -460,7 +460,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         if (buf.ndim != 2 || buf.shape[0] != buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be square");
         }
-        const ssize_t n = buf.shape[0];
+        const py::ssize_t n = buf.shape[0];
         auto* ptr = static_cast<double*>(buf.ptr);
         EuclideanCheckResult r = check_euclidean_compatibility_impl(ptr, n, method);
 
@@ -484,7 +484,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         if (in_buf.ndim != 2 || in_buf.shape[0] != in_buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be square");
         }
-        const ssize_t n = in_buf.shape[0];
+        const py::ssize_t n = in_buf.shape[0];
         auto* in_ptr = static_cast<double*>(in_buf.ptr);
 
         PreparedMatrixData prep = prepare_distance_matrix_impl(
@@ -543,7 +543,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
     m.def("cluster_quality_summary", [](py::dict metric_values,
                                         py::list metric_order,
                                         int k_start) -> py::dict {
-        const ssize_t m = static_cast<ssize_t>(py::len(metric_order));
+        const py::ssize_t m = static_cast<py::ssize_t>(py::len(metric_order));
         auto opt_clusters = py::array_t<double>(m);
         auto raw_values = py::array_t<double>(m);
         auto z_values = py::array_t<double>(m);
@@ -551,7 +551,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         auto* raw_ptr = static_cast<double*>(raw_values.request().ptr);
         auto* z_ptr = static_cast<double*>(z_values.request().ptr);
 
-        for (ssize_t i = 0; i < m; ++i) {
+        for (py::ssize_t i = 0; i < m; ++i) {
             const std::string metric = py::cast<std::string>(metric_order[i]);
             if (!metric_values.contains(py::str(metric))) {
                 opt_ptr[i] = std::numeric_limits<double>::quiet_NaN();
@@ -565,15 +565,15 @@ PYBIND11_MODULE(clustering_c_code, m) {
             );
             auto buf = arr.request();
             auto* ptr = static_cast<double*>(buf.ptr);
-            const ssize_t n = buf.size;
+            const py::ssize_t n = buf.size;
 
             double sum = 0.0;
             double sumsq = 0.0;
-            ssize_t cnt = 0;
+            py::ssize_t cnt = 0;
             double best_val = -std::numeric_limits<double>::infinity();
-            ssize_t best_idx = -1;
+            py::ssize_t best_idx = -1;
 
-            for (ssize_t j = 0; j < n; ++j) {
+            for (py::ssize_t j = 0; j < n; ++j) {
                 const double v = ptr[j];
                 if (is_nan_ieee(v)) {
                     continue;
@@ -615,12 +615,12 @@ PYBIND11_MODULE(clustering_c_code, m) {
 
     m.def("cluster_quality_range_table", [](py::dict metric_values,
                                             py::list metric_order) -> py::dict {
-        const ssize_t n_metrics = static_cast<ssize_t>(py::len(metric_order));
-        ssize_t n_rows = -1;
+        const py::ssize_t n_metrics = static_cast<py::ssize_t>(py::len(metric_order));
+        py::ssize_t n_rows = -1;
         std::vector<py::array_t<double, py::array::c_style | py::array::forcecast>> arrays;
         arrays.reserve(static_cast<size_t>(n_metrics));
 
-        for (ssize_t i = 0; i < n_metrics; ++i) {
+        for (py::ssize_t i = 0; i < n_metrics; ++i) {
             const std::string metric = py::cast<std::string>(metric_order[i]);
             py::array_t<double, py::array::c_style | py::array::forcecast> arr;
             if (metric_values.contains(py::str(metric))) {
@@ -647,16 +647,16 @@ PYBIND11_MODULE(clustering_c_code, m) {
         auto* out_ptr = static_cast<double*>(values.request().ptr);
         const double nan = std::numeric_limits<double>::quiet_NaN();
 
-        for (ssize_t r = 0; r < n_rows; ++r) {
-            for (ssize_t c = 0; c < n_metrics; ++c) {
+        for (py::ssize_t r = 0; r < n_rows; ++r) {
+            for (py::ssize_t c = 0; c < n_metrics; ++c) {
                 out_ptr[r * n_metrics + c] = nan;
             }
         }
 
-        for (ssize_t c = 0; c < n_metrics; ++c) {
+        for (py::ssize_t c = 0; c < n_metrics; ++c) {
             auto buf = arrays[static_cast<size_t>(c)].request();
             auto* ptr = static_cast<double*>(buf.ptr);
-            for (ssize_t r = 0; r < n_rows; ++r) {
+            for (py::ssize_t r = 0; r < n_rows; ++r) {
                 out_ptr[r * n_metrics + c] = ptr[r];
             }
         }

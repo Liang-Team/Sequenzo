@@ -29,13 +29,13 @@ struct PreparedMatrixData {
     bool had_negative = false;
     bool was_symmetrized = false;
     double replacement_value = 0.0;
-    ssize_t n = 0;
+    py::ssize_t n = 0;
     int warning_flags = WARN_NONE;
 };
 
 PreparedMatrixData prepare_distance_matrix_impl(
     const double* in_ptr,
-    ssize_t n,
+    py::ssize_t n,
     bool enforce_symmetry,
     double rtol,
     double atol,
@@ -44,9 +44,9 @@ PreparedMatrixData prepare_distance_matrix_impl(
 
 EuclideanCheckResult check_euclidean_compatibility_impl(
     const double* matrix_ptr,
-    ssize_t n,
+    py::ssize_t n,
     const std::string& method
 );
 
-py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, ssize_t rows, ssize_t cols);
+py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, py::ssize_t rows, py::ssize_t cols);
 py::array_t<double> vector_to_pyarray_1d(std::vector<double>&& data);
