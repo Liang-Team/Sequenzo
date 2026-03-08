@@ -364,6 +364,20 @@ jobs:
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
           echo "Setting Python encoding to UTF-8 for Windows"
 
+      - name: Sanitize PATH for Windows linker resolution
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $parts = $env:PATH -split ';' | Where-Object {
+            $_ -and ($_ -notmatch '(?i)\\Git\\usr\\bin\\?$')
+          }
+          $cleanPath = $parts -join ';'
+          "PATH=$cleanPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $env:PATH = $cleanPath
+          Write-Host "Resolved cl/link after PATH cleanup:"
+          where.exe cl
+          where.exe link
+
       # Install dependencies with fallback strategy
       - name: Install dependencies
         run: |
