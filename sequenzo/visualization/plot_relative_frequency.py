@@ -352,12 +352,13 @@ def _cmdscale(D):
     scale = max_abs if max_abs > 0.0 else 1.0
     D_scaled = D / scale
 
-    # Step 1: Compute the centering matrix
-    H = np.eye(n) - np.ones((n, n)) / n
-
-    # Step 2: Compute the double centered distance matrix
-    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-        B = -0.5 * H @ (D_scaled ** 2) @ H
+    # Step 1-2: Double centering without explicit matrix multiplication.
+    # Equivalent to B = -0.5 * H @ (D^2) @ H, but numerically more stable.
+    D2 = D_scaled ** 2
+    row_mean = np.mean(D2, axis=1, keepdims=True)
+    col_mean = np.mean(D2, axis=0, keepdims=True)
+    total_mean = np.mean(D2)
+    B = -0.5 * (D2 - row_mean - col_mean + total_mean)
     B = 0.5 * (B + B.T)  # enforce symmetry for stable eigh
 
     # Step 3: Compute eigenvalues and eigenvectors
@@ -374,10 +375,10 @@ def _cmdscale(D):
     if w.size == 0:
         # Keep downstream shape assumptions valid (callers index [:, 0]).
         return np.zeros((n, 1), dtype=np.float64)
-    L = np.diag(np.sqrt(eigvals[w]))
     V = eigvecs[:, w]
-
-    return V @ L  # Return the MDS coordinates
+    sqrt_vals = np.sqrt(eigvals[w])
+    # Equivalent to V @ diag(sqrt_vals), avoids extra matmul warnings.
+    return V * sqrt_vals[np.newaxis, :]  # Return the MDS coordinates
 
 
 def _compute_group_medoid(distance_matrix: np.ndarray, group_indices: np.ndarray, weights: np.ndarray = None) -> int:
