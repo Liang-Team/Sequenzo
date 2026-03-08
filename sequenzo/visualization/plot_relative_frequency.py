@@ -328,13 +328,37 @@ def _cmdscale(D):
     :param D: A NxN symmetric distance matrix
     :return: Y, a Nxd coordinate matrix, where d is the largest positive eigenvalues' count
     """
-    n = len(D)
+    D = np.asarray(D, dtype=np.float64)
+    if D.ndim != 2 or D.shape[0] != D.shape[1]:
+        raise ValueError("D must be a square distance matrix.")
+    n = D.shape[0]
+
+    # Numerical-stability guard:
+    # 1) enforce symmetry/zero diagonal,
+    # 2) sanitize non-finite values,
+    # 3) scale distances before squaring to avoid overflow in matmul.
+    D = 0.5 * (D + D.T)
+    np.fill_diagonal(D, 0.0)
+    finite_mask = np.isfinite(D)
+    if not np.all(finite_mask):
+        finite_vals = D[finite_mask]
+        replacement = np.max(np.abs(finite_vals)) if finite_vals.size > 0 else 1.0
+        D = np.where(finite_mask, D, replacement)
+        D = np.maximum(D, 0.0)
+    else:
+        D = np.maximum(D, 0.0)
+
+    max_abs = np.max(np.abs(D)) if D.size > 0 else 0.0
+    scale = max_abs if max_abs > 0.0 else 1.0
+    D_scaled = D / scale
 
     # Step 1: Compute the centering matrix
     H = np.eye(n) - np.ones((n, n)) / n
 
     # Step 2: Compute the double centered distance matrix
-    B = -0.5 * H @ (D ** 2) @ H
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+        B = -0.5 * H @ (D_scaled ** 2) @ H
+    B = 0.5 * (B + B.T)  # enforce symmetry for stable eigh
 
     # Step 3: Compute eigenvalues and eigenvectors
     eigvals, eigvecs = np.linalg.eigh(B)
@@ -344,9 +368,12 @@ def _cmdscale(D):
     eigvals = eigvals[idx]
     eigvecs = eigvecs[:, idx]
 
-    # Step 5: Select only positive eigenvalues
-    w, = np.where(eigvals > 0)
-    L = np.diag(np.sqrt(eigvals[w]))
+    # Step 5: Select only finite positive eigenvalues
+    eps = np.finfo(np.float64).eps
+    w, = np.where(np.isfinite(eigvals) & (eigvals > eps))
+    if w.size == 0:
+        # Keep downstream shape assumptions valid (callers index [:, 0]).
+        return np.zeros((n, 1), dtype=np.float64)
     L = np.diag(np.sqrt(eigvals[w]))
     V = eigvecs[:, w]
 
