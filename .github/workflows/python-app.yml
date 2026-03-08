@@ -19,7 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         include:
           # Linux 配置
@@ -627,8 +627,14 @@ jobs:
           CIBW_BEFORE_BUILD_WINDOWS: |
             echo "Setting up MSVC environment"
             call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-            set PATH="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64";%PATH%
-            echo %PATH%
+            for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find VC\Tools\MSVC\**\bin\Hostx64\x64`) do set "VCTOOLS_BIN=%%i"
+            if not defined VCTOOLS_BIN (
+              echo "ERROR: Unable to locate MSVC linker path via vswhere"
+              exit /b 1
+            )
+            set "PATH=%VCTOOLS_BIN%;%PATH%"
+            where cl
+            where link
             echo "Using minimal build dependencies"
             python -m pip install --upgrade pip
 
