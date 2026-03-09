@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
-@File    : multichannel_em.py
+@File    : multichannel_emission.py
 @Time    : 2025-11-08 13:52
 @Desc    : EM algorithm for multichannel HMM
 

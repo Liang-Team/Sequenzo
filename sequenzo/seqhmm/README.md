@@ -271,7 +271,7 @@ for name, model in models.items():
 Creates a Hidden Markov Model object from sequence data.
 
 **Parameters:**
-- `observations`: SequenceData object or list of sequences
+- `observations`: SequenceData object or list of SequenceData objects (for multichannel)
 - `n_states`: Number of hidden states (e.g., 3-6 for typical analyses)
 - `initial_probs`: Optional custom initial state probabilities
 - `transition_probs`: Optional custom transition probability matrix
@@ -507,9 +507,9 @@ ci = boot_results['summary']['initial_probs']['ci_95']
 ### Fully Implemented Features
 
 - **Basic HMM**: Complete implementation with EM algorithm
-- **Mixture HMM (MHMM)**: Full support with cluster estimation
+- **Mixture HMM (MHMM)**: Cluster estimation with weighted Baum-Welch M-step (single-channel only; multichannel and covariate support not yet available in `build_mhmm`)
 - **Non-homogeneous HMM (NHMM)**: Complete with covariate support
-- **Multichannel Support**: Handle multiple parallel sequences
+- **Multichannel Support**: `build_hmm()` and `HMM()` support `List[SequenceData]` for multichannel data; multichannel EM fitting is implemented in pure Python
 - **Formula-Based Covariates**: R-style formula interface for NHMM and MHMM simulation
 - **Model Simulation**: Simulate sequences from HMM and MHMM models
 - **Model Comparison**: AIC, BIC, and model comparison tools
@@ -524,7 +524,23 @@ ci = boot_results['summary']['initial_probs']['ci_95']
    - Lag terms (e.g., "~ lag(x1)")
    - Transformations (e.g., "~ log(x1)")
 
-3. **Multichannel NHMM**: Multichannel support is available for HMM and MHMM, but not yet for NHMM
+2. **Multichannel NHMM**: Multichannel support is available for HMM, but not yet for NHMM
+
+3. **MHMM Multichannel & Covariates**: `build_mhmm()` only accepts a single `SequenceData` object (not `List[SequenceData]` for multichannel) and has no `formula`/`data` parameters for covariates, unlike R's `seqHMM`
+
+4. **Multichannel EM Performance**: The multichannel EM algorithm (`multichannel_emission.py`) is implemented in pure Python with nested loops, which is significantly slower than R's C backend for large datasets. For datasets with >500 sequences, consider using a subset for fitting
+
+### Recent Bug Fixes (February 2026)
+
+Five bugs were identified through cross-language consistency testing against R seqHMM and fixed:
+
+| # | File | Description |
+|---|------|-------------|
+| 1 | `mhmm.py` | **MHMM M-step ignored responsibilities.** The EM M-step did equal-weight `self.clusters[k].fit()` instead of weighted Baum-Welch, causing clustering to fail. Fixed with proper weighted sufficient statistics. |
+| 2 | `bootstrap.py` | **Bootstrap resampling crashed.** `to_dataframe()` returns integer-coded values but `SequenceData()` expects string labels. Fixed by mapping integers back to labels. |
+| 3 | `mhmm.py` | **MHMM missing `sequence_lengths` attribute.** `bic(mhmm)` / `aic(mhmm)` crashed with `AttributeError`. Fixed by adding the attribute in `__init__`. |
+| 4 | `build_hmm.py` | **`build_hmm()` crashed on `List[SequenceData]`.** The type signature declared multichannel support but the implementation only handled single `SequenceData`. Fixed with multichannel branch. |
+| 5 | `multichannel_emission.py` | **Transition probability rows didn't sum to 1.** The gamma denominator accumulated over all time steps including T-1, but xi only covers t=0..T-2. Fixed by using separate accumulator for transition denominator. |
 
 ## Notes
 
@@ -543,5 +559,5 @@ For more detailed documentation, see:
 ## References
 
 - **seqHMM R package**: https://github.com/helske/seqHMM
-  - Helske & Helske (2019). Mixture Hidden Markov Models for Sequence Data: The seqHMM Package in R. *Journal of Statistical Software, 88*(3).
+  - Helske & Helske (2019). Mixture Hidden Markov Models for Sequence Data: The seqHMM Package in R. *Journal of Statistical Software, 88*(3), 1–32. https://doi.org/10.18637/jss.v088.i03
 - **hmmlearn Python package**: https://github.com/hmmlearn/hmmlearn

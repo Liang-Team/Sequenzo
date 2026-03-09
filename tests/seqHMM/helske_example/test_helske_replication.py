@@ -48,7 +48,7 @@ CHILD_STATES = ["childless", "children"]              # 2 symbols
 LEFT_STATES  = ["with parents", "left home"]          # 2 symbols
 
 # Number of sequences for multichannel fit tests.
-# multichannel_em.py is pure-Python nested loops, so 2000 seqs is far too slow.
+# multichannel_emission.py is pure-Python nested loops, so 2000 seqs is far too slow.
 # 200 seqs keeps each fit under ~30 seconds.
 MC_N_SUBSET = 200
 

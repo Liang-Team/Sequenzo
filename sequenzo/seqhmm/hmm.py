@@ -227,7 +227,7 @@ class HMM:
             self.converged = self._hmm_model.monitor_.converged
         else:
             # Multichannel: use custom EM algorithm
-            from .multichannel_em import fit_multichannel_hmm
+            from .multichannel_emission import fit_multichannel_hmm
             fit_multichannel_hmm(self, n_iter=n_iter, tol=tol, verbose=verbose)
         
         return self
