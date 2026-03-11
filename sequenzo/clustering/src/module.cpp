@@ -8,6 +8,7 @@
 #include "distance_prep_utils.cpp"
 #include "fastcluster_linkage.cpp"
 #include "cluster_core.cpp"
+#include "cluster_quality_pipeline.cpp"
 
 #include <limits>
 #include <stdexcept>
@@ -746,4 +747,195 @@ PYBIND11_MODULE(clustering_c_code, m) {
     "Full clustering pipeline: feature matrix -> linkage matrix via linkage_vector (C++ core).");
     };
     register_cluster_core_apis();
+
+    // =========================================================================
+    // ClusterQuality pipeline (single-call CQI computation)
+    // =========================================================================
+    auto register_cq_pipeline_apis = [&m]() {
+
+    m.def("cluster_quality_from_cluster_data",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> condensed,
+           py::array_t<double, py::array::c_style | py::array::forcecast> linkage_matrix,
+           py::array_t<double, py::array::c_style | py::array::forcecast> weights,
+           int n, int k_min, int k_max) -> py::dict {
+
+        auto cond_buf = condensed.request();
+        auto link_buf = linkage_matrix.request();
+        auto wt_buf = weights.request();
+
+        validate_linkage(link_buf, n);
+        validate_condensed_size(cond_buf.size, n, "Condensed distance array size mismatch");
+        validate_vector_length(wt_buf.size, n, "Weights must have length n");
+
+        ClusterQualityPipelineResult res = cluster_quality_from_cluster_data(
+            static_cast<double*>(cond_buf.ptr),
+            static_cast<int>(cond_buf.size),
+            static_cast<double*>(link_buf.ptr),
+            n,
+            static_cast<double*>(wt_buf.ptr),
+            k_min, k_max
+        );
+
+        const int k_count = res.k_count;
+        py::dict out;
+        out["PBC"]  = vector_to_pyarray_1d(std::move(res.pbc));
+        out["HG"]   = vector_to_pyarray_1d(std::move(res.hg));
+        out["HGSD"] = vector_to_pyarray_1d(std::move(res.hgsd));
+        out["ASW"]  = vector_to_pyarray_1d(std::move(res.asw));
+        out["ASWw"] = vector_to_pyarray_1d(std::move(res.asww));
+        out["CH"]   = vector_to_pyarray_1d(std::move(res.ch));
+        out["R2"]   = vector_to_pyarray_1d(std::move(res.r2));
+        out["CHsq"] = vector_to_pyarray_1d(std::move(res.chsq));
+        out["R2sq"] = vector_to_pyarray_1d(std::move(res.r2sq));
+        out["HC"]   = vector_to_pyarray_1d(std::move(res.hc));
+
+        out["opt_clusters"] = vector_to_pyarray_1d(std::move(res.opt_clusters));
+        out["raw_values"]   = vector_to_pyarray_1d(std::move(res.raw_values));
+        out["z_scores"]     = vector_to_pyarray_1d(std::move(res.z_scores));
+
+        out["range_table"] = vector_to_pyarray_2d(
+            std::move(res.range_table),
+            static_cast<py::ssize_t>(k_count),
+            static_cast<py::ssize_t>(CQ_NUM_METRICS));
+        out["k_min"]   = res.k_min;
+        out["k_count"] = res.k_count;
+        return out;
+    },
+    py::arg("condensed"), py::arg("linkage_matrix"), py::arg("weights"),
+    py::arg("n"), py::arg("k_min"), py::arg("k_max"),
+    "Compute all CQI scores, summary, and range table from pre-computed cluster data.");
+
+    m.def("cluster_quality_from_matrix",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
+           const std::string& method,
+           int max_clusters,
+           py::array_t<double, py::array::c_style | py::array::forcecast> weights) -> py::dict {
+
+        auto mat_buf = matrix.request();
+        if (mat_buf.ndim != 2 || mat_buf.shape[0] != mat_buf.shape[1]) {
+            throw std::runtime_error("Distance matrix must be a 2D square array.");
+        }
+        const int N = static_cast<int>(mat_buf.shape[0]);
+        auto wt_buf = weights.request();
+        validate_vector_length(wt_buf.size, N, "Weights must have length N");
+
+        ClusterQualityPipelineResult res = cluster_quality_from_matrix(
+            static_cast<double*>(mat_buf.ptr), N, method, max_clusters,
+            static_cast<double*>(wt_buf.ptr)
+        );
+
+        const int k_count = res.k_count;
+        py::dict out;
+
+        // Linkage data
+        if (!res.linkage_matrix.empty()) {
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix),
+                static_cast<py::ssize_t>(N - 1), 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        if (!res.condensed_matrix.empty()) {
+            out["condensed_matrix"] = vector_to_pyarray_1d(std::move(res.condensed_matrix));
+        } else {
+            out["condensed_matrix"] = py::none();
+        }
+        if (!res.full_matrix.empty()) {
+            out["full_matrix"] = vector_to_pyarray_2d(
+                std::move(res.full_matrix),
+                static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(N));
+        } else {
+            out["full_matrix"] = py::none();
+        }
+        out["warning_flags"]       = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+
+        // CQI scores
+        out["PBC"]  = vector_to_pyarray_1d(std::move(res.pbc));
+        out["HG"]   = vector_to_pyarray_1d(std::move(res.hg));
+        out["HGSD"] = vector_to_pyarray_1d(std::move(res.hgsd));
+        out["ASW"]  = vector_to_pyarray_1d(std::move(res.asw));
+        out["ASWw"] = vector_to_pyarray_1d(std::move(res.asww));
+        out["CH"]   = vector_to_pyarray_1d(std::move(res.ch));
+        out["R2"]   = vector_to_pyarray_1d(std::move(res.r2));
+        out["CHsq"] = vector_to_pyarray_1d(std::move(res.chsq));
+        out["R2sq"] = vector_to_pyarray_1d(std::move(res.r2sq));
+        out["HC"]   = vector_to_pyarray_1d(std::move(res.hc));
+
+        out["opt_clusters"] = vector_to_pyarray_1d(std::move(res.opt_clusters));
+        out["raw_values"]   = vector_to_pyarray_1d(std::move(res.raw_values));
+        out["z_scores"]     = vector_to_pyarray_1d(std::move(res.z_scores));
+
+        out["range_table"] = vector_to_pyarray_2d(
+            std::move(res.range_table),
+            static_cast<py::ssize_t>(k_count),
+            static_cast<py::ssize_t>(CQ_NUM_METRICS));
+        out["k_min"]   = res.k_min;
+        out["k_count"] = res.k_count;
+        out["clustering_method"] = (method == "ward") ? "ward_d" : method;
+        return out;
+    },
+    py::arg("matrix"), py::arg("method"), py::arg("max_clusters"), py::arg("weights"),
+    "Full pipeline: distance matrix -> linkage -> CQI scores + summary + range table.");
+
+    };
+    register_cq_pipeline_apis();
+
+    // =========================================================================
+    // ClusterResults: combined cutree + distribution
+    // =========================================================================
+    auto register_cluster_results_api = [&m]() {
+
+    m.def("cluster_results_compute",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> linkage_matrix,
+           int n, int num_clusters,
+           py::array_t<double, py::array::c_style | py::array::forcecast> weights) -> py::dict {
+
+        auto link_buf = linkage_matrix.request();
+        auto wt_buf = weights.request();
+        validate_linkage(link_buf, n);
+        validate_vector_length(wt_buf.size, n, "Weights must have length n");
+
+        ClusterResultData data = compute_cluster_results(
+            static_cast<double*>(link_buf.ptr), n, num_clusters,
+            static_cast<double*>(wt_buf.ptr)
+        );
+
+        const auto m_clusters = static_cast<py::ssize_t>(data.cluster_ids.size());
+
+        auto labels_arr = py::array_t<int>(static_cast<py::ssize_t>(n));
+        std::memcpy(labels_arr.mutable_data(), data.labels.data(),
+                     static_cast<size_t>(n) * sizeof(int));
+
+        auto cluster_arr = py::array_t<int>(m_clusters);
+        auto count_arr   = py::array_t<int>(m_clusters);
+        auto pct_arr     = py::array_t<double>(m_clusters);
+        auto wsum_arr    = py::array_t<double>(m_clusters);
+        auto wpct_arr    = py::array_t<double>(m_clusters);
+
+        std::memcpy(cluster_arr.mutable_data(), data.cluster_ids.data(),
+                     static_cast<size_t>(m_clusters) * sizeof(int));
+        std::memcpy(count_arr.mutable_data(), data.counts.data(),
+                     static_cast<size_t>(m_clusters) * sizeof(int));
+        std::memcpy(pct_arr.mutable_data(), data.percentages.data(),
+                     static_cast<size_t>(m_clusters) * sizeof(double));
+        std::memcpy(wsum_arr.mutable_data(), data.weight_sums.data(),
+                     static_cast<size_t>(m_clusters) * sizeof(double));
+        std::memcpy(wpct_arr.mutable_data(), data.weight_percentages.data(),
+                     static_cast<size_t>(m_clusters) * sizeof(double));
+
+        py::dict out;
+        out["labels"]            = labels_arr;
+        out["Cluster"]           = cluster_arr;
+        out["Count"]             = count_arr;
+        out["Percentage"]        = pct_arr;
+        out["Weight_Sum"]        = wsum_arr;
+        out["Weight_Percentage"] = wpct_arr;
+        return out;
+    },
+    py::arg("linkage_matrix"), py::arg("n"), py::arg("num_clusters"), py::arg("weights"),
+    "Combined cutree + distribution: cut linkage tree and compute cluster statistics.");
+
+    };
+    register_cluster_results_api();
 }

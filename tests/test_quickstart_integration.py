@@ -286,6 +286,116 @@ def test_complete_workflow():
     assert True
 
 
+def test_cluster_quality_direct_matrix_path():
+    """Test ClusterQuality initialised with a raw distance matrix (path B)."""
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
+
+    cq_from_cluster = ClusterQuality(cluster, max_clusters=10)
+    cq_from_matrix = ClusterQuality(om, max_clusters=10, clustering_method='ward_d2')
+
+    for metric in cq_from_cluster.metric_order:
+        a = np.array(cq_from_cluster.scores[metric], dtype=np.float64)
+        b = np.array(cq_from_matrix.scores[metric], dtype=np.float64)
+        assert np.allclose(a, b, atol=1e-10, equal_nan=True), \
+            f"Direct-matrix path diverges on {metric}"
+
+    t1 = cq_from_cluster.get_cqi_table()
+    t2 = cq_from_matrix.get_cqi_table()
+    assert np.allclose(t1["Opt. Clusters"].values, t2["Opt. Clusters"].values, equal_nan=True)
+    assert np.allclose(t1["Raw Value"].values, t2["Raw Value"].values, atol=1e-10, equal_nan=True)
+
+    r1 = cq_from_cluster.get_cluster_range_table()
+    r2 = cq_from_matrix.get_cluster_range_table()
+    assert np.allclose(r1.values, r2.values, atol=1e-10, equal_nan=True)
+
+
+def test_cluster_quality_ward_d():
+    """Test ClusterQuality with ward_d method."""
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
+
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
+    cq = ClusterQuality(cluster, max_clusters=10)
+
+    table = cq.get_cqi_table()
+    assert table is not None
+    assert len(table) == 10
+    assert all(table["Opt. Clusters"].notna())
+
+    range_table = cq.get_cluster_range_table()
+    assert range_table.shape == (9, 10)  # k=2..10 => 9 rows, 10 metrics
+
+
+def test_weighted_cluster_results():
+    """Test ClusterResults with weighted data."""
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
+
+    n = om.shape[0] if isinstance(om, np.ndarray) else om.values.shape[0]
+    rng = np.random.RandomState(42)
+    weights = rng.uniform(0.5, 2.0, size=n)
+
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2', weights=weights)
+    cr = ClusterResults(cluster)
+
+    dist = cr.get_cluster_distribution(num_clusters=5, weighted=True)
+    assert 'Weight_Sum' in dist.columns
+    assert 'Weight_Percentage' in dist.columns
+    assert np.isclose(dist['Weight_Percentage'].sum(), 100.0, atol=0.1)
+    assert np.isclose(dist['Percentage'].sum(), 100.0, atol=0.1)
+
+    dist_unweighted = cr.get_cluster_distribution(num_clusters=5, weighted=False)
+    assert 'Weight_Sum' not in dist_unweighted.columns
+
+
+def test_cluster_quality_compute_scores_noop():
+    """Test that compute_cluster_quality_scores() is a no-op (scores computed in __init__)."""
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
+
+    cq = ClusterQuality(cluster, max_clusters=10)
+    scores_before = {m: list(cq.scores[m]) for m in cq.metric_order}
+    cq.compute_cluster_quality_scores()
+    for m in cq.metric_order:
+        assert cq.scores[m] == scores_before[m], f"compute_cluster_quality_scores() changed {m}"
+
+
+def test_cluster_results_caching():
+    """Test that repeated calls to get_cluster_memberships use cache."""
+    df = load_dataset('country_co2_emissions_global_deciles')
+    time_list = list(df.columns)[1:]
+    states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
+
+    sequence_data = SequenceData(df, time=time_list, id_col="country", states=states, labels=states)
+    om = get_distance_matrix(seqdata=sequence_data, method="OM", sm="TRATE", indel="auto")
+    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d2')
+
+    cr = ClusterResults(cluster)
+    m1 = cr.get_cluster_memberships(5)
+    m2 = cr.get_cluster_memberships(5)
+    assert np.array_equal(m1["Cluster"].values, m2["Cluster"].values)
+    assert 5 in cr._results_cache
+
+
 if __name__ == "__main__":
     # Allow running tests directly
     pytest.main([__file__, "-v", "-s"])

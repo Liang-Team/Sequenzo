@@ -360,20 +360,20 @@ def benchmark_ward_labels(
         print(f"  sklearn (ward on X):    跳过（需提供 X_features，且 shape[0]==n）")
     
     # TanaT 测试（需要 tanat 包）
-    if run_tanat_test and X_features is not None and X_features.shape[0] == n:
-        try:
-            t_tanat = tanat_test_from_xfeatures(X_features, num_clusters=num_clusters, metric_name="edit")
-            print(
-                "  TanaT (prep+metric+ward): "
-                f"{t_tanat['total_time']:.4f}s  "
-                f"[prep={t_tanat['prep_time']:.4f}s, metric={t_tanat['metric_time']:.4f}s, ward={t_tanat['ward_time']:.4f}s]"
-            )
-        except ImportError as e:
-            print(f"  TanaT (prep+metric+ward): 跳过（{e}）")
-    elif run_tanat_test:
-        print(f"  TanaT (prep+metric+ward): 跳过（需提供 X_features，且 shape[0]==n）")
-    else:
-        print("  TanaT (prep+metric+ward): 关闭（run_tanat_test=False）")
+    # if run_tanat_test and X_features is not None and X_features.shape[0] == n:
+    #     try:
+    #         t_tanat = tanat_test_from_xfeatures(X_features, num_clusters=num_clusters, metric_name="edit")
+    #         print(
+    #             "  TanaT (prep+metric+ward): "
+    #             f"{t_tanat['total_time']:.4f}s  "
+    #             f"[prep={t_tanat['prep_time']:.4f}s, metric={t_tanat['metric_time']:.4f}s, ward={t_tanat['ward_time']:.4f}s]"
+    #         )
+    #     except ImportError as e:
+    #         print(f"  TanaT (prep+metric+ward): 跳过（{e}）")
+    # elif run_tanat_test:
+    #     print(f"  TanaT (prep+metric+ward): 跳过（需提供 X_features，且 shape[0]==n）")
+    # else:
+    #     print("  TanaT (prep+metric+ward): 关闭（run_tanat_test=False）")
 
     print("-" * 55)
     print("注意：Sequenzo full 含 linkage；fastcluster/scipy 仅做 linkage+fcluster。")

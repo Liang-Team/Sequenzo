@@ -84,30 +84,16 @@ except ImportError:
         # Last resort: try relative import
         from .sequenzo_fastcluster.fastcluster import linkage, linkage_vector
 
-# Import C++ cluster quality functions
+# Import C++ clustering extensions (required for all clustering operations)
 try:
     from . import clustering_c_code
     _CPP_AVAILABLE = True
     _CPP_CUTREE_AVAILABLE = hasattr(clustering_c_code, "cutree_maxclust")
-    _CPP_CUTREE_ALL_AVAILABLE = hasattr(clustering_c_code, "cutree_maxclust_all")
-    _CPP_BATCH_CQ_AVAILABLE = hasattr(clustering_c_code, "cluster_quality_over_k_condensed")
-    _CPP_CLUSTER_DIST_AVAILABLE = hasattr(clustering_c_code, "cluster_distribution_from_labels")
-    _CPP_PREP_DIST_AVAILABLE = hasattr(clustering_c_code, "prepare_distance_matrix")
     _CPP_EUCLIDEAN_CHECK_AVAILABLE = hasattr(clustering_c_code, "check_euclidean_compatibility")
-    _CPP_PREP_CHECK_WARD_AVAILABLE = hasattr(clustering_c_code, "prepare_distance_matrix_and_check_ward")
-    _CPP_CQI_SUMMARY_AVAILABLE = hasattr(clustering_c_code, "cluster_quality_summary")
-    _CPP_CQI_RANGE_AVAILABLE = hasattr(clustering_c_code, "cluster_quality_range_table")
 except ImportError:
     _CPP_AVAILABLE = False
     _CPP_CUTREE_AVAILABLE = False
-    _CPP_CUTREE_ALL_AVAILABLE = False
-    _CPP_BATCH_CQ_AVAILABLE = False
-    _CPP_CLUSTER_DIST_AVAILABLE = False
-    _CPP_PREP_DIST_AVAILABLE = False
     _CPP_EUCLIDEAN_CHECK_AVAILABLE = False
-    _CPP_PREP_CHECK_WARD_AVAILABLE = False
-    _CPP_CQI_SUMMARY_AVAILABLE = False
-    _CPP_CQI_RANGE_AVAILABLE = False
     print("[!] Warning: C++ clustering extensions not available. Cluster class will not work.")
 
 
@@ -138,25 +124,6 @@ def _cutree_maxclust(linkage_matrix, num_clusters):
 
     return fcluster(linkage_matrix, t=num_clusters, criterion="maxclust")
 
-
-def _cutree_maxclust_all(linkage_matrix, k_min, k_max):
-    """
-    Cut linkage tree for all k in [k_min, k_max], returning shape (k_count, n).
-    """
-    if _CPP_AVAILABLE and _CPP_CUTREE_ALL_AVAILABLE:
-        n = linkage_matrix.shape[0] + 1
-        labels_all = clustering_c_code.cutree_maxclust_all(
-            np.asarray(linkage_matrix, dtype=np.float64, order="C"),
-            int(n),
-            int(k_min),
-            int(k_max),
-        )
-        return np.asarray(labels_all, dtype=np.int32)
-
-    labels_all = []
-    for k in range(k_min, k_max + 1):
-        labels_all.append(fcluster(linkage_matrix, t=k, criterion="maxclust"))
-    return np.asarray(labels_all, dtype=np.int32)
 
 def _check_euclidean_compatibility(matrix, method):
     """
@@ -218,112 +185,6 @@ def _warn_ward_usage_once(matrix, method, euclidean_compatible=None, warning_fla
         _WARD_WARNING_SHOWN = True
 
 
-def _prepare_distance_matrix_for_linkage(
-    matrix,
-    method=None,
-    include_full_matrix=True,
-    run_ward_check=True,
-):
-    """
-    Prepare square-form distance matrix for hierarchical linkage.
-    Returns: (full_matrix, condensed_matrix, was_symmetrized, euclidean_compatible_or_none, warning_flags)
-    """
-    if _CPP_AVAILABLE and _CPP_PREP_CHECK_WARD_AVAILABLE and method is not None:
-        matrix_cpp = np.asarray(matrix, dtype=np.float64, order="C")
-
-        # Robust non-finite handling in Python (reliable under aggressive C++ fast-math builds).
-        had_nonfinite_py = False
-        if np.any(np.isnan(matrix_cpp)) or np.any(np.isinf(matrix_cpp)):
-            had_nonfinite_py = True
-            print("[!] Warning: Distance matrix contains NaN or Inf values.")
-            finite_vals = matrix_cpp[np.isfinite(matrix_cpp)]
-            if len(finite_vals) > 0:
-                replacement_val = np.percentile(finite_vals, 95)
-                print(f"    Replacing with 95th percentile value: {replacement_val:.6f}")
-            else:
-                replacement_val = 1.0
-                print(f"    No finite values found, using default: {replacement_val}")
-            matrix_cpp = matrix_cpp.copy()
-            matrix_cpp[~np.isfinite(matrix_cpp)] = replacement_val
-
-        # Guard numerical warnings from internal heuristic Ward compatibility checks.
-        # The compatibility decision is still returned via `result["compatible"]`.
-        with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-            result = clustering_c_code.prepare_distance_matrix_and_check_ward(
-                matrix_cpp,
-                method.lower(),
-                True,
-                1e-5,
-                1e-8,
-                0.95,
-                bool(include_full_matrix),
-                bool(run_ward_check),
-            )
-        full_matrix = (
-            np.asarray(result["full_matrix"], dtype=np.float64)
-            if include_full_matrix and "full_matrix" in result
-            else None
-        )
-        condensed_matrix = np.asarray(result["condensed_matrix"], dtype=np.float64)
-
-        warning_flags = int(result.get("warning_flags", 0)) | (_WARN_NONFINITE if had_nonfinite_py else 0)
-        if warning_flags & _WARN_NEGATIVE:
-            print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
-        compatible = result.get("compatible", True)
-        compatible = None if compatible is None else bool(compatible)
-
-        return (
-            full_matrix,
-            condensed_matrix,
-            bool(result.get("was_symmetrized", False)),
-            compatible,
-            warning_flags,
-        )
-
-    if _CPP_AVAILABLE and _CPP_PREP_DIST_AVAILABLE:
-        matrix_cpp = np.asarray(matrix, dtype=np.float64, order="C")
-
-        # Robust non-finite handling in Python (reliable under aggressive C++ fast-math builds).
-        had_nonfinite_py = False
-        if np.any(np.isnan(matrix_cpp)) or np.any(np.isinf(matrix_cpp)):
-            had_nonfinite_py = True
-            print("[!] Warning: Distance matrix contains NaN or Inf values.")
-            finite_vals = matrix_cpp[np.isfinite(matrix_cpp)]
-            if len(finite_vals) > 0:
-                replacement_val = np.percentile(finite_vals, 95)
-                print(f"    Replacing with 95th percentile value: {replacement_val:.6f}")
-            else:
-                replacement_val = 1.0
-                print(f"    No finite values found, using default: {replacement_val}")
-            matrix_cpp = matrix_cpp.copy()
-            matrix_cpp[~np.isfinite(matrix_cpp)] = replacement_val
-
-        result = clustering_c_code.prepare_distance_matrix(
-            matrix_cpp,
-            True,   # enforce_symmetry
-            1e-5,   # rtol
-            1e-8,   # atol
-            0.95,   # replacement_quantile
-            bool(include_full_matrix),
-        )
-        full_matrix = (
-            np.asarray(result["full_matrix"], dtype=np.float64)
-            if include_full_matrix and "full_matrix" in result
-            else None
-        )
-        condensed_matrix = np.asarray(result["condensed_matrix"], dtype=np.float64)
-
-        warning_flags = int(result.get("warning_flags", 0)) | (_WARN_NONFINITE if had_nonfinite_py else 0)
-        if warning_flags & _WARN_NEGATIVE:
-            print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
-
-        return full_matrix, condensed_matrix, bool(result.get("was_symmetrized", False)), None, warning_flags
-
-    raise RuntimeError(
-        "C++ distance matrix preparation is not available. "
-        "Please ensure the C++ extensions are properly compiled."
-    )
-
 class Cluster:
     def __init__(self,
                  matrix=None,
@@ -355,9 +216,11 @@ class Cluster:
                 "C++ clustering core is not available. "
                 "Please ensure the C++ extensions are properly compiled.")
 
+        # Users may pass a DataFrame, a `float32` array, a Fortran-order array, or even a Python list.
+        # Converting all of these to a C-contiguous `float64` `ndarray` is a necessary prerequisite
+        # before invoking the C++ code.
         method = clustering_method.lower()
 
-        # Determine data dimensions and path
         ward_methods = ("ward", "ward_d", "ward_d2")
         use_vector_path = (X_features is not None and method in ward_methods)
 
@@ -376,14 +239,17 @@ class Cluster:
                 raise ValueError("Input must be a full square-form distance matrix.")
             n = matrix.shape[0]
 
-        # entity_ids bookkeeping
+        # `entity_ids` and `weights` are not involved in the linkage computation;
+        # they are used later by `get_cluster_labels()`, `ClusterQuality`, and `plot_dendrogram()`.
+        # Passing them into C++ and then returning them would only introduce an unnecessary data copy (Python → C++ → Python)
+        # without any computational benefit.
+
         self.entity_ids = np.array(entity_ids) if entity_ids is not None else np.arange(n)
         if len(self.entity_ids) != n:
             raise ValueError("Length of entity_ids must match the number of data points.")
         if len(np.unique(self.entity_ids)) != len(self.entity_ids):
             raise ValueError("entity_ids must contain unique values.")
 
-        # weights bookkeeping
         if weights is not None:
             self.weights = np.array(weights, dtype=np.float64)
             if len(self.weights) != n:
@@ -558,243 +424,122 @@ class ClusterQuality:
         """
         Initialize the ClusterQuality class for precomputed distance matrices or a Cluster instance.
 
-        Allow the ClusterQuality class to directly accept a Cluster instance
-        and internally extract the relevant matrix (cluster.full_matrix)
-        and clustering method (cluster.clustering_method).
+        All heavy computation (linkage, CQI scores, summary, range table) is performed
+        in a single C++ call. Python only handles parameter validation and result unpacking.
 
-        This keeps the user interface clean and simple while handling the logic under the hood.
-
-        :param matrix_or_cluster: The precomputed distance matrix (full square form or condensed form)
+        :param matrix_or_cluster: The precomputed distance matrix (full square form)
                                    or an instance of the Cluster class.
         :param max_clusters: Maximum number of clusters to evaluate (default: 20).
         :param clustering_method: Clustering algorithm to use. If None, inherit from Cluster instance.
         :param weights: Optional array of weights for each entity. If None and using Cluster instance,
                        weights will be extracted from the Cluster object.
         """
+        if not _CPP_AVAILABLE:
+            raise RuntimeError(
+                "C++ clustering core is not available. "
+                "Please ensure the C++ extensions are properly compiled.")
+
+        self.metric_order = [
+            "PBC", "HG", "HGSD", "ASW", "ASWw",
+            "CH", "R2", "CHsq", "R2sq", "HC",
+        ]
+
         if isinstance(matrix_or_cluster, Cluster):
-            # Extract matrix, clustering method, and weights from the Cluster instance
-            self.matrix = matrix_or_cluster.full_matrix
-            self.clustering_method = matrix_or_cluster.clustering_method
-            self.linkage_matrix = matrix_or_cluster.linkage_matrix
-            self.weights = matrix_or_cluster.weights
-            self._condensed_matrix = matrix_or_cluster.condensed_matrix
+            cluster = matrix_or_cluster
+            self.matrix = cluster.full_matrix
+            self.clustering_method = cluster.clustering_method
+            self.linkage_matrix = cluster.linkage_matrix
+            self.weights = cluster.weights
+            self._condensed_matrix = cluster.condensed_matrix
+
+            n = len(cluster.entity_ids)
+            k_max = min(int(max_clusters), n)
+            if k_max < 2:
+                raise ValueError("max_clusters must be at least 2 and no greater than the sample size.")
+
+            result = clustering_c_code.cluster_quality_from_cluster_data(
+                np.asarray(self._condensed_matrix, dtype=np.float64, order="C"),
+                np.asarray(self.linkage_matrix, dtype=np.float64, order="C"),
+                np.asarray(self.weights, dtype=np.float64, order="C"),
+                n, 2, k_max,
+            )
 
         elif isinstance(matrix_or_cluster, (np.ndarray, pd.DataFrame)):
-            # Handle direct matrix input
             if isinstance(matrix_or_cluster, pd.DataFrame):
                 print("[>] Detected Pandas DataFrame. Converting to NumPy array...")
                 matrix_or_cluster = matrix_or_cluster.values
-            self.matrix = matrix_or_cluster
-            self.clustering_method = clustering_method or "ward_d"  # Default to classic Ward
-            
-            # Initialize weights for direct matrix input
+            matrix = np.asarray(matrix_or_cluster, dtype=np.float64, order="C")
+            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+                raise ValueError("Matrix must be a full square-form distance matrix.")
+
+            n = matrix.shape[0]
+            method = (clustering_method or "ward_d").lower()
+            if method == "ward":
+                method = "ward_d"
+            k_max = min(int(max_clusters), n)
+            if k_max < 2:
+                raise ValueError("max_clusters must be at least 2 and no greater than the sample size.")
+
             if weights is not None:
-                self.weights = np.array(weights, dtype=np.float64)
-                if len(self.weights) != len(self.matrix):
+                w = np.asarray(weights, dtype=np.float64, order="C")
+                if len(w) != n:
                     raise ValueError("Length of weights must match the size of the matrix.")
             else:
-                self.weights = np.ones(len(self.matrix), dtype=np.float64)
-            self._condensed_matrix = None
-            
-            # Compute linkage matrix for direct input (needed for clustering operations)
-            self.linkage_matrix = self._compute_linkage_for_direct_input()
+                w = np.ones(n, dtype=np.float64)
 
+            result = clustering_c_code.cluster_quality_from_matrix(
+                matrix, method, k_max, w,
+            )
+
+            self.linkage_matrix = np.asarray(result["linkage_matrix"])
+            self._condensed_matrix = np.asarray(result["condensed_matrix"])
+            self.matrix = np.asarray(result["full_matrix"])
+            self.clustering_method = result["clustering_method"]
+            self.weights = w
+
+            self._warn_from_flags(int(result["warning_flags"]), self.clustering_method)
         else:
             raise ValueError(
                 "Input must be a Cluster instance, a NumPy array, or a Pandas DataFrame."
             )
 
-        if self.matrix.shape[0] != self.matrix.shape[1]:
-            raise ValueError("Matrix must be a full square-form distance matrix.")
+        self.max_clusters = k_max
+        self._unpack_cqi_result(result)
 
-        self.max_clusters = max_clusters
-        self.metric_order = [
-            "PBC",
-            "HG",
-            "HGSD",
-            "ASW",
-            "ASWw",
-            "CH",
-            "R2",
-            "CHsq",
-            "R2sq",
-            "HC",
-        ]
-        self.scores = {metric: [] for metric in self.metric_order}
+    def _unpack_cqi_result(self, result):
+        """Unpack the C++ pipeline result dict into instance attributes."""
+        self.scores = {}
+        for metric in self.metric_order:
+            self.scores[metric] = np.asarray(result[metric], dtype=np.float64).tolist()
 
-        # Store original scores separately to preserve raw values
-        self.original_scores = None
+        self.original_scores = {}
+        for metric in self.metric_order:
+            self.original_scores[metric] = np.asarray(result[metric], dtype=np.float64).copy()
 
-    def _compute_linkage_for_direct_input(self):
-        """
-        Compute linkage matrix for direct matrix input (similar to Cluster class logic).
-        Supports both Ward D and Ward D2 methods.
-        """
-        # Handle backward compatibility: 'ward' maps to 'ward_d'
-        if self.clustering_method == "ward":
-            self.clustering_method = "ward_d"
-            print("[>] Note: 'ward' method maps to 'ward_d' (classic Ward method).")
-            print("    Use 'ward_d2' for Ward method with squared Euclidean distances.")
-            
-        (
-            self.matrix,
-            condensed_matrix,
-            was_symmetrized,
-            euclidean_compatible,
-            warning_flags,
-        ) = _prepare_distance_matrix_for_linkage(
-            self.matrix, self.clustering_method
-        )
-        if was_symmetrized:
+        self._summary_opt = np.asarray(result["opt_clusters"], dtype=np.float64)
+        self._summary_raw = np.asarray(result["raw_values"], dtype=np.float64)
+        self._summary_z = np.asarray(result["z_scores"], dtype=np.float64)
+        self._range_table_values = np.asarray(result["range_table"], dtype=np.float64)
+
+    @staticmethod
+    def _warn_from_flags(flags, method):
+        """Translate C++ warning_flags bitmask into Python warnings."""
+        if flags & _WARN_SYMMETRIZED:
             print("[!] Warning: Distance matrix is not symmetric.")
-            print("    Hierarchical clustering algorithms require symmetric distance matrices.")
-            print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
-            print("    If this is not appropriate for your data, please provide a symmetric matrix.")
-
-        # Check Ward compatibility and issue one-time warning if needed
-        _warn_ward_usage_once(
-            self.matrix,
-            self.clustering_method,
-            euclidean_compatible=euclidean_compatible,
-            warning_flags=warning_flags,
-        )
-        self._condensed_matrix = condensed_matrix
-
-        try:
-            # Map our method names to fastcluster's expected method names
-            fastcluster_method = self._map_method_name(self.clustering_method)
-            # preserve_input=False: condensed_matrix is local, not used after linkage
-            linkage_matrix = linkage(
-                condensed_matrix, method=fastcluster_method, preserve_input=False
-            )
-            
-            # Apply Ward D correction if needed
-            if self.clustering_method == "ward_d":
-                linkage_matrix = self._apply_ward_d_correction(linkage_matrix)
-                
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to compute linkage with method '{self.clustering_method}'. "
-                "Check that the distance matrix is square, symmetric, finite, non-negative, and has a zero diagonal. "
-                "For sequence distances, consider using 'average', 'complete', or 'single' instead of Ward methods. "
-                f"Original error: {e}"
-            )
-        return linkage_matrix
-        
-    def _map_method_name(self, method):
-        """
-        Map our internal method names to fastcluster's expected method names.
-        """
-        method_mapping = {
-            "ward_d": "ward",    # Classic Ward (will be corrected later)
-            "ward_d2": "ward",   # Ward D2 (no correction needed)
-            "single": "single",
-            "complete": "complete",
-            "average": "average",
-            "centroid": "centroid",
-            "median": "median"
-        }
-        return method_mapping.get(method, method)
-    
-    def _apply_ward_d_correction(self, linkage_matrix):
-        """
-        Apply Ward D correction by dividing distances by 2.
-        This converts Ward D2 results to classic Ward D results.
-        """
-        linkage_corrected = linkage_matrix.copy()
-        linkage_corrected[:, 2] = linkage_corrected[:, 2] / 2.0
-        print("[>] Applied Ward D correction: distances divided by 2 for classic Ward method.")
-        return linkage_corrected
+            print("    Automatically symmetrized using (matrix + matrix.T) / 2")
+        if flags & _WARN_NONFINITE:
+            print("[!] Warning: Distance matrix contained NaN or Inf values (replaced).")
+        if flags & _WARN_NEGATIVE:
+            print("[!] Warning: Distance matrix contained negative values (clipped to zero).")
+        if flags & _WARN_WARD_NON_EUCLIDEAN:
+            _warn_ward_usage_once(None, method, euclidean_compatible=False, warning_flags=flags)
 
     def compute_cluster_quality_scores(self):
         """
-        Compute clustering quality scores for different numbers of clusters.
-        
-        Uses C++ implementation for accuracy and performance.
-        This implementation aligns with R WeightedCluster package results.
+        Kept for API compatibility. Scores are already computed in __init__.
+        Calling this is a no-op.
         """
-        if not _CPP_AVAILABLE:
-            raise RuntimeError(
-                "C++ cluster quality implementation is not available. "
-                "Please ensure the C++ extensions are properly compiled."
-            )
-        self._compute_cluster_quality_scores_cpp()
-        
-        # Save original scores immediately after computation
-        self.original_scores = {}
-        for metric, values in self.scores.items():
-            self.original_scores[metric] = np.array(values).copy()
-
-    def _compute_cluster_quality_scores_cpp(self):
-        """
-        Compute clustering quality scores using C++ implementation (matches R WeightedCluster).
-        """
-        if self.matrix.shape[0] != self.matrix.shape[1]:
-            raise ValueError("Matrix must be square for C++ implementation")
-
-        n = self.matrix.shape[0]
-        k_max = min(int(self.max_clusters), n)
-        if k_max < 2:
-            raise ValueError("max_clusters must be at least 2 and no greater than the sample size.")
-
-        # Reset scores for idempotent repeated calls
-        self.scores = {metric: [] for metric in self.metric_order}
-
-        if self._condensed_matrix is None:
-            self._condensed_matrix = squareform(self.matrix)
-        condensed = np.asarray(self._condensed_matrix, dtype=np.float64, order="C")
-        linkage = np.asarray(self.linkage_matrix, dtype=np.float64, order="C")
-        weights = np.asarray(self.weights, dtype=np.float64, order="C")
-
-        try:
-            if _CPP_BATCH_CQ_AVAILABLE:
-                # Fast path: one C++ call computes all k in [2, k_max].
-                result = clustering_c_code.cluster_quality_over_k_condensed(
-                    condensed,
-                    linkage,
-                    weights,
-                    n,
-                    2,
-                    k_max,
-                )
-                for metric in self.metric_order:
-                    self.scores[metric] = np.asarray(
-                        result.get(metric, np.full(k_max - 1, np.nan)),
-                        dtype=np.float64,
-                    ).tolist()
-                return
-
-            # Backward-compatible path for older extension builds.
-            labels_all = _cutree_maxclust_all(self.linkage_matrix, 2, k_max)
-            for idx, k in enumerate(range(2, k_max + 1)):
-                labels = np.asarray(labels_all[idx], dtype=np.int32, order="C")
-                result = clustering_c_code.cluster_quality_condensed(
-                    condensed,
-                    labels,
-                    weights,
-                    n,
-                    k,
-                )
-                for metric in self.metric_order:
-                    self.scores[metric].append(result.get(metric, np.nan))
-
-        except Exception as e:
-            print(f"[!] Error: C++ computation failed: {e}")
-            print("    Python fallback has been removed due to accuracy issues.")
-            raise RuntimeError(
-                "C++ cluster quality computation failed. "
-                "Please rebuild C++ extensions and retry."
-            ) from e
-
-    def _compute_cluster_quality_scores_python(self):
-        """
-        Python fallback implementation has been removed.
-        Only C++ implementation is available for accuracy and performance.
-        """
-        raise NotImplementedError(
-            "Python cluster quality implementation has been removed due to accuracy issues. "
-            "Please use C++ implementation by setting use_cpp=True (default)."
-        )
+        pass
 
     def _normalize_scores(self, method="zscore", scores=None):
         """
@@ -833,39 +578,8 @@ class ClusterQuality:
         :return: DataFrame indexed by cluster count ("cluster2", ...)
                  with raw metric values for each quality indicator.
         """
-        # Prefer preserved raw scores to avoid normalization side-effects
-        if self.original_scores is not None:
-            scores_to_use = self.original_scores
-        else:
-            scores_to_use = self.scores
-
-        # Ensure metrics are available
-        if not scores_to_use or not any(len(scores_to_use[m]) for m in self.metric_order):
-            raise ValueError("Cluster quality scores are empty. Run `compute_cluster_quality_scores()` first.")
-
-        # Determine number of evaluated cluster counts
-        lengths = [len(scores_to_use[metric]) for metric in self.metric_order if metric in scores_to_use]
-        if not lengths:
-            raise ValueError("No recognized metrics found in scores.")
-
-        if len(set(lengths)) != 1:
-            raise ValueError("Inconsistent metric lengths detected. Please recompute cluster quality scores.")
-
-        n_rows = lengths[0]
-        if n_rows == 0:
-            raise ValueError("Cluster quality scores contain no entries.")
-
-        metric_arrays = {
-            metric: np.asarray(scores_to_use.get(metric, np.full(n_rows, np.nan)), dtype=np.float64)
-            for metric in self.metric_order
-        }
-
-        if _CPP_AVAILABLE and _CPP_CQI_RANGE_AVAILABLE:
-            result = clustering_c_code.cluster_quality_range_table(metric_arrays, self.metric_order)
-            values = np.asarray(result["values"], dtype=np.float64)
-        else:
-            values = np.column_stack([metric_arrays[m] for m in self.metric_order])
-
+        values = self._range_table_values
+        n_rows = values.shape[0]
         index_labels = [f"cluster{k}" for k in range(2, 2 + n_rows)]
         table = pd.DataFrame(values, index=index_labels, columns=self.metric_order)
         table.index.name = "Cluster"
@@ -878,44 +592,12 @@ class ClusterQuality:
         :return: Pandas DataFrame summarizing the optimal number of clusters (N groups),
                  the corresponding raw metric values, and z-score normalized values.
         """
-        scores_to_use = self.original_scores if self.original_scores is not None else self.scores
-        metric_arrays = {
-            metric: np.asarray(scores_to_use.get(metric, []), dtype=np.float64)
-            for metric in self.metric_order
-        }
-
-        if _CPP_AVAILABLE and _CPP_CQI_SUMMARY_AVAILABLE:
-            result = clustering_c_code.cluster_quality_summary(
-                metric_arrays,
-                self.metric_order,
-                2,
-            )
-            return pd.DataFrame({
-                "Metric": self.metric_order,
-                "Opt. Clusters": np.asarray(result["Opt. Clusters"], dtype=np.float64),
-                "Raw Value": np.asarray(result["Raw Value"], dtype=np.float64),
-                "Z-Score Norm.": np.asarray(result["Z-Score Norm."], dtype=np.float64),
-            })
-
-        # NumPy fallback
-        summary = {"Metric": [], "Opt. Clusters": [], "Raw Value": [], "Z-Score Norm.": []}
-        for metric in self.metric_order:
-            values = metric_arrays.get(metric)
-            if values is None or values.size == 0 or np.all(np.isnan(values)):
-                optimal_k, raw_value, z_val = np.nan, np.nan, np.nan
-            else:
-                pos = np.nanargmax(values)
-                optimal_k = pos + 2
-                raw_value = values[pos]
-                mean_val = np.nanmean(values)
-                std_val = np.nanstd(values)
-                z_val = (raw_value - mean_val) / std_val if std_val > 0 else raw_value
-            summary["Metric"].append(metric)
-            summary["Opt. Clusters"].append(optimal_k)
-            summary["Raw Value"].append(raw_value)
-            summary["Z-Score Norm."].append(z_val)
-
-        return pd.DataFrame(summary)
+        return pd.DataFrame({
+            "Metric": self.metric_order,
+            "Opt. Clusters": self._summary_opt,
+            "Raw Value": self._summary_raw,
+            "Z-Score Norm.": self._summary_z,
+        })
 
     def plot_cqi_scores(self,
                              metrics_list=None,
@@ -958,13 +640,11 @@ class ClusterQuality:
 
         :return: The figure object
         """
-        # Snapshot raw scores to avoid mutating class state.
         original_scores = {
             metric: np.asarray(values, dtype=np.float64).copy()
             for metric, values in self.scores.items()
         }
 
-        # Calculate statistics from original data
         original_stats = {}
         for metric in metrics_list or self.metric_order:
             values = np.array(original_scores[metric])
@@ -973,13 +653,11 @@ class ClusterQuality:
                 'std': np.nanstd(values)
             }
 
-        # Build plotting scores without mutating self.scores.
         if norm == "none":
             plot_scores = original_scores
         else:
             plot_scores = self._normalize_scores(method=norm, scores=original_scores)
 
-        # Set up plot
         sns.set(style=style)
         palette_colors = sns.color_palette(palette, len(metrics_list) if metrics_list else len(plot_scores))
         plt.figure(figsize=figsize)
@@ -989,15 +667,11 @@ class ClusterQuality:
         else:
             metrics_list = [metric for metric in metrics_list if metric in self.metric_order]
 
-        # Plot each metric
         for idx, metric in enumerate(metrics_list):
             values = np.asarray(plot_scores[metric], dtype=np.float64)
-
-            # Use original statistics for legend
             mean_val = original_stats[metric]['mean']
             std_val = original_stats[metric]['std']
             legend_label = f"{metric} ({mean_val:.2f} / {std_val:.2f})"
-
             plt.plot(
                 range(2, self.max_clusters + 1),
                 values,
@@ -1006,7 +680,6 @@ class ClusterQuality:
                 linewidth=line_width,
             )
 
-        # Set title and labels
         if title is None:
             title = "Cluster Quality Metrics"
 
@@ -1014,27 +687,22 @@ class ClusterQuality:
         plt.xlabel(xlabel, fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
 
-        # Configure ticks and legend
         plt.xticks(ticks=range(2, self.max_clusters + 1), fontsize=10)
         plt.yticks(fontsize=10)
         plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.legend(title="Metrics (Raw Mean / Std Dev)", fontsize=10, title_fontsize=12)
 
-        # Add a note about normalization
         norm_note = f"Note: Lines show {norm} normalized values; legend shows raw statistics"
         plt.figtext(0.5, 0.01, norm_note, ha='center', fontsize=10, style='italic')
 
-        # Configure grid
         if grid:
             plt.grid(True, linestyle="--", alpha=0.7)
         else:
             plt.grid(False)
 
-        # Adjust layout to make room for the note
         plt.tight_layout()
         plt.subplots_adjust(bottom=0.1)
 
-        # Save and show the plot
         return save_and_show_results(save_as, dpi, show=show)
 
 
@@ -1047,82 +715,59 @@ class ClusterResults:
         """
         if not isinstance(cluster, Cluster):
             raise ValueError("Input must be an instance of the Cluster class.")
+        if not _CPP_AVAILABLE:
+            raise RuntimeError(
+                "C++ clustering core is not available. "
+                "Please ensure the C++ extensions are properly compiled.")
 
         self.linkage_matrix = cluster.linkage_matrix
-        self.entity_ids = cluster.entity_ids  # Retrieve entity IDs from Cluster class
-        self.weights = cluster.weights  # Retrieve weights from Cluster class
-        self._labels_cache = {}
+        self.entity_ids = cluster.entity_ids
+        self.weights = cluster.weights
+        self._results_cache = {}
 
-    def _get_cluster_labels_cached(self, num_clusters):
-        """Get cluster labels with in-instance caching to avoid repeated tree cuts."""
-        if num_clusters not in self._labels_cache:
-            self._labels_cache[num_clusters] = _cutree_maxclust(self.linkage_matrix, num_clusters)
-        return self._labels_cache[num_clusters]
+    def _get_cached_result(self, num_clusters):
+        """Single C++ call for cutree + distribution, with per-k caching."""
+        if num_clusters not in self._results_cache:
+            self._results_cache[num_clusters] = clustering_c_code.cluster_results_compute(
+                np.asarray(self.linkage_matrix, dtype=np.float64, order="C"),
+                len(self.entity_ids),
+                int(num_clusters),
+                np.asarray(self.weights, dtype=np.float64, order="C"),
+            )
+        return self._results_cache[num_clusters]
 
     def get_cluster_memberships(self, num_clusters) -> pd.DataFrame:
         """
         Generate a table mapping entity IDs to their corresponding cluster IDs.
-        Based on this table, users later can link this to the original dataframe for further regression models.
-
-        There is a common point of confusion because
-        k is typically used to represent the number of clusters in clustering algorithms (e.g., k-means).
-        However, SciPy's hierarchical clustering API specifically uses t as the parameter name.
 
         :param num_clusters: The number of clusters to create.
         :return: Pandas DataFrame with entity IDs and cluster memberships.
         """
         if self.linkage_matrix is None:
             raise ValueError("Linkage matrix is not computed.")
-
-        cluster_labels = self._get_cluster_labels_cached(num_clusters)
-        return pd.DataFrame({"Entity ID": self.entity_ids, "Cluster": cluster_labels})
+        result = self._get_cached_result(num_clusters)
+        return pd.DataFrame({
+            "Entity ID": self.entity_ids,
+            "Cluster": np.asarray(result["labels"], dtype=np.int32),
+        })
 
     def get_cluster_distribution(self, num_clusters, weighted=False) -> pd.DataFrame:
         """
-        Generate a distribution summary of clusters showing counts, percentages, and optionally weighted statistics.
-
-        This function calculates how many entities belong to each cluster and what
-        percentage of the total they represent. When weighted=True, it also provides
-        weight-based statistics.
+        Generate a distribution summary of clusters showing counts, percentages,
+        and optionally weighted statistics.
 
         :param num_clusters: The number of clusters to create.
         :param weighted: If True, include weighted statistics in the distribution.
         :return: DataFrame with cluster distribution information.
         """
-        cluster_labels = np.asarray(
-            self._get_cluster_labels_cached(num_clusters), dtype=np.int32, order="C"
-        )
-        weights = np.asarray(self.weights, dtype=np.float64, order="C")
-
-        if _CPP_AVAILABLE and _CPP_CLUSTER_DIST_AVAILABLE:
-            result = clustering_c_code.cluster_distribution_from_labels(cluster_labels, weights)
-            distribution = pd.DataFrame({
-                "Cluster": np.asarray(result["Cluster"], dtype=np.int32),
-                "Count": np.asarray(result["Count"], dtype=np.int32),
-                "Percentage": np.round(np.asarray(result["Percentage"], dtype=np.float64), 2),
-                "Weight_Sum": np.asarray(result["Weight_Sum"], dtype=np.float64),
-                "Weight_Percentage": np.round(np.asarray(result["Weight_Percentage"], dtype=np.float64), 2),
-            }).sort_values("Cluster")
-        else:
-            # NumPy fallback: vectorized and faster than DataFrame filtering loops.
-            labels_zero = cluster_labels - 1
-            n_clusters_found = int(cluster_labels.max())
-            counts = np.bincount(labels_zero, minlength=n_clusters_found)
-            weight_sums = np.bincount(labels_zero, weights=weights, minlength=n_clusters_found)
-            cluster_ids = np.arange(1, n_clusters_found + 1, dtype=np.int32)
-            total_entities = len(cluster_labels)
-            total_weight = float(np.sum(weights))
-
-            distribution = pd.DataFrame({
-                "Cluster": cluster_ids,
-                "Count": counts.astype(np.int32),
-                "Percentage": np.round((counts / total_entities) * 100.0, 2),
-                "Weight_Sum": weight_sums.astype(np.float64),
-                "Weight_Percentage": np.round(
-                    (weight_sums / total_weight * 100.0) if total_weight > 0 else np.zeros_like(weight_sums),
-                    2,
-                ),
-            })
+        result = self._get_cached_result(num_clusters)
+        distribution = pd.DataFrame({
+            "Cluster": np.asarray(result["Cluster"], dtype=np.int32),
+            "Count": np.asarray(result["Count"], dtype=np.int32),
+            "Percentage": np.round(np.asarray(result["Percentage"], dtype=np.float64), 2),
+            "Weight_Sum": np.asarray(result["Weight_Sum"], dtype=np.float64),
+            "Weight_Percentage": np.round(np.asarray(result["Weight_Percentage"], dtype=np.float64), 2),
+        }).sort_values("Cluster")
 
         if not weighted:
             return distribution[["Cluster", "Count", "Percentage"]]
@@ -1133,10 +778,6 @@ class ClusterResults:
         """
         Plot the distribution of entities across clusters as a bar chart.
 
-        This visualization shows how many entities belong to each cluster, providing
-        insight into the balance and size distribution of the clustering result.
-        When weighted=True, displays weight-based percentages.
-
         :param num_clusters: The number of clusters to create.
         :param save_as: File path to save the plot. If None, the plot will be shown.
         :param title: Title for the plot. If None, a default title will be used.
@@ -1145,14 +786,11 @@ class ClusterResults:
         :param figsize: Figure size in inches.
         :param weighted: If True, display weighted percentages instead of entity count percentages.
         """
-        # Get cluster distribution data (include weights if needed)
         distribution = self.get_cluster_distribution(num_clusters, weighted=weighted)
 
-        # Set up plot
         sns.set(style=style)
         plt.figure(figsize=figsize)
 
-        # Choose what to plot based on weighted parameter
         if weighted and 'Weight_Sum' in distribution.columns:
             y_column = 'Weight_Sum'
             percentage_column = 'Weight_Percentage'
@@ -1164,55 +802,35 @@ class ClusterResults:
             ylabel = "Number of Entities"
             note_text = "Y-axis shows entity counts; percentages above bars indicate their relative frequency."
 
-        # Create bar plot with a more poetic, fresh color palette
-        # 'muted', 'pastel', and 'husl' are good options for fresher colors
         ax = sns.barplot(x='Cluster', y=y_column, data=distribution, palette='pastel')
-
-        # Set the Y-axis range to prevent text overflow
         ax.set_ylim(0, distribution[y_column].max() * 1.2)
 
-        # Ensure Y-axis uses appropriate ticks
         if not weighted:
             plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        # Add percentage labels on top of bars
         for p, (_, row) in zip(ax.patches, distribution.iterrows()):
             height = p.get_height()
             percentage = row[percentage_column]
             ax.text(p.get_x() + p.get_width() / 2., height + max(height * 0.02, 0.5),
                     f'{percentage:.1f}%', ha="center", fontsize=9)
 
-        # Set a simple label for entity count at the top
         if title is None:
             if weighted:
                 title = f"N = {len(self.entity_ids)}, Total Weight = {np.sum(self.weights):.1f}"
             else:
                 title = f"N = {len(self.entity_ids)}"
 
-        # Use a lighter, non-bold title style
         plt.title(title, fontsize=12, fontweight="normal", loc='right')
-
         plt.xlabel("Cluster ID", fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
         plt.xticks(fontsize=10)
         plt.yticks(fontsize=10)
-
-        # Ensure integer ticks for cluster IDs
         plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
-
-        # Add grid for better readability but make it lighter
         plt.grid(axis='y', linestyle='--', alpha=0.4)
-
-        # Adjust layout
         plt.tight_layout()
-
-        # Adjust layout to make room for the note
         plt.subplots_adjust(bottom=0.13)
-
-        # Add a note about what is being displayed
         plt.figtext(0.5, 0.01, note_text, ha='center', fontsize=10, style='italic')
 
-        # Save and show the plot
         save_and_show_results(save_as, dpi)
 
 

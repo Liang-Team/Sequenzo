@@ -23,6 +23,10 @@ tests/
 ├── test_basic.py                       # Basic package tests
 ├── test_pam_and_kmedoids.py           # Clustering algorithm tests
 ├── test_quickstart_integration.py     # End-to-end integration tests
+├── hierarchical_clustering_consistency/ # Hierarchical clustering consistency baselines
+│   ├── generate_hierarchical_clustering_baselines.py
+│   ├── verify_hierarchical_clustering_consistency.py
+│   └── reference_results/             # Reference .npz outputs for consistency checks
 ├── dissimilarity_measures/            # Distance measure tests
 │   ├── test_dissimilarity_measures_traminer.py
 │   └── ref_*.csv                       # TraMineR reference outputs

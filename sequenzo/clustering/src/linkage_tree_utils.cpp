@@ -1,5 +1,6 @@
 #include "linkage_tree_utils.h"
 
+#include <algorithm>
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
@@ -104,4 +105,59 @@ void compute_labels_from_linkage(
             labels_out[i] = it->second;
         }
     }
+}
+
+ClusterResultData compute_cluster_results(
+    const double* linkage_ptr,
+    int n,
+    int num_clusters,
+    const double* weights
+) {
+    ClusterResultData result;
+    result.labels.resize(static_cast<size_t>(n));
+
+    compute_labels_from_linkage(linkage_ptr, n, num_clusters, result.labels.data());
+
+    // Accumulate counts and weight sums per cluster.
+    std::unordered_map<int, int> count_map;
+    std::unordered_map<int, double> weight_map;
+    count_map.reserve(static_cast<size_t>(num_clusters));
+    weight_map.reserve(static_cast<size_t>(num_clusters));
+
+    double total_weight = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const int cid = result.labels[i];
+        count_map[cid] += 1;
+        weight_map[cid] += weights[i];
+        total_weight += weights[i];
+    }
+
+    // Sort cluster ids.
+    result.cluster_ids.reserve(count_map.size());
+    for (const auto& kv : count_map) {
+        result.cluster_ids.push_back(kv.first);
+    }
+    std::sort(result.cluster_ids.begin(), result.cluster_ids.end());
+
+    const auto m = static_cast<int>(result.cluster_ids.size());
+    result.counts.resize(static_cast<size_t>(m));
+    result.percentages.resize(static_cast<size_t>(m));
+    result.weight_sums.resize(static_cast<size_t>(m));
+    result.weight_percentages.resize(static_cast<size_t>(m));
+
+    for (int i = 0; i < m; ++i) {
+        const int cid = result.cluster_ids[i];
+        const int cnt = count_map[cid];
+        const double wsum = weight_map[cid];
+        result.counts[i] = cnt;
+        result.percentages[i] = (n > 0)
+            ? (100.0 * static_cast<double>(cnt) / static_cast<double>(n))
+            : 0.0;
+        result.weight_sums[i] = wsum;
+        result.weight_percentages[i] = (total_weight > 0.0)
+            ? (100.0 * wsum / total_weight)
+            : 0.0;
+    }
+
+    return result;
 }

@@ -98,7 +98,7 @@ public:
         int ipass = 0;
         int hbest = -1;
         int nbest = -1;
-        int k, icluster, h;
+        int k;
         double total = -1.0;
         int nclusters = static_cast<int>(centroids.size());
 
