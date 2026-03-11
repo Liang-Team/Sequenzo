@@ -6,6 +6,8 @@
 #include "binding_common.cpp"
 #include "linkage_tree_utils.cpp"
 #include "distance_prep_utils.cpp"
+#include "fastcluster_linkage.cpp"
+#include "cluster_core.cpp"
 
 #include <limits>
 #include <stdexcept>
@@ -669,4 +671,79 @@ PYBIND11_MODULE(clustering_c_code, m) {
     "Build metrics-by-cluster range table values matrix.");
     };
     register_cqi_postprocess_apis();
+
+    // =========================================================================
+    // Cluster core: full clustering pipeline in C++
+    // =========================================================================
+    auto register_cluster_core_apis = [&m]() {
+    m.def("cluster_from_matrix", [](py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
+                                     const std::string& method,
+                                     bool fast_path) -> py::dict {
+        auto buf = matrix.request();
+        if (buf.ndim != 2 || buf.shape[0] != buf.shape[1]) {
+            throw std::runtime_error("Distance matrix must be a 2D square array.");
+        }
+        const int N = static_cast<int>(buf.shape[0]);
+        auto* ptr = static_cast<double*>(buf.ptr);
+
+        ClusterCoreResult res = cluster_from_matrix(ptr, N, method, fast_path);
+
+        py::dict out;
+        if (!res.linkage_matrix.empty()) {
+            const py::ssize_t rows = static_cast<py::ssize_t>(N - 1);
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix), rows, 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        if (!res.condensed_matrix.empty()) {
+            out["condensed_matrix"] = vector_to_pyarray_1d(
+                std::move(res.condensed_matrix));
+        } else {
+            out["condensed_matrix"] = py::none();
+        }
+        if (!res.full_matrix.empty()) {
+            const py::ssize_t n = static_cast<py::ssize_t>(N);
+            out["full_matrix"] = vector_to_pyarray_2d(
+                std::move(res.full_matrix), n, n);
+        } else {
+            out["full_matrix"] = py::none();
+        }
+        out["warning_flags"] = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+        return out;
+    },
+    py::arg("matrix"), py::arg("method"), py::arg("fast_path") = false,
+    "Full clustering pipeline: distance matrix -> linkage matrix (C++ core).");
+
+    m.def("cluster_from_features", [](py::array_t<double, py::array::c_style | py::array::forcecast> X,
+                                       const std::string& method) -> py::dict {
+        auto buf = X.request();
+        if (buf.ndim != 2) {
+            throw std::runtime_error("Feature matrix must be a 2D array.");
+        }
+        const int N = static_cast<int>(buf.shape[0]);
+        const int D = static_cast<int>(buf.shape[1]);
+        auto* ptr = static_cast<double*>(buf.ptr);
+
+        ClusterCoreResult res = cluster_from_features(ptr, N, D, method);
+
+        py::dict out;
+        if (!res.linkage_matrix.empty()) {
+            const py::ssize_t rows = static_cast<py::ssize_t>(N - 1);
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix), rows, 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        out["condensed_matrix"] = py::none();
+        out["full_matrix"] = py::none();
+        out["warning_flags"] = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+        return out;
+    },
+    py::arg("X"), py::arg("method"),
+    "Full clustering pipeline: feature matrix -> linkage matrix via linkage_vector (C++ core).");
+    };
+    register_cluster_core_apis();
 }

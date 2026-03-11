@@ -108,7 +108,7 @@ except ImportError:
     _CPP_PREP_CHECK_WARD_AVAILABLE = False
     _CPP_CQI_SUMMARY_AVAILABLE = False
     _CPP_CQI_RANGE_AVAILABLE = False
-    print("[!] Warning: C++ cluster quality functions not available. Using Python fallback.")
+    print("[!] Warning: C++ clustering extensions not available. Cluster class will not work.")
 
 
 # Corrected imports: Use relative imports *within* the package.
@@ -161,77 +161,21 @@ def _cutree_maxclust_all(linkage_matrix, k_min, k_max):
 def _check_euclidean_compatibility(matrix, method):
     """
     Check if a distance matrix is likely compatible with Euclidean-based methods like Ward.
-    
-    This performs heuristic checks rather than exact validation since perfect validation
-    would be computationally expensive for large matrices.
-    
-    Parameters:
-    -----------
-    matrix : np.ndarray
-        Distance matrix to check
-    method : str
-        Clustering method name
-        
-    Returns:
-    --------
-    bool
-        True if matrix appears Euclidean-compatible, False otherwise
+    Uses C++ implementation exclusively.
     """
     if method.lower() not in ["ward", "ward_d", "ward_d2"]:
         return True
 
-    if _CPP_AVAILABLE and _CPP_EUCLIDEAN_CHECK_AVAILABLE:
-        result = clustering_c_code.check_euclidean_compatibility(
-            np.asarray(matrix, dtype=np.float64, order="C"),
-            method.lower(),
-        )
-        return bool(result.get("compatible", True))
+    if not (_CPP_AVAILABLE and _CPP_EUCLIDEAN_CHECK_AVAILABLE):
+        raise RuntimeError(
+            "C++ check_euclidean_compatibility is not available. "
+            "Please ensure the C++ extensions are properly compiled.")
 
-    # Python fallback (legacy behavior)
-    n = matrix.shape[0]
-    sample_size = min(50, n)
-    if n > sample_size:
-        indices = np.random.choice(n, sample_size, replace=False)
-        sample_matrix = matrix[np.ix_(indices, indices)]
-    else:
-        sample_matrix = matrix
-
-    sample_n = sample_matrix.shape[0]
-    violations = 0
-    total_checks = 0
-
-    for i in range(sample_n):
-        for j in range(i + 1, sample_n):
-            for k in range(j + 1, sample_n):
-                dij = sample_matrix[i, j]
-                dik = sample_matrix[i, k]
-                djk = sample_matrix[j, k]
-                if (
-                    dik > dij + djk + 1e-10
-                    or dij > dik + djk + 1e-10
-                    or djk > dij + dik + 1e-10
-                ):
-                    violations += 1
-                total_checks += 1
-
-    if total_checks > 0 and (violations / total_checks) > 0.1:
-        return False
-
-    try:
-        if sample_n <= 100:
-            H = np.eye(sample_n) - np.ones((sample_n, sample_n)) / sample_n
-            B = -0.5 * H @ (sample_matrix ** 2) @ H
-            eigenvals = np.linalg.eigvalsh(B)
-            negative_eigenvals = eigenvals[eigenvals < -1e-10]
-            if len(negative_eigenvals) > 0:
-                neg_energy = -np.sum(negative_eigenvals)
-                total_energy = np.sum(np.abs(eigenvals))
-                if total_energy > 0 and neg_energy / total_energy > 0.1:
-                    return False
-    except np.linalg.LinAlgError:
-        pass
-
-    return True
+    result = clustering_c_code.check_euclidean_compatibility(
+        np.asarray(matrix, dtype=np.float64, order="C"),
+        method.lower(),
+    )
+    return bool(result.get("compatible", True))
 
 
 def _warn_ward_usage_once(matrix, method, euclidean_compatible=None, warning_flags=None):
@@ -272,67 +216,6 @@ def _warn_ward_usage_once(matrix, method, euclidean_compatible=None, warning_fla
                 stacklevel=3
             )
         _WARD_WARNING_SHOWN = True
-
-
-def _clean_distance_matrix(matrix):
-    """
-    Clean and validate a distance matrix for hierarchical clustering.
-    
-    This function:
-    1. Handles NaN/Inf values using robust percentile-based replacement
-    2. Sets diagonal to zero
-    3. Ensures non-negativity
-    
-    Uses a fast path when matrix has no NaN/Inf/negative values to avoid
-    unnecessary copy and scans.
-    
-    Note: Symmetry is NOT enforced at this stage since distance matrices may legitimately 
-    be asymmetric (e.g., directed sequence distances, time-dependent measures, etc.).
-    However, symmetrization will be performed later in linkage computation when required 
-    by clustering algorithms.
-    
-    Parameters:
-    -----------
-    matrix : np.ndarray
-        Input distance matrix
-        
-    Returns:
-    --------
-    np.ndarray
-        Cleaned distance matrix
-    """
-    # Fast path: no NaN/Inf/negative values - skip expensive percentile/scan logic
-    if np.all(np.isfinite(matrix)) and np.all(matrix >= 0):
-        matrix = np.array(matrix, dtype=np.float64, copy=True)
-        np.fill_diagonal(matrix, 0.0)
-        return matrix
-
-    # Full path: handle problematic values
-    matrix = matrix.copy()
-
-    # Step 1: Handle NaN/Inf values with percentile-based replacement
-    if np.any(np.isnan(matrix)) or np.any(np.isinf(matrix)):
-        print("[!] Warning: Distance matrix contains NaN or Inf values.")
-
-        finite_vals = matrix[np.isfinite(matrix)]
-        if len(finite_vals) > 0:
-            replacement_val = np.percentile(finite_vals, 95)
-            print(f"    Replacing with 95th percentile value: {replacement_val:.6f}")
-        else:
-            replacement_val = 1.0
-            print(f"    No finite values found, using default: {replacement_val}")
-
-        matrix[~np.isfinite(matrix)] = replacement_val
-
-    # Step 2: Force diagonal to be exactly zero (self-distance should be zero)
-    np.fill_diagonal(matrix, 0.0)
-
-    # Step 3: Ensure non-negativity (distance matrices should be non-negative)
-    if np.any(matrix < 0):
-        print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
-        matrix = np.maximum(matrix, 0.0)
-
-    return matrix
 
 
 def _prepare_distance_matrix_for_linkage(
@@ -435,28 +318,11 @@ def _prepare_distance_matrix_for_linkage(
             print("[!] Warning: Distance matrix contains negative values. Clipping to zero...")
 
         return full_matrix, condensed_matrix, bool(result.get("was_symmetrized", False)), None, warning_flags
-    full_matrix_work = _clean_distance_matrix(matrix)
-    n = full_matrix_work.shape[0]
-    triu_i, triu_j = np.triu_indices(n, k=1)
-    was_symmetrized = not np.allclose(
-        full_matrix_work[triu_i, triu_j],
-        full_matrix_work[triu_j, triu_i],
-        rtol=1e-5,
-        atol=1e-8,
+
+    raise RuntimeError(
+        "C++ distance matrix preparation is not available. "
+        "Please ensure the C++ extensions are properly compiled."
     )
-    if was_symmetrized:
-        full_matrix_work = (full_matrix_work + full_matrix_work.T) / 2
-    condensed_matrix = squareform(full_matrix_work)
-    warning_flags = 0
-    if np.any(~np.isfinite(np.asarray(matrix))):
-        warning_flags |= _WARN_NONFINITE
-    if np.any(np.asarray(matrix) < 0):
-        warning_flags |= _WARN_NEGATIVE
-    if was_symmetrized:
-        warning_flags |= _WARN_SYMMETRIZED
-    full_matrix_out = full_matrix_work if include_full_matrix else None
-    compatible = _check_euclidean_compatibility(full_matrix_work, method) if run_ward_check else None
-    return full_matrix_out, condensed_matrix, was_symmetrized, compatible, warning_flags
 
 class Cluster:
     def __init__(self,
@@ -467,7 +333,7 @@ class Cluster:
                  X_features=None,
                  fast_path=False):
         """
-        A class to handle hierarchical clustering operations using fastcluster for improved performance.
+        Hierarchical clustering with the full computational pipeline in C++.
 
         :param matrix: Precomputed distance matrix (full square form). Required when X_features is None.
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
@@ -481,98 +347,80 @@ class Cluster:
             - "median": Median linkage
         :param weights: Optional array of weights for each entity (default: None for equal weights).
         :param X_features: Optional (n x d) feature matrix for Euclidean Ward clustering. When provided
-            with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)), same as
-            sklearn/TanaT. If both matrix and X_features are provided, X_features takes precedence for
-            Ward methods.
-        :param fast_path: If True, skips Ward compatibility checking and avoids returning full_matrix
-            during C++ preprocessing to reduce memory traffic. Default False (strict path).
+            with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)).
+        :param fast_path: If True, skips Ward compatibility checking and full_matrix retention.
         """
-        self.clustering_method = clustering_method.lower()
-        self.fast_path = bool(fast_path)
+        if not _CPP_AVAILABLE:
+            raise RuntimeError(
+                "C++ clustering core is not available. "
+                "Please ensure the C++ extensions are properly compiled.")
 
-        # Supported clustering methods
-        supported_methods = ["ward", "ward_d", "ward_d2", "single", "complete", "average", "centroid", "median"]
-        if self.clustering_method not in supported_methods:
-            raise ValueError(
-                f"Unsupported clustering method '{clustering_method}'. Supported methods: {supported_methods}")
+        method = clustering_method.lower()
 
-        # Handle backward compatibility: 'ward' maps to 'ward_d' (classic Ward method)
-        if self.clustering_method == "ward":
-            self.clustering_method = "ward_d"
-            print("[>] Note: 'ward' method maps to 'ward_d' (classic Ward method).")
-            print("    Use 'ward_d2' for Ward method with squared Euclidean distances.")
-
-        # Determine input mode: X_features (linkage_vector) vs matrix (distance matrix)
-        ward_methods = ["ward_d", "ward_d2"]
-        use_vector_path = (
-            X_features is not None
-            and self.clustering_method in ward_methods
-        )
+        # Determine data dimensions and path
+        ward_methods = ("ward", "ward_d", "ward_d2")
+        use_vector_path = (X_features is not None and method in ward_methods)
 
         if use_vector_path:
-            print("[>] There's using vector path for 'ward' clustering.")
-            # X_features path: memory-efficient linkage_vector for Ward + Euclidean
-            X = np.asarray(X_features, dtype=np.float64)
+            X = np.asarray(X_features, dtype=np.float64, order="C")
             if X.ndim != 2:
                 raise ValueError("X_features must be a 2D array (n x d).")
             n = X.shape[0]
-
-            self.entity_ids = np.array(entity_ids) if entity_ids is not None else np.arange(n)
-            if len(self.entity_ids) != n:
-                raise ValueError("Length of entity_ids must match the number of rows in X_features.")
-
-            if len(np.unique(self.entity_ids)) != len(self.entity_ids):
-                raise ValueError("entity_ids must contain unique values.")
-
-            if weights is not None:
-                self.weights = np.array(weights, dtype=np.float64)
-                if len(self.weights) != n:
-                    raise ValueError("Length of weights must match X_features.")
-                if np.any(self.weights < 0) or np.sum(self.weights) == 0:
-                    raise ValueError("All weights must be non-negative and sum > 0.")
-            else:
-                self.weights = np.ones(n, dtype=np.float64)
-
-            self._X_features = X
-            self._full_matrix = None  # Lazy-computed when ClusterQuality needs it
-            self.condensed_matrix = None
-            self.linkage_matrix = self._compute_linkage_from_features()
-        
         else:
-            # Matrix path: traditional distance matrix input
             if matrix is None:
                 raise ValueError("Either matrix or X_features (with ward/ward_d2) must be provided.")
-
-            self.entity_ids = np.array(entity_ids)
-            if len(self.entity_ids) != len(matrix):
-                raise ValueError("Length of entity_ids must match the size of the matrix.")
-            if len(np.unique(self.entity_ids)) != len(self.entity_ids):
-                raise ValueError("entity_ids must contain unique values.")
-
-            if weights is not None:
-                self.weights = np.array(weights, dtype=np.float64)
-                if len(self.weights) != len(matrix):
-                    raise ValueError("Length of weights must match the size of the matrix.")
-                if np.any(self.weights < 0) or np.sum(self.weights) == 0:
-                    raise ValueError("All weights must be non-negative and sum > 0.")
-            else:
-                self.weights = np.ones(len(matrix), dtype=np.float64)
-
             if isinstance(matrix, pd.DataFrame):
-                print("[>] Converting DataFrame to NumPy array...")
-                self._full_matrix = matrix.values
-            else:
-                self._full_matrix = matrix
-
-            if len(self._full_matrix.shape) != 2 or self._full_matrix.shape[0] != self._full_matrix.shape[1]:
+                matrix = matrix.values
+            matrix = np.asarray(matrix, dtype=np.float64, order="C")
+            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
                 raise ValueError("Input must be a full square-form distance matrix.")
+            n = matrix.shape[0]
 
+        # entity_ids bookkeeping
+        self.entity_ids = np.array(entity_ids) if entity_ids is not None else np.arange(n)
+        if len(self.entity_ids) != n:
+            raise ValueError("Length of entity_ids must match the number of data points.")
+        if len(np.unique(self.entity_ids)) != len(self.entity_ids):
+            raise ValueError("entity_ids must contain unique values.")
+
+        # weights bookkeeping
+        if weights is not None:
+            self.weights = np.array(weights, dtype=np.float64)
+            if len(self.weights) != n:
+                raise ValueError("Length of weights must match the number of data points.")
+            if np.any(self.weights < 0) or np.sum(self.weights) == 0:
+                raise ValueError("All weights must be non-negative and sum > 0.")
+        else:
+            self.weights = np.ones(n, dtype=np.float64)
+
+        # Call C++ core
+        if use_vector_path:
+            result = clustering_c_code.cluster_from_features(X, method)
+            self._X_features = X
+        else:
+            result = clustering_c_code.cluster_from_matrix(
+                matrix, method, bool(fast_path))
             self._X_features = None
-            self.linkage_matrix = self._compute_linkage()
+
+        # Store results
+        self.clustering_method = "ward_d" if method == "ward" else method
+        self.fast_path = bool(fast_path)
+
+        lm = result["linkage_matrix"]
+        self.linkage_matrix = np.asarray(lm) if lm is not None else None
+
+        cm = result["condensed_matrix"]
+        self.condensed_matrix = np.asarray(cm) if cm is not None else None
+
+        fm = result["full_matrix"]
+        self._full_matrix = np.asarray(fm) if fm is not None else None
+
+        # Emit Python-side warnings from C++ flags
+        self._warn_from_flags(int(result["warning_flags"]), self.clustering_method)
 
     @property
     def full_matrix(self):
-        """Full distance matrix. Lazy-computed from X_features when using linkage_vector path."""
+        """Full distance matrix. Lazy-computed from X_features or condensed_matrix."""
         if self._full_matrix is None and self._X_features is not None:
             self._full_matrix = squareform(pdist(self._X_features, "euclidean"))
         elif self._full_matrix is None and self.condensed_matrix is not None:
@@ -583,82 +431,20 @@ class Cluster:
     def full_matrix(self, value):
         self._full_matrix = value
 
-    def _compute_linkage_from_features(self):
-        """Compute linkage via linkage_vector (O(ND) memory) for Ward + Euclidean."""
-        X = np.asarray(self._X_features, dtype=np.float64, order="C")
-        # linkage_vector 'ward' produces ward_d2 style; apply correction for ward_d
-        Z = linkage_vector(X, method="ward", metric="euclidean")
-        if self.clustering_method == "ward_d":
-            # Z = Z.copy()
-            Z[:, 2] = Z[:, 2] / 2.0
-        return Z
-
-    def _compute_linkage(self):
-        """
-        Compute the linkage matrix using fastcluster for improved performance.
-        Supports both Ward D (classic) and Ward D2 methods.
-        """
-        (
-            self._full_matrix,
-            self.condensed_matrix,
-            was_symmetrized,
-            euclidean_compatible,
-            warning_flags,
-        ) = _prepare_distance_matrix_for_linkage(
-            self._full_matrix,
-            self.clustering_method,
-            include_full_matrix=not self.fast_path,
-            run_ward_check=not self.fast_path,
-        )
-        if was_symmetrized:
+    def _warn_from_flags(self, flags, method):
+        """Translate C++ warning_flags bitmask into Python warnings."""
+        if flags & _WARN_SYMMETRIZED:
             print("[!] Warning: Distance matrix is not symmetric.")
-            print("    Hierarchical clustering algorithms require symmetric distance matrices.")
-            print("    Automatically symmetrizing using (matrix + matrix.T) / 2")
-            print("    If this is not appropriate for your data, please provide a symmetric matrix.")
-
-        # Check Ward compatibility and issue one-time warning if needed
-        if not self.fast_path:
+            print("    Automatically symmetrized using (matrix + matrix.T) / 2")
+        if flags & _WARN_NONFINITE:
+            print("[!] Warning: Distance matrix contained NaN or Inf values (replaced).")
+        if flags & _WARN_NEGATIVE:
+            print("[!] Warning: Distance matrix contained negative values (clipped to zero).")
+        if flags & _WARN_WARD_NON_EUCLIDEAN:
             _warn_ward_usage_once(
-                self.full_matrix,
-                self.clustering_method,
-                euclidean_compatible=euclidean_compatible,
-                warning_flags=warning_flags,
-            )
-
-        # Map our method names to fastcluster's expected method names
-        fastcluster_method = self._map_method_name(self.clustering_method)
-
-        # preserve_input=False: condensed_matrix is not used after linkage, saves ~50% memory
-        linkage_matrix = linkage(
-            self.condensed_matrix, method=fastcluster_method, preserve_input=False
-        )
-
-        return linkage_matrix
-
-    def _map_method_name(self, method):
-        """
-        Map our internal method names to fastcluster's expected method names.
-        """
-        method_mapping = {
-            "ward_d": "ward",    # Classic Ward (will be corrected later) (updated: it was solved on Nov.15, 2025 by Xinyi)
-            "ward_d2": "ward_d2",   # Ward D2 (no correction needed)
-            "single": "single",
-            "complete": "complete",
-            "average": "average",
-            "centroid": "centroid",
-            "median": "median"
-        }
-        return method_mapping.get(method, method)
-    
-    def _apply_ward_d_correction(self, linkage_matrix):
-        """
-        Apply Ward D correction by dividing distances by 2.
-        This converts Ward D2 results to classic Ward D results.
-        """
-        linkage_corrected = linkage_matrix.copy()
-        linkage_corrected[:, 2] = linkage_corrected[:, 2] / 2.0
-        print("[>] Applied Ward D correction: distances divided by 2 for classic Ward method.")
-        return linkage_corrected
+                self.full_matrix, method,
+                euclidean_compatible=False,
+                warning_flags=flags)
 
     def plot_dendrogram(self,
                         save_as=None,

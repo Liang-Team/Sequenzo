@@ -498,6 +498,7 @@ def get_clustering_include_dirs():
         pybind11.get_include(user=True),
         numpy.get_include(),
         'sequenzo/clustering/src/',
+        'sequenzo/clustering/sequenzo_fastcluster/src/',
     ]
 
 
@@ -589,11 +590,17 @@ def configure_cpp_extension():
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
         # Same for clustering: compile only the binding TU.
+        # Remove -ffast-math because the clustering module now embeds
+        # fastcluster.cpp which relies on IEEE NaN semantics (fc_isnan).
+        clustering_compile_args = get_compile_args_for_file("dummy.cpp")
+        clustering_compile_args = [a for a in clustering_compile_args if a != '-ffast-math']
+        if '-O3' not in clustering_compile_args:
+            clustering_compile_args.append('-O3')
         clustering_ext_module = Pybind11Extension(
             'sequenzo.clustering.clustering_c_code',
             sources=['sequenzo/clustering/src/module.cpp'],
             include_dirs=get_clustering_include_dirs(),
-            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_compile_args=clustering_compile_args,
             extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.1.21"'),
