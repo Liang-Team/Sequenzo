@@ -23,6 +23,12 @@ from .seqcompare import (
     compute_bayesian_information_criterion_test,
 )
 
+from .kob_decomposition import (
+    oaxaca_blinder_decomposition,
+    kob_decomposition,
+    KOBDecompositionResult,
+)
+
 __all__ = [
     'compare_groups_across_positions',
     'plot_group_differences_across_positions',
@@ -30,4 +36,7 @@ __all__ = [
     'compare_groups_overall',
     'compute_likelihood_ratio_test',
     'compute_bayesian_information_criterion_test',
+    'oaxaca_blinder_decomposition',
+    'kob_decomposition',
+    'KOBDecompositionResult',
 ]

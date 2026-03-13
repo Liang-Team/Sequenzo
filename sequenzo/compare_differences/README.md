@@ -4,11 +4,13 @@ This module provides functions for comparing groups of sequences and analyzing h
 
 ## Overview
 
-The `compare_differences` module implements two main types of analysis:
+The `compare_differences` module implements three main types of analysis:
 
 1. **Position-wise Discrepancy Analysis** (`compare_groups_across_positions`): Analyzes how differences between groups of sequences evolve along the positions using sliding windows.
 
 2. **Sequence Comparison Tests** (`compare_groups_overall`, `compute_likelihood_ratio_test`, `compute_bayesian_information_criterion_test`): Performs likelihood ratio tests and Bayesian information criterion tests to compare two groups of sequences.
+
+3. **Kitagawa–Oaxaca–Blinder (KOB) Decomposition** (`kob_decomposition`, `oaxaca_blinder_decomposition`): Decomposes mean differences in a continuous outcome between two groups into composition (explained) and returns (unexplained) components, and can be combined with sequence-derived typologies (e.g. life-course clusters).
 
 ## Functions
 
@@ -104,6 +106,46 @@ from sequenzo.compare_differences import compute_bayesian_information_criterion_
 results = compute_bayesian_information_criterion_test(seqdata, group=group, method="LCS", s=100)
 # Returns: [Delta BIC, Bayes Factor]
 ```
+
+### kob_decomposition()
+
+**Kitagawa–Oaxaca–Blinder (KOB) decomposition for group inequalities**
+
+Decomposes the mean difference in a continuous outcome between two groups into:
+
+- **Explained (composition / endowments)**: differences in covariate means weighted by a reference coefficient vector.
+- **Unexplained (returns)**: differences in group-specific regression coefficients and intercepts, evaluated at observed covariate means and a chosen reference coefficient vector.
+
+This implementation follows:
+
+- Jann, B. (2008). "The Blinder–Oaxaca decomposition for linear regression models." *The Stata Journal*, 8(4), 453–479.
+- Fortin, N., Lemieux, T., & Firpo, S. (2011). "Decomposition methods in economics." In *Handbook of Labor Economics*, Vol. 4A, 1–102.
+
+and is motivated by the life-course-sensitive application in:
+
+- Rowold, C., Struffolino, E., & Fasang, A. E. (2024). "Life-Course-Sensitive Analysis of Group Inequalities: Combining Sequence Analysis With the Kitagawa–Oaxaca–Blinder Decomposition." *Sociological Methods & Research*, 54(2), 646–705.
+
+```python
+import numpy as np
+from sequenzo.compare_differences import kob_decomposition
+
+# y: outcome, group: two-group indicator, X: covariate matrix
+result = kob_decomposition(
+    y=y,
+    group=group,
+    X=X,
+    variable_names=["X1", "X2"],  # optional
+    term_ids=[0, 1],              # optional grouping of coefficients into "terms"
+    reference="group0",           # "group0", "group1", or "pooled"
+    majority_owner=None           # optional term-wise reference choice
+)
+
+print(result.total_gap, result.explained, result.unexplained_returns)
+print(result.by_variable)
+```
+
+For more control over the reference structure, you can call the underlying
+`oaxaca_blinder_decomposition` function directly.
 
 ## Examples
 

@@ -64,6 +64,7 @@ This creates reference CSV files:
 - `ref_disstree_info.csv`: Distance tree structure info
 - `ref_disstree_leaves.csv`: Leaf memberships from distance tree
 - `ref_seqtree_leaves.csv`: Leaf memberships from sequence tree
+- `ref_dissindic.csv`: Individual-level indicators from TraMineRextras `dissindic()`
 
 **When to use:**
 - Before releases: Verify that implementation matches TraMineR exactly
@@ -175,13 +176,14 @@ Rscript tests/tree_analysis/traminer_reference.R
 This R script (`traminer_reference.R`) will:
 1. Load the dyadic_children dataset (first 20 rows)
 2. Create sequence objects and compute distance matrices
-3. Run TraMineR functions: `dissvar()`, `dissassoc()`, `disstree()`, `seqtree()`
+3. Run TraMineR functions: `dissvar()`, `dissassoc()`, `disstree()`, `seqtree()` and TraMineRextras `dissindic()`
 4. Save numerical results to CSV files in `tests/tree_analysis/`:
    - `ref_dissvar.csv`: Variance values (unweighted, weighted, squared)
    - `ref_dissassoc.csv`: Association test results (pseudo F, R², p-values)
    - `ref_disstree_info.csv`: Distance tree structure information
    - `ref_disstree_leaves.csv`: Leaf memberships from distance tree
    - `ref_seqtree_leaves.csv`: Leaf memberships from sequence tree
+   - `ref_dissindic.csv`: Individual-level marginality and gain indicators
 
 **Note:** The R script uses `set.seed(12345)` for reproducibility, ensuring that
 random components (like permutation tests) produce consistent results across runs.

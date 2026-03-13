@@ -3,6 +3,7 @@
 # Usage: Rscript tests/tree_analysis/traminer_reference.R
 
 library(TraMineR)
+library(TraMineRextras)
 
 # Set working directory to project root
 setwd("/Users/lei/Documents/Sequenzo_all_folders/Sequenzo")
@@ -147,6 +148,7 @@ write.csv(data.frame(
     rule = rules
 ), "tests/tree_analysis/ref_disstree_rules.csv", row.names = FALSE)
 
+#
 # ============================================================================
 # Test 4: seqtree (build_sequence_tree)
 # ============================================================================
@@ -181,6 +183,22 @@ write.csv(data.frame(
     rule = seqtree_rules
 ), "tests/tree_analysis/ref_seqtree_rules.csv", row.names = FALSE)
 
+
+# ============================================================================
+# Test 5: dissindic (compute_distance_indicators)
+# ============================================================================
+cat("\nTest 5: dissindic\n")
+
+indic <- dissindic(dist_matrix, group = groups, gower = FALSE,
+                   squared = FALSE, weights = NULL)
+
+cat("First few rows of dissindic result:\n")
+print(head(indic))
+
+write.csv(indic,
+          "tests/tree_analysis/ref_dissindic.csv",
+          row.names = FALSE)
+
 cat("\n=== Reference generation complete ===\n")
 cat("Reference files saved to tests/tree_analysis/\n")
 cat("Generated files:\n")
@@ -191,3 +209,4 @@ cat("  - ref_disstree_leaves.csv\n")
 cat("  - ref_disstree_rules.csv\n")
 cat("  - ref_seqtree_leaves.csv\n")
 cat("  - ref_seqtree_rules.csv\n")
+cat("  - ref_dissindic.csv\n")

@@ -60,6 +60,7 @@ from sequenzo.tree_analysis import (
     get_classification_rules,
     assign_to_leaves,
 )
+from sequenzo.tree_analysis.dissassoc_permutation import compute_distance_indicators
 
 
 # Tolerance for numerical comparisons
@@ -200,6 +201,42 @@ def test_dissassoc_consistency(lsog_distance_matrix, lsog_predictors):
     
     print(f"[✓] Pseudo F matches: {result['pseudo_f']:.10f}")
     print(f"[✓] Pseudo R² matches: {result['pseudo_r2']:.10f}")
+
+
+# ============================================================================
+# Test compute_distance_indicators vs TraMineR dissindic
+# ============================================================================
+
+def test_dissindic_consistency(lsog_distance_matrix, lsog_predictors):
+    """Compare compute_distance_indicators with TraMineRextras dissindic."""
+    ref = _load_reference_file("ref_dissindic.csv")
+    if ref is None:
+        pytest.skip("Reference file not found. Run traminer_reference.R first.")
+
+    groups = lsog_predictors["group"].values
+
+    result = compute_distance_indicators(
+        distance_matrix=lsog_distance_matrix,
+        group=groups,
+        weights=None,
+        gower=False,
+        squared=False,
+    )
+
+    # Ensure same ordering and length
+    assert ref.shape[0] == result.shape[0]
+
+    # Compare group labels
+    assert np.array_equal(result["group"].values.astype(str), ref["group"].values.astype(str))
+
+    # Compare marginality and gain
+    for col in ["marginality", "gain"]:
+        sequenzo_vals = result[col].values
+        traminer_vals = ref[col].values
+        assert np.allclose(sequenzo_vals, traminer_vals, rtol=RTOL, atol=ATOL), \
+            f"{col} mismatch"
+
+    print("[✓] dissindic-based indicators match TraMineRextras")
 
 
 # ============================================================================
