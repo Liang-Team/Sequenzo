@@ -728,6 +728,187 @@ def compare_groups(subseq: SubsequenceList,
             subseq.eseq.weights = original_weights
 
 
+def convert_event_sequences_to_tse(eseq: EventSequenceList) -> pd.DataFrame:
+    """
+    Convert an EventSequenceList to TraMineR-style TSE (Time-Stamped Event) format.
+
+    TraMineR equivalent: seqe2tse()
+
+    The resulting DataFrame has three columns:
+        - 'id'      : individual identifier
+        - 'timestamp': event time (numeric, already sorted within each id)
+        - 'event'   : event label (string, using the event dictionary)
+
+    Notes
+    -----
+    - This is a pure format conversion helper. It does not modify the original
+      event sequences and can be called at any time.
+    - Timestamps are taken as-is from the EventSequence objects.
+    """
+    rows = []
+    for seq in eseq.sequences:
+        # For each event in the sequence, create one TSE row
+        for t, e in zip(seq.timestamps, seq.events):
+            # Map integer code back to event label using dictionary
+            if 1 <= int(e) <= len(seq.dictionary):
+                ev_label = seq.dictionary[int(e) - 1]
+            else:
+                ev_label = f"Event{int(e)}"
+            rows.append(
+                {
+                    "id": seq.id,
+                    "timestamp": float(t),
+                    "event": ev_label,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame(columns=["id", "timestamp", "event"])
+
+    tse_df = pd.DataFrame(rows, columns=["id", "timestamp", "event"])
+    # Ensure events are sorted by id and timestamp exactly like TraMineR
+    tse_df = tse_df.sort_values(["id", "timestamp", "event"]).reset_index(drop=True)
+    return tse_df
+
+
+def compute_event_transition_matrix(
+    eseq: EventSequenceList,
+    weighted: bool = True,
+    normalize: bool = True,
+) -> pd.DataFrame:
+    """
+    Compute the event transition matrix for an EventSequenceList.
+
+    TraMineR equivalent: seqetm()
+
+    This function counts how often each ordered pair of events (i -> j)
+    occurs across all sequences and optionally normalizes the counts
+    into transition probabilities.
+
+    Parameters
+    ----------
+    eseq : EventSequenceList
+        Collection of event sequences.
+    weighted : bool, default True
+        If True, each sequence contributes according to its weight stored in
+        eseq.weights. If False, all sequences are equally weighted.
+    normalize : bool, default True
+        If True, each row of the resulting matrix is normalized so that:
+            sum_j P(i -> j) = 1  (when row i has at least one outgoing transition)
+        If False, raw weighted counts are returned.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Square matrix with shape (K, K), where K is the number of distinct
+        events in the dictionary. Rows and columns are indexed by event labels.
+        Cell (i, j) contains either:
+            - the weighted count of transitions i -> j       (normalize=False), or
+            - the transition probability P(i -> j)           (normalize=True).
+    """
+    n_events = len(eseq.dictionary)
+    if n_events == 0:
+        return pd.DataFrame()
+
+    # Initialize transition count matrix
+    counts = np.zeros((n_events, n_events), dtype=np.float64)
+
+    # Decide which weights to use
+    if weighted:
+        weights = eseq.weights
+    else:
+        weights = np.ones(eseq.n_sequences, dtype=np.float64)
+
+    # Loop over sequences and accumulate transitions
+    for idx, seq in enumerate(eseq.sequences):
+        w = float(weights[idx])
+        # Need at least two events to define a transition
+        if len(seq.events) < 2 or w == 0.0:
+            continue
+
+        for k in range(len(seq.events) - 1):
+            src_code = int(seq.events[k])
+            dst_code = int(seq.events[k + 1])
+
+            # Codes are 1-based indices into the dictionary. We ignore any
+            # unexpected values for safety.
+            if 1 <= src_code <= n_events and 1 <= dst_code <= n_events:
+                counts[src_code - 1, dst_code - 1] += w
+
+    # Convert to DataFrame with readable labels
+    labels = list(eseq.dictionary)
+    tm = pd.DataFrame(counts, index=labels, columns=labels, dtype=float)
+
+    if normalize:
+        # Normalize each row to sum to 1 (if row sum > 0)
+        row_sums = tm.sum(axis=1)
+        non_zero = row_sums > 0
+        tm.loc[non_zero] = tm.loc[non_zero].div(row_sums[non_zero], axis=0)
+
+    return tm
+
+
+def check_event_subsequence_containment(
+    eseq: EventSequenceList,
+    subseq: Union[EventSequence, str],
+    constraint: Optional[EventSequenceConstraint] = None,
+) -> pd.Series:
+    """
+    Check whether each event sequence contains a given subsequence.
+
+    TraMineR equivalent: seqecontain()
+
+    This is a high-level convenience wrapper built on top of the internal
+    subsequence search utilities. It returns a boolean indicator for each
+    sequence, telling you whether the target subsequence occurs at least once.
+
+    Parameters
+    ----------
+    eseq : EventSequenceList
+        Collection of event sequences to be scanned.
+    subseq : EventSequence or str
+        Target subsequence specification:
+        - If EventSequence: used directly, its dictionary must be compatible
+          with eseq.dictionary.
+        - If str: parsed using the same syntax as TraMineR, e.g. "(A)-(B,C)".
+    constraint : EventSequenceConstraint, optional
+        Time and counting constraints controlling what counts as a valid
+        occurrence (maximum gap, window size, age limits, etc.). When None,
+        a default unconstrained EventSequenceConstraint is used.
+
+    Returns
+    -------
+    pandas.Series
+        Boolean Series of length n_sequences, indexed by implicit 0..n-1:
+        - True  : subsequence occurs at least once in the sequence
+        - False : subsequence does not occur
+    """
+    if constraint is None:
+        constraint = EventSequenceConstraint()
+
+    # Ensure we have an EventSequence representation of the target subsequence
+    if isinstance(subseq, EventSequence):
+        target = subseq
+    elif isinstance(subseq, str):
+        target = _parse_subsequence_string(subseq, eseq.dictionary)
+    else:
+        raise TypeError(
+            "subseq must be either an EventSequence or a subsequence string "
+            "such as '(A)-(B,C)'."
+        )
+
+    results = []
+    for seq in eseq.sequences:
+        present = _find_subsequence_presence(
+            subseq_seq=target,
+            seq=seq,
+            constraint=constraint,
+        )
+        results.append(bool(present))
+
+    return pd.Series(results, name="contains")
+
+
 # ============================================================================
 # Internal Helper Functions
 # ============================================================================

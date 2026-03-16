@@ -287,14 +287,24 @@ def _plot_event_parallel_coordinates(
             )
             ax.add_patch(rect)
 
-    # Color palette for lines (one color per trajectory type or per sequence)
+    # Color palette for lines (one color per trajectory type or per sequence).
+    # TraMineR uses qualitative palettes such as "Dark2"/"Set2". In Matplotlib 3.7+
+    # the legacy `plt.cm.get_cmap` is deprecated, so we prefer the modern
+    # `matplotlib.colormaps` interface and only fall back to older APIs when
+    # absolutely necessary.
     try:
-        from matplotlib.colors import to_rgba
-        _dark2 = plt.cm.get_cmap("Set2")
-        if _dark2 is None:
-            _dark2 = plt.cm.get_cmap("tab10")
+        from matplotlib import colormaps
+
+        try:
+            # Preferred qualitative palette
+            _dark2 = colormaps["Set2"]
+        except KeyError:
+            # Fallback to a widely available qualitative palette
+            _dark2 = colormaps["tab10"]
     except Exception:
-        _dark2 = plt.cm.tab10
+        # Final fallback for very old Matplotlib versions – still works,
+        # but may emit a deprecation warning on newer versions.
+        _dark2 = plt.get_cmap("tab10")
     n_traj = len(trajectories)
     colors = [_dark2(i % 8) for i in range(n_traj)]
 

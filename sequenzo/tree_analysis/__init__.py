@@ -9,7 +9,12 @@
            Corresponds to TraMineR functions: seqtree(), disstree(), dissvar(), dissassoc()
 """
 
-from .tree_utils import compute_pseudo_variance, compute_distance_association
+from .tree_utils import (
+    compute_pseudo_variance,
+    compute_distance_association,
+    dissmfacw,
+    dissmergegroups,
+)
 from .disstree import build_distance_tree
 from .seqtree import build_sequence_tree
 from .tree_helpers import (
@@ -28,6 +33,8 @@ __all__ = [
     # Utility functions
     'compute_pseudo_variance',
     'compute_distance_association',
+    'dissmfacw',
+    'dissmergegroups',
     # Tree building
     'build_distance_tree',
     'build_sequence_tree',

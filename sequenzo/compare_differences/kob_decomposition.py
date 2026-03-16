@@ -1,13 +1,11 @@
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : oaxaca_blinder.py
-@Time    : 2026-03-13
+@Time    : 2026-03-13 08:17
 @Desc    : Generic Kitagawa–Oaxaca–Blinder (KOB) decomposition for group inequalities.
 
 This module provides a general implementation of the Kitagawa–Oaxaca–Blinder
 decomposition for differences in a numeric outcome between two groups.
-
-It is designed to be *generic* and reusable:
 
 - It can be applied to any continuous outcome and covariates (not only sequence data).
 - It can be combined with sequence-derived typologies (e.g. life-course clusters)

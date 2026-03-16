@@ -186,48 +186,71 @@
 
 ## 6. 事件序列分析
 
-### ❌ Sequenzo 完全缺失的功能模块
+### ✅ Sequenzo 已基本实现（与 TraMineR 对齐）
 
 #### 6.1 事件序列创建和处理
-- **`seqecreate()`** - 创建事件序列对象
-- **`seqeid()`** - 事件序列ID
-- **`seqelength()`** - 事件序列长度
-- **`seqeweight()`** - 事件序列权重
-- **`seqeapplysub()`** - 应用子序列到事件序列
+- **`seqecreate()`** → `create_event_sequences()`（位于 `sequenzo/with_event_history_analysis/event_sequence.py`）
+  - 支持从 STS（`SequenceData`）或 TSE 数据框创建事件序列对象
+- **`seqelist` / `eseq` / `subseqelist`** → `EventSequenceList`, `EventSequence`, `SubsequenceList`
+  - 保存 ID、时间戳、事件字典、权重、长度等信息
+- **`seqeid()` / `seqelength()` / `seqeweight()`**  
+  - ID：`EventSequence.id`
+  - 长度：`EventSequenceList.lengths`
+  - 权重：`EventSequenceList.weights`
+- **`seqeapplysub()`** → `count_subsequence_occurrences()`
+  - 通过 `EventSequenceConstraint.count_method` 支持 COBJ / CDIST_O / CWIN / CMINWIN / CDIST 等计数方式
+- **`seqeconstraint()`** → `EventSequenceConstraint`
+  - 与 TraMineR 类似的时间窗、最大间隔、计数方法等控制选项
 
 #### 6.2 事件子序列挖掘
-- **`seqefsub()`** - 查找频繁事件子序列
-- **`seqecmpgroup()`** - 比较组间事件子序列（识别最区分性的子序列）
-- **`seqecontain()`** - 检查事件序列是否包含特定子序列
-- **`seqeconstraint()`** - 事件序列约束（时间约束、计数方法等）
+- **`seqefsub()`** → `find_frequent_subsequences()`
+  - 支持通过 `min_support` 或 `pmin_support` 设定频繁子序列阈值
+  - 支持用户指定子序列字符串（与 TraMineR 子序列语法兼容，如 `"(A)-(B,C)"`）
+- **`seqecmpgroup()`** → `compare_groups()`
+  - 使用卡方检验（可选 Bonferroni 校正）比较组间子序列分布差异
+  - 返回的统计结果与 TraMineR 输出结构对应（p-value, statistic, group-specific frequencies/residuals）
+- **`seqecontain()`** → `seqecontain()`（新增高层封装）
+  - 内部基于 `_find_subsequence_presence()`，对每条序列返回是否包含指定子序列的布尔向量
+  - 支持字符串子序列和 `EventSequence` 两种输入形式
 
 #### 6.3 事件序列转换
-- **`seqetm()`** - 事件转换矩阵
-- **`seqe2tse()`** - 事件序列转TSE格式
+- **`seqe2tse()`** → `seqe2tse()`（新增接口）
+  - 将 `EventSequenceList` 转换为 TSE 数据框，列名为 `id`, `timestamp`, `event`
+  - 同一 ID 内按时间戳和事件名排序，结构与 TraMineR `seqe2tse()` 输出保持一致
+- **`seqetm()`** → `seqetm()`（新增接口）
+  - 在所有事件序列上计算事件转换矩阵：
+    - 行：起始事件
+    - 列：目标事件
+    - 元素：加权转移计数或转移概率（按行归一化）
+  - `weighted=True` 时使用 `EventSequenceList.weights` 作为权重
 
 #### 6.4 事件序列可视化
-- **`plot.subseqelist()`** - 事件子序列列表图
-- **`plot.subseqelistchisq()`** - 事件子序列卡方检验图
+- **`plot.subseqelist()` / `plot.subseqelistchisq()`**  
+  - 在 `event_sequence_visualization.py` 中提供等价的可视化函数，用于：
+    - 展示频繁子序列的支持度 / 计数
+    - 展示组间区分性子序列的卡方统计结果
+  - 输出内容与 TraMineR 相同，只是接口形式采用 Python 风格函数而非 S3 方法
 
 ---
 
 ## 7. 树分析
 
-### ❌ Sequenzo 完全缺失的功能模块
+### ✅ Sequenzo 已基本实现（基于距离矩阵的树分析）
 
 #### 7.1 序列回归树
-- **`seqtree()`** - 创建序列回归树（基于距离矩阵）
-- **`seqtreedisplay()`** - 显示序列树
-- **`seqtree2dot()`** - 序列树转GraphViz DOT格式
+- **`seqtree()`** → `build_sequence_tree()`（位于 `sequenzo/tree_analysis/seqtree.py`）
+  - 从 `SequenceData` 提取或计算距离矩阵，再调用距离树引擎
+- **`seqtreedisplay()`** → `plot_tree()` / `print_tree()`（位于 `tree_visualization.py`）
+- **`seqtree2dot()`** → `export_tree_to_dot()`（同上，导出 GraphViz DOT）
 
 #### 7.2 距离树
-- **`disstree()`** - 创建距离树
-- **`disstreedisplay()`** - 显示距离树
-- **`disstree2dot()`** - 距离树转DOT格式
-- **`disstree2dotp()`** - 距离树转DOT格式（带参数）
-- **`disstreeleaf()`** - 距离树叶节点
-- **`disstree.get.rules()`** - 获取分类规则
-- **`disstree.assign()`** - 分配规则索引
+- **`disstree()`** → `build_distance_tree()`（位于 `sequenzo/tree_analysis/disstree.py`）
+- **`disstreedisplay()`** → `plot_tree()` / `print_tree()`（与序列树共用）
+- **`disstree2dot()` / `disstree2dotp()`** → `export_tree_to_dot()`  
+  - 支持带参数导出（如控制节点信息、标签等）
+- **`disstreeleaf()`** → `_get_leaf_memberships()` + 公共封装 `get_leaf_membership()`
+- **`disstree.get.rules()`** → `get_classification_rules()`
+- **`disstree.assign()`** → `assign_to_leaves()`
 
 ---
 
@@ -260,28 +283,35 @@
 
 ## 9. 距离矩阵分析
 
-### ❌ Sequenzo 缺失的功能模块
+### ✅ Sequenzo 已部分实现
 
 #### 9.1 距离矩阵统计
-- **`dissvar()`** - 距离矩阵的伪方差
-- **`dissassoc()`** - 距离与因子的关联分析
-- **`dissmfacw()`** - 多因子加权分析
-- **`dissmergegroups()`** - 合并组以最小化分区质量损失
+- **`dissvar()`** → `compute_pseudo_variance()`（位于 `sequenzo/tree_analysis/tree_utils.py`）
+- **`dissassoc()`** → `compute_distance_association()`（同上）
+- **`dissmfacw()`** → `dissmfacw()`（同上，新增）
+  - 对多个因子（列）逐个调用 `compute_distance_association()`，返回每个因子的 Pseudo R² / Pseudo F / p-value 等汇总表
+- **`dissmergegroups()`** → `dissmergegroups()`（同上，新增）
+  - 从初始分组出发，迭代合并“对 Pseudo R² 损失最小”的两个组，直到达到目标组数
+  - 返回合并历史和最终分组结果，便于重现分组合并路径
 
 #### 9.2 距离矩阵可视化
-- **`dissrep()`** - 代表性对象提取（已在上文列出）
-- **`dissrf()`** - RF组中位数（已在上文列出）
+- **`dissrep()`** / **`dissrf()`**  
+  - 目前尚无完全同名的高层封装；代表性对象和 RF 中位数主要通过：
+    - K-medoids / 层次聚类 / CLARA（`sequenzo/clustering`）
+    - `plot_relative_frequency()` + `disscentertrim()`（`sequenzo/visualization/plot_relative_frequency.py` 和 `clustering/utils/disscenter.py`）实现
+  - 若希望 1:1 接口对应 TraMineR，后续可以基于上述内部函数封装 `dissrep()` / `dissrf()` 名称
 
 ---
 
 ## 10. 序列差异分析
 
-### ❌ Sequenzo 缺失的功能
+### ✅ Sequenzo 已实现
 
-- **`seqdiff()`** - 序列差异分析（ANOVA-like分析）
-  - 比较组间序列差异
-  - 支持置换检验
-  - 可视化功能 `plot.seqdiff()`
+- **`seqdiff()`** → `compare_groups_across_positions()`（位于 `sequenzo/compare_differences/seqdiff.py`）
+  - 按时间位置做滑动窗口的差异分析，内部使用 `get_distance_matrix()` + `compute_distance_association()`
+  - 输出含有 Pseudo F / Pseudo Fbf / Pseudo R² / Bartlett / Levene 等统计量的表格
+- **`print.seqdiff()`** → `print_group_differences_across_positions()`
+- **`plot.seqdiff()`** → `plot_group_differences_across_positions()`
 
 ---
 
@@ -351,8 +381,10 @@
 ### ❌ Sequenzo 缺失的功能
 
 #### 14.1 加权统计
-- 更全面的加权统计支持（在所有相关函数中）
-- **`weighted.mean()`**, **`weighted.var()`**, **`weighted.fivenum()`** 等内部函数
+- **`weighted.mean()`** → `weighted_mean()`（位于 `sequenzo/utils/weighted_stats.py`）
+- **`weighted.var()`** → `weighted_variance()`（同上）
+- **`weighted.fivenum()`** → `weighted_five_number_summary()`（同上）
+- 这些函数在序列特征计算、树分析及其他模块中作为内部工具被广泛使用，与 TraMineR 的 Hmisc-based 实现保持逻辑一致
 
 #### 14.2 统计增强
 - **`seqmeant()`** - 平均时间（支持 `serr` 参数显示标准误差）
@@ -362,59 +394,38 @@
 
 ## 总结
 
-### 主要缺失的功能模块：
+### 主要缺失的功能模块（2026-03 更新后）：
 
-1. **事件序列分析** - 完全缺失
-   - 事件序列对象创建和处理
-   - 事件子序列挖掘
-   - 事件序列可视化
+1. **代表性序列提取** - 仍部分缺失
+   - `seqrep()` 和 `dissrep()` 的统一高层封装
+   - RF 组中位数相关的完整 API 家族（当前可通过 K-medoids、`plot_relative_frequency()` 等实现近似功能）
 
-2. **树分析** - 完全缺失
-   - 序列回归树
-   - 距离树
-   - 树可视化
+2. **高级可视化** - 部分缺失
+   - 平行坐标图 `seqpcplot()`
+   - 熵指数图 `seqHtplot()` / 带熵覆盖的分布图 `seqdHplot()`
+   - 多域序列图 `seqplotMD()`
 
-3. **代表性序列提取** - 部分缺失
-   - `seqrep()` 和 `dissrep()` 功能
-   - RF组中位数序列
+3. **综合指标函数** - 缺少统一入口
+   - 单个指标（如 `seqlength`, `seqdur`, `recu`, `meand`, `dustd`, `turb`, `prec`, `insec` 等）已在不同模块中实现
+   - 但尚未提供类似 TraMineR `seqindic()` 的“一次性计算多个指标”的包装函数
 
-4. **序列差异分析** - ✅ 已实现
-   - `seqdiff()` ANOVA-like分析 (位于 `sequenzo/compare_differences/`)
-   - `seqcompare()`, `seqLRT()`, `seqBIC()` 序列比较测试 (来自TraMineRextras)
-
-5. **高级可视化** - 部分缺失
-   - 平行坐标图
-   - 熵指数图
-   - 多域序列图
-
-6. **综合指标函数** - 缺失
-   - `seqindic()` 一次性计算多个指标
-
-7. **格式转换** - 部分缺失
-   - 更全面的格式转换（TSE, SRS等）
-   - 事件序列格式支持
-
-8. **工具函数** - 部分缺失
-   - 序列检查函数
-   - 序列查找函数
-   - 序列对齐可视化
+4. **格式转换与工具函数** - 仍有差距
+   - 更全面的 `seqformat()` 家族（尤其是 SRS、SPS、DSS 等格式的用户级 API）
+   - 部分检查 / 对齐 / 查找函数（如 `seqhasmiss()`, `seqfcheck()`, `seqalign()` 及其可视化家族）目前只在内部或底层工具中部分覆盖
 
 ### 建议优先级：
 
 **高优先级**：
-1. 事件序列分析模块（如果用户需要）
-2. 代表性序列提取（`seqrep()`, `dissrep()`）
-3. 综合指标函数（`seqindic()`）
-4. 序列差异分析（`seqdiff()`）
+1. 代表性序列提取高层 API（`seqrep()`, `dissrep()`, RF 组中位数家族）
+2. 综合指标函数统一入口（`seqindic()` 风格的包装函数）
 
 **中优先级**：
-5. 树分析模块
-6. 高级可视化（平行坐标图、熵图等）
-7. 格式转换增强
+3. 高级可视化（平行坐标图、熵图、多域序列图等）
+4. 格式转换增强（完善 `seqformat()` 家族接口）
 
 **低优先级**：
-8. 序列生成和模拟
-9. 工具函数增强
+5. 序列生成和模拟（`seqgen()` 等）
+6. 工具函数增强（检查 / 对齐 / 查找家族的人性化封装）
 
 ---
 

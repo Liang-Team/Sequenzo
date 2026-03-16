@@ -11,7 +11,7 @@
 
 import numpy as np
 import pandas as pd
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any, List
 import importlib
 from .dissassoc_permutation import dissassoc_permutation_test
 
@@ -578,4 +578,234 @@ def compute_distance_association(
         'anova_table': anova_df,
         'R': R,
         'weight_permutation': weight_permutation
+    }
+
+
+def dissmfacw(
+    distance_matrix: np.ndarray,
+    factors: pd.DataFrame,
+    weights: Optional[np.ndarray] = None,
+    R: int = 0,
+    weight_permutation: str = "none",
+    squared: bool = False
+) -> pd.DataFrame:
+    """
+    Multi-factor association between a distance matrix and several covariates.
+
+    TraMineR equivalent: dissmfacw()
+
+    This function is a *practical* multi-factor wrapper around
+    `compute_distance_association`. For each factor (column) in the provided
+    DataFrame, it computes the pseudo-ANOVA statistics describing how much of
+    the discrepancy in the distance matrix is explained by that factor alone.
+
+    The goal is to provide an analysis table similar in spirit to TraMineR's
+    `dissmfacw()` output, while keeping the implementation simple and easy
+    to understand on the Python side.
+
+    Parameters
+    ----------
+    distance_matrix : np.ndarray or pandas.DataFrame
+        Square symmetric distance matrix of shape (n, n).
+    factors : pandas.DataFrame
+        DataFrame with n rows and one or more factor columns describing
+        covariates (e.g., gender, cohort, country). Each column is treated
+        as a separate factor in the analysis.
+    weights : np.ndarray, optional
+        Optional weights for each observation (length n). If None, equal
+        weights are used.
+    R : int, default 0
+        Number of permutations for each factor-specific association test.
+        When R=0, permutation p-values are skipped (faster).
+    weight_permutation : {"none", "replicate", "diss", "group"}, default "none"
+        Weight handling strategy for permutation tests. Passed directly
+        to `compute_distance_association`.
+    squared : bool, default False
+        Whether to square distances before analysis, passed to
+        `compute_distance_association`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Summary table with one row per factor and the following columns:
+            - 'factor'     : factor name (column name in `factors`)
+            - 'Pseudo R2'  : proportion of variance explained
+            - 'Pseudo F'   : pseudo F statistic
+            - 'p-value'    : permutation p-value for Pseudo F (if R > 1)
+            - 'n_groups'   : number of non-empty groups for that factor
+    """
+    # Convert distance matrix to ndarray if needed
+    if isinstance(distance_matrix, pd.DataFrame):
+        distance_matrix = distance_matrix.values
+
+    results = []
+    for col in factors.columns:
+        factor_values = factors[col].values
+        assoc = compute_distance_association(
+            distance_matrix=distance_matrix,
+            group=factor_values,
+            weights=weights,
+            R=R,
+            weight_permutation=weight_permutation,
+            squared=squared,
+        )
+
+        # Count non-empty groups for information
+        n_groups = (assoc["groups"]["n"] > 0).sum() - 1  # subtract "Total" row
+
+        results.append(
+            {
+                "factor": col,
+                "Pseudo R2": assoc["pseudo_r2"],
+                "Pseudo F": assoc["pseudo_f"],
+                "p-value": assoc["pseudo_f_pval"],
+                "n_groups": int(n_groups),
+            }
+        )
+
+    return pd.DataFrame(results).set_index("factor")
+
+
+def dissmergegroups(
+    distance_matrix: np.ndarray,
+    group: Union[np.ndarray, pd.Series],
+    weights: Optional[np.ndarray] = None,
+    target_n_groups: int = 2,
+    squared: bool = False
+) -> Dict[str, Any]:
+    """
+    Iteratively merge groups to minimize loss of distance-based partition quality.
+
+    TraMineR equivalent: dissmergegroups()
+
+    Starting from an initial grouping of the observations, this function
+    repeatedly merges the pair of groups whose fusion yields the *smallest*
+    loss of explained discrepancy (Pseudo R²). The process stops when the
+    desired target number of groups is reached.
+
+    Parameters
+    ----------
+    distance_matrix : np.ndarray or pandas.DataFrame
+        Square symmetric distance matrix of shape (n, n).
+    group : array-like
+        Initial group labels (length n). Can be numeric or categorical.
+    weights : np.ndarray, optional
+        Optional weights for each observation.
+    target_n_groups : int, default 2
+        Target number of groups after merging. Must be at least 1 and less
+        than the initial number of distinct groups.
+    squared : bool, default False
+        Whether to square distances before analysis (passed to
+        `compute_distance_association`).
+
+    Returns
+    -------
+    dict
+        Dictionary with the following elements:
+            - 'history' : list of merge steps. Each step is a dict with:
+                * 'step'          : integer step index (starting at 1)
+                * 'merged'        : tuple (g1, g2) of group labels that were merged
+                * 'pseudo_r2'     : Pseudo R² after the merge
+                * 'delta_r2'      : loss in Pseudo R² caused by the merge
+                * 'n_groups'      : number of groups remaining after the merge
+            - 'final_group' : pandas.Series with the final merged grouping
+    """
+    # Convert distance matrix if needed
+    if isinstance(distance_matrix, pd.DataFrame):
+        distance_matrix = distance_matrix.values
+
+    # Work with a mutable copy of the grouping variable.
+    # We first convert to a pandas Series, then to categorical codes, and finally
+    # to a standalone NumPy array to avoid any read-only backing issues.
+    group_series = pd.Series(group).copy()
+    factor = pd.Categorical(group_series)
+    codes = np.array(factor.codes, dtype=np.int32)  # make sure this is a writable copy
+    current_labels = pd.Series(codes, index=group_series.index)
+
+    # Helper to compute pseudo R² for the current grouping
+    def _current_r2(labels: pd.Series) -> float:
+        assoc = compute_distance_association(
+            distance_matrix=distance_matrix,
+            group=labels.values,
+            weights=weights,
+            R=0,
+            weight_permutation="none",
+            squared=squared,
+        )
+        return float(assoc["pseudo_r2"])
+
+    # Initial statistics
+    unique_groups = np.unique(current_labels.values)
+    if target_n_groups < 1 or target_n_groups >= len(unique_groups):
+        raise ValueError(
+            f"'target_n_groups' must be in [1, {len(unique_groups) - 1}], "
+            f"got {target_n_groups}."
+        )
+
+    history: List[Dict[str, Any]] = []
+    current_r2 = _current_r2(current_labels)
+
+    step = 0
+    while len(unique_groups) > target_n_groups:
+        best_pair = None
+        best_r2 = None
+
+        # Try merging each unordered pair of groups and record the effect on R²
+        for g1_idx in range(len(unique_groups)):
+            for g2_idx in range(g1_idx + 1, len(unique_groups)):
+                g1 = unique_groups[g1_idx]
+                g2 = unique_groups[g2_idx]
+
+                # Build candidate merged labels: replace g2 with g1
+                merged_labels = current_labels.copy()
+                mask = merged_labels == g2
+                if not mask.any():
+                    continue
+                merged_labels[mask] = g1
+
+                # Re-normalize labels to consecutive integers for stability
+                # (does not change grouping structure)
+                cat = pd.Categorical(merged_labels)
+                merged_codes = pd.Series(cat.codes, index=merged_labels.index)
+
+                cand_r2 = _current_r2(merged_codes)
+
+                if (best_r2 is None) or (cand_r2 > best_r2):
+                    best_r2 = cand_r2
+                    best_pair = (int(g1), int(g2))
+
+        if best_pair is None or best_r2 is None:
+            # No valid merge found; break to avoid infinite loop
+            break
+
+        # Apply the best merge
+        g1, g2 = best_pair
+        merge_mask = current_labels == g2
+        current_labels[merge_mask] = g1
+        # Re-code to consecutive integers again
+        cat = pd.Categorical(current_labels)
+        current_labels = pd.Series(cat.codes, index=current_labels.index)
+        unique_groups = np.unique(current_labels.values)
+
+        step += 1
+        delta_r2 = current_r2 - best_r2
+        current_r2 = best_r2
+
+        history.append(
+            {
+                "step": step,
+                "merged": (g1, g2),
+                "pseudo_r2": current_r2,
+                "delta_r2": delta_r2,
+                "n_groups": len(unique_groups),
+            }
+        )
+
+    # Map final numeric codes back to a compact set of labels 0..k-1
+    final_cat = pd.Categorical(current_labels)
+    final_group = pd.Series(final_cat.codes, index=current_labels.index, name="group")
+
+    return {
+        "history": history,
+        "final_group": final_group,
     }

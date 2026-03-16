@@ -48,6 +48,8 @@ from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.tree_analysis import (
     compute_pseudo_variance,
     compute_distance_association,
+    dissmfacw,
+    dissmergegroups,
     build_distance_tree,
     build_sequence_tree,
     get_leaf_membership,
@@ -234,6 +236,92 @@ def test_compute_distance_association_with_permutation(lsog_distance_matrix, lso
             "P-value should be between 0 and 1"
     
     print(f"[✓] Permutation test completed: p-value = {result['pseudo_f_pval']}")
+
+
+# ============================================================================
+# Test dissmfacw (multi-factor association wrapper)
+# ============================================================================
+
+
+def test_dissmfacw_matches_single_factor_calls(lsog_distance_matrix, lsog_predictors):
+    """
+    dissmfacw should return the same Pseudo F and Pseudo R² as calling
+    compute_distance_association() separately for each factor.
+    """
+    factors = lsog_predictors.copy()
+
+    mf_result = dissmfacw(
+        distance_matrix=lsog_distance_matrix,
+        factors=factors,
+        weights=None,
+        R=0,
+        weight_permutation="none",
+        squared=False,
+    )
+
+    # Check index and essential columns
+    assert set(mf_result.index) == set(factors.columns)
+    assert {"Pseudo F", "Pseudo R2", "p-value", "n_groups"}.issubset(mf_result.columns)
+
+    # For each factor, compare against a direct compute_distance_association() call
+    for col in factors.columns:
+        assoc = compute_distance_association(
+            distance_matrix=lsog_distance_matrix,
+            group=factors[col].values,
+            weights=None,
+            R=0,
+            weight_permutation="none",
+            squared=False,
+        )
+        row = mf_result.loc[col]
+        assert np.isclose(row["Pseudo F"], assoc["pseudo_f"]), \
+            f"Pseudo F mismatch for factor '{col}'"
+        assert np.isclose(row["Pseudo R2"], assoc["pseudo_r2"]), \
+            f"Pseudo R2 mismatch for factor '{col}'"
+        assert row["n_groups"] >= 1
+
+
+# ============================================================================
+# Test dissmergegroups (group merging based on Pseudo R²)
+# ============================================================================
+
+
+def test_dissmergegroups_reduces_number_of_groups(lsog_distance_matrix, lsog_predictors):
+    """
+    dissmergegroups should iteratively merge groups until the target number
+    of groups is reached, while tracking Pseudo R² changes.
+    """
+    groups = lsog_predictors["group"].values
+    initial_n_groups = len(np.unique(groups))
+    # With lsog_predictors we typically have exactly 2 groups ("A" and "B").
+    # For dissmergegroups to do any merge at all, the target must be strictly
+    # smaller than the initial number of groups, so we ask it to merge down
+    # to a single group.
+    target_n_groups = 1
+
+    result = dissmergegroups(
+        distance_matrix=lsog_distance_matrix,
+        group=groups,
+        weights=None,
+        target_n_groups=target_n_groups,
+        squared=False,
+    )
+
+    history = result["history"]
+    final_group = result["final_group"]
+
+    # The number of merge steps should be initial_n_groups - target_n_groups
+    assert len(history) == initial_n_groups - target_n_groups
+
+    # The final grouping should have exactly target_n_groups distinct labels
+    assert len(np.unique(final_group.values)) == target_n_groups
+
+    # Pseudo R² should be non-increasing as we merge (each merge loses information)
+    pseudo_r2_values = [step["pseudo_r2"] for step in history]
+    assert all(
+        earlier >= later
+        for earlier, later in zip(pseudo_r2_values, pseudo_r2_values[1:])
+    ), "Pseudo R² should not increase when groups are merged"
 
 
 # ============================================================================
