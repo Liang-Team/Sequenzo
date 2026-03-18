@@ -9,7 +9,7 @@ def seqdss(seqdata):
     if not isinstance(seqdata, SequenceData):
         raise ValueError("[!] data is NOT a sequence object, see SequenceData to create one.")
 
-    cdef cnp.ndarray[int32_t, ndim=2] seqdatanum = seqdata.values.astype(np.int32, copy=False)
+    cdef cnp.ndarray[int32_t, ndim=2] seqdatanum = seqdata.values.astype(np.int32, copy=True)
     cdef int n = seqdatanum.shape[0], m = seqdatanum.shape[1]
     cdef int i, j
 

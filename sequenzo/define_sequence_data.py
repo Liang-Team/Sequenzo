@@ -243,10 +243,47 @@ class SequenceData:
             if hasattr(s, 'item'):  # numpy scalar
                 s = s.item()
             states_clean_normalized.append(s)
-        
+
+        # Check for NaN in states
+        has_nan_in_states = any(pd.isna(s) for s in self.states)
+
+        # Get missing value indicators to exclude from the check
+        missing_indicators = set()
+        if has_nan_in_states:
+            missing_indicators.add(np.nan)
+        # Add user-specified missing_values
+        for mv in self.missing_values:
+            if pd.isna(mv):
+                missing_indicators.add(np.nan)
+            else:
+                missing_indicators.add(mv)
+        # Also check for string "Missing" (case-insensitive) in states
+        for s in self.states:
+            if isinstance(s, str) and s.lower() == 'missing':
+                missing_indicators.add(s)
+        # Also check for string "NaN" (case-insensitive) in states
+        for s in self.states:
+            if isinstance(s, str) and s.lower() == 'nan':
+                missing_indicators.add(s)
+
+        # Auto-detect string "NaN" (case-insensitive) in data as missing value
+        # Similar to how we handle string "Missing" in _process_missing_values
+        # Also check for string "Missing" (case-insensitive) in data
+        for dv in data_values_no_nan:
+            if isinstance(dv, str):
+                dv_lower = dv.lower()
+                if dv_lower == 'nan' or dv_lower == 'missing':
+                    missing_indicators.add(dv)
+
         # Exclude padding values from validation check
-        unmatched_states = [s for s in data_values_no_nan if s not in states_clean_normalized and s not in padding_values]
-        
+        unmatched_states = [
+            s for s in data_values_no_nan
+            if s not in states_clean_normalized
+               and s not in padding_values
+               and s not in missing_indicators
+               and not (isinstance(s, str) and s.lower() in ('nan', 'missing'))
+        ]
+
         if unmatched_states:
             raise ValueError(
                 f"[!] The following provided 'states' are not found in the data: {unmatched_states}\n"
@@ -266,36 +303,7 @@ class SequenceData:
                 states_normalized.append(s)
         states_list = list(states_normalized)
         states_set = set(states_normalized)
-        # Check for NaN in states
-        has_nan_in_states = any(pd.isna(s) for s in self.states)
-        
-        # Get missing value indicators to exclude from the check
-        missing_indicators = set()
-        if has_nan_in_states:
-            missing_indicators.add(np.nan)
-        # Add user-specified missing_values
-        for mv in self.missing_values:
-            if pd.isna(mv):
-                missing_indicators.add(np.nan)
-            else:
-                missing_indicators.add(mv)
-        # Also check for string "Missing" (case-insensitive) in states
-        for s in self.states:
-            if isinstance(s, str) and s.lower() == 'missing':
-                missing_indicators.add(s)
-        # Also check for string "NaN" (case-insensitive) in states
-        for s in self.states:
-            if isinstance(s, str) and s.lower() == 'nan':
-                missing_indicators.add(s)
-        
-        # Auto-detect string "NaN" (case-insensitive) in data as missing value
-        # Similar to how we handle string "Missing" in _process_missing_values
-        # Also check for string "Missing" (case-insensitive) in data
-        for dv in data_values_no_nan:
-            if isinstance(dv, str):
-                dv_lower = dv.lower()
-                if dv_lower == 'nan' or dv_lower == 'missing':
-                    missing_indicators.add(dv)
+
         
         # Find data values that are not in states and not missing values
         # Use more robust comparison that handles type mismatches
