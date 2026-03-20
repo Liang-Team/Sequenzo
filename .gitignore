@@ -54,3 +54,4 @@ Tutorials/with_event_history_analysis/result.csv
 # ignore RData and Rhistory
 .RData
 .Rhistory
+tests/archive_test/yapeng_test/generated_datasets/

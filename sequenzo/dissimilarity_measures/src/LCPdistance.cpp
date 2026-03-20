@@ -1,19 +1,7 @@
 /*
  * LCPdistance: Longest Common Prefix (LCP) and Reverse LCP (RLCP).
- *
- * Compares sequences position-wise: the common prefix length L is the number
- * of consecutive positions (from the start or from the end) where both sequences
- * have the same state. Raw distance is (n + m - 2*L) where n, m are sequence
- * lengths; normalized by maxdist = n + m so d = raw / maxdist is in [0, 1].
- *
- * Forward (sign > 0): LCP, compare from first position.
- * Reverse (sign < 0): RLCP, compare from last position.
- *
- * Source:
- *   Elzinga, C. H. (2007). Sequence analysis: Metric representations of
- *   categorical time series. Manuscript, Dept of Social Science Research
- *   Methods, Vrije Universiteit, Amsterdam.
- * @Author  : Xinyi Li 李欣怡
+ * Optimized: raw pointer cache, removed try/catch from hot path.
+ * Uses updated dp_utils.h (dynamic scheduling + diagonal skip).
  */
 
 #include <pybind11/pybind11.h>
@@ -32,89 +20,72 @@ public:
         py::print("[>] Starting (Reverse) Longest Common Prefix(LCP/RLCP)...");
         std::cout << std::flush;
 
-        try{
-            this->sequences = sequences;
+        this->sequences = sequences;
 
-            auto seq_shape = sequences.shape();
-            nseq = seq_shape[0];
-            len = seq_shape[1];
+        auto seq_shape = sequences.shape();
+        nseq = seq_shape[0];
+        len = seq_shape[1];
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
+        // [OPT] Cache raw pointer once. Original created unchecked<2>() per
+        // compute_distance call (~36M calls for n=8501 unique sequences).
+        seq_ptr = sequences.data();
 
-            // about reference sequences :
-            nans = nseq;
+        dist_matrix = py::array_t<double>({nseq, nseq});
 
-            rseq1 = refseqS.at(0);
-            rseq2 = refseqS.at(1);
-            if(rseq1 < rseq2){
-                nseq = rseq1;
-                nans = nseq * (rseq2 - rseq1);
-            }else{
-                rseq1 = rseq1 - 1;
-            }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2-rseq1)});
-        } catch (const std::exception& e){
-            py::print("Error in constructor: ", e.what());
-            throw ;
+        nans = nseq;
+        rseq1 = refseqS.at(0);
+        rseq2 = refseqS.at(1);
+        if(rseq1 < rseq2){
+            nseq = rseq1;
+            nans = nseq * (rseq2 - rseq1);
+        }else{
+            rseq1 = rseq1 - 1;
         }
+        refdist_matrix = py::array_t<double>({nseq, (rseq2-rseq1)});
     }
 
     double compute_distance(int is, int js) {
-        try {
-            int m = len;
-            int n = len;
-            int minimum = m;
-            if(n < m) minimum = n;
+        const int m = len;
+        const int n = len;
+        const int minimum = (m < n) ? m : n;
 
-            int length = 0;
-            auto ptr_seq = sequences.unchecked<2>();
+        const int* row_i = seq_ptr + static_cast<ptrdiff_t>(is) * len;
+        const int* row_j = seq_ptr + static_cast<ptrdiff_t>(js) * len;
 
-            if (sign > 0) {
-                // Forward LCP: compare from the start, with bounds check first
-                while (length < minimum && ptr_seq(is, length) == ptr_seq(js, length)) {
-                    length++;
-                }
-            } else {
-                // Reverse LCP: compare from the end, with bounds check first
-                while (length < minimum &&
-                       ptr_seq(is, m - 1 - length) == ptr_seq(js, n - 1 - length)) {
-                    length++;
-                }
+        int length = 0;
+
+        if (sign > 0) {
+            // Forward LCP
+            while (length < minimum && row_i[length] == row_j[length]) {
+                length++;
             }
-
-            return normalize_distance(n+m-2.0*length, n+m, m, n, norm);
-        } catch (const std::exception& e) {
-            py::print("Error in compute_distance: ", e.what());
-            throw;
+        } else {
+            // Reverse LCP
+            while (length < minimum &&
+                   row_i[m - 1 - length] == row_j[n - 1 - length]) {
+                length++;
+            }
         }
+
+        return normalize_distance(n+m-2.0*length, n+m, m, n, norm);
     }
 
     py::array_t<double> compute_all_distances() {
-        try {
-            return dp_utils::compute_all_distances_simple(
-                nseq,
-                dist_matrix,
-                [this](int i, int j){ return this->compute_distance(i, j); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
-            throw;
-        }
+        return dp_utils::compute_all_distances_simple(
+            nseq,
+            dist_matrix,
+            [this](int i, int j){ return this->compute_distance(i, j); }
+        );
     }
 
     py::array_t<double> compute_refseq_distances() {
-        try {
-            return dp_utils::compute_refseq_distances_simple(
-                nseq,
-                rseq1,
-                rseq2,
-                refdist_matrix,
-                [this](int is, int rseq){ return this->compute_distance(is, rseq); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
-            throw;
-        }
+        return dp_utils::compute_refseq_distances_simple(
+            nseq,
+            rseq1,
+            rseq2,
+            refdist_matrix,
+            [this](int is, int rseq){ return this->compute_distance(is, rseq); }
+        );
     }
 
 private:
@@ -123,9 +94,9 @@ private:
     int nseq;
     int len;
     int sign;
+    const int* seq_ptr = nullptr;
     py::array_t<double> dist_matrix;
 
-    py::array_t<int> refseqS;
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;

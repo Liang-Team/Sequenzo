@@ -18,6 +18,7 @@
 #include "NMSMSTdistance.cpp"
 #include "NMSMSTSoftdistanceII.cpp"
 #include "TWEDdistance.cpp"
+#include "preprocess.cpp"
 #include "normalization_ElzingaStuder.cpp"
 
 namespace py = pybind11;
@@ -135,4 +136,9 @@ PYBIND11_MODULE(c_code, m) {
           &normalize_similarity_from_distance_ElzingaStuder,
           "Convert normalized distance matrix to similarity matrix (equation 11)",
           py::arg("normalized_distance_matrix"));
+
+    m.def("find_unique_sequences",
+          &find_unique_sequences,
+          "Find unique sequences and build index mapping",
+          py::arg("sequences"));
 }

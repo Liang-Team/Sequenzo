@@ -16,48 +16,46 @@ public:
         py::print("[>] Computing all pairwise distances...");
         std::cout << std::flush;
 
-        try {
-            this->seqdata_didxs = seqdata_didxs;
-            this->dist_dseqs_num = dist_dseqs_num;
-
-            dist_matrix = py::array_t<double>({nseq, nseq});
-        } catch (const std::exception& e) {
-            py::print("Error in constructor: ", e.what());
-            throw;
-        }
+        this->seqdata_didxs = seqdata_didxs;
+        this->dist_dseqs_num = dist_dseqs_num;
+        dist_matrix = py::array_t<double>({nseq, nseq});
     }
 
+    // [OPT-12] Raw pointer expansion replaces pybind11 unchecked<>() accessors.
+    // For n=10000, this loop runs ~50M iterations. Each accessor call has overhead
+    // from stride computation. Raw pointers with pre-computed row offsets eliminate this.
+    //
+    // Hoisting dist_row outside the j-loop means we access the unique distance matrix
+    // row-sequentially within each i-iteration, which is cache-friendly.
     py::array_t<double> padding_matrix() {
-        try {
-           auto idxs_buf = seqdata_didxs.unchecked<1>();
-           auto dist_buf = dist_dseqs_num.unchecked<2>();
-           auto buffer = dist_matrix.mutable_unchecked<2>();
+        const int* idxs = seqdata_didxs.data();
+        const double* dist = dist_dseqs_num.data();
+        double* out = dist_matrix.mutable_data();
+        const int nunique = static_cast<int>(dist_dseqs_num.shape(0));
 
-           #pragma omp parallel for schedule(static)
-           for (int i = 0; i < nseq; ++i) {
-               for (int j = i; j < nseq; ++j) {
-                   buffer(i, j) = dist_buf(idxs_buf(i), idxs_buf(j));
-               }
-           }
-
-           #pragma omp parallel for schedule(static)
-           for (int i = 0; i < nseq; ++i) {
-               for (int j = i + 1; j < nseq; ++j) {
-                   buffer(j, i) = buffer(i, j);
-               }
-           }
-
-           return dist_matrix;
-        } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
-            throw;
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < nseq; ++i) {
+            const int ui = idxs[i];
+            const double* dist_row = dist + static_cast<ptrdiff_t>(ui) * nunique;
+            double* out_row = out + static_cast<ptrdiff_t>(i) * nseq;
+            for (int j = i; j < nseq; ++j) {
+                out_row[j] = dist_row[idxs[j]];
+            }
         }
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < nseq; ++i) {
+            for (int j = i + 1; j < nseq; ++j) {
+                out[static_cast<ptrdiff_t>(j) * nseq + i] = out[static_cast<ptrdiff_t>(i) * nseq + j];
+            }
+        }
+
+        return dist_matrix;
     }
 
 private:
     py::array_t<int> seqdata_didxs;
     py::array_t<double> dist_dseqs_num;
     int nseq = 0;
-
     py::array_t<double> dist_matrix;
 };

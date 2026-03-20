@@ -1,5 +1,5 @@
 """
-@Author  : Xinyi Li 李欣怡, Yuqi Liang 梁彧祺
+@Author  : Xinyi Li 李欣怡, Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
 @File    : get_distance_matrix.py
 @Time    : 2024/11/10 19:55
 @Desc    : Computes pairwise dissimilarities between sequences or dissimilarity from a reference sequence.
@@ -114,8 +114,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     from .__init__ import _import_c_code
     c_code = _import_c_code()
 
-    gc.collect()                           # garbage collection
-
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -210,9 +208,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     else:
         refseq_type = "none"
 
-    # check for empty sequences
-    sdur = seqdur(seqdata)
-    emptyseq = np.where(np.isnan(sdur[:, 0]))[0]
+    spell_methods = ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell",
+                     "NMSMST", "SVRspell", "OMslen"]
+    if method in spell_methods:
+        sdur = seqdur(seqdata)
+        emptyseq = np.where(np.isnan(sdur[:, 0]))[0]
+    else:
+        _all_lengths = seqlength(seqdata)
+        emptyseq = np.where(_all_lengths == 0)[0]
 
     if len(emptyseq) > 0:
         if method == "OMloc":
@@ -697,7 +700,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if norm == "auto":
             norm = "YujianBo"
 
-    seqdata_num = seqdata.values   # it's numpy
+    seqdata_num = seqdata.values  # it's numpy
+    _cpp_lengths = None
 
     if refseq_type == "sets":
         dseqs_num1 = np.unique(seqdata_num[refseq[0], :], axis=0)
@@ -708,7 +712,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
 
     else:
-        dseqs_num = np.unique(seqdata_num, axis=0)
+        try:
+            # C++ fast path: single O(nL) hash-based dedup
+            dseqs_num, seqdata_didxs, _cpp_lengths = c_code.find_unique_sequences(
+                seqdata_num.astype(np.int32, copy=False)
+            )
+        except (AttributeError, TypeError):
+            # Fallback if C++ extension not available
+            dseqs_num = np.unique(seqdata_num, axis=0)
 
     # Check that dseqs_num does not exceed the max allowed number
     # if check_max_size:
@@ -738,11 +749,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         seqdata_didxs2 = np.array([index_map[element] for element in conc3])
 
     else:
-        seqdata_series = seqconc(data=seqdata_num)
-        dseqs_series = seqconc(data=dseqs_num)
+        if _cpp_lengths is None:
+            seqdata_series = seqconc(data=seqdata_num)
+            dseqs_series = seqconc(data=dseqs_num)
 
-        index_map = {value: idx for idx, value in enumerate(dseqs_series)}
-        seqdata_didxs = np.array([index_map[element] for element in seqdata_series])
+            index_map = {value: idx for idx, value in enumerate(dseqs_series)}
+            seqdata_didxs = np.array([index_map[element] for element in seqdata_series])
 
     if refseq_type != "none":
         if refseq_type == "sets":
@@ -934,7 +946,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         _totaldur = dseqs_durpos.sum(axis=1).astype(np.float64)
         sign = 1 if method in ["LCPmst", "LCPprod"] else -1
 
-    del index_map
+    if 'index_map' in locals():
+        del index_map
     del seqdata_num
 
     # ===========================
@@ -963,8 +976,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         dseqs_num = np.array(dseqs_num, copy=True)
     if sm is not None and not sm.flags.writeable:
         sm = np.array(sm, copy=True)
-    
-    lengths = seqlength(dseqs_num)
+
+    if _cpp_lengths is not None:
+        lengths = _cpp_lengths
+    else:
+        lengths = seqlength(dseqs_num)
     # Ensure lengths is also writable (though seqlength should return a new array)
     if not lengths.flags.writeable:
         lengths = np.array(lengths, copy=True)

@@ -1,9 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <xsimd/xsimd.hpp>
 #include <vector>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
+#include <cstring>
 #include "utils.h"
 #include "dp_utils.h"
 #ifdef _OPENMP
@@ -14,7 +15,6 @@ namespace py = pybind11;
 
 class OMdistance {
 public:
-    // indellist: optional state-dependent indel costs. If length alphasize: indellist[state] = cost for state (1-based). If length alphasize-1: indellist[state-1] = cost for state (TraMineR convention). Empty = scalar indel.
     OMdistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> seqlength, py::array_t<int> refseqS,
                py::array_t<double> indellist = py::array_t<double>())
             : indel(indel), norm(norm) {
@@ -22,227 +22,231 @@ public:
         py::print("[>] Starting Optimal Matching(OM)...");
         std::cout << std::flush;
 
-        try {
-            this->sequences = sequences;
-            this->sm = sm;
-            this->seqlength = seqlength;
+        this->sequences = sequences;
+        this->sm = sm;
+        this->seqlength = seqlength;
 
-            auto seq_shape = sequences.shape();
-            nseq = seq_shape[0];
-            seqlen = seq_shape[1];
-            alphasize = sm.shape()[0];
+        auto seq_shape = sequences.shape();
+        nseq = seq_shape[0];
+        seqlen = seq_shape[1];
+        alphasize = sm.shape()[0];
 
-            use_indellist = (indellist.size() == static_cast<py::ssize_t>(alphasize) || indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
-            indellist_0based = (indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
-            if (use_indellist)
-                this->indellist = indellist;
+        use_indellist = (indellist.size() == static_cast<py::ssize_t>(alphasize) || indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
+        indellist_0based = (indellist.size() == static_cast<py::ssize_t>(alphasize - 1));
+        if (use_indellist)
+            this->indellist = indellist;
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
-            // When use_indellist we do not skip prefix/suffix, so DP size is (seqlen+1)x(seqlen+1); prev/curr need seqlen+2 elements.
-            fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
+        // [OPT-1] Cache raw pointers. Original creates pybind11 unchecked<>() accessors
+        // inside compute_distance, which is called ~n^2/2 times. Each accessor has overhead
+        // from bounds-check setup and stride computation. Raw pointers eliminate this.
+        seq_ptr = sequences.data();
+        len_ptr = seqlength.data();
+        if (use_indellist)
+            indel_ptr = indellist.data();
 
-            if (norm == 4) {
-                maxscost = 2 * indel;
-            } else {
-                auto ptr = sm.mutable_unchecked<2>();
-                for (int i = 0; i < alphasize; i++) {
-                    for (int j = i + 1; j < alphasize; j++) {
-                        if (ptr(i, j) > maxscost) maxscost = ptr(i, j);
-                    }
-                }
-                maxscost = std::min(maxscost, 2 * indel);
-            }
+        // [OPT-2] Copy SM with zeroed diagonal. Eliminates the branch
+        // (ai == bj) ? 0.0 : sm[ai][bj] in the innermost loop. When ai == bj,
+        // sm_local[ai * alphasize + ai] == 0.0 by construction, giving correct result
+        // without a branch. Branch misprediction costs ~15 cycles on modern CPUs.
+        sm_buf.resize(alphasize * alphasize);
+        std::memcpy(sm_buf.data(), sm.data(), alphasize * alphasize * sizeof(double));
+        for (int i = 0; i < alphasize; ++i)
+            sm_buf[i * alphasize + i] = 0.0;
+        sm_local = sm_buf.data();
 
-            nans = nseq;
-            rseq1 = refseqS.at(0);
-            rseq2 = refseqS.at(1);
-            if (rseq1 < rseq2) {
-                nseq = rseq1;
-                nans = nseq * (rseq2 - rseq1);
-            } else {
-                rseq1 = rseq1 - 1;
-            }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
-        } catch (const std::exception& e) {
-            py::print("Error in constructor: ", e.what());
-            throw;
+        dist_matrix = py::array_t<double>({nseq, nseq});
+        fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
+
+        if (norm == 4) {
+            maxscost = 2 * indel;
+        } else {
+            for (int i = 0; i < alphasize; i++)
+                for (int j = i + 1; j < alphasize; j++)
+                    maxscost = std::max(maxscost, sm_local[i * alphasize + j]);
+            maxscost = std::min(maxscost, 2 * indel);
         }
+
+        nans = nseq;
+        rseq1 = refseqS.at(0);
+        rseq2 = refseqS.at(1);
+        if (rseq1 < rseq2) {
+            nseq = rseq1;
+            nans = nseq * (rseq2 - rseq1);
+        } else {
+            rseq1 = rseq1 - 1;
+        }
+        refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
     }
 
-    inline double get_indel(int state) const {
+    // [OPT-3] Cached raw pointer lookup replaces indellist.unchecked<1>()(idx) per call.
+    inline double get_indel_fast(int state) const {
         if (use_indellist) {
-            auto ptr = indellist.unchecked<1>();
-            // state from sequence is 1-based (1..nstates). TraMineR passes indels of length nstates and uses indellist[state] with 0-based state in C.
             int idx = indellist_0based ? (state - 1) : state;
-            return ptr(idx);
+            return indel_ptr[idx];
         }
         return indel;
     }
 
-    double compute_distance(int is, int js, double* prev, double* curr) {
-        try {
-            auto ptr_len = seqlength.unchecked<1>();
-            int m_full = ptr_len(is);
-            int n_full = ptr_len(js);
-            int mSuf = m_full + 1, nSuf = n_full + 1;
-            int prefix = 0;
+    double compute_distance(int is, int js, double* __restrict__ prev, double* __restrict__ curr) {
+        const int m_full = len_ptr[is];
+        const int n_full = len_ptr[js];
+        int mSuf = m_full + 1, nSuf = n_full + 1;
+        int prefix = 0;
 
-            auto ptr_seq = sequences.unchecked<2>();
-            auto ptr_sm = sm.unchecked<2>();
+        // [OPT-1] Raw pointer row access: seq_ptr + row * stride.
+        // Uses ptrdiff_t cast to avoid int overflow when is * seqlen > INT_MAX.
+        const int* seq_i = seq_ptr + static_cast<ptrdiff_t>(is) * seqlen;
+        const int* seq_j = seq_ptr + static_cast<ptrdiff_t>(js) * seqlen;
 
-            // Skipping common prefix/suffix: TraMineR OMVIdistance (vector indel) does NOT skip (commented out in their code), so we match that when use_indellist to get identical results.
-            if (!use_indellist) {
-                int ii = 1, jj = 1;
-                while (ii < mSuf && jj < nSuf && ptr_seq(is, ii-1) == ptr_seq(js, jj-1)) {
-                    ii++; jj++; prefix++;
-                }
-                while (mSuf > ii && nSuf > jj && ptr_seq(is, mSuf - 2) == ptr_seq(js, nSuf - 2)) {
-                    mSuf--; nSuf--;
-                }
-            }
-
-            // Segment lengths (TraMineR uses m=slen[is], n=slen[js]; we align segment [prefix..mSuf-2] so length = mSuf - prefix - 1).
-            int m = mSuf - prefix - 1;
-            int n = nSuf - prefix - 1;
-
-            if (m == 0 && n == 0)
-                return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
-            if (m == 0) {
-                double cost = 0;
-                for (int x = 0; x < n; ++x)
-                    cost += get_indel(ptr_seq(js, prefix + x));
-                double maxpossiblecost = std::abs(n_full - m_full) * indel + maxscost * std::min(m_full, n_full);
-                return normalize_distance(cost, maxpossiblecost, double(m_full) * indel, double(n_full) * indel, norm);
-            }
-            if (n == 0) {
-                double cost = 0;
-                for (int x = 0; x < m; ++x)
-                    cost += get_indel(ptr_seq(is, prefix + x));
-                double maxpossiblecost = std::abs(n_full - m_full) * indel + maxscost * std::min(m_full, n_full);
-                return normalize_distance(cost, maxpossiblecost, double(m_full) * indel, double(n_full) * indel, norm);
-            }
-
-            // First row: cumulative insertion costs along js segment
-            prev[0] = 0;
-            for (int x = 1; x <= n; ++x)
-                prev[x] = prev[x - 1] + get_indel(ptr_seq(js, prefix + x - 1));
-
-            if (!use_indellist) {
-                // Scalar indel: use SIMD (original logic)
-                using batch_t = xsimd::batch<double>;
-                constexpr std::size_t B = batch_t::size;
-                for (int i = 1; i <= m; ++i) {
-                    int ai = ptr_seq(is, prefix + i - 1);
-                    curr[0] = indel * double(i);
-
-                    int j = 1;
-                    for (; j + (int)B <= n; j += (int)B) {
-                        const double* prev_ptr = prev + j;
-                        const double* prevm1_ptr = prev + (j - 1);
-                        batch_t prevj = batch_t::load_unaligned(prev_ptr);
-                        batch_t prevjm1 = batch_t::load_unaligned(prevm1_ptr);
-                        alignas(64) double subs[B];
-                        for (std::size_t b = 0; b < B; ++b) {
-                            int bj = ptr_seq(js, prefix + j + (int)b - 1);
-                            subs[b] = (ai == bj) ? 0.0 : ptr_sm(ai, bj);
-                        }
-                        batch_t sub_batch = batch_t::load_unaligned(subs);
-                        batch_t cand_del = prevj + batch_t(indel);
-                        batch_t cand_sub = prevjm1 + sub_batch;
-                        batch_t vert = xsimd::min(cand_del, cand_sub);
-                        double running_ins = curr[j - 1] + indel;
-                        for (std::size_t b = 0; b < B; ++b) {
-                            double v = vert.get(b);
-                            double c = std::min(v, running_ins);
-                            curr[j + (int)b] = c;
-                            running_ins = c + indel;
-                        }
-                    }
-                    for (; j <= n; ++j) {
-                        int bj = ptr_seq(js, prefix + j - 1);
-                        double subcost = (ai == bj) ? 0.0 : ptr_sm(ai, bj);
-                        curr[j] = std::min({ prev[j] + indel, curr[j - 1] + indel, prev[j - 1] + subcost });
-                    }
-                    std::swap(prev, curr);
-                }
-            } else {
-                // Vector indel: scalar loop (per-state indel)
-                for (int i = 1; i <= m; ++i) {
-                    int ai = ptr_seq(is, prefix + i - 1);
-                    curr[0] = 0;
-                    for (int k = 0; k < i; ++k) curr[0] += get_indel(ptr_seq(is, prefix + k));
-
-                    for (int j = 1; j <= n; ++j) {
-                        int bj = ptr_seq(js, prefix + j - 1);
-                        double delcost = prev[j] + get_indel(ai);
-                        double inscost = curr[j - 1] + get_indel(bj);
-                        double subcost = (ai == bj) ? 0.0 : ptr_sm(ai, bj);
-                        double subval = prev[j - 1] + subcost;
-                        curr[j] = std::min({ delcost, inscost, subval });
-                    }
-                    std::swap(prev, curr);
+        // Prefix/suffix trimming. Disabled for vector indel per TraMineR OMVIdistance.
+        if (!use_indellist) {
+            // [OPT-4] Early first-element check. For random sequences with ~20 states,
+            // P(first elements match) = 1/20 = 5%. 95% of pairs skip the entire prefix scan.
+            // CORRECTNESS: guard m_full > 0 && n_full > 0 prevents out-of-bounds access.
+            // Original code guarded implicitly via `ii < mSuf` where mSuf = m_full + 1.
+            if (m_full > 0 && n_full > 0 && seq_i[0] == seq_j[0]) {
+                prefix = 1;
+                const int lim = std::min(m_full, n_full);
+                int ii = 1;
+                while (ii < lim && seq_i[ii] == seq_j[ii]) {
+                    ii++; prefix++;
                 }
             }
-
-            double final_cost = prev[n];
-            // TraMineR: use full sequence length for normalization and maxpossiblecost (m_full, n_full = slen[is], slen[js])
-            double maxpossiblecost = std::abs(n_full - m_full) * indel + maxscost * std::min(m_full, n_full);
-            double ml = double(m_full) * indel;
-            double nl = double(n_full) * indel;
-            return normalize_distance(final_cost, maxpossiblecost, ml, nl, norm);
-
-        } catch (const std::exception& e) {
-            py::print("Error in SIMD-batch compute_distance: ", e.what());
-            throw;
+            while (mSuf > prefix + 1 && nSuf > prefix + 1 && seq_i[mSuf - 2] == seq_j[nSuf - 2]) {
+                mSuf--; nSuf--;
+            }
         }
+
+        const int m = mSuf - prefix - 1;
+        const int n = nSuf - prefix - 1;
+
+        // Pre-compute normalization constants (all exit paths use these).
+        const double ml = double(m_full) * indel;
+        const double nl = double(n_full) * indel;
+        const double maxpossiblecost = std::abs(n_full - m_full) * indel + maxscost * std::min(m_full, n_full);
+
+        if (m == 0 && n == 0)
+            return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
+        if (m == 0) {
+            double cost = 0;
+            for (int x = 0; x < n; ++x)
+                cost += get_indel_fast(seq_j[prefix + x]);
+            return normalize_distance(cost, maxpossiblecost, ml, nl, norm);
+        }
+        if (n == 0) {
+            double cost = 0;
+            for (int x = 0; x < m; ++x)
+                cost += get_indel_fast(seq_i[prefix + x]);
+            return normalize_distance(cost, maxpossiblecost, ml, nl, norm);
+        }
+
+        // First row: cumulative insertion costs along seq_j segment.
+        prev[0] = 0;
+        for (int x = 1; x <= n; ++x)
+            prev[x] = prev[x - 1] + get_indel_fast(seq_j[prefix + x - 1]);
+
+        if (!use_indellist) {
+            // ===== SCALAR INDEL PATH (most common case) =====
+            //
+            // [OPT-5] Removed fake SIMD. Original loaded xsimd batch<double> for 4 cells,
+            // computed deletion and substitution candidates in parallel, then had to
+            // sequentially fix up insertion costs because curr[j] depends on curr[j-1].
+            // The SIMD load/store + sequential fixup was SLOWER than pure scalar.
+            //
+            // [OPT-6] SM row pointer pre-fetched per i-row. Original called ptr_sm(ai, bj)
+            // which resolves base + ai * stride + bj per j-iteration. Now one pointer add
+            // per i-row, then sm_row[bj] in the inner loop.
+            //
+            // [OPT-2] Branch-free SM lookup: sm_row[seg_j[j-1]] returns 0.0 when ai == seg_j[j-1]
+            // because we zeroed the diagonal. No branch needed.
+            //
+            // [OPT-7] Manual 3-way min replaces std::min({a,b,c}) which constructs an
+            // initializer_list (heap-touching) on every call.
+            const int* seg_j = seq_j + prefix;
+            const double indel_val = indel;
+
+            for (int i = 1; i <= m; ++i) {
+                const int ai = seq_i[prefix + i - 1];
+                curr[0] = indel_val * double(i);
+                const double* sm_row = sm_local + ai * alphasize;
+
+                for (int j = 1; j <= n; ++j) {
+                    const double subcost = sm_row[seg_j[j - 1]];
+                    const double del_cost = prev[j] + indel_val;
+                    const double ins_cost = curr[j - 1] + indel_val;
+                    const double sub_cost = prev[j - 1] + subcost;
+                    double best = del_cost;
+                    if (ins_cost < best) best = ins_cost;
+                    if (sub_cost < best) best = sub_cost;
+                    curr[j] = best;
+                }
+                std::swap(prev, curr);
+            }
+        } else {
+            // ===== VECTOR INDEL PATH =====
+            //
+            // [OPT-8] Incremental curr[0]. Original code:
+            //   curr[0] = 0; for (k=0; k<i; k++) curr[0] += get_indel(...)
+            // This recomputes the entire prefix sum each row: O(m^2) total.
+            // Now: running accumulator, O(1) per row, O(m) total.
+            double cum_indel_i = 0;
+            for (int i = 1; i <= m; ++i) {
+                const int ai = seq_i[prefix + i - 1];
+                cum_indel_i += get_indel_fast(ai);
+                curr[0] = cum_indel_i;
+
+                const double* sm_row = sm_local + ai * alphasize;
+                const double indel_ai = get_indel_fast(ai);
+
+                for (int j = 1; j <= n; ++j) {
+                    const int bj = seq_j[prefix + j - 1];
+                    const double delcost = prev[j] + indel_ai;
+                    const double inscost = curr[j - 1] + get_indel_fast(bj);
+                    const double subval = prev[j - 1] + sm_row[bj];
+                    double best = delcost;
+                    if (inscost < best) best = inscost;
+                    if (subval < best) best = subval;
+                    curr[j] = best;
+                }
+                std::swap(prev, curr);
+            }
+        }
+
+        return normalize_distance(prev[n], maxpossiblecost, ml, nl, norm);
     }
 
 
     py::array_t<double> compute_all_distances() {
-        try {
-            return dp_utils::compute_all_distances(
-                nseq,
-                fmatsize,
-                dist_matrix,
-                [this](int i, int j, double* prev, double* curr) {
-                    return this->compute_distance(i, j, prev, curr);
-                }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
-            throw;
-        }
+        return dp_utils::compute_all_distances(
+            nseq,
+            fmatsize,
+            dist_matrix,
+            [this](int i, int j, double* prev, double* curr) {
+                return this->compute_distance(i, j, prev, curr);
+            }
+        );
     }
 
     py::array_t<double> compute_refseq_distances() {
-        try {
-            auto buffer = refdist_matrix.mutable_unchecked<2>();
+        auto buffer = refdist_matrix.mutable_unchecked<2>();
 
-            #pragma omp parallel
-            {
-                double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
-                double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
+        #pragma omp parallel
+        {
+            double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
+            double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
 
-                #pragma omp for schedule(static)
-                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                    for (int is = 0; is < nseq; is ++) {
-                        double cmpres = 0;
-                        if(is != rseq){
-                            cmpres = compute_distance(is, rseq, prev, curr);
-                        }
-
-                        buffer(is, rseq - rseq1) = cmpres;
-                    }
+            #pragma omp for schedule(dynamic, 4)
+            for (int rseq = rseq1; rseq < rseq2; rseq ++) {
+                for (int is = 0; is < nseq; is ++) {
+                    double cmpres = (is == rseq) ? 0.0 : compute_distance(is, rseq, prev, curr);
+                    buffer(is, rseq - rseq1) = cmpres;
                 }
-                dp_utils::aligned_free_double(prev);
-                dp_utils::aligned_free_double(curr);
             }
-
-            return refdist_matrix;
-        } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
-            throw;
+            dp_utils::aligned_free_double(prev);
+            dp_utils::aligned_free_double(curr);
         }
+
+        return refdist_matrix;
     }
 
 private:
@@ -251,7 +255,7 @@ private:
     double indel;
     int norm;
     bool use_indellist = false;
-    bool indellist_0based = false;  // true: indellist[state-1]; false: indellist[state]
+    bool indellist_0based = false;
     py::array_t<double> indellist;
     int nseq;
     int seqlen;
@@ -259,9 +263,14 @@ private:
     int fmatsize;
     py::array_t<int> seqlength;
     py::array_t<double> dist_matrix;
-    double maxscost;
+    double maxscost = 0.0;
 
-    // about reference sequences :
+    const int* seq_ptr = nullptr;
+    const int* len_ptr = nullptr;
+    const double* indel_ptr = nullptr;
+    std::vector<double> sm_buf;
+    const double* sm_local = nullptr;
+
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;

@@ -10,7 +10,6 @@
 
 namespace dp_utils {
 
-// Cross-platform aligned allocation for double buffers
 #ifdef _WIN32
 inline double* aligned_alloc_double(size_t size, size_t align = 64) {
     return reinterpret_cast<double*>(_aligned_malloc(size * sizeof(double), align));
@@ -27,8 +26,12 @@ inline double* aligned_alloc_double(size_t size, size_t align = 64) {
 inline void aligned_free_double(double* ptr) { free(ptr); }
 #endif
 
-// Generic pairwise symmetric computation helper
-// ComputeFn signature: double(int i, int j, double* prev, double* curr)
+// [OPT-9] Dynamic scheduling for triangular pairwise computation.
+// Row 0 computes nseq-1 pairs, row nseq-1 computes 0 pairs.
+// schedule(static) gives thread 0 the heaviest rows; dynamic rebalances.
+//
+// [OPT-10] Skip diagonal: d(i,i) = 0 always. Avoids a full DP computation
+// per unique sequence (saves nunique calls, each O(L^2)).
 template <typename ComputeFn>
 inline pybind11::array_t<double> compute_all_distances(
     int nseq,
@@ -43,9 +46,10 @@ inline pybind11::array_t<double> compute_all_distances(
         double* prev = aligned_alloc_double(static_cast<size_t>(fmatsize));
         double* curr = aligned_alloc_double(static_cast<size_t>(fmatsize));
 
-        #pragma omp for schedule(static)
+        #pragma omp for schedule(dynamic, 16)
         for (int i = 0; i < nseq; i++) {
-            for (int j = i; j < nseq; j++) {
+            buffer(i, i) = 0.0;
+            for (int j = i + 1; j < nseq; j++) {
                 buffer(i, j) = compute_fn(i, j, prev, curr);
             }
         }
@@ -54,6 +58,7 @@ inline pybind11::array_t<double> compute_all_distances(
         aligned_free_double(curr);
     }
 
+    // Mirror upper triangle to lower
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < nseq; i++) {
         for (int j = i + 1; j < nseq; j++) {
@@ -64,8 +69,6 @@ inline pybind11::array_t<double> compute_all_distances(
     return dist_matrix;
 }
 
-// Generic pairwise symmetric computation helper (no buffers)
-// ComputeFn signature: double(int i, int j)
 template <typename ComputeFn>
 inline pybind11::array_t<double> compute_all_distances_simple(
     int nseq,
@@ -76,9 +79,10 @@ inline pybind11::array_t<double> compute_all_distances_simple(
 
     #pragma omp parallel
     {
-        #pragma omp for schedule(static)
+        #pragma omp for schedule(dynamic, 16)
         for (int i = 0; i < nseq; i++) {
-            for (int j = i; j < nseq; j++) {
+            buffer(i, i) = 0.0;
+            for (int j = i + 1; j < nseq; j++) {
                 buffer(i, j) = compute_fn(i, j);
             }
         }
@@ -94,8 +98,6 @@ inline pybind11::array_t<double> compute_all_distances_simple(
     return dist_matrix;
 }
 
-// Generic reference-sequence computation helper (no buffers)
-// ComputeFn signature: double(int is, int rseq)
 template <typename ComputeFn>
 inline pybind11::array_t<double> compute_refseq_distances_simple(
     int nseq,
@@ -108,7 +110,7 @@ inline pybind11::array_t<double> compute_refseq_distances_simple(
 
     #pragma omp parallel
     {
-        #pragma omp for schedule(guided)
+        #pragma omp for schedule(dynamic, 4)
         for (int rseq = rseq1; rseq < rseq2; rseq++) {
             for (int is = 0; is < nseq; is++) {
                 buffer(is, rseq - rseq1) = (is == rseq) ? 0.0 : compute_fn(is, rseq);
@@ -119,8 +121,6 @@ inline pybind11::array_t<double> compute_refseq_distances_simple(
     return refdist_matrix;
 }
 
-// Generic reference-sequence computation helper (with DP buffers)
-// ComputeFn signature: double(int is, int rseq, double* prev, double* curr)
 template <typename ComputeFn>
 inline pybind11::array_t<double> compute_refseq_distances_buffered(
     int nseq,
@@ -137,14 +137,10 @@ inline pybind11::array_t<double> compute_refseq_distances_buffered(
         double* prev = aligned_alloc_double(static_cast<size_t>(fmatsize));
         double* curr = aligned_alloc_double(static_cast<size_t>(fmatsize));
 
-        #pragma omp for schedule(static)
+        #pragma omp for schedule(dynamic, 4)
         for (int rseq = rseq1; rseq < rseq2; rseq++) {
             for (int is = 0; is < nseq; is++) {
-                double cmpres = 0.0;
-                if (is != rseq) {
-                    cmpres = compute_fn(is, rseq, prev, curr);
-                }
-                buffer(is, rseq - rseq1) = cmpres;
+                buffer(is, rseq - rseq1) = (is == rseq) ? 0.0 : compute_fn(is, rseq, prev, curr);
             }
         }
 
@@ -156,5 +152,3 @@ inline pybind11::array_t<double> compute_refseq_distances_buffered(
 }
 
 } // namespace dp_utils
-
-

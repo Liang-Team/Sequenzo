@@ -1,17 +1,12 @@
 /*
  * LCSdistance: Longest Common Subsequence distance.
  *
- * Port of TraMineR's cLCS from src/ffunctions.c (seqLLCS) and seqdist(method="LCS").
- * For each pair of sequences we compute the length L of a longest common subsequence (LCS),
- * then the raw distance is:  raw = len_i + len_j - 2*L.
- * This matches the edit-distance interpretation with indel cost 1 and no substitutions
- * (only insertions/deletions). Normalization uses the same scheme as LCP/RLCP (e.g. gmean).
- *
- * @Author  : Yuqi Liang 梁彧祺
- * @File    : LCSdistance.cpp
- * @Time    : 2026/2/7 8:36
- * @Desc    : 
- * Reference: TraMineR src/ffunctions.c.
+ * Optimizations vs original:
+ * 1. Raw pointer cache (eliminates pybind11 accessor overhead in O(L^2) loop)
+ * 2. Pre-allocated per-thread DP buffers (eliminates ~50M heap alloc/dealloc at n=10000)
+ * 3. Prefix/suffix trimming (reduces DP matrix dimensions for sequences sharing common ends)
+ * 4. OpenMP parallel with dynamic scheduling (original was serial via compute_all_distances_simple)
+ * 5. Removed try/catch from hot path
  */
 
 #include <pybind11/pybind11.h>
@@ -19,21 +14,17 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
+#include <cstring>
 #include "utils.h"
 #include "dp_utils.h"
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace py = pybind11;
 
 class LCSdistance {
 public:
-    /*
-     * Constructor.
-     * - sequences: state sequences, shape (nseq, maxlen); only positions 0..seqlength(i)-1
-     *   are valid for sequence i.
-     * - seqlength: number of valid positions per sequence, shape (nseq,).
-     * - norm: normalization index (see utils.h; 0=none, 1=maxlength, 2=gmean, 3=maxdist, 4=YujianBo).
-     * - refseqS: reference sequence indices [rseq1, rseq2).
-     */
     LCSdistance(py::array_t<int> sequences,
                 py::array_t<int> seqlength,
                 int norm,
@@ -42,55 +33,92 @@ public:
         py::print("[>] Starting Longest Common Subsequence (LCS)...");
         std::cout << std::flush;
 
-        try {
-            this->sequences = sequences;
-            this->seqlength = seqlength;
+        this->sequences = sequences;
+        this->seqlength = seqlength;
 
-            auto seq_shape = sequences.shape();
-            nseq = static_cast<int>(seq_shape[0]);
-            maxlen = static_cast<int>(seq_shape[1]);
+        auto seq_shape = sequences.shape();
+        nseq = static_cast<int>(seq_shape[0]);
+        maxlen = static_cast<int>(seq_shape[1]);
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
+        // [OPT-1] Cache raw pointers
+        seq_ptr = sequences.data();
+        len_ptr = seqlength.data();
 
-            nans = nseq;
-            rseq1 = refseqS.at(0);
-            rseq2 = refseqS.at(1);
-            if (rseq1 < rseq2) {
-                nseq = rseq1;
-                nans = nseq * (rseq2 - rseq1);
-            } else {
-                rseq1 = rseq1 - 1;
-            }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
-        } catch (const std::exception& e) {
-            py::print("Error in LCSdistance constructor: ", e.what());
-            throw;
+        // DP buffer size: need (maxlen+1) ints for prev and curr rows
+        fmatsize = maxlen + 1;
+
+        dist_matrix = py::array_t<double>({nseq, nseq});
+
+        nans = nseq;
+        rseq1 = refseqS.at(0);
+        rseq2 = refseqS.at(1);
+        if (rseq1 < rseq2) {
+            nseq = rseq1;
+            nans = nseq * (rseq2 - rseq1);
+        } else {
+            rseq1 = rseq1 - 1;
         }
+        refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
     }
 
-    /*
-     * Compute LCS length for two sequences (TraMineR cLCS logic).
-     * iseq, jseq: row indices. m = length of iseq, n = length of jseq.
-     * Returns length of a longest common subsequence (integer).
-     */
-    int compute_LCS_length(int is, int js) {
-        auto ptr_seq = sequences.unchecked<2>();
-        auto ptr_len = seqlength.unchecked<1>();
+    // [OPT-2] Takes pre-allocated int buffers from caller (per-thread).
+    // Original allocated two std::vector<int>(n+1) per call = ~50M heap alloc/dealloc
+    // pairs for n=10000 unique sequences.
+    double compute_distance(int is, int js, int* __restrict__ prev, int* __restrict__ curr) {
+        const int m = len_ptr[is];
+        const int n = len_ptr[js];
 
-        const int m = ptr_len(is);
-        const int n = ptr_len(js);
-        if (m == 0 || n == 0) return 0;
+        if (m == 0 && n == 0)
+            return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
+        if (m == 0 || n == 0) {
+            double raw = static_cast<double>(m + n);
+            return normalize_distance(raw, raw, static_cast<double>(m), static_cast<double>(n), norm);
+        }
 
-        // DP table: L[i][j] = LCS length of iseq[0..i-1] and jseq[0..j-1].
-        // We use two rows to save memory (current and previous).
-        std::vector<int> prev(n + 1, 0);
-        std::vector<int> curr(n + 1, 0);
+        const int* row_i = seq_ptr + static_cast<ptrdiff_t>(is) * maxlen;
+        const int* row_j = seq_ptr + static_cast<ptrdiff_t>(js) * maxlen;
 
-        for (int i = 1; i <= m; i++) {
-            int si = ptr_seq(is, i - 1);
-            for (int j = 1; j <= n; j++) {
-                int sj = ptr_seq(js, j - 1);
-                if (si == sj) {
+        // [OPT-3] Prefix/suffix trimming.
+        // If sequences share common prefix of length k, those k positions each
+        // contribute exactly 1 to LCS. Similarly for common suffix.
+        // DP only runs on the middle portion: O((m-k-s) * (n-k-s)) instead of O(m*n).
+        // For 20 random states: expected common prefix ~L/20, saves ~10% of DP.
+        // For real-world data with common start/end states: much larger savings.
+        int prefix = 0;
+        const int min_mn = std::min(m, n);
+        while (prefix < min_mn && row_i[prefix] == row_j[prefix]) {
+            prefix++;
+        }
+
+        int suffix = 0;
+        const int max_suffix = std::min(m - prefix, n - prefix);
+        while (suffix < max_suffix && row_i[m - 1 - suffix] == row_j[n - 1 - suffix]) {
+            suffix++;
+        }
+
+        const int m_mid = m - prefix - suffix;
+        const int n_mid = n - prefix - suffix;
+
+        if (m_mid == 0 || n_mid == 0) {
+            // Entire LCS is prefix + suffix (no DP needed)
+            int L = prefix + suffix;
+            double raw = static_cast<double>(m + n - 2 * L);
+            double maxdist = static_cast<double>(m + n);
+            return normalize_distance(raw, maxdist, static_cast<double>(m), static_cast<double>(n), norm);
+        }
+
+        // DP on middle portion only
+        const int* mid_i = row_i + prefix;
+        const int* mid_j = row_j + prefix;
+
+        // Zero-init prev row for middle portion
+        std::memset(prev, 0, (n_mid + 1) * sizeof(int));
+
+        for (int i = 1; i <= m_mid; i++) {
+            curr[0] = 0;
+            const int si = mid_i[i - 1];
+            for (int j = 1; j <= n_mid; j++) {
+                if (si == mid_j[j - 1]) {
                     curr[j] = 1 + prev[j - 1];
                 } else {
                     int a = prev[j];
@@ -98,66 +126,68 @@ public:
                     curr[j] = (a >= b) ? a : b;
                 }
             }
-            prev.swap(curr);
+            std::swap(prev, curr);
         }
-        return prev[n];
+
+        int L = prefix + suffix + prev[n_mid];
+        double raw = static_cast<double>(m + n - 2 * L);
+        double maxdist = static_cast<double>(m + n);
+        return normalize_distance(raw, maxdist, static_cast<double>(m), static_cast<double>(n), norm);
     }
 
-    /*
-     * Compute LCS distance between sequence is and sequence js.
-     * Raw distance = len_i + len_j - 2*L (L = LCS length). Then normalize.
-     */
-    double compute_distance(int is, int js) {
-        try {
-            auto ptr_len = seqlength.unchecked<1>();
-            int m = ptr_len(is);
-            int n = ptr_len(js);
-
-            if (m == 0 && n == 0) {
-                return normalize_distance(0.0, 0.0, 0.0, 0.0, norm);
-            }
-            if (m == 0 || n == 0) {
-                double raw = static_cast<double>(m + n);
-                double maxdist = raw;
-                return normalize_distance(raw, maxdist, static_cast<double>(m), static_cast<double>(n), norm);
-            }
-
-            int L = compute_LCS_length(is, js);
-            double raw = static_cast<double>(m + n - 2 * L);
-            double maxdist = static_cast<double>(m + n);
-            return normalize_distance(raw, maxdist, static_cast<double>(m), static_cast<double>(n), norm);
-        } catch (const std::exception& e) {
-            py::print("Error in LCSdistance::compute_distance: ", e.what());
-            throw;
-        }
-    }
-
+    // [OPT-4] Custom OpenMP loop with per-thread pre-allocated buffers.
+    // Original used compute_all_distances_simple (no buffer support), forcing
+    // heap allocation inside each compute_distance call.
     py::array_t<double> compute_all_distances() {
-        try {
-            return dp_utils::compute_all_distances_simple(
-                    nseq,
-                    dist_matrix,
-                    [this](int i, int j) { return this->compute_distance(i, j); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in LCSdistance::compute_all_distances: ", e.what());
-            throw;
+        auto buffer = dist_matrix.mutable_unchecked<2>();
+
+        #pragma omp parallel
+        {
+            int* prev = new int[fmatsize]();
+            int* curr = new int[fmatsize]();
+
+            #pragma omp for schedule(dynamic, 16)
+            for (int i = 0; i < nseq; i++) {
+                buffer(i, i) = 0.0;
+                for (int j = i + 1; j < nseq; j++) {
+                    buffer(i, j) = compute_distance(i, j, prev, curr);
+                }
+            }
+
+            delete[] prev;
+            delete[] curr;
         }
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < nseq; i++) {
+            for (int j = i + 1; j < nseq; j++) {
+                buffer(j, i) = buffer(i, j);
+            }
+        }
+
+        return dist_matrix;
     }
 
     py::array_t<double> compute_refseq_distances() {
-        try {
-            return dp_utils::compute_refseq_distances_simple(
-                    nseq,
-                    rseq1,
-                    rseq2,
-                    refdist_matrix,
-                    [this](int is, int rseq) { return this->compute_distance(is, rseq); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in LCSdistance::compute_refseq_distances: ", e.what());
-            throw;
+        auto buffer = refdist_matrix.mutable_unchecked<2>();
+
+        #pragma omp parallel
+        {
+            int* prev = new int[fmatsize]();
+            int* curr = new int[fmatsize]();
+
+            #pragma omp for schedule(dynamic, 4)
+            for (int rseq = rseq1; rseq < rseq2; rseq++) {
+                for (int is = 0; is < nseq; is++) {
+                    buffer(is, rseq - rseq1) = (is == rseq) ? 0.0 : compute_distance(is, rseq, prev, curr);
+                }
+            }
+
+            delete[] prev;
+            delete[] curr;
         }
+
+        return refdist_matrix;
     }
 
 private:
@@ -166,6 +196,9 @@ private:
     int norm;
     int nseq;
     int maxlen;
+    int fmatsize;
+    const int* seq_ptr = nullptr;
+    const int* len_ptr = nullptr;
     py::array_t<double> dist_matrix;
 
     int nans;
