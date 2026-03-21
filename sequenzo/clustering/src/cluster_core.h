@@ -22,6 +22,15 @@ ClusterCoreResult cluster_from_matrix(
     bool fast_path
 );
 
+// Fast pipeline: condensed distance array -> linkage.
+// condensed: N*(N-1)/2 doubles (upper triangle, SciPy pdist order).
+// Skips full-matrix construction, symmetry check, and full→condensed extraction.
+ClusterCoreResult cluster_from_condensed(
+    const double* condensed, int N,
+    const std::string& method,
+    bool fast_path
+);
+
 // Full pipeline: feature matrix -> linkage_vector.
 // X: N x D feature matrix (row-major, will be copied internally).
 // method: "ward", "ward_d", "ward_d2" only.

@@ -1,15 +1,10 @@
 #pragma once
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
 #include <vector>
 #include <map>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
-
-namespace py = pybind11;
 
 // Cluster Quality Index constants (matching R WeightedCluster package)
 #define ClusterQualHPG 0   // Hubert's Gamma Prime (not implemented in this version)
@@ -110,6 +105,19 @@ void clusterqualitySimple_dist(const double* diss, const int* cluster, const dou
  */
 void resetKendallTree(KendallTree& kendall);
 void finalizeKendall(KendallTree& kendall);
+
+/**
+ * RAII wrapper for KendallTree — ensures cleanup even if an exception is thrown.
+ * Use this instead of manual finalizeKendall() calls in performance-critical
+ * or exception-prone code paths (e.g., OpenMP loops).
+ */
+struct ScopedKendallTree {
+    KendallTree tree;
+    ~ScopedKendallTree() { finalizeKendall(tree); }
+    ScopedKendallTree() = default;
+    ScopedKendallTree(const ScopedKendallTree&) = delete;
+    ScopedKendallTree& operator=(const ScopedKendallTree&) = delete;
+};
 
 /**
  * Utility functions

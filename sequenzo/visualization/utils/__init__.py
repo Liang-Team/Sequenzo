@@ -11,7 +11,8 @@ from .utils import (set_up_time_labels_for_x_axis,
                     save_and_show_results,
                     determine_layout,
                     show_plot_title,
-                    show_group_title)
+                    show_group_title,
+                    _to_square_matrix)
 
 __all__ = ['set_up_time_labels_for_x_axis',
            'create_standalone_legend',
@@ -20,4 +21,5 @@ __all__ = ['set_up_time_labels_for_x_axis',
            'save_and_show_results',
            'determine_layout',
            'show_plot_title',
-           'show_group_title']
+           'show_group_title',
+           '_to_square_matrix']

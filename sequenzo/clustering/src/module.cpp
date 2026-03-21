@@ -5,8 +5,10 @@
 #include "cluster_quality.cpp"
 #include "binding_common.cpp"
 #include "linkage_tree_utils.cpp"
-#include "distance_prep_utils.cpp"
-#include "fastcluster_linkage.cpp"
+// distance_prep_utils.cpp and fastcluster_linkage.cpp are in fastcluster_tu.cpp
+// (compiled without -ffast-math to preserve IEEE NaN/Inf semantics).
+#include "distance_prep_utils.h"
+#include "fastcluster_linkage.h"
 #include "cluster_core.cpp"
 #include "cluster_quality_pipeline.cpp"
 
@@ -465,7 +467,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         }
         const py::ssize_t n = buf.shape[0];
         auto* ptr = static_cast<double*>(buf.ptr);
-        EuclideanCheckResult r = check_euclidean_compatibility_impl(ptr, n, method);
+        EuclideanCheckResult r = check_euclidean_compatibility_pure(ptr, n, method);
 
         py::dict out;
         out["compatible"] = r.compatible;
@@ -495,7 +497,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         );
         EuclideanCheckResult eu;
         if (run_ward_check) {
-            eu = check_euclidean_compatibility_impl(prep.full.data(), n, method);
+            eu = check_euclidean_compatibility_pure(prep.full.data(), n, method);
         }
 
         auto condensed = vector_to_pyarray_1d(std::move(prep.condensed));
@@ -573,7 +575,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
             double sum = 0.0;
             double sumsq = 0.0;
             py::ssize_t cnt = 0;
-            double best_val = -std::numeric_limits<double>::infinity();
+            double best_val = std::numeric_limits<double>::lowest();
             py::ssize_t best_idx = -1;
 
             for (py::ssize_t j = 0; j < n; ++j) {
@@ -716,6 +718,41 @@ PYBIND11_MODULE(clustering_c_code, m) {
     },
     py::arg("matrix"), py::arg("method"), py::arg("fast_path") = false,
     "Full clustering pipeline: distance matrix -> linkage matrix (C++ core).");
+
+    m.def("cluster_from_condensed", [](py::array_t<double, py::array::c_style | py::array::forcecast> condensed,
+                                       int n,
+                                       const std::string& method,
+                                       bool fast_path) -> py::dict {
+        auto buf = condensed.request();
+        if (buf.ndim != 1) {
+            throw std::runtime_error("Condensed distance array must be a 1D array.");
+        }
+        const int N = n;
+        auto* ptr = static_cast<double*>(buf.ptr);
+
+        ClusterCoreResult res = cluster_from_condensed(ptr, N, method, fast_path);
+
+        py::dict out;
+        if (!res.linkage_matrix.empty()) {
+            const py::ssize_t rows = static_cast<py::ssize_t>(N - 1);
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix), rows, 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        if (!res.condensed_matrix.empty()) {
+            out["condensed_matrix"] = vector_to_pyarray_1d(
+                std::move(res.condensed_matrix));
+        } else {
+            out["condensed_matrix"] = py::none();
+        }
+        out["full_matrix"] = py::none();
+        out["warning_flags"] = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+        return out;
+    },
+    py::arg("condensed"), py::arg("n"), py::arg("method"), py::arg("fast_path") = false,
+    "Fast clustering pipeline: condensed distance array -> linkage matrix (C++ core).");
 
     m.def("cluster_from_features", [](py::array_t<double, py::array::c_style | py::array::forcecast> X,
                                        const std::string& method) -> py::dict {

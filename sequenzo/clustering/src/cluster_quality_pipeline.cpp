@@ -22,6 +22,10 @@
 #include <stdexcept>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace {
 
 // Metric index order matches Python's metric_order list:
@@ -58,7 +62,7 @@ void compute_summary(
 
         double sum = 0.0, sumsq = 0.0;
         int cnt = 0;
-        double best_val = -std::numeric_limits<double>::infinity();
+        double best_val = std::numeric_limits<double>::lowest();
         int best_idx = -1;
 
         for (int j = 0; j < k_count; ++j) {
@@ -139,30 +143,51 @@ void compute_cqi_core(
         result.hc.data()
     };
 
-    // Temporary labels buffer.
+#ifdef _OPENMP
+    #pragma omp parallel if(k_count > 2)
+    {
+        std::vector<int> labels(static_cast<size_t>(n), 1);
+        std::vector<double> stats(ClusterQualNumStat);
+
+        #pragma omp for schedule(dynamic)
+        for (int idx = 0; idx < k_count; ++idx) {
+            const int k = k_min + idx;
+
+            compute_labels_from_linkage(linkage, n, k, labels.data());
+
+            std::vector<double> asw_cluster(static_cast<size_t>(2 * k));
+            ScopedKendallTree scoped;
+            clusterquality_dist(
+                condensed, labels.data(), weights, n,
+                stats.data(), k, asw_cluster.data(), scoped.tree
+            );
+
+            for (int m = 0; m < CQ_NUM_METRICS; ++m) {
+                metric_ptrs[m][idx] = stats[METRIC_IDX[m]];
+            }
+        }
+    }
+#else
     std::vector<int> labels(static_cast<size_t>(n), 1);
     std::vector<double> stats(ClusterQualNumStat);
 
     for (int idx = 0; idx < k_count; ++idx) {
         const int k = k_min + idx;
 
-        // Cut the linkage tree.
         compute_labels_from_linkage(linkage, n, k, labels.data());
 
-        // Compute quality metrics.
         std::vector<double> asw_cluster(static_cast<size_t>(2 * k));
-        KendallTree kendall;
+        ScopedKendallTree scoped;
         clusterquality_dist(
             condensed, labels.data(), weights, n,
-            stats.data(), k, asw_cluster.data(), kendall
+            stats.data(), k, asw_cluster.data(), scoped.tree
         );
-        finalizeKendall(kendall);
 
-        // Scatter stats into per-metric arrays.
         for (int m = 0; m < CQ_NUM_METRICS; ++m) {
             metric_ptrs[m][idx] = stats[METRIC_IDX[m]];
         }
     }
+#endif
 
     // Compute summary.
     result.opt_clusters.resize(CQ_NUM_METRICS);

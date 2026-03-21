@@ -5,6 +5,7 @@
 @Desc    : 
 """
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
@@ -13,6 +14,55 @@ from PIL import Image
 from typing import Tuple, Optional, List, Dict, Any
 
 from sequenzo import SequenceData
+
+
+def _to_square_matrix(distance_matrix) -> np.ndarray:
+    """
+    Normalise a distance matrix to a writable 2D square numpy array.
+
+    Accepted input formats
+    ----------------------
+    - ``pd.DataFrame``            – converted via ``.to_numpy()``
+    - 2D ``np.ndarray (n, n)``   – returned as-is (copy only if read-only)
+    - 1D ``np.ndarray`` of length ``n*(n-1)/2``
+                                  – expanded via ``scipy.spatial.distance.squareform``
+
+    Raises
+    ------
+    ValueError
+        If the array shape cannot be interpreted as a valid distance matrix.
+    """
+    if isinstance(distance_matrix, pd.DataFrame):
+        distance_matrix = distance_matrix.to_numpy()
+
+    distance_matrix = np.asarray(distance_matrix, dtype=np.float64)
+
+    if distance_matrix.ndim == 2:
+        if distance_matrix.shape[0] != distance_matrix.shape[1]:
+            raise ValueError(
+                f"[x] distance_matrix must be square, got shape {distance_matrix.shape}."
+            )
+        # Ensure the array is writable
+        if not distance_matrix.flags.writeable:
+            distance_matrix = distance_matrix.copy()
+        return distance_matrix
+
+    if distance_matrix.ndim == 1:
+        # Condensed distance vector: length must equal n*(n-1)/2 for some integer n >= 2
+        from scipy.spatial.distance import squareform
+        m = distance_matrix.shape[0]
+        # Solve n*(n-1)/2 = m  →  n = (1 + sqrt(1 + 8m)) / 2
+        n = int(round((1 + (1 + 8 * m) ** 0.5) / 2))
+        if n * (n - 1) // 2 != m:
+            raise ValueError(
+                f"[x] 1D distance_matrix of length {m} cannot be interpreted as a "
+                f"condensed upper-triangle (expected length n*(n-1)/2 for integer n)."
+            )
+        return squareform(distance_matrix)
+
+    raise ValueError(
+        f"[x] distance_matrix must be 1D (condensed) or 2D (square), got {distance_matrix.ndim}D array."
+    )
 
 
 def set_up_time_labels_for_x_axis(seqdata: SequenceData,

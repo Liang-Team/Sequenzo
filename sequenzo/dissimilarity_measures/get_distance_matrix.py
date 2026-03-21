@@ -114,6 +114,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     from .__init__ import _import_c_code
     c_code = _import_c_code()
 
+    gc.collect()                           # garbage collection
+
     if opts is not None:
         seqdata = opts.get('seqdata')
         method = opts.get('method')
@@ -208,14 +210,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     else:
         refseq_type = "none"
 
-    spell_methods = ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell",
-                     "NMSMST", "SVRspell", "OMslen"]
-    if method in spell_methods:
-        sdur = seqdur(seqdata)
-        emptyseq = np.where(np.isnan(sdur[:, 0]))[0]
-    else:
-        _all_lengths = seqlength(seqdata)
-        emptyseq = np.where(_all_lengths == 0)[0]
+    # check for empty sequences
+    sdur = seqdur(seqdata)
+    emptyseq = np.where(np.isnan(sdur[:, 0]))[0]
 
     if len(emptyseq) > 0:
         if method == "OMloc":
@@ -700,7 +697,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if norm == "auto":
             norm = "YujianBo"
 
-    seqdata_num = seqdata.values  # it's numpy
+    seqdata_num = seqdata.values   # it's numpy
     _cpp_lengths = None
 
     if refseq_type == "sets":
@@ -1353,7 +1350,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
 
         _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
-        _dist2matrix = _matrix.padding_matrix()
+
+        if full_matrix == False and refseq is None:
+            _dist2condensed = _matrix.padding_condensed()
+        else:
+            _dist2matrix = _matrix.padding_matrix()
 
     if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
@@ -1371,7 +1372,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None. This is same as TraMineR.")
 
     elif full_matrix == False and refseq == None:
-        dist_matrix = squareform(_dist2matrix)
+        dist_matrix = np.asarray(_dist2condensed, dtype=np.float64)
 
     # Apply ElzingaStuder normalization if requested (post-processing step)
     # We apply a theoretical normalization following Elzinga & Studer (2019),

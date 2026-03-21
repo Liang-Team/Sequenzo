@@ -589,16 +589,20 @@ def configure_cpp_extension():
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
-        # Same for clustering: compile only the binding TU.
-        # Remove -ffast-math because the clustering module now embeds
-        # fastcluster.cpp which relies on IEEE NaN semantics (fc_isnan).
+        # Clustering extension: two translation units with different -ffast-math settings.
+        #   module.cpp          — compiled WITH  -ffast-math (all non-fastcluster code)
+        #   fastcluster_tu.cpp  — compiled WITHOUT -ffast-math (preserves IEEE NaN for fc_isnan)
         clustering_compile_args = get_compile_args_for_file("dummy.cpp")
-        clustering_compile_args = [a for a in clustering_compile_args if a != '-ffast-math']
+        if '-ffast-math' not in clustering_compile_args:
+            clustering_compile_args.append('-ffast-math')
         if '-O3' not in clustering_compile_args:
             clustering_compile_args.append('-O3')
         clustering_ext_module = Pybind11Extension(
             'sequenzo.clustering.clustering_c_code',
-            sources=['sequenzo/clustering/src/module.cpp'],
+            sources=[
+                'sequenzo/clustering/src/module.cpp',
+                'sequenzo/clustering/src/fastcluster_tu.cpp',
+            ],
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=clustering_compile_args,
             extra_link_args=link_args,
@@ -698,7 +702,28 @@ def configure_cython_extensions():
 class BuildExt(build_ext):
     """
     Custom build_ext class with enhanced architecture and OpenMP reporting.
+    Supports per-file compile flags: strips -ffast-math from fastcluster_tu.cpp.
     """
+
+    def build_extension(self, ext):
+        if ext.name == 'sequenzo.clustering.clustering_c_code' and sys.platform != 'win32':
+            original_compile = self.compiler._compile
+
+            def _per_file_compile(obj, src, ext_str, cc_args, extra_postargs, pp_opts):
+                if 'fastcluster_tu' in src:
+                    postargs = [a for a in extra_postargs if a != '-ffast-math']
+                else:
+                    postargs = extra_postargs
+                return original_compile(obj, src, ext_str, cc_args, postargs, pp_opts)
+
+            self.compiler._compile = _per_file_compile
+            try:
+                super().build_extension(ext)
+            finally:
+                self.compiler._compile = original_compile
+        else:
+            super().build_extension(ext)
+
     @staticmethod
     def _sanitize_windows_path_and_fix_linker(compiler):
         """Ensure MSVC link.exe is used instead of Git's /usr/bin/link.exe."""

@@ -19,7 +19,8 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     save_and_show_results,
     set_up_time_labels_for_x_axis,
-    show_plot_title
+    show_plot_title,
+    _to_square_matrix
 )
 
 
@@ -54,8 +55,7 @@ def plot_relative_frequency(seqdata: SequenceData,
     :param save_as: (str, optional) File path to save the plot.
     :param dpi: (int) Resolution of the saved plot.
     """
-    if isinstance(distance_matrix, pd.DataFrame):
-        distance_matrix = distance_matrix.to_numpy()
+    distance_matrix = _to_square_matrix(distance_matrix)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":

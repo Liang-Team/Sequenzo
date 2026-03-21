@@ -196,7 +196,10 @@ class Cluster:
         """
         Hierarchical clustering with the full computational pipeline in C++.
 
-        :param matrix: Precomputed distance matrix (full square form). Required when X_features is None.
+        :param matrix: Precomputed distance matrix. Accepts:
+            - Full square form: 2D array (N×N) or pandas DataFrame
+            - Condensed form: 1D array of length N*(N-1)/2 (upper triangle, SciPy pdist order)
+            Required when X_features is None.
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
         :param clustering_method: Clustering algorithm to use. Options include:
             - "ward" or "ward_d": Classic Ward method (squared Euclidean distances ÷ 2) [default]
@@ -216,13 +219,11 @@ class Cluster:
                 "C++ clustering core is not available. "
                 "Please ensure the C++ extensions are properly compiled.")
 
-        # Users may pass a DataFrame, a `float32` array, a Fortran-order array, or even a Python list.
-        # Converting all of these to a C-contiguous `float64` `ndarray` is a necessary prerequisite
-        # before invoking the C++ code.
         method = clustering_method.lower()
 
         ward_methods = ("ward", "ward_d", "ward_d2")
         use_vector_path = (X_features is not None and method in ward_methods)
+        use_condensed_path = False
 
         if use_vector_path:
             X = np.asarray(X_features, dtype=np.float64, order="C")
@@ -235,14 +236,22 @@ class Cluster:
             if isinstance(matrix, pd.DataFrame):
                 matrix = matrix.values
             matrix = np.asarray(matrix, dtype=np.float64, order="C")
-            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
-                raise ValueError("Input must be a full square-form distance matrix.")
-            n = matrix.shape[0]
 
-        # `entity_ids` and `weights` are not involved in the linkage computation;
-        # they are used later by `get_cluster_labels()`, `ClusterQuality`, and `plot_dendrogram()`.
-        # Passing them into C++ and then returning them would only introduce an unnecessary data copy (Python → C++ → Python)
-        # without any computational benefit.
+            if matrix.ndim == 1:
+                # Condensed distance array: infer n from length = n*(n-1)/2
+                condensed_len = matrix.shape[0]
+                n = int((1 + np.sqrt(1 + 8 * condensed_len)) / 2)
+                if n * (n - 1) // 2 != condensed_len:
+                    raise ValueError(
+                        f"1D input length {condensed_len} does not correspond to any valid "
+                        f"condensed distance matrix (expected n*(n-1)/2 for some integer n).")
+                use_condensed_path = True
+            elif matrix.ndim == 2 and matrix.shape[0] == matrix.shape[1]:
+                n = matrix.shape[0]
+            else:
+                raise ValueError(
+                    "Input must be a full square-form distance matrix (2D) "
+                    "or a condensed distance array (1D).")
 
         self.entity_ids = np.array(entity_ids) if entity_ids is not None else np.arange(n)
         if len(self.entity_ids) != n:
@@ -259,16 +268,18 @@ class Cluster:
         else:
             self.weights = np.ones(n, dtype=np.float64)
 
-        # Call C++ core
         if use_vector_path:
             result = clustering_c_code.cluster_from_features(X, method)
             self._X_features = X
+        elif use_condensed_path:
+            result = clustering_c_code.cluster_from_condensed(
+                matrix, int(n), method, bool(fast_path))
+            self._X_features = None
         else:
             result = clustering_c_code.cluster_from_matrix(
                 matrix, method, bool(fast_path))
             self._X_features = None
 
-        # Store results
         self.clustering_method = "ward_d" if method == "ward" else method
         self.fast_path = bool(fast_path)
 
@@ -281,7 +292,6 @@ class Cluster:
         fm = result["full_matrix"]
         self._full_matrix = np.asarray(fm) if fm is not None else None
 
-        # Emit Python-side warnings from C++ flags
         self._warn_from_flags(int(result["warning_flags"]), self.clustering_method)
 
     @property

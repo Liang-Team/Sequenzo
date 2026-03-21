@@ -26,7 +26,8 @@ namespace py = pybind11;
 PYBIND11_MODULE(c_code, m) {
     py::class_<dist2matrix>(m, "dist2matrix")
             .def(py::init<int, py::array_t<int>, py::array_t<double>>())
-            .def("padding_matrix", &dist2matrix::padding_matrix);
+            .def("padding_matrix", &dist2matrix::padding_matrix)
+            .def("padding_condensed", &dist2matrix::padding_condensed);
 
     py::class_<LCPdistance>(m, "LCPdistance")
             .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())

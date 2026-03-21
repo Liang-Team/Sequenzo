@@ -16,9 +16,15 @@ public:
         py::print("[>] Computing all pairwise distances...");
         std::cout << std::flush;
 
-        this->seqdata_didxs = seqdata_didxs;
-        this->dist_dseqs_num = dist_dseqs_num;
-        dist_matrix = py::array_t<double>({nseq, nseq});
+        try {
+            this->seqdata_didxs = seqdata_didxs;
+            this->dist_dseqs_num = dist_dseqs_num;
+
+            dist_matrix = py::array_t<double>({nseq, nseq});
+        } catch (const std::exception& e) {
+            py::print("Error in constructor: ", e.what());
+            throw;
+        }
     }
 
     // [OPT-12] Raw pointer expansion replaces pybind11 unchecked<>() accessors.
@@ -51,6 +57,28 @@ public:
         }
 
         return dist_matrix;
+    }
+
+    py::array_t<double> padding_condensed() {
+        const int* idxs = seqdata_didxs.data();
+        const double* dist = dist_dseqs_num.data();
+        const int nunique = static_cast<int>(dist_dseqs_num.shape(0));
+
+        const long long condensed_len = static_cast<long long>(nseq) * (nseq - 1) / 2;
+        auto condensed = py::array_t<double>(condensed_len);
+        auto* out_ptr = static_cast<double*>(condensed.request().ptr);
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < nseq; ++i) {
+            const int ui = idxs[i];
+            const double* dist_row = dist + static_cast<ptrdiff_t>(ui) * nunique;
+            const long long row_start = static_cast<long long>(i) * (2 * nseq - i - 1) / 2;
+            for (int j = i + 1; j < nseq; ++j) {
+                out_ptr[row_start + (j - i - 1)] = dist_row[idxs[j]];
+            }
+        }
+
+        return condensed;
     }
 
 private:

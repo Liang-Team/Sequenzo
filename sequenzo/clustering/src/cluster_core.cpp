@@ -59,6 +59,15 @@ int vector_method_code(const std::string& method) {
         method + "'.");
 }
 
+// Returns true if the method modifies the condensed array in-place
+// (squaring for ward_d2, centroid, median).
+bool method_modifies_condensed(int method_code) {
+    return method_code == 4  // METHOD_METR_WARD
+        || method_code == 7  // METHOD_METR_WARD_D2
+        || method_code == 5  // METHOD_METR_CENTROID
+        || method_code == 6; // METHOD_METR_MEDIAN
+}
+
 }  // namespace
 
 // ============================================================================
@@ -82,59 +91,172 @@ ClusterCoreResult cluster_from_matrix(
     ClusterCoreResult result;
 
     if (N == 1) {
-        // Trivial: no merges.
         result.warning_flags = 0;
         result.euclidean_compatible = true;
         return result;
     }
 
-    // --- Distance matrix preparation (reuse existing C++ impl) ---
     const auto n = static_cast<ssize_t>(N);
-    PreparedMatrixData prep = prepare_distance_matrix_impl(
-        matrix, n,
-        /*enforce_symmetry=*/true,
-        /*rtol=*/1e-5,
-        /*atol=*/1e-8,
-        /*replacement_quantile=*/0.95
+    const int mcode = condensed_method_code(method);
+
+    if (fast_path) {
+        // ---- FAST PATH ----
+        // Single-pass extraction: square matrix → condensed.
+        // No full-matrix allocation, no symmetry check, no Euclidean check.
+        PreparedCondensedData prep = prepare_matrix_to_condensed_fast(
+            matrix, n, /*replacement_quantile=*/0.95);
+
+        result.warning_flags = prep.warning_flags;
+
+        result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
+
+        // Ward/centroid/median square distances in-place — no need to
+        // preserve condensed under fast_path, so skip the copy entirely.
+        compute_linkage_condensed(
+            prep.condensed.data(), N, mcode,
+            result.linkage_matrix.data()
+        );
+
+        if (method == "ward_d") {
+            apply_ward_d_correction(result.linkage_matrix, N);
+        }
+    } else {
+        // ---- FULL PATH (backward compatible) ----
+        PreparedMatrixData prep = prepare_distance_matrix_impl(
+            matrix, n,
+            /*enforce_symmetry=*/true,
+            /*rtol=*/1e-5,
+            /*atol=*/1e-8,
+            /*replacement_quantile=*/0.95
+        );
+
+        result.warning_flags = prep.warning_flags;
+
+        // Euclidean compatibility check for Ward methods.
+        if (is_ward_method(method)) {
+            EuclideanCheckResult eu = check_euclidean_compatibility_pure(
+                prep.full.data(), n, method);
+            result.euclidean_compatible = eu.compatible;
+            if (!eu.compatible) {
+                result.warning_flags |= WARN_WARD_NON_EUCLIDEAN;
+            }
+        }
+
+        result.full_matrix = std::move(prep.full);
+
+        result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
+
+        if (method_modifies_condensed(mcode)) {
+            // Method will square distances in-place — copy to preserve original.
+            result.condensed_matrix = prep.condensed;
+            std::vector<double> condensed_work = std::move(prep.condensed);
+            compute_linkage_condensed(
+                condensed_work.data(), N, mcode,
+                result.linkage_matrix.data()
+            );
+        } else {
+            compute_linkage_condensed(
+                prep.condensed.data(), N, mcode,
+                result.linkage_matrix.data()
+            );
+            result.condensed_matrix = std::move(prep.condensed);
+        }
+
+        if (method == "ward_d") {
+            apply_ward_d_correction(result.linkage_matrix, N);
+        }
+    }
+
+    return result;
+}
+
+// ============================================================================
+// cluster_from_condensed
+// ============================================================================
+
+ClusterCoreResult cluster_from_condensed(
+    const double* condensed, int N,
+    const std::string& raw_method,
+    bool fast_path)
+{
+    if (N < 1) {
+        throw std::runtime_error("At least one element is needed for clustering.");
+    }
+
+    const std::string method = normalise_method(raw_method);
+    condensed_method_code(method);
+
+    ClusterCoreResult result;
+
+    if (N == 1) {
+        result.warning_flags = 0;
+        result.euclidean_compatible = true;
+        return result;
+    }
+
+    const auto n = static_cast<ssize_t>(N);
+    const auto condensed_len = static_cast<ssize_t>(N) * (N - 1) / 2;
+
+    PreparedCondensedData prep = prepare_distance_condensed_impl(
+        condensed, condensed_len, n, /*replacement_quantile=*/0.95
     );
 
     result.warning_flags = prep.warning_flags;
 
-    // Euclidean compatibility check for Ward methods.
-    if (!fast_path && is_ward_method(method)) {
-        EuclideanCheckResult eu = check_euclidean_compatibility_impl(
-            prep.full.data(), n, method);
-        result.euclidean_compatible = eu.compatible;
-        if (!eu.compatible) {
-            result.warning_flags |= WARN_WARD_NON_EUCLIDEAN;
-        }
-    }
-
-    // Keep full matrix when not in fast_path.
-    if (!fast_path) {
-        result.full_matrix = std::move(prep.full);
-    }
-
-    // --- Linkage computation ---
-    // compute_linkage_condensed consumes the condensed array, which is fine
-    // because we move it into result afterward (after copying for linkage).
-    // We need the condensed data both for linkage and for the result, so copy.
-    result.condensed_matrix = prep.condensed;  // copy for later use
-    std::vector<double> condensed_work = std::move(prep.condensed);
-
     const int mcode = condensed_method_code(method);
     result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 
-    compute_linkage_condensed(
-        condensed_work.data(), N, mcode,
-        result.linkage_matrix.data()
-    );
+    if (fast_path) {
+        // ---- FAST PATH ----
+        // No Euclidean check, no condensed copy — compute linkage directly.
+        compute_linkage_condensed(
+            prep.condensed.data(), N, mcode,
+            result.linkage_matrix.data()
+        );
+    } else {
+        // ---- FULL PATH ----
+        // Ward euclidean check requires a full matrix for sampling.
+        if (is_ward_method(method)) {
+            const int sample_cap = std::min(N, 50);
+            std::vector<double> sample_full(static_cast<size_t>(sample_cap) * sample_cap, 0.0);
+            for (int i = 0; i < sample_cap; ++i) {
+                for (int j = i + 1; j < sample_cap; ++j) {
+                    const auto idx = static_cast<size_t>(
+                        static_cast<ssize_t>(i) * (2 * n - i - 1) / 2 + (j - i - 1));
+                    const double d = prep.condensed[idx];
+                    sample_full[i * sample_cap + j] = d;
+                    sample_full[j * sample_cap + i] = d;
+                }
+            }
+            EuclideanCheckResult eu = check_euclidean_compatibility_pure(
+                sample_full.data(), static_cast<ssize_t>(sample_cap), method);
+            result.euclidean_compatible = eu.compatible;
+            if (!eu.compatible) {
+                result.warning_flags |= WARN_WARD_NON_EUCLIDEAN;
+            }
+        }
 
-    // Ward-D correction: divide distances by 2.
+        if (method_modifies_condensed(mcode)) {
+            result.condensed_matrix = prep.condensed;  // copy to preserve
+            std::vector<double> condensed_work = std::move(prep.condensed);
+            compute_linkage_condensed(
+                condensed_work.data(), N, mcode,
+                result.linkage_matrix.data()
+            );
+        } else {
+            compute_linkage_condensed(
+                prep.condensed.data(), N, mcode,
+                result.linkage_matrix.data()
+            );
+            result.condensed_matrix = std::move(prep.condensed);
+        }
+    }
+
     if (method == "ward_d") {
         apply_ward_d_correction(result.linkage_matrix, N);
     }
 
+    // full_matrix left empty — lazily reconstructed in Python if needed.
     return result;
 }
 

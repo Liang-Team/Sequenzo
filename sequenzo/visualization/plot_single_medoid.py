@@ -13,7 +13,8 @@ from typing import List, Optional
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     save_and_show_results,
-    show_plot_title
+    show_plot_title,
+    _to_square_matrix
 )
 
 
@@ -44,6 +45,10 @@ def plot_single_medoid(seqdata: SequenceData,
         if len(weights) != len(seqdata.values):
             raise ValueError("Length of weights must equal number of sequences.")
     
+    # Normalise distance matrix: accept full 2D (np.ndarray or pd.DataFrame)
+    # or condensed 1D array (output of get_distance_matrix with full_matrix=False)
+    distance_matrix = _to_square_matrix(distance_matrix)
+
     _, medoid_indices = compute_medoids_from_distance_matrix(distance_matrix, seqdata, weights=weights, top_k=1)
     medoid_coverages = _compute_individual_medoid_coverage(distance_matrix, medoid_indices)
 
@@ -103,6 +108,10 @@ def compute_medoids_from_distance_matrix(distance_matrix: np.ndarray, seqdata: S
     """
     if not isinstance(seqdata, SequenceData):
         raise TypeError("[X] seqdata must be a SequenceData object.")
+
+    # Normalise distance matrix: accept full 2D (np.ndarray or pd.DataFrame)
+    # or condensed 1D array (output of get_distance_matrix with full_matrix=False)
+    distance_matrix = _to_square_matrix(distance_matrix)
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":

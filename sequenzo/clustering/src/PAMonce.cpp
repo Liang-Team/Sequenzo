@@ -1,4 +1,4 @@
-﻿#include <pybind11/pybind11.h>
+#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
 #include <iostream>
@@ -64,11 +64,11 @@ public:
         int rows = buf_info[0];
         int cols = buf_info[1];
 
-        double max_val = -std::numeric_limits<double>::infinity();
+        double max_val = std::numeric_limits<double>::lowest();
 
         #pragma omp parallel
         {
-            double thread_max = -std::numeric_limits<double>::infinity();
+            double thread_max = std::numeric_limits<double>::lowest();
             #pragma omp for nowait
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {

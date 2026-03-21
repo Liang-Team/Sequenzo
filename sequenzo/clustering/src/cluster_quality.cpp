@@ -1,5 +1,4 @@
 #include "cluster_quality.h"
-#include <iostream>
 #include <limits>
 #include <cstring>
 
@@ -142,23 +141,11 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
         covx = wx2 / totweights - xb * xb;
         covy = wy / totweights - yb * yb;
         covxy = wxy / totweights - yb * xb;
-        
-        // Debug: Print intermediate values
-        #ifdef DEBUG_PBC
-        std::cout << "DEBUG PBC: totweights=" << totweights << ", wx=" << wx << ", wy=" << wy << ", wxy=" << wxy << ", wx2=" << wx2 << std::endl;
-        std::cout << "DEBUG PBC: xb=" << xb << ", yb=" << yb << std::endl;
-        std::cout << "DEBUG PBC: covx=" << covx << ", covy=" << covy << ", covxy=" << covxy << std::endl;
-        #endif
-        
+
         if (covx > 0 && covy > 0) {
             pearson = covxy / std::sqrt(covx * covy);
-            double pbc_value = -1.0 * static_cast<double>(pearson);  // Apply negative to get positive PBC
+            double pbc_value = -1.0 * static_cast<double>(pearson);
             stats[ClusterQualHPG] = pbc_value;
-            
-            // Debug: Print final calculation
-            #ifdef DEBUG_PBC
-            std::cout << "DEBUG PBC: pearson=" << pearson << ", pbc_value=" << pbc_value << std::endl;
-            #endif
         }
     }
     
@@ -258,94 +245,146 @@ void compute_cluster_quality_core(const double* diss, const int* cluster, const 
         }
     }
     
-    // Compute ASW exactly like R version
+    // Compute ASW — O(n²) hot loop, parallelised with thread-local accumulators.
     double asw_i = 0.0;
     double asw_w = 0.0;
-    
-    // Reset ASW arrays
+
     for (int j = 0; j < nclusters; j++) {
         asw[j] = 0.0;
         asw[j + nclusters] = 0.0;
     }
-    
-    for (int i = 0; i < n; i++) {
-        if (weights[i] > 0) {
-            int iclustIndex = cluster[i] - 1;  // Convert to 0-based
+
+#ifdef _OPENMP
+    #pragma omp parallel if(n > 128)
+    {
+        std::vector<double> asw_thr(static_cast<size_t>(2 * nclusters), 0.0);
+        std::vector<double> othergroups(nclusters);
+        double asw_i_thr = 0.0, asw_w_thr = 0.0;
+
+        #pragma omp for schedule(static) nowait
+        for (int i = 0; i < n; i++) {
+            if (weights[i] <= 0) continue;
+            int iclustIndex = cluster[i] - 1;
             if (iclustIndex < 0 || iclustIndex >= nclusters) continue;
-            
+
             double aik = 0.0;
-            std::vector<double> othergroups(nclusters, 0.0);
-            
-            // Calculate distances to all other points
+            std::fill(othergroups.begin(), othergroups.end(), 0.0);
+
             if constexpr (!UseCondensed) {
-                ij = i * n;
+                const int base = i * n;
                 for (int j = 0; j < n; j++) {
                     if (i == j) continue;
-                    int jclustIndex = cluster[j] - 1;
-                    if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
-                    
-                    if (iclustIndex == jclustIndex) {
-                        aik += weights[j] * diss[ij + j];
-                    } else {
-                        othergroups[jclustIndex] += weights[j] * diss[ij + j];
-                    }
+                    int jc = cluster[j] - 1;
+                    if (jc < 0 || jc >= nclusters) continue;
+                    double d = weights[j] * diss[base + j];
+                    if (iclustIndex == jc) aik += d;
+                    else                   othergroups[jc] += d;
                 }
             } else {
-                // Condensed version
                 for (int j = 0; j < n; j++) {
                     if (i == j) continue;
-                    int jclustIndex = cluster[j] - 1;
-                    if (jclustIndex < 0 || jclustIndex >= nclusters) continue;
-                    
-                    double dist_val = (i < j) ? diss[getCondensedIndex(i, j, n)] : diss[getCondensedIndex(j, i, n)];
-                    
-                    if (iclustIndex == jclustIndex) {
-                        aik += weights[j] * dist_val;
-                    } else {
-                        othergroups[jclustIndex] += weights[j] * dist_val;
-                    }
+                    int jc = cluster[j] - 1;
+                    if (jc < 0 || jc >= nclusters) continue;
+                    double dist_val = (i < j) ? diss[getCondensedIndex(i, j, n)]
+                                               : diss[getCondensedIndex(j, i, n)];
+                    double d = weights[j] * dist_val;
+                    if (iclustIndex == jc) aik += d;
+                    else                   othergroups[jc] += d;
                 }
             }
-            
-            // Find minimum average distance to other clusters
+
             double bik = std::numeric_limits<double>::max();
             for (int j = 0; j < nclusters; j++) {
                 if (j != iclustIndex && sizes[j] > 0) {
-                    double avg_dist = othergroups[j] / sizes[j];
-                    if (bik >= avg_dist) {
-                        bik = avg_dist;
-                    }
+                    double avg = othergroups[j] / sizes[j];
+                    if (bik >= avg) bik = avg;
                 }
             }
-            
-            // Calculate ASW values like R
-            double aik_w = aik / sizes[iclustIndex];  // Weighted version
-            if (sizes[iclustIndex] <= 1.0) {
-                aik = 0.0;  // Avoid division by zero for singletons
-            } else {
-                aik /= (sizes[iclustIndex] - 1.0);  // Unweighted version
-            }
-            
+
+            double aik_w = aik / sizes[iclustIndex];
+            if (sizes[iclustIndex] <= 1.0) aik = 0.0;
+            else                            aik /= (sizes[iclustIndex] - 1.0);
+
             if (bik != std::numeric_limits<double>::max()) {
                 double sik_i = weights[i] * ((bik - aik) / std::max(aik, bik));
                 double sik_w = weights[i] * ((bik - aik_w) / std::max(aik_w, bik));
-                
-                asw[iclustIndex] += sik_i;
-                asw[iclustIndex + nclusters] += sik_w;
-                asw_i += sik_i;
-                asw_w += sik_w;
+                asw_thr[iclustIndex] += sik_i;
+                asw_thr[iclustIndex + nclusters] += sik_w;
+                asw_i_thr += sik_i;
+                asw_w_thr += sik_w;
             }
         }
+
+        #pragma omp critical
+        {
+            for (int j = 0; j < 2 * nclusters; j++) asw[j] += asw_thr[j];
+            asw_i += asw_i_thr;
+            asw_w += asw_w_thr;
+        }
     }
-    
-    // Normalize cluster ASW by cluster sizes
+#else
+    {
+    std::vector<double> othergroups(nclusters);
+    for (int i = 0; i < n; i++) {
+        if (weights[i] <= 0) continue;
+        int iclustIndex = cluster[i] - 1;
+        if (iclustIndex < 0 || iclustIndex >= nclusters) continue;
+
+        double aik = 0.0;
+        std::fill(othergroups.begin(), othergroups.end(), 0.0);
+
+        if constexpr (!UseCondensed) {
+            const int base = i * n;
+            for (int j = 0; j < n; j++) {
+                if (i == j) continue;
+                int jc = cluster[j] - 1;
+                if (jc < 0 || jc >= nclusters) continue;
+                if (iclustIndex == jc) aik += weights[j] * diss[base + j];
+                else                   othergroups[jc] += weights[j] * diss[base + j];
+            }
+        } else {
+            for (int j = 0; j < n; j++) {
+                if (i == j) continue;
+                int jc = cluster[j] - 1;
+                if (jc < 0 || jc >= nclusters) continue;
+                double dist_val = (i < j) ? diss[getCondensedIndex(i, j, n)]
+                                           : diss[getCondensedIndex(j, i, n)];
+                if (iclustIndex == jc) aik += weights[j] * dist_val;
+                else                   othergroups[jc] += weights[j] * dist_val;
+            }
+        }
+
+        double bik = std::numeric_limits<double>::max();
+        for (int j = 0; j < nclusters; j++) {
+            if (j != iclustIndex && sizes[j] > 0) {
+                double avg = othergroups[j] / sizes[j];
+                if (bik >= avg) bik = avg;
+            }
+        }
+
+        double aik_w = aik / sizes[iclustIndex];
+        if (sizes[iclustIndex] <= 1.0) aik = 0.0;
+        else                            aik /= (sizes[iclustIndex] - 1.0);
+
+        if (bik != std::numeric_limits<double>::max()) {
+            double sik_i = weights[i] * ((bik - aik) / std::max(aik, bik));
+            double sik_w = weights[i] * ((bik - aik_w) / std::max(aik_w, bik));
+            asw[iclustIndex] += sik_i;
+            asw[iclustIndex + nclusters] += sik_w;
+            asw_i += sik_i;
+            asw_w += sik_w;
+        }
+    }
+    }
+#endif
+
     for (int j = 0; j < nclusters; j++) {
         if (sizes[j] > 0) {
             asw[j] /= sizes[j];
             asw[j + nclusters] /= sizes[j];
         }
     }
-    
+
     if (total_cluster_weights > 0) {
         stats[ClusterQualASWi] = asw_i / total_cluster_weights;
         stats[ClusterQualASWw] = asw_w / total_cluster_weights;
