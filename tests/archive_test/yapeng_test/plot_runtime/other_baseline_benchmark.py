@@ -8,7 +8,7 @@ import seaborn as sns
 # Data (3-run averages)
 # ==================================================================
 
-# --- Experiment 1: Sequence Length (n=10000, U=85) ---
+# --- Experiment 1: Sequence Length (n=10,000, U=85) ---
 # LCP
 sqz_old_lcp_exp1 = [0.61, 0.68, 0.58, 0.87]
 sqz_new_lcp_exp1 = [0.56, 0.38, 0.43, 0.46]
@@ -22,7 +22,7 @@ sqz_old_euc_exp1 = [14.62, 43.37, 71.58, 139.18]
 sqz_new_euc_exp1 = [1.02, 3.18, 5.18, 12.07]
 tat_euc_exp1     = [178.86, 480.17, 1302.66, 2027.29]
 
-# --- Experiment 2: Uniqueness Rate (n=10000, L=30) ---
+# --- Experiment 2: Uniqueness Rate (n=10,000, L=30) ---
 # LCP
 sqz_old_lcp_exp2 = [0.58, 1.40, 0.68, 0.76]
 sqz_new_lcp_exp2 = [0.30, 0.33, 0.38, 0.39]
@@ -50,9 +50,9 @@ sqz_old_euc_exp3 = [0.29, 2.10, 5.16, 14.66, 43.37]
 sqz_new_euc_exp3 = [0.026, 0.080, 0.190, 0.376, 3.18]
 tat_euc_exp3     = [2.78, 11.95, 31.26, 58.18, 480.17]
 
-x_exp1 = ['L=10', 'L=30', 'L=50', 'L=100']
-x_exp2 = ['U=20', 'U=50', 'U=85', 'U=100']
-x_exp3 = ['n=1k', 'n=2k', 'n=3k', 'n=4k', 'n=10k']
+x_exp1 = ['10', '30', '50', '100']
+x_exp2 = ['20', '50', '85', '100']
+x_exp3 = ['1', '2', '3', '4', '10']
 
 
 # ==================================================================
@@ -88,39 +88,39 @@ def plot_combined(metric_name, datasets_list, save_path):
 # --- LCP ---
 plot_combined('LCP', [
     {'data': {'Sequenzo (before)': sqz_old_lcp_exp1, 'Sequenzo (after)': sqz_new_lcp_exp1, 'TanaT': tat_lcp_exp1},
-     'x': ['10', '30', '50', '100'], 'xlabel': 'Sequence Length',
-     'title': 'LCP: Sequence Length\n(n=10k, U=85)'},
+     'x': x_exp1, 'xlabel': 'Sequence Length',
+     'title': 'LCP: Sequence Length\n(n=10,000, U=85)'},
     {'data': {'Sequenzo (before)': sqz_old_lcp_exp2, 'Sequenzo (after)': sqz_new_lcp_exp2, 'TanaT': tat_lcp_exp2},
-     'x': ['20', '50', '85', '100'], 'xlabel': 'Uniqueness Rate (%)',
-     'title': 'LCP: Uniqueness Rate\n(n=10k, L=30)'},
+     'x': x_exp2, 'xlabel': 'Uniqueness Rate (%)',
+     'title': 'LCP: Uniqueness Rate\n(n=10,000, L=30)'},
     {'data': {'Sequenzo (before)': sqz_old_lcp_exp3, 'Sequenzo (after)': sqz_new_lcp_exp3, 'TanaT': tat_lcp_exp3},
-     'x': ['1k', '2k', '3k', '4k', '10k'], 'xlabel': 'Sample Size',
+     'x': x_exp3, 'xlabel': 'Sample Size (1,000)',
      'title': 'LCP: Sample Size\n(L=30, U=85)'},
 ], 'lcp_combined.png')
 
 # --- LCS ---
 plot_combined('LCS', [
     {'data': {'Sequenzo (before)': sqz_old_lcs_exp1, 'Sequenzo (after)': sqz_new_lcs_exp1, 'TanaT': tat_lcs_exp1},
-     'x': ['10', '30', '50', '100'], 'xlabel': 'Sequence Length',
-     'title': 'LCS: Sequence Length\n(n=10k, U=85)'},
+     'x': x_exp1, 'xlabel': 'Sequence Length',
+     'title': 'LCS: Sequence Length\n(n=10,000, U=85)'},
     {'data': {'Sequenzo (before)': sqz_old_lcs_exp2, 'Sequenzo (after)': sqz_new_lcs_exp2, 'TanaT': tat_lcs_exp2},
-     'x': ['20', '50', '85', '100'], 'xlabel': 'Uniqueness Rate (%)',
-     'title': 'LCS: Uniqueness Rate\n(n=10k, L=30)'},
+     'x': x_exp2, 'xlabel': 'Uniqueness Rate (%)',
+     'title': 'LCS: Uniqueness Rate\n(n=10,000, L=30)'},
     {'data': {'Sequenzo (before)': sqz_old_lcs_exp3, 'Sequenzo (after)': sqz_new_lcs_exp3, 'TanaT': tat_lcs_exp3},
-     'x': ['1k', '2k', '3k', '4k', '10k'], 'xlabel': 'Sample Size',
+     'x': x_exp3, 'xlabel': 'Sample Size (1,000)',
      'title': 'LCS: Sample Size\n(L=30, U=85)'},
 ], 'lcs_combined.png')
 
 # --- EUCLID ---
 plot_combined('EUCLID', [
     {'data': {'Sequenzo (before)': sqz_old_euc_exp1, 'Sequenzo (after)': sqz_new_euc_exp1, 'TanaT': tat_euc_exp1},
-     'x': ['10', '30', '50', '100'], 'xlabel': 'Sequence Length',
-     'title': 'EUCLID: Sequence Length\n(n=10k, U=85)'},
+     'x': x_exp1, 'xlabel': 'Sequence Length',
+     'title': 'EUCLID: Sequence Length\n(n=10,000, U=85)'},
     {'data': {'Sequenzo (before)': sqz_old_euc_exp2, 'Sequenzo (after)': sqz_new_euc_exp2, 'TanaT': tat_euc_exp2},
-     'x': ['20', '50', '85', '100'], 'xlabel': 'Uniqueness Rate (%)',
-     'title': 'EUCLID: Uniqueness Rate\n(n=10k, L=30)'},
+     'x': x_exp2, 'xlabel': 'Uniqueness Rate (%)',
+     'title': 'EUCLID: Uniqueness Rate\n(n=10,000, L=30)'},
     {'data': {'Sequenzo (before)': sqz_old_euc_exp3, 'Sequenzo (after)': sqz_new_euc_exp3, 'TanaT': tat_euc_exp3},
-     'x': ['1k', '2k', '3k', '4k', '10k'], 'xlabel': 'Sample Size',
+     'x': x_exp3, 'xlabel': 'Sample Size (1,000)',
      'title': 'EUCLID: Sample Size\n(L=30, U=85)'},
 ], 'euclid_combined.png')
 
@@ -148,17 +148,17 @@ for metric, datasets in [
     ('LCP', [
         (sqz_old_lcp_exp1, sqz_new_lcp_exp1, tat_lcp_exp1, [10,30,50,100], 'Seq Length'),
         (sqz_old_lcp_exp2, sqz_new_lcp_exp2, tat_lcp_exp2, [20,50,85,100], 'U (%)'),
-        (sqz_old_lcp_exp3, sqz_new_lcp_exp3, tat_lcp_exp3, ['1k','2k','3k','4k','10k'], 'n'),
+        (sqz_old_lcp_exp3, sqz_new_lcp_exp3, tat_lcp_exp3, ['1,000','2,000','3,000','4,000','10,000'], 'n'),
     ]),
     ('LCS', [
         (sqz_old_lcs_exp1, sqz_new_lcs_exp1, tat_lcs_exp1, [10,30,50,100], 'Seq Length'),
         (sqz_old_lcs_exp2, sqz_new_lcs_exp2, tat_lcs_exp2, [20,50,85,100], 'U (%)'),
-        (sqz_old_lcs_exp3, sqz_new_lcs_exp3, tat_lcs_exp3, ['1k','2k','3k','4k','10k'], 'n'),
+        (sqz_old_lcs_exp3, sqz_new_lcs_exp3, tat_lcs_exp3, ['1,000','2,000','3,000','4,000','10,000'], 'n'),
     ]),
     ('EUCLID', [
         (sqz_old_euc_exp1, sqz_new_euc_exp1, tat_euc_exp1, [10,30,50,100], 'Seq Length'),
         (sqz_old_euc_exp2, sqz_new_euc_exp2, tat_euc_exp2, [20,50,85,100], 'U (%)'),
-        (sqz_old_euc_exp3, sqz_new_euc_exp3, tat_euc_exp3, ['1k','2k','3k','4k','10k'], 'n'),
+        (sqz_old_euc_exp3, sqz_new_euc_exp3, tat_euc_exp3, ['1,000','2,000','3,000','4,000','10,000'], 'n'),
     ]),
 ]:
     print(f"\n--- {metric} ---")

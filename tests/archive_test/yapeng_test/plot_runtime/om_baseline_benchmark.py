@@ -43,7 +43,7 @@ def plot_comparison(data_dict, x_axis, x_label, y_label='Time (seconds)',
 
 
 # ==========================================
-# Experiment 1: Sequence Length (n=10000, U=85)
+# Experiment 1: Sequence Length (n=10,000, U=85)
 # 3-run average
 # ==========================================
 sequenzo_old_exp1 = [6.74, 64.06, 167.12, 783.81]
@@ -52,7 +52,7 @@ tanat_exp1        = [20.37, 42.44, 115.54, 510.00]
 
 plot_comparison(
     data_dict={'Sequenzo (before)': sequenzo_old_exp1, 'Sequenzo (after)': sequenzo_new_exp1, 'TanaT': tanat_exp1},
-    x_axis=['L=10', 'L=30', 'L=50', 'L=100'],
+    x_axis=['10', '30', '50', '100'],
     x_label='Sequence Length',
     title='Exp 1: Effect of Sequence Length on OM Computation Time',
     save_path='om_exp1_sequence_length.png'
@@ -72,7 +72,7 @@ print()
 
 
 # ==========================================
-# Experiment 2: Uniqueness Rate (n=10000, L=30)
+# Experiment 2: Uniqueness Rate (n=10,000, L=30)
 # 3-run average
 # ==========================================
 sequenzo_old_exp2 = [3.79, 18.09, 64.06, 75.14]
@@ -81,7 +81,7 @@ tanat_exp2        = [36.49, 40.53, 42.44, 40.36]
 
 plot_comparison(
     data_dict={'Sequenzo (before)': sequenzo_old_exp2, 'Sequenzo (after)': sequenzo_new_exp2, 'TanaT': tanat_exp2},
-    x_axis=['U=20', 'U=50', 'U=85', 'U=100'],
+    x_axis=['20', '50', '85', '100'],
     x_label='Uniqueness Rate (%)',
     title='Exp 2: Effect of Uniqueness Rate on OM Computation Time',
     save_path='om_exp2_uniqueness_rate.png'
@@ -110,8 +110,8 @@ tanat_exp3        = [1.46, 2.43, 4.56, 7.34, 42.44]
 
 plot_comparison(
     data_dict={'Sequenzo (before)': sequenzo_old_exp3, 'Sequenzo (after)': sequenzo_new_exp3, 'TanaT': tanat_exp3},
-    x_axis=['n=1k', 'n=2k', 'n=3k', 'n=4k', 'n=10k'],
-    x_label='Sample Size',
+    x_axis=['1', '2', '3', '4', '10'],
+    x_label='Sample Size (1,000)',
     title='Exp 3: Effect of Sample Size on OM Computation Time',
     save_path='om_exp3_sample_size.png'
 )
@@ -142,18 +142,18 @@ datasets = [
         'data': {'Sequenzo (before)': sequenzo_old_exp1, 'Sequenzo (after)': sequenzo_new_exp1, 'TanaT': tanat_exp1},
         'x': ['10', '30', '50', '100'],
         'xlabel': 'Sequence Length',
-        'title': 'Exp 1: Sequence Length\n(n=10k, U=85)',
+        'title': 'Exp 1: Sequence Length\n(n=10,000, U=85)',
     },
     {
         'data': {'Sequenzo (before)': sequenzo_old_exp2, 'Sequenzo (after)': sequenzo_new_exp2, 'TanaT': tanat_exp2},
         'x': ['20', '50', '85', '100'],
         'xlabel': 'Uniqueness Rate (%)',
-        'title': 'Exp 2: Uniqueness Rate\n(n=10k, L=30)',
+        'title': 'Exp 2: Uniqueness Rate\n(n=10,000, L=30)',
     },
     {
         'data': {'Sequenzo (before)': sequenzo_old_exp3, 'Sequenzo (after)': sequenzo_new_exp3, 'TanaT': tanat_exp3},
-        'x': ['1k', '2k', '3k', '4k', '10k'],
-        'xlabel': 'Sample Size',
+        'x': ['1', '2', '3', '4', '10'],
+        'xlabel': 'Sample Size (1,000)',
         'title': 'Exp 3: Sample Size\n(L=30, U=85)',
     },
 ]
