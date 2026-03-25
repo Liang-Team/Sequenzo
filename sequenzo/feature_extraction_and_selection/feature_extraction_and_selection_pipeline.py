@@ -206,36 +206,3 @@ def run_feature_extraction_and_selection_pipeline(
     return result
 
 
-FESConfig = FeatureExtractionAndSelectionConfig
-
-
-def run_fes_pipeline(
-    seqdata: SequenceData,
-    y: Union[Sequence[Any], np.ndarray, pd.Series],
-    *,
-    controls: Optional[Union[pd.DataFrame, np.ndarray]] = None,
-    sample_weights: Optional[Union[np.ndarray, pd.Series]] = None,
-    state_groups: Optional[Dict[str, List[Any]]] = None,
-    problem_type: Optional[str] = None,
-    config: Optional[FeatureExtractionAndSelectionConfig] = None,
-    ids: Optional[Sequence[Any]] = None,
-    verbose: bool = True,
-) -> Dict[str, Any]:
-    """
-    Backward-compatible wrapper.
-
-    The previous API used parameter name `y` as the outcome; internally we
-    forward to `run_feature_extraction_and_selection_pipeline(..., outcome=y)`.
-    """
-    return run_feature_extraction_and_selection_pipeline(
-        seqdata=seqdata,
-        outcome=y,
-        controls=controls,
-        sample_weights=sample_weights,
-        state_groups=state_groups,
-        problem_type=problem_type,
-        config=config,
-        ids=ids,
-        verbose=verbose,
-    )
-

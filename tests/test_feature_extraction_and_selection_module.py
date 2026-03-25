@@ -24,7 +24,6 @@ from sequenzo import (
     FeatureExtractionAndSelectionConfig,
     clustassoc_like_typology_validation,
 )
-from sequenzo import run_fes_pipeline, FESConfig
 
 
 def _build_toy_monthly_sequence_data():
@@ -179,36 +178,4 @@ def test_clustassoc_like_typology_validation_smoke():
     assert np.all(np.isfinite(table["pseudoR2_null"].to_numpy()))
     assert np.all(np.isfinite(table["pseudoR2_remaining"].to_numpy()))
 
-
-def test_backward_compat_aliases_smoke(capsys):
-    """
-    Backward compatibility smoke test:
-    - the old alias names should still be importable and callable
-    """
-    seqdata = _build_toy_monthly_sequence_data()
-    capsys.readouterr()
-
-    y = np.array([10.0, 12.0, 11.0, 7.0, 9.0, 8.0], dtype=float)
-
-    cfg = FESConfig(
-        sequencing_max_k=2,
-        sequencing_min_support=0.5,
-        sequencing_top_mined_subsequences=10,
-        timing_bin_width=2.0,
-        boruta_n_iter=2,
-        residualize_target_with_controls=False,
-    )
-
-    res = run_fes_pipeline(
-        seqdata=seqdata,
-        y=y,
-        problem_type="regression",
-        controls=None,
-        config=cfg,
-        ids=seqdata.ids.tolist(),
-        verbose=False,
-    )
-
-    assert res["problem_type"] == "regression"
-    assert len(res["selected_feature_names"]) >= 1
 

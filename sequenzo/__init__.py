@@ -163,13 +163,6 @@ _LAZY: dict[str, tuple[str, str]] = {
         "sequenzo.feature_extraction_and_selection",
         "clustassoc_like_typology_validation",
     ),
-    # Backward-compatible aliases
-    "run_fes_pipeline": ("sequenzo.feature_extraction_and_selection", "run_fes_pipeline"),
-    "FESConfig": ("sequenzo.feature_extraction_and_selection", "FESConfig"),
-    "clustassoc_like_validation": (
-        "sequenzo.feature_extraction_and_selection",
-        "clustassoc_like_typology_validation",
-    ),
 }
 
 # Modules that need OpenMP setup before import (clustering, etc.)
@@ -340,10 +333,6 @@ __all__ = [
     "run_feature_extraction_and_selection_pipeline",
     "FeatureExtractionAndSelectionConfig",
     "clustassoc_like_typology_validation",
-    # Backward-compatible aliases
-    "run_fes_pipeline",
-    "FESConfig",
-    "clustassoc_like_validation",
 ]
 
 # Version check (async, non-blocking)
