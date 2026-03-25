@@ -1,7 +1,7 @@
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : __init__.py
-@Time    : 11/02/2025 16:41
+@Time    : 25/03/2026 19:52
 @Desc    : 
 """
 # Eager load only lightweight datasets API for fast startup
@@ -150,6 +150,26 @@ _LAZY: dict[str, tuple[str, str]] = {
     "fit_model_advanced": ("sequenzo.seqhmm", "fit_model_advanced"),
     "Formula": ("sequenzo.seqhmm", "Formula"),
     "create_model_matrix": ("sequenzo.seqhmm", "create_model_matrix"),
+    # Feature Extraction & Selection (readable names preferred)
+    "run_feature_extraction_and_selection_pipeline": (
+        "sequenzo.feature_extraction_and_selection",
+        "run_feature_extraction_and_selection_pipeline",
+    ),
+    "FeatureExtractionAndSelectionConfig": (
+        "sequenzo.feature_extraction_and_selection",
+        "FeatureExtractionAndSelectionConfig",
+    ),
+    "clustassoc_like_typology_validation": (
+        "sequenzo.feature_extraction_and_selection",
+        "clustassoc_like_typology_validation",
+    ),
+    # Backward-compatible aliases
+    "run_fes_pipeline": ("sequenzo.feature_extraction_and_selection", "run_fes_pipeline"),
+    "FESConfig": ("sequenzo.feature_extraction_and_selection", "FESConfig"),
+    "clustassoc_like_validation": (
+        "sequenzo.feature_extraction_and_selection",
+        "clustassoc_like_typology_validation",
+    ),
 }
 
 # Modules that need OpenMP setup before import (clustering, etc.)
@@ -316,6 +336,14 @@ __all__ = [
     "fit_model_advanced",
     "Formula",
     "create_model_matrix",
+    # Feature Extraction & Selection
+    "run_feature_extraction_and_selection_pipeline",
+    "FeatureExtractionAndSelectionConfig",
+    "clustassoc_like_typology_validation",
+    # Backward-compatible aliases
+    "run_fes_pipeline",
+    "FESConfig",
+    "clustassoc_like_validation",
 ]
 
 # Version check (async, non-blocking)

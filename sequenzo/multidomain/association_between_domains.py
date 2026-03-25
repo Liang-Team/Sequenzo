@@ -1,8 +1,8 @@
 """
 @Author  : Yuqi Liang 梁彧祺
 @File    : association_between_domains.py
-@Time    : 14/04/2025 21:15
-@Desc    : 
+@Time    : 25/03/2026 23:18
+@Desc    :
     This module provides functionality for measuring the association
     between multiple domains of sequence data. It is a Python implementation
     of the R function `seqdomassoc`, and supports calculating statistical
