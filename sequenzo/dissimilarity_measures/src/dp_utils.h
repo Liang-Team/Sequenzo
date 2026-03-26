@@ -1,5 +1,12 @@
 #pragma once
 
+// MSVC uses __restrict; GCC/Clang use __restrict__
+#ifdef _MSC_VER
+  #define RESTRICT __restrict
+#else
+  #define RESTRICT __restrict__
+#endif
+
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #ifdef _OPENMP

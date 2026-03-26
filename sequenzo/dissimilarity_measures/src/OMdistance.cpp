@@ -87,7 +87,7 @@ public:
         return indel;
     }
 
-    double compute_distance(int is, int js, double* __restrict__ prev, double* __restrict__ curr) {
+    double compute_distance(int is, int js, double* RESTRICT prev, double* RESTRICT curr) {
         const int m_full = len_ptr[is];
         const int n_full = len_ptr[js];
         int mSuf = m_full + 1, nSuf = n_full + 1;

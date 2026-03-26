@@ -64,7 +64,7 @@ public:
     // [OPT-2] Takes pre-allocated int buffers from caller (per-thread).
     // Original allocated two std::vector<int>(n+1) per call = ~50M heap alloc/dealloc
     // pairs for n=10000 unique sequences.
-    double compute_distance(int is, int js, int* __restrict__ prev, int* __restrict__ curr) {
+    double compute_distance(int is, int js, int* RESTRICT prev, int* RESTRICT curr) {
         const int m = len_ptr[is];
         const int n = len_ptr[js];
 
