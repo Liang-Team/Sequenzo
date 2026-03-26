@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _MSC_VER
+typedef ptrdiff_t ssize_t;
+#endif
+
 namespace {
 
 // Canonical method name normalisation.
