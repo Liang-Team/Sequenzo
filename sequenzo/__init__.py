@@ -4,6 +4,11 @@
 @Time    : 25/03/2026 19:52
 @Desc    : 
 """
+import os as _os
+_os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+_nt = _os.environ.get("SEQUENZO_NUM_THREADS")
+if _nt is not None:
+    _os.environ.setdefault("OMP_NUM_THREADS", str(_nt))
 # Eager load only lightweight datasets API for fast startup
 from .datasets import load_dataset, list_datasets
 
@@ -171,19 +176,23 @@ _OPENMP_MODULES = frozenset({
     "sequenzo.clustering.KMedoids",
     "sequenzo.big_data.clara.clara",
     "sequenzo.big_data.clara.visualization",
+    "sequenzo.dissimilarity_measures",
 })
 
 _loaded: dict[str, Any] = {}  # module_path -> module, for caching
 
 
+_openmp_setup_done = False
 def _setup_openmp_if_needed():
-    """Setup OpenMP on Apple Silicon before using clustering."""
+    """Setup OpenMP on Apple Silicon before using clustering/dissimilarity."""
+    global _openmp_setup_done
+    if _openmp_setup_done:
+        return
+    _openmp_setup_done = True
     import sys
     import os
     import platform
     if sys.platform != "darwin" or platform.machine() != "arm64":
-        return
-    if os.environ.get("CONDA_DEFAULT_ENV"):
         return
     try:
         from sequenzo.openmp_setup import ensure_openmp_support

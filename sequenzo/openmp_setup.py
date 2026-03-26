@@ -140,8 +140,7 @@ def ensure_openmp_support():
     
     # Check if we're in a conda environment (don't interfere)
     if os.environ.get('CONDA_DEFAULT_ENV'):
-        print("[>] Detected Conda environment, skipping OpenMP auto-setup")
-        return True
+        print("[>] Detected Conda environment, checking OpenMP support...")
     
     print("[>] Detected Apple Silicon Mac, checking OpenMP support...")
     
