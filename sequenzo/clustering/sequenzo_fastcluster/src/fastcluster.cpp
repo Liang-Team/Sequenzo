@@ -410,7 +410,8 @@ class fenv_error{};
 #endif
 
 static void MST_linkage_core(const t_index N, const t_float * const D,
-                             cluster_result & Z2) {
+                             cluster_result & Z2,
+                             bool skip_nan_check = false) {
 /*
     N: integer, number of data points
     D: condensed distance matrix N*(N-1)/2
@@ -442,7 +443,7 @@ static void MST_linkage_core(const t_index N, const t_float * const D,
       min = d[i];
       idx2 = i;
     }
-    else if (fc_isnan(d[i]))
+    else if (!skip_nan_check && fc_isnan(d[i]))
       throw (nan_error());
 #if HAVE_DIAGNOSTIC
 #pragma GCC diagnostic pop
@@ -464,7 +465,7 @@ static void MST_linkage_core(const t_index N, const t_float * const D,
 #endif
       if (tmp < d[i])
         d[i] = tmp;
-      else if (fc_isnan(tmp))
+      else if (!skip_nan_check && fc_isnan(tmp))
         throw (nan_error());
 #if HAVE_DIAGNOSTIC
 #pragma GCC diagnostic pop
@@ -482,7 +483,7 @@ static void MST_linkage_core(const t_index N, const t_float * const D,
 #endif
       if (d[i] > tmp)
         d[i] = tmp;
-      else if (fc_isnan(tmp))
+      else if (!skip_nan_check && fc_isnan(tmp))
         throw (nan_error());
 #if HAVE_DIAGNOSTIC
 #pragma GCC diagnostic pop
@@ -578,7 +579,8 @@ inline static void f_median( t_float * const b, const t_float a, const t_float c
 }
 
 template <method_codes method, typename t_members>
-static void NN_chain_core(const t_index N, t_float * const D, t_members * const members, cluster_result & Z2) {
+static void NN_chain_core(const t_index N, t_float * const D, t_members * const members, cluster_result & Z2,
+                          bool skip_nan_check = false) {
 /*
     N: integer
     D: condensed distance matrix N*(N-1)/2
@@ -601,18 +603,20 @@ static void NN_chain_core(const t_index N, t_float * const D, t_members * const 
 
   t_float min;
 
-  for (t_float const * DD=D; DD!=D+(static_cast<std::ptrdiff_t>(N)*(N-1)>>1);
-       ++DD) {
+  if (!skip_nan_check) {
+    for (t_float const * DD=D; DD!=D+(static_cast<std::ptrdiff_t>(N)*(N-1)>>1);
+         ++DD) {
 #if HAVE_DIAGNOSTIC
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
 #endif
-    if (fc_isnan(*DD)) {
-      throw(nan_error());
-    }
+      if (fc_isnan(*DD)) {
+        throw(nan_error());
+      }
 #if HAVE_DIAGNOSTIC
 #pragma GCC diagnostic pop
 #endif
+    }
   }
 
   #ifdef FE_INVALID

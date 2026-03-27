@@ -125,28 +125,33 @@ ClusterCoreResult cluster_from_matrix(
             apply_ward_d_correction(result.linkage_matrix, N);
         }
     } else {
-        // ---- FULL PATH (backward compatible) ----
-        PreparedMatrixData prep = prepare_distance_matrix_impl(
+        // ---- FULL PATH (optimized: fused single-pass extraction) ----
+        // Uses prepare_matrix_to_condensed_fused to combine symmetry check,
+        // validation, and condensed extraction into one upper-triangle pass.
+        // Never allocates a full N×N copy.
+        PreparedCondensedData prep = prepare_matrix_to_condensed_fused(
             matrix, n,
-            /*enforce_symmetry=*/true,
+            /*replacement_quantile=*/0.95,
+            /*check_symmetry=*/true,
             /*rtol=*/1e-5,
-            /*atol=*/1e-8,
-            /*replacement_quantile=*/0.95
+            /*atol=*/1e-8
         );
 
         result.warning_flags = prep.warning_flags;
 
         // Euclidean compatibility check for Ward methods.
+        // Read directly from the input matrix pointer (still alive in our scope).
         if (is_ward_method(method)) {
             EuclideanCheckResult eu = check_euclidean_compatibility_pure(
-                prep.full.data(), n, method);
+                matrix, n, method);
             result.euclidean_compatible = eu.compatible;
             if (!eu.compatible) {
                 result.warning_flags |= WARN_WARD_NON_EUCLIDEAN;
             }
         }
 
-        result.full_matrix = std::move(prep.full);
+        // full_matrix is no longer stored — Python can lazily reconstruct
+        // from condensed_matrix if needed.
 
         result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 

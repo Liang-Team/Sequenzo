@@ -264,20 +264,20 @@ void compute_linkage_condensed(
 
     switch (method_code) {
     case METHOD_METR_SINGLE:
-        MST_linkage_core(n, D_, Z2);
+        MST_linkage_core(n, D_, Z2, /*skip_nan_check=*/true);
         break;
     case METHOD_METR_COMPLETE:
-        NN_chain_core<METHOD_METR_COMPLETE, t_index>(n, D_, NULL, Z2);
+        NN_chain_core<METHOD_METR_COMPLETE, t_index>(n, D_, NULL, Z2, /*skip_nan_check=*/true);
         break;
     case METHOD_METR_AVERAGE:
-        NN_chain_core<METHOD_METR_AVERAGE, t_index>(n, D_, members, Z2);
+        NN_chain_core<METHOD_METR_AVERAGE, t_index>(n, D_, members, Z2, /*skip_nan_check=*/true);
         break;
     case METHOD_METR_WEIGHTED:
-        NN_chain_core<METHOD_METR_WEIGHTED, t_index>(n, D_, NULL, Z2);
+        NN_chain_core<METHOD_METR_WEIGHTED, t_index>(n, D_, NULL, Z2, /*skip_nan_check=*/true);
         break;
     case METHOD_METR_WARD:
     case METHOD_METR_WARD_D2:
-        NN_chain_core<METHOD_METR_WARD_D2, t_index>(n, D_, members, Z2);
+        NN_chain_core<METHOD_METR_WARD_D2, t_index>(n, D_, members, Z2, /*skip_nan_check=*/true);
         break;
     case METHOD_METR_CENTROID:
         generic_linkage<METHOD_METR_CENTROID, t_index>(n, D_, members, Z2);

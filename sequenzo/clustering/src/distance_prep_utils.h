@@ -74,6 +74,20 @@ PreparedCondensedData prepare_matrix_to_condensed_fast(
     double replacement_quantile
 );
 
+// Fused full-path extraction: reads the upper triangle of an N×N matrix in a
+// single pass, performs symmetrization, validation (NaN/Inf/negative), and
+// writes the condensed array directly.  Never allocates a full N×N copy.
+// check_symmetry: if true, detects asymmetry and sets WARN_SYMMETRIZED.
+// Always symmetrizes inline (average of (i,j) and (j,i)) regardless of flag.
+PreparedCondensedData prepare_matrix_to_condensed_fused(
+    const double* in_ptr,
+    std::ptrdiff_t n,
+    double replacement_quantile,
+    bool check_symmetry,
+    double rtol,
+    double atol
+);
+
 // Pure-C++ eigenvalue check (no NumPy dependency).
 // Operates on a symmetric s×s distance sub-matrix (row-major).
 EuclideanCheckResult check_euclidean_compatibility_pure(

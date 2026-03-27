@@ -435,13 +435,13 @@ def benchmark_fast_paths(
         except ImportError:
             print("  [TanaT] tanat 未安装，TanaT 列将跳过。")
 
-    width = 130 if _tanat_available else 113
+    width = 152 if _tanat_available else 135
     tanat_header = f"{'tanat(ward)':>14s}" if _tanat_available else ""
     print("=" * width)
     print(f"Fast-path benchmark  (ward_variant={ward_variant}, repeats={repeats}, seq_len={seq_len})")
     print(f"  计时方法: timeit.repeat(number=1, repeat={repeats}), 取 min")
-    print(f"{'n':>7s}  {'fastcluster':>13s}  {'sqz_full':>12s}  "
-          f"{'sqz_fast':>12s}  {'sqz_cond+fast':>15s}  {'sqz_cond(no fast)':>19s}  {tanat_header}")
+    print(f"{'n':>7s}  {'fc(cond)':>10s}  {'fc(full)':>14s}  {'sqz_full':>14s}  "
+          f"{'sqz_fast':>14s}  {'sqz_cond+fast':>16s}  {'sqz_cond(no fast)':>18s}  {tanat_header}")
     print("-" * width)
 
     results = []
@@ -453,11 +453,19 @@ def benchmark_fast_paths(
         condensed = pdist(X, "euclidean")
         entity_ids = np.arange(n)
 
-        # --- fastcluster ---
+        # --- fastcluster (condensed) ---
         t_fc = _t(
             lambda c=condensed: (
                 lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
             )(_fc_linkage(c.copy(), method=ward_variant)),
+            repeats,
+        )
+
+        # --- fastcluster (full matrix) ---
+        t_fc_full = _t(
+            lambda m=D: (
+                lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
+            )(_fc_linkage(squareform(m, checks=False), method=ward_variant)),
             repeats,
         )
 
@@ -485,7 +493,7 @@ def benchmark_fast_paths(
             repeats,
         )
 
-        results.append((t_fc, t_full, t_fast, t_cond_fast, t_cond_nf))
+        results.append((t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf))
 
         # --- TanaT (ward on X) ---
         t_tanat = None
@@ -495,14 +503,15 @@ def benchmark_fast_paths(
                 for _ in range(repeats)
             )
 
-        results[-1] = (t_fc, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat)
+        results[-1] = (t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat)
 
         tanat_col = (
             f"   {t_tanat:.4f}s ({t_tanat/t_fc:.2f}x)" if t_tanat is not None else ""
         )
         print(
             f"  n={n:6d}:  "
-            f"{t_fc:.4f}s          "
+            f"{t_fc:.4f}s(c) "
+            f"{t_fc_full:.4f}s ({t_fc_full/t_fc:.2f}x)   "
             f"{t_full:.4f}s ({t_full/t_fc:.2f}x)   "
             f"{t_fast:.4f}s ({t_fast/t_fc:.2f}x)   "
             f"{t_cond_fast:.4f}s ({t_cond_fast/t_fc:.2f}x)   "
@@ -512,26 +521,26 @@ def benchmark_fast_paths(
     print("-" * width)
     print("\nSummary — ratio to fastcluster (< 1.0 = faster than fastcluster):")
     tanat_hdr = f"  {'tanat':>10s}" if _tanat_available else ""
-    print(f"{'n':>7s}  {'full':>8s}  {'fast(sq)':>10s}  {'fast(cond)':>12s}  {'nf(cond)':>10s}{tanat_hdr}")
+    print(f"{'n':>7s}  {'fc(full)':>10s}  {'full':>8s}  {'fast(sq)':>10s}  {'fast(cond)':>12s}  {'nf(cond)':>10s}{tanat_hdr}")
     for n, row in zip(sizes, results):
-        t_fc, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat = row
+        t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat = row
         tanat_cell = f"  {t_tanat/t_fc:10.2f}x" if t_tanat is not None else ""
         print(
-            f"  {n:6d}  {t_full/t_fc:8.2f}x  {t_fast/t_fc:10.2f}x  "
+            f"  {n:6d}  {t_fc_full/t_fc:10.2f}x  {t_full/t_fc:8.2f}x  {t_fast/t_fc:10.2f}x  "
             f"{t_cond_fast/t_fc:12.2f}x  {t_cond_nf/t_fc:10.2f}x{tanat_cell}"
         )
 
     print("\nSummary — absolute times in seconds (for plotting):")
     tanat_hdr2 = f"  {'tanat(s)':>12s}" if _tanat_available else ""
     print(
-        f"{'n':>7s}  {'fastcluster(s)':>14s}  {'full(s)':>10s}  "
+        f"{'n':>7s}  {'fc(cond)(s)':>13s}  {'fc(full)(s)':>13s}  {'full(s)':>10s}  "
         f"{'fast(sq)(s)':>12s}  {'fast(cond)(s)':>14s}  {'nf(cond)(s)':>13s}{tanat_hdr2}"
     )
     for n, row in zip(sizes, results):
-        t_fc, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat = row
+        t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat = row
         tanat_cell2 = f"  {t_tanat:12.4f}" if t_tanat is not None else ""
         print(
-            f"  {n:6d}  {t_fc:14.4f}  {t_full:10.4f}  "
+            f"  {n:6d}  {t_fc:13.4f}  {t_fc_full:13.4f}  {t_full:10.4f}  "
             f"{t_fast:12.4f}  {t_cond_fast:14.4f}  {t_cond_nf:13.4f}{tanat_cell2}"
         )
     print("=" * width)
@@ -543,18 +552,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # fast_path 路径对比（多规模，含 condensed 输入 + TanaT 竞品）
     # ------------------------------------------------------------------
-    benchmark_fast_paths(
-        sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
-        seq_len=30,
-        num_clusters=5,
-        ward_variant="ward_d2",
-        seed=42,
-        repeats=5,
-        run_tanat=True,
-    )
-
     # benchmark_fast_paths(
-    #     sizes=[10000, 15000, 20000, 25000, 30000],
+    #     sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
     #     seq_len=30,
     #     num_clusters=5,
     #     ward_variant="ward_d2",
@@ -562,3 +561,14 @@ if __name__ == "__main__":
     #     repeats=5,
     #     run_tanat=True,
     # )
+
+    benchmark_fast_paths(
+        sizes=[10000, 15000, 20000, 25000, 30000],
+        # sizes=[10000],
+        seq_len=30,
+        num_clusters=5,
+        ward_variant="ward_d2",
+        seed=42,
+        repeats=5,
+        run_tanat=True,
+    )

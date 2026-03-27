@@ -41,10 +41,11 @@ double percentile_linear(std::vector<double>& values, double q) {
     return values[lo] * (1.0 - alpha) + values[hi] * alpha;
 }
 
-bool is_finite_ieee(double x) {
-    uint64_t bits = 0;
-    std::memcpy(&bits, &x, sizeof(double));
-    return (bits & 0x7ff0000000000000ULL) != 0x7ff0000000000000ULL;
+// Use std::isfinite directly — this TU is compiled WITHOUT -ffast-math,
+// so std::isfinite is IEEE-correct and generates better code than
+// the manual bit-masking approach.
+inline bool is_finite_val(double x) {
+    return std::isfinite(x);
 }
 
 // Jacobi eigenvalue algorithm for symmetric matrices (max size ~100×100).
@@ -129,7 +130,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
     for (std::ptrdiff_t i = 0; i < nn; ++i) {
         const double v = in_ptr[static_cast<size_t>(i)];
         out.full[static_cast<size_t>(i)] = v;
-        if (!is_finite_ieee(v)) {
+        if (!is_finite_val(v)) {
             had_nonfinite_flag = 1;
         } else if (v < 0.0) {
             had_negative_flag = 1;
@@ -144,7 +145,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
         finite_vals.reserve(static_cast<size_t>(nn));
         for (std::ptrdiff_t i = 0; i < nn; ++i) {
             const double v = out.full[static_cast<size_t>(i)];
-            if (is_finite_ieee(v)) {
+            if (is_finite_val(v)) {
                 finite_vals.push_back(v);
             }
         }
@@ -157,7 +158,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 #pragma omp parallel for if(nn > 4096)
 #endif
         for (std::ptrdiff_t i = 0; i < nn; ++i) {
-            if (!is_finite_ieee(out.full[static_cast<size_t>(i)])) {
+            if (!is_finite_val(out.full[static_cast<size_t>(i)])) {
                 out.full[static_cast<size_t>(i)] = out.replacement_value;
             }
         }
@@ -287,7 +288,7 @@ PreparedCondensedData prepare_distance_condensed_impl(
     for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
         const double v = in_ptr[static_cast<size_t>(i)];
         out.condensed[static_cast<size_t>(i)] = v;
-        if (!is_finite_ieee(v)) {
+        if (!is_finite_val(v)) {
             had_nonfinite_flag = 1;
         } else if (v < 0.0) {
             had_negative_flag = 1;
@@ -302,7 +303,7 @@ PreparedCondensedData prepare_distance_condensed_impl(
         finite_vals.reserve(static_cast<size_t>(condensed_len));
         for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
             const double v = out.condensed[static_cast<size_t>(i)];
-            if (is_finite_ieee(v)) {
+            if (is_finite_val(v)) {
                 finite_vals.push_back(v);
             }
         }
@@ -315,7 +316,7 @@ PreparedCondensedData prepare_distance_condensed_impl(
 #pragma omp parallel for if(condensed_len > 4096)
 #endif
         for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
-            if (!is_finite_ieee(out.condensed[static_cast<size_t>(i)])) {
+            if (!is_finite_val(out.condensed[static_cast<size_t>(i)])) {
                 out.condensed[static_cast<size_t>(i)] = out.replacement_value;
             }
         }
@@ -372,7 +373,7 @@ PreparedCondensedData prepare_matrix_to_condensed_fast(
             const std::ptrdiff_t local = j - i - 1;
             const auto idx = static_cast<size_t>(row_start + local);
 
-            if (!is_finite_ieee(v)) {
+            if (!is_finite_val(v)) {
                 had_nonfinite_flag = 1;
                 out.condensed[idx] = v;  // placeholder, fixed in pass 2
             } else if (v < 0.0) {
@@ -397,7 +398,7 @@ PreparedCondensedData prepare_matrix_to_condensed_fast(
         finite_vals.reserve(static_cast<size_t>(condensed_len));
         for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
             const double v = out.condensed[static_cast<size_t>(i)];
-            if (is_finite_ieee(v)) {
+            if (is_finite_val(v)) {
                 finite_vals.push_back(v);
             }
         }
@@ -410,7 +411,103 @@ PreparedCondensedData prepare_matrix_to_condensed_fast(
 #pragma omp parallel for if(condensed_len > 4096)
 #endif
         for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
-            if (!is_finite_ieee(out.condensed[static_cast<size_t>(i)])) {
+            if (!is_finite_val(out.condensed[static_cast<size_t>(i)])) {
+                out.condensed[static_cast<size_t>(i)] = out.replacement_value;
+            }
+        }
+    }
+
+    return out;
+}
+
+// ============================================================================
+// prepare_matrix_to_condensed_fused — replaces multi-pass full path
+// ============================================================================
+
+PreparedCondensedData prepare_matrix_to_condensed_fused(
+    const double* in_ptr,
+    std::ptrdiff_t n,
+    double replacement_quantile,
+    bool check_symmetry,
+    double rtol,
+    double atol
+) {
+    PreparedCondensedData out;
+    out.n = n;
+
+    const std::ptrdiff_t condensed_len = n * (n - 1) / 2;
+    out.condensed.resize(static_cast<size_t>(condensed_len));
+
+    // --- Single fused pass: extract upper triangle, symmetrize, validate ---
+    int had_nonfinite_flag = 0;
+    int had_negative_flag = 0;
+    int had_asymmetry_flag = 0;
+
+#ifdef _OPENMP
+#pragma omp parallel for reduction(|:had_nonfinite_flag,had_negative_flag,had_asymmetry_flag) if(n > 256)
+#endif
+    for (std::ptrdiff_t i = 0; i < n; ++i) {
+        const std::ptrdiff_t row_start = (i * (2 * n - i - 1)) / 2;
+        for (std::ptrdiff_t j = i + 1; j < n; ++j) {
+            const double a = in_ptr[static_cast<size_t>(i * n + j)];
+            const double b = in_ptr[static_cast<size_t>(j * n + i)];
+
+            // Optional symmetry detection
+            if (check_symmetry) {
+                const double tol = atol + rtol * std::abs(b);
+                if (std::abs(a - b) > tol) {
+                    had_asymmetry_flag = 1;
+                }
+            }
+
+            // Symmetrize inline: average of (i,j) and (j,i).
+            const double v = (a + b) * 0.5;
+
+            const std::ptrdiff_t local = j - i - 1;
+            const auto idx = static_cast<size_t>(row_start + local);
+
+            if (!is_finite_val(v)) {
+                had_nonfinite_flag = 1;
+                out.condensed[idx] = v;  // placeholder, fixed in pass 2
+            } else if (v < 0.0) {
+                had_negative_flag = 1;
+                out.condensed[idx] = 0.0;  // clamp inline
+            } else {
+                out.condensed[idx] = v;
+            }
+        }
+    }
+    out.had_nonfinite = (had_nonfinite_flag != 0);
+    out.had_negative = (had_negative_flag != 0);
+
+    if (out.had_negative) {
+        out.warning_flags |= WARN_NEGATIVE;
+    }
+    if (had_asymmetry_flag) {
+        out.warning_flags |= WARN_SYMMETRIZED;
+    }
+
+    // --- Pass 2 (rare): replace non-finite values ---
+    if (out.had_nonfinite) {
+        out.warning_flags |= WARN_NONFINITE;
+        std::vector<double> finite_vals;
+        finite_vals.reserve(static_cast<size_t>(condensed_len));
+        for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
+            const double v = out.condensed[static_cast<size_t>(i)];
+            if (is_finite_val(v)) {
+                finite_vals.push_back(v);
+            }
+        }
+        if (!finite_vals.empty()) {
+            out.replacement_value = percentile_linear(finite_vals, replacement_quantile);
+        } else {
+            out.replacement_value = 1.0;
+        }
+#ifdef _OPENMP
+#pragma omp parallel for if(condensed_len > 4096)
+#endif
+        for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
+            if (!is_finite_val(out.condensed[static_cast<size_t>(i)])) {
                 out.condensed[static_cast<size_t>(i)] = out.replacement_value;
             }
         }
@@ -486,7 +583,7 @@ EuclideanCheckResult check_euclidean_compatibility_pure(
         std::vector<double> sample_for_eigen = sample;
         double max_abs_sample = 0.0;
         for (double v : sample_for_eigen) {
-            if (is_finite_ieee(v)) {
+            if (is_finite_val(v)) {
                 max_abs_sample = std::max(max_abs_sample, std::abs(v));
             }
         }

@@ -122,6 +122,62 @@ def setup_openmp_environment():
         return False
 
 
+def fix_duplicate_libomp_in_conda():
+    """
+    Fix duplicate libomp loading in Conda environments on macOS.
+
+    When a .so extension module is linked to Homebrew's libomp
+    (/opt/homebrew/.../libomp.dylib) but the active Conda environment also
+    ships its own libomp, both copies get loaded simultaneously.  Two OpenMP
+    runtimes in the same process causes memory corruption / segfaults,
+    especially on Python 3.10.
+
+    This function rewrites the install-name of every Sequenzo .so file that
+    still points at Homebrew's libomp so that it uses the Conda copy instead.
+
+    The rewrite is idempotent: it is skipped when not needed.
+    """
+    conda_prefix = os.environ.get('CONDA_PREFIX') or os.environ.get('CONDA_DEFAULT_ENV')
+    if not conda_prefix or not os.path.isdir(conda_prefix):
+        return
+
+    # Candidate Conda libomp path
+    conda_libomp = os.path.join(conda_prefix, 'lib', 'libomp.dylib')
+    if not os.path.exists(conda_libomp):
+        return  # Conda env doesn't ship libomp – nothing to fix
+
+    # Homebrew libomp path patterns we want to replace
+    homebrew_patterns = [
+        '/opt/homebrew/opt/libomp/lib/libomp.dylib',
+        '/opt/homebrew/lib/libomp.dylib',
+        '/usr/local/opt/libomp/lib/libomp.dylib',
+        '/usr/local/lib/libomp.dylib',
+    ]
+
+    # Walk every .so in the sequenzo package tree
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    for root, _dirs, files in os.walk(pkg_dir):
+        for fname in files:
+            if not fname.endswith('.so'):
+                continue
+            so_path = os.path.join(root, fname)
+            try:
+                result = subprocess.run(
+                    ['otool', '-L', so_path],
+                    capture_output=True, text=True, timeout=5
+                )
+                for brew_path in homebrew_patterns:
+                    if brew_path in result.stdout:
+                        subprocess.run(
+                            ['install_name_tool', '-change',
+                             brew_path, conda_libomp, so_path],
+                            check=True, capture_output=True, timeout=10
+                        )
+                        break  # at most one libomp entry per .so
+            except Exception:
+                pass  # best-effort; never crash import
+
+
 def ensure_openmp_support():
     """
     Ensure OpenMP support is available on Apple Silicon Macs.
@@ -147,6 +203,10 @@ def ensure_openmp_support():
     # Check if libomp is already available
     if check_libomp_availability():
         print("[>] OpenMP support is available")
+        # In Conda envs, fix any .so files linked to Homebrew libomp to avoid
+        # dual-libomp segfaults (two libomp instances loaded simultaneously).
+        if os.environ.get('CONDA_DEFAULT_ENV') or os.environ.get('CONDA_PREFIX'):
+            fix_duplicate_libomp_in_conda()
         return True
     
     # Check if Homebrew is available

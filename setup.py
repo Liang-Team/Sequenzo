@@ -543,9 +543,10 @@ def configure_cpp_extension():
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
-        # Clustering extension: two translation units with different -ffast-math settings.
-        #   module.cpp          — compiled WITH  -ffast-math (all non-fastcluster code)
-        #   fastcluster_tu.cpp  — compiled WITHOUT -ffast-math (preserves IEEE NaN for fc_isnan)
+        # Clustering extension: three translation units with different -ffast-math settings.
+        #   module.cpp                   — compiled WITH  -ffast-math
+        #   distance_prep_tu.cpp         — compiled WITHOUT -ffast-math (IEEE NaN handling)
+        #   fastcluster_linkage_tu.cpp   — compiled WITH  -ffast-math (linkage performance)
         clustering_compile_args = get_compile_args_for_file("dummy.cpp")
         if '-ffast-math' not in clustering_compile_args:
             clustering_compile_args.append('-ffast-math')
@@ -555,7 +556,8 @@ def configure_cpp_extension():
             'sequenzo.clustering.clustering_c_code',
             sources=[
                 'sequenzo/clustering/src/module.cpp',
-                'sequenzo/clustering/src/fastcluster_tu.cpp',
+                'sequenzo/clustering/src/distance_prep_tu.cpp',
+                'sequenzo/clustering/src/fastcluster_linkage_tu.cpp',
             ],
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=clustering_compile_args,
@@ -656,7 +658,9 @@ def configure_cython_extensions():
 class BuildExt(build_ext):
     """
     Custom build_ext class with enhanced architecture and OpenMP reporting.
-    Supports per-file compile flags: strips -ffast-math from fastcluster_tu.cpp.
+    Supports per-file compile flags: strips -ffast-math from distance_prep_tu.cpp
+    and fastcluster_linkage_tu.cpp (both need IEEE semantics for NaN/Inf), while
+    keeping it for module.cpp.
     """
 
     def build_extension(self, ext):
@@ -664,7 +668,10 @@ class BuildExt(build_ext):
             original_compile = self.compiler._compile
 
             def _per_file_compile(obj, src, ext_str, cc_args, extra_postargs, pp_opts):
-                if 'fastcluster_tu' in src:
+                # Both distance_prep_tu and fastcluster_linkage_tu need IEEE
+                # semantics: distance_prep uses std::isfinite, fastcluster
+                # uses std::numeric_limits::infinity(). Strip -ffast-math.
+                if 'distance_prep_tu' in src or 'fastcluster_linkage_tu' in src:
                     postargs = [a for a in extra_postargs if a != '-ffast-math']
                 else:
                     postargs = extra_postargs
