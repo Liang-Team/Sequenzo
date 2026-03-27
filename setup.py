@@ -212,11 +212,16 @@ def get_mac_arch():
         return 'x86_64'
 
 def _find_libomp_prefix():
-    """Find Homebrew libomp path. Returns (include_dir, lib_dir) or (None, None)."""
-    candidates = [
+    """Find libomp path. Prefer conda env's libomp to avoid duplicate loading."""
+    candidates = []
+    conda_prefix = os.environ.get('CONDA_PREFIX', '')
+    if conda_prefix:
+        candidates.append(conda_prefix)
+    candidates.extend([
         '/opt/homebrew/opt/libomp',   # Apple Silicon
         '/usr/local/opt/libomp',      # Intel Mac
-    ]
+    ])
+
     for prefix in candidates:
         inc = os.path.join(prefix, 'include')
         lib = os.path.join(prefix, 'lib')
