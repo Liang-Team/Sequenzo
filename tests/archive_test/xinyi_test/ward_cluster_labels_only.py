@@ -552,19 +552,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # fast_path 路径对比（多规模，含 condensed 输入 + TanaT 竞品）
     # ------------------------------------------------------------------
-    # benchmark_fast_paths(
-    #     sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
-    #     seq_len=30,
-    #     num_clusters=5,
-    #     ward_variant="ward_d2",
-    #     seed=42,
-    #     repeats=5,
-    #     run_tanat=True,
-    # )
-
     benchmark_fast_paths(
-        sizes=[10000, 15000, 20000, 25000, 30000],
-        # sizes=[10000],
+        sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
         seq_len=30,
         num_clusters=5,
         ward_variant="ward_d2",
@@ -572,3 +561,14 @@ if __name__ == "__main__":
         repeats=5,
         run_tanat=True,
     )
+
+    # benchmark_fast_paths(
+    #     sizes=[10000, 15000, 20000, 25000, 30000],
+    #     # sizes=[10000],
+    #     seq_len=30,
+    #     num_clusters=5,
+    #     ward_variant="ward_d2",
+    #     seed=42,
+    #     repeats=5,
+    #     run_tanat=True,
+    # )

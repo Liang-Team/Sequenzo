@@ -258,6 +258,19 @@ py::array_t<double> vector_to_pyarray_1d(std::vector<double>&& data) {
     );
 }
 
+py::array_t<double> rawbuffer_to_pyarray_1d(RawBuffer&& buf) {
+    auto* heap_buf = new RawBuffer(std::move(buf));
+    py::capsule free_when_done(heap_buf, [](void* p) {
+        delete reinterpret_cast<RawBuffer*>(p);
+    });
+    return py::array_t<double>(
+        {static_cast<py::ssize_t>(heap_buf->size())},
+        {static_cast<py::ssize_t>(sizeof(double))},
+        heap_buf->data(),
+        free_when_done
+    );
+}
+
 // ============================================================================
 // prepare_distance_condensed_impl — fast path for condensed input
 // ============================================================================
@@ -278,7 +291,7 @@ PreparedCondensedData prepare_distance_condensed_impl(
             std::to_string(expected) + ", got " + std::to_string(condensed_len));
     }
 
-    out.condensed.resize(static_cast<size_t>(condensed_len));
+    out.condensed = RawBuffer(static_cast<size_t>(condensed_len));
 
     int had_nonfinite_flag = 0;
     int had_negative_flag = 0;
@@ -286,7 +299,7 @@ PreparedCondensedData prepare_distance_condensed_impl(
 #pragma omp parallel for reduction(|:had_nonfinite_flag,had_negative_flag) if(condensed_len > 4096)
 #endif
     for (std::ptrdiff_t i = 0; i < condensed_len; ++i) {
-        const double v = in_ptr[static_cast<size_t>(i)];
+        const double v = in_ptr[i];
         out.condensed[static_cast<size_t>(i)] = v;
         if (!is_finite_val(v)) {
             had_nonfinite_flag = 1;
@@ -350,7 +363,7 @@ PreparedCondensedData prepare_matrix_to_condensed_fast(
     out.n = n;
 
     const std::ptrdiff_t condensed_len = n * (n - 1) / 2;
-    out.condensed.resize(static_cast<size_t>(condensed_len));
+    out.condensed = RawBuffer(static_cast<size_t>(condensed_len));
 
     // --- Pass 1: extract upper triangle, symmetrize, detect problems ---
     int had_nonfinite_flag = 0;
@@ -436,7 +449,7 @@ PreparedCondensedData prepare_matrix_to_condensed_fused(
     out.n = n;
 
     const std::ptrdiff_t condensed_len = n * (n - 1) / 2;
-    out.condensed.resize(static_cast<size_t>(condensed_len));
+    out.condensed = RawBuffer(static_cast<size_t>(condensed_len));
 
     // --- Single fused pass: extract upper triangle, symmetrize, validate ---
     int had_nonfinite_flag = 0;

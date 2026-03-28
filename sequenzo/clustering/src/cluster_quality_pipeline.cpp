@@ -254,7 +254,10 @@ ClusterQualityPipelineResult cluster_quality_from_matrix(
     }
 
     // Reuse cluster_from_matrix for matrix prep + linkage.
-    ClusterCoreResult core = cluster_from_matrix(matrix, N, raw_method, /*fast_path=*/false);
+    // Must retain_condensed=true because CQI computation needs the condensed matrix.
+    ClusterCoreResult core = cluster_from_matrix(matrix, N, raw_method,
+                                                 /*fast_path=*/false,
+                                                 /*retain_condensed=*/true);
 
     const int k_max = std::min(max_clusters, N);
     if (k_max < 2) {

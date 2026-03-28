@@ -273,11 +273,13 @@ class Cluster:
             self._X_features = X
         elif use_condensed_path:
             result = clustering_c_code.cluster_from_condensed(
-                matrix, int(n), method, bool(fast_path))
+                matrix, int(n), method, bool(fast_path),
+                False)  # retain_condensed=False for performance
             self._X_features = None
         else:
             result = clustering_c_code.cluster_from_matrix(
-                matrix, method, bool(fast_path))
+                matrix, method, bool(fast_path),
+                False)  # retain_condensed=False for performance
             self._X_features = None
 
         self.clustering_method = "ward_d" if method == "ward" else method
@@ -287,7 +289,18 @@ class Cluster:
         self.linkage_matrix = np.asarray(lm) if lm is not None else None
 
         cm = result["condensed_matrix"]
-        self.condensed_matrix = np.asarray(cm) if cm is not None else None
+        self._condensed_matrix = np.asarray(cm) if cm is not None else None
+
+        # Keep reference to original input matrix for lazy condensed reconstruction
+        if not use_vector_path and not use_condensed_path:
+            self._input_matrix = matrix  # N×N numpy array
+        elif use_condensed_path:
+            self._input_matrix = None
+            # If condensed was the input and we didn't retain, store original
+            if self._condensed_matrix is None:
+                self._condensed_matrix = np.array(matrix, dtype=np.float64, copy=True)
+        else:
+            self._input_matrix = None
 
         fm = result["full_matrix"]
         self._full_matrix = np.asarray(fm) if fm is not None else None
@@ -295,10 +308,25 @@ class Cluster:
         self._warn_from_flags(int(result["warning_flags"]), self.clustering_method)
 
     @property
+    def condensed_matrix(self):
+        """Condensed distance matrix. Lazy-computed from input matrix if not retained."""
+        if self._condensed_matrix is None and self._input_matrix is not None:
+            self._condensed_matrix = squareform(
+                (self._input_matrix + self._input_matrix.T) / 2.0
+            )
+        return self._condensed_matrix
+
+    @condensed_matrix.setter
+    def condensed_matrix(self, value):
+        self._condensed_matrix = value
+
+    @property
     def full_matrix(self):
         """Full distance matrix. Lazy-computed from X_features or condensed_matrix."""
         if self._full_matrix is None and self._X_features is not None:
             self._full_matrix = squareform(pdist(self._X_features, "euclidean"))
+        elif self._full_matrix is None and self._input_matrix is not None:
+            self._full_matrix = self._input_matrix
         elif self._full_matrix is None and self.condensed_matrix is not None:
             self._full_matrix = squareform(self.condensed_matrix)
         return self._full_matrix

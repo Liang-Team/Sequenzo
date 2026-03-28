@@ -681,7 +681,8 @@ PYBIND11_MODULE(clustering_c_code, m) {
     auto register_cluster_core_apis = [&m]() {
     m.def("cluster_from_matrix", [](py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
                                      const std::string& method,
-                                     bool fast_path) -> py::dict {
+                                     bool fast_path,
+                                     bool retain_condensed) -> py::dict {
         auto buf = matrix.request();
         if (buf.ndim != 2 || buf.shape[0] != buf.shape[1]) {
             throw std::runtime_error("Distance matrix must be a 2D square array.");
@@ -689,7 +690,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         const int N = static_cast<int>(buf.shape[0]);
         auto* ptr = static_cast<double*>(buf.ptr);
 
-        ClusterCoreResult res = cluster_from_matrix(ptr, N, method, fast_path);
+        ClusterCoreResult res = cluster_from_matrix(ptr, N, method, fast_path, retain_condensed);
 
         py::dict out;
         if (!res.linkage_matrix.empty()) {
@@ -717,12 +718,14 @@ PYBIND11_MODULE(clustering_c_code, m) {
         return out;
     },
     py::arg("matrix"), py::arg("method"), py::arg("fast_path") = false,
+    py::arg("retain_condensed") = false,
     "Full clustering pipeline: distance matrix -> linkage matrix (C++ core).");
 
     m.def("cluster_from_condensed", [](py::array_t<double, py::array::c_style | py::array::forcecast> condensed,
                                        int n,
                                        const std::string& method,
-                                       bool fast_path) -> py::dict {
+                                       bool fast_path,
+                                       bool retain_condensed) -> py::dict {
         auto buf = condensed.request();
         if (buf.ndim != 1) {
             throw std::runtime_error("Condensed distance array must be a 1D array.");
@@ -730,7 +733,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         const int N = n;
         auto* ptr = static_cast<double*>(buf.ptr);
 
-        ClusterCoreResult res = cluster_from_condensed(ptr, N, method, fast_path);
+        ClusterCoreResult res = cluster_from_condensed(ptr, N, method, fast_path, retain_condensed);
 
         py::dict out;
         if (!res.linkage_matrix.empty()) {
@@ -752,6 +755,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         return out;
     },
     py::arg("condensed"), py::arg("n"), py::arg("method"), py::arg("fast_path") = false,
+    py::arg("retain_condensed") = false,
     "Fast clustering pipeline: condensed distance array -> linkage matrix (C++ core).");
 
     m.def("cluster_from_features", [](py::array_t<double, py::array::c_style | py::array::forcecast> X,

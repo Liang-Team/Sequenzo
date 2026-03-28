@@ -63,15 +63,6 @@ int vector_method_code(const std::string& method) {
         method + "'.");
 }
 
-// Returns true if the method modifies the condensed array in-place
-// (squaring for ward_d2, centroid, median).
-bool method_modifies_condensed(int method_code) {
-    return method_code == 4  // METHOD_METR_WARD
-        || method_code == 7  // METHOD_METR_WARD_D2
-        || method_code == 5  // METHOD_METR_CENTROID
-        || method_code == 6; // METHOD_METR_MEDIAN
-}
-
 }  // namespace
 
 // ============================================================================
@@ -81,7 +72,8 @@ bool method_modifies_condensed(int method_code) {
 ClusterCoreResult cluster_from_matrix(
     const double* matrix, int N,
     const std::string& raw_method,
-    bool fast_path)
+    bool fast_path,
+    bool retain_condensed)
 {
     if (N < 1) {
         throw std::runtime_error("At least one element is needed for clustering.");
@@ -114,8 +106,11 @@ ClusterCoreResult cluster_from_matrix(
 
         result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 
-        // Ward/centroid/median square distances in-place — no need to
-        // preserve condensed under fast_path, so skip the copy entirely.
+        if (retain_condensed) {
+            // Copy condensed before linkage corrupts it.
+            result.condensed_matrix = prep.condensed.to_vector();
+        }
+
         compute_linkage_condensed(
             prep.condensed.data(), N, mcode,
             result.linkage_matrix.data()
@@ -155,21 +150,18 @@ ClusterCoreResult cluster_from_matrix(
 
         result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 
-        if (method_modifies_condensed(mcode)) {
-            // Method will square distances in-place — copy to preserve original.
-            result.condensed_matrix = prep.condensed;
-            std::vector<double> condensed_work = std::move(prep.condensed);
-            compute_linkage_condensed(
-                condensed_work.data(), N, mcode,
-                result.linkage_matrix.data()
-            );
-        } else {
-            compute_linkage_condensed(
-                prep.condensed.data(), N, mcode,
-                result.linkage_matrix.data()
-            );
-            result.condensed_matrix = std::move(prep.condensed);
+        if (retain_condensed) {
+            // All methods modify condensed in-place during linkage
+            // (Ward/centroid/median square distances; single/complete/average/
+            // weighted update distances via f_single/f_complete/etc).
+            // Copy before linkage to preserve the original.
+            result.condensed_matrix = prep.condensed.to_vector();
         }
+
+        compute_linkage_condensed(
+            prep.condensed.data(), N, mcode,
+            result.linkage_matrix.data()
+        );
 
         if (method == "ward_d") {
             apply_ward_d_correction(result.linkage_matrix, N);
@@ -186,7 +178,8 @@ ClusterCoreResult cluster_from_matrix(
 ClusterCoreResult cluster_from_condensed(
     const double* condensed, int N,
     const std::string& raw_method,
-    bool fast_path)
+    bool fast_path,
+    bool retain_condensed)
 {
     if (N < 1) {
         throw std::runtime_error("At least one element is needed for clustering.");
@@ -218,6 +211,9 @@ ClusterCoreResult cluster_from_condensed(
     if (fast_path) {
         // ---- FAST PATH ----
         // No Euclidean check, no condensed copy — compute linkage directly.
+        if (retain_condensed) {
+            result.condensed_matrix = prep.condensed.to_vector();
+        }
         compute_linkage_condensed(
             prep.condensed.data(), N, mcode,
             result.linkage_matrix.data()
@@ -245,20 +241,15 @@ ClusterCoreResult cluster_from_condensed(
             }
         }
 
-        if (method_modifies_condensed(mcode)) {
-            result.condensed_matrix = prep.condensed;  // copy to preserve
-            std::vector<double> condensed_work = std::move(prep.condensed);
-            compute_linkage_condensed(
-                condensed_work.data(), N, mcode,
-                result.linkage_matrix.data()
-            );
-        } else {
-            compute_linkage_condensed(
-                prep.condensed.data(), N, mcode,
-                result.linkage_matrix.data()
-            );
-            result.condensed_matrix = std::move(prep.condensed);
+        if (retain_condensed) {
+            // All methods corrupt condensed during linkage — copy to preserve.
+            result.condensed_matrix = prep.condensed.to_vector();
         }
+
+        compute_linkage_condensed(
+            prep.condensed.data(), N, mcode,
+            result.linkage_matrix.data()
+        );
     }
 
     if (method == "ward_d") {

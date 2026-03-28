@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -10,6 +13,59 @@
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
+
+// ============================================================================
+// RawBuffer: malloc-backed double array — avoids std::vector::resize zero-init.
+// For N=30,000, avoids ~3.4 GB of useless zero-writes.
+// ============================================================================
+struct RawBuffer {
+    double* ptr = nullptr;
+    size_t  len = 0;
+
+    RawBuffer() = default;
+
+    explicit RawBuffer(size_t n)
+        : ptr(static_cast<double*>(std::malloc(n * sizeof(double)))), len(n) {
+        if (!ptr && n > 0) throw std::bad_alloc();
+    }
+
+    ~RawBuffer() { std::free(ptr); }
+
+    // Move-only
+    RawBuffer(RawBuffer&& o) noexcept : ptr(o.ptr), len(o.len) {
+        o.ptr = nullptr; o.len = 0;
+    }
+    RawBuffer& operator=(RawBuffer&& o) noexcept {
+        if (this != &o) {
+            std::free(ptr);
+            ptr = o.ptr; len = o.len;
+            o.ptr = nullptr; o.len = 0;
+        }
+        return *this;
+    }
+
+    RawBuffer(const RawBuffer&) = delete;
+    RawBuffer& operator=(const RawBuffer&) = delete;
+
+    double& operator[](size_t i) { return ptr[i]; }
+    const double& operator[](size_t i) const { return ptr[i]; }
+    double* data() { return ptr; }
+    const double* data() const { return ptr; }
+    size_t size() const { return len; }
+    bool empty() const { return len == 0; }
+
+    // Deep-copy to a new RawBuffer.
+    RawBuffer copy() const {
+        RawBuffer c(len);
+        std::memcpy(c.ptr, ptr, len * sizeof(double));
+        return c;
+    }
+
+    // Convert to std::vector<double> (copies data). Used when handing to pybind11.
+    std::vector<double> to_vector() const {
+        return std::vector<double>(ptr, ptr + len);
+    }
+};
 
 struct EuclideanCheckResult {
     bool compatible = true;
@@ -47,7 +103,7 @@ PreparedMatrixData prepare_distance_matrix_impl(
 );
 
 struct PreparedCondensedData {
-    std::vector<double> condensed;
+    RawBuffer condensed;        // malloc-backed — no zero-init overhead
     bool had_nonfinite = false;
     bool had_negative = false;
     double replacement_value = 0.0;
@@ -99,3 +155,6 @@ EuclideanCheckResult check_euclidean_compatibility_pure(
 // Utility: move a std::vector<double> into a NumPy array with zero-copy.
 py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, py::ssize_t rows, py::ssize_t cols);
 py::array_t<double> vector_to_pyarray_1d(std::vector<double>&& data);
+
+// Utility: move a RawBuffer into a 1D NumPy array with zero-copy.
+py::array_t<double> rawbuffer_to_pyarray_1d(RawBuffer&& buf);
