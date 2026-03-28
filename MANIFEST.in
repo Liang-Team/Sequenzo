@@ -1,5 +1,6 @@
 # Include all Python files
 recursive-include sequenzo *.py
+recursive-include sequenzo *.pyx
 
 # Note: .pyx, .pxd files are only needed for source distribution (sdist)
 # For wheel distribution, only the compiled .so/.pyd files are needed
