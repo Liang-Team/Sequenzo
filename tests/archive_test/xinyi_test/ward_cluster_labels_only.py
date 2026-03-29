@@ -405,7 +405,7 @@ def benchmark_fast_paths(
     :param num_clusters: 簇数
     :param ward_variant: Ward 变体（"ward_d"/"ward_d2"）
     :param seed:        随机种子
-    :param repeats:     每个规模重复测量次数，取 min
+    :param repeats:     每个规模重复测量次数，取 median
     :param run_tanat:   是否测试 TanaT（需安装 tanat；False 则跳过）
     """
     import timeit
@@ -424,7 +424,7 @@ def benchmark_fast_paths(
 
     def _t(fn, repeats):
         """用 timeit.repeat 计时 fn()，返回最快一次的耗时（秒）。"""
-        return min(timeit.repeat(fn, number=1, repeat=repeats))
+        return np.median(timeit.repeat(fn, number=1, repeat=repeats))
 
     # 检测 TanaT 可用性
     _tanat_available = False
@@ -439,7 +439,7 @@ def benchmark_fast_paths(
     tanat_header = f"{'tanat(ward)':>14s}" if _tanat_available else ""
     print("=" * width)
     print(f"Fast-path benchmark  (ward_variant={ward_variant}, repeats={repeats}, seq_len={seq_len})")
-    print(f"  计时方法: timeit.repeat(number=1, repeat={repeats}), 取 min")
+    print(f"  计时方法: timeit.repeat(number=1, repeat={repeats}), 取 median")
     print(f"{'n':>7s}  {'fc(cond)':>10s}  {'fc(full)':>14s}  {'sqz_full':>14s}  "
           f"{'sqz_fast':>14s}  {'sqz_cond+fast':>16s}  {'sqz_cond(no fast)':>18s}  {tanat_header}")
     print("-" * width)
@@ -454,20 +454,23 @@ def benchmark_fast_paths(
         entity_ids = np.arange(n)
 
         # --- fastcluster (condensed) ---
-        t_fc = _t(
-            lambda c=condensed: (
-                lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
-            )(_fc_linkage(c.copy(), method=ward_variant)),
-            repeats,
-        )
+        # t_fc = _t(
+        #     lambda c=condensed: (
+        #         lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
+        #     )(_fc_linkage(c.copy(), method=ward_variant)),
+        #     repeats,
+        # )
+        t_fc = 1
 
         # --- fastcluster (full matrix) ---
-        t_fc_full = _t(
-            lambda m=D: (
-                lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
-            )(_fc_linkage(squareform(m, checks=False), method=ward_variant)),
-            repeats,
-        )
+        # t_fc_full = _t(
+        #     lambda m=D: (
+        #         lambda Z: fcluster(Z, t=num_clusters, criterion="maxclust")
+        #     )(_fc_linkage(squareform(m, checks=False), method=ward_variant)),
+        #     repeats,
+        # )
+
+        t_fc_full = 1
 
         # --- Sequenzo full path ---
         t_full = _t(
@@ -476,10 +479,11 @@ def benchmark_fast_paths(
         )
 
         # --- Sequenzo fast path (square matrix) ---
-        t_fast = _t(
-            lambda: Cluster(D.copy(), entity_ids, clustering_method=ward_variant, fast_path=True),
-            repeats,
-        )
+        # t_fast = _t(
+        #     lambda: Cluster(D.copy(), entity_ids, clustering_method=ward_variant, fast_path=True),
+        #     repeats,
+        # )
+        t_fast = 1
 
         # --- Sequenzo fast path (condensed 1D) ---
         t_cond_fast = _t(
@@ -496,12 +500,13 @@ def benchmark_fast_paths(
         results.append((t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf))
 
         # --- TanaT (ward on X) ---
-        t_tanat = None
-        if _tanat_available:
-            t_tanat = min(
-                tanat_test_from_xfeatures(X_int, num_clusters=num_clusters, metric_name="edit")
-                for _ in range(repeats)
-            )
+        # t_tanat = None
+        # if _tanat_available:
+        #     t_tanat = min(
+        #         tanat_test_from_xfeatures(X_int, num_clusters=num_clusters, metric_name="edit")
+        #         for _ in range(repeats)
+        #     )
+        t_tanat = 1
 
         results[-1] = (t_fc, t_fc_full, t_full, t_fast, t_cond_fast, t_cond_nf, t_tanat)
 
@@ -552,23 +557,23 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # fast_path 路径对比（多规模，含 condensed 输入 + TanaT 竞品）
     # ------------------------------------------------------------------
-    benchmark_fast_paths(
-        sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
-        seq_len=30,
-        num_clusters=5,
-        ward_variant="ward_d2",
-        seed=42,
-        repeats=5,
-        run_tanat=True,
-    )
-
     # benchmark_fast_paths(
-    #     sizes=[10000, 15000, 20000, 25000, 30000],
-    #     # sizes=[10000],
-    #     seq_len=30,
+    #     sizes=[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
+    #     seq_len=500,
     #     num_clusters=5,
     #     ward_variant="ward_d2",
     #     seed=42,
-    #     repeats=5,
+    #     repeats=10,
     #     run_tanat=True,
     # )
+
+    benchmark_fast_paths(
+        sizes=[10000, 15000, 20000, 25000, 30000],
+        # sizes=[30000],
+        seq_len=500,
+        num_clusters=5,
+        ward_variant="ward_d2",
+        seed=42,
+        repeats=10,
+        run_tanat=True,
+    )

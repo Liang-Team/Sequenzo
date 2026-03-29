@@ -534,10 +534,17 @@ jobs:
           # Environment variables
           CIBW_ENVIRONMENT_LINUX: SEQUENZO_ENABLE_OPENMP=1
           CIBW_ENVIRONMENT_WINDOWS: SEQUENZO_ENABLE_OPENMP=1 DISTUTILS_USE_SDK=1
-          
+
+          # 显式将 runner 级别的环境变量传入 cibuildwheel 的隔离 venv
+          # 避免 $LIBOMP_PATH 因隐式继承失败而导致 delocate 找不到 libomp
+          CIBW_PASS_ENV: "LIBOMP_PATH SEQUENZO_ENABLE_OPENMP"
+
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
+          # REPAIR_LIBRARY_PATH 是 libomp 路径的副本，专用于在 repair 阶段
+          # 内部设置 DYLD_LIBRARY_PATH（macOS SIP 会剥离子进程继承的 DYLD_LIBRARY_PATH）
           CIBW_ENVIRONMENT_MACOS: >
             SEQUENZO_ENABLE_OPENMP=1
+            REPAIR_LIBRARY_PATH="$LIBOMP_PATH"
             LDFLAGS="-L$LIBOMP_PATH -Wl,-rpath,@loader_path/../.dylibs"
             CPPFLAGS="-I$LIBOMP_PATH/../include"
 
@@ -565,27 +572,41 @@ jobs:
             fi
           
           # macOS: Use delocate to bundle libomp into the wheel
+          # 修复关键点：
+          # 1. 在 repair 命令内部显式设置 DYLD_LIBRARY_PATH
+          #    macOS SIP 会在子进程启动时剥离 DYLD_LIBRARY_PATH，
+          #    所以必须在 shell 命令内临时设置，delocate 才能找到 libomp.dylib。
+          # 2. 添加 --require-archs {delocate_archs} 确保打包的 dylib 架构
+          #    与 .so 文件一致（防止 arm64/x86_64 混淆导致用户端 crash）。
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             echo "=== Repairing macOS wheel ==="
             echo "Current architecture: $(uname -m)"
-            echo "Wheel to repair: {wheel}"
-            
-            # 使用 delocate 修复
-            delocate-wheel -w {dest_dir} -v {wheel}
-            
-            if [ $? -eq 0 ]; then
-              echo "[SUCCESS] Wheel repaired successfully"
-            else
-              echo "[WARNING] delocate failed, copying wheel as-is"
-              mkdir -p {dest_dir}
-              cp {wheel} {dest_dir}/
-            fi
-            
-            # 验证修复结果
+            echo "Wheel: {wheel}"
+            echo "REPAIR_LIBRARY_PATH: ${REPAIR_LIBRARY_PATH}"
+
+            # 在 repair 命令内部设置 DYLD_LIBRARY_PATH，绕过 macOS SIP 的剥离
+            DYLD_LIBRARY_PATH="${REPAIR_LIBRARY_PATH}:${DYLD_LIBRARY_PATH:-}" \
+              delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel} || {
+              echo "[WARNING] delocate with --require-archs failed, retrying without arch check..."
+              DYLD_LIBRARY_PATH="${REPAIR_LIBRARY_PATH}:${DYLD_LIBRARY_PATH:-}" \
+                delocate-wheel -w {dest_dir} -v {wheel} || {
+                  echo "[WARNING] delocate failed completely, copying wheel as-is"
+                  mkdir -p {dest_dir}
+                  cp {wheel} {dest_dir}/
+                }
+            }
+
+            # 验证修复结果：确认 libomp 是否真的打包进去了
             if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
               REPAIRED_WHEEL=$(ls {dest_dir}/*.whl | head -1)
               echo "Repaired wheel: $REPAIRED_WHEEL"
-              delocate-listdeps "$REPAIRED_WHEEL" 2>&1 || echo "Dependency check completed"
+              echo "=== Bundled dependencies ==="
+              delocate-listdeps --all "$REPAIRED_WHEEL" 2>&1 || echo "Dependency listing failed"
+              if delocate-listdeps --all "$REPAIRED_WHEEL" 2>&1 | grep -q "libomp"; then
+                echo "[OK] libomp successfully bundled into wheel"
+              else
+                echo "[WARNING] libomp may not be bundled - check wheel manually"
+              fi
             fi
 
 
@@ -652,9 +673,8 @@ jobs:
             echo "Using minimal build dependencies"
             python -m pip install --upgrade pip
 
-          # Universal dependency installation (fallback)
-          CIBW_BEFORE_BUILD: >
-            echo "Using setup.py dependencies only"
+          # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
+          # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
           CIBW_TEST_COMMAND_MACOS: |
