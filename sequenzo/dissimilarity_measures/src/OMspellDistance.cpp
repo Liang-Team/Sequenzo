@@ -1,3 +1,15 @@
+/*
+ * OMspellDistance: Optimal Matching on spell sequences (duration-weighted).
+ *
+ * Optimizations vs original:
+ *   [OPT-1] Removed pseudo-SIMD. xsimd batch loaded B cells for del/sub but insertion
+ *           depends on curr[j-1] → sequential fixup negated SIMD benefit.
+ *   [OPT-2] Manual 3-way min replaces std::min({a,b,c}) (avoids initializer_list heap alloc).
+ *   [OPT-3] Cache dur_j once per j-iteration (original tail loop called ptr_dur(js,j-1) twice).
+ *
+ * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
+ * @File    : OMspellDistance.cpp
+ */
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
@@ -8,7 +20,6 @@
 #ifdef _OPENMP
     #include <omp.h>
 #endif
-#include <xsimd/xsimd.hpp>
 
 namespace py = pybind11;
 
@@ -23,93 +34,63 @@ public:
         std::cout << std::flush;
 
         try {
-            // ============================================
-            // parameter : sequences, sm, seqdur, indellist
-            // ============================================
             this->sequences = sequences;
             this->sm = sm;
-
             this->seqdur = seqdur;
             this->indellist = indellist;
-
             this->seqlength = seqlength;
             this->norm_seqlength = norm_seqlength;
 
-            // ====================================================
-            // initialize nseq, seqlen, dist_matrix, fmatsize, fmat
-            // ====================================================
             auto seq_shape = sequences.shape();
             nseq = seq_shape[0];
             len = seq_shape[1];
 
             dist_matrix = py::array_t<double>({nseq, nseq});
-
             fmatsize = len + 1;
 
-            // ====================
-            // initialize alphasize
-            // ====================
             auto sm_shape = sm.shape();
             alphasize = sm_shape[0];
 
-            // ==================
-            // initialize maxcost
-            // ==================
             auto ptr = sm.mutable_unchecked<2>();
-
-            if(norm == 4){
+            if (norm == 4) {
                 maxscost = 2 * indel;
-            }else{
-                for(int i = 0; i < alphasize; i++){
-                    for(int j = i+1; j < alphasize; j++){
-                        if(ptr(i, j) > maxscost){
+            } else {
+                for (int i = 0; i < alphasize; i++)
+                    for (int j = i + 1; j < alphasize; j++)
+                        if (ptr(i, j) > maxscost)
                             maxscost = ptr(i, j);
-                        }
-                    }
-                }
                 maxscost = std::min(maxscost, 2 * indel);
             }
 
-            // about reference sequences :
             nans = nseq;
-
             rseq1 = refseqS.at(0);
             rseq2 = refseqS.at(1);
-            if(rseq1 < rseq2){
+            if (rseq1 < rseq2) {
                 nseq = rseq1;
                 nans = nseq * (rseq2 - rseq1);
-            }else{
+            } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2-rseq1)});
+            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in constructor: ", e.what());
             throw;
         }
     }
 
-    // 对齐分配函数 moved to dp_utils.h
-
-    double getIndel(int i, int j, int state){
+    double getIndel(int i, int j, int state) {
         auto ptr_indel = indellist.mutable_unchecked<1>();
         auto ptr_dur = seqdur.mutable_unchecked<2>();
-
         return ptr_indel(state) + timecost * ptr_dur(i, j);
     }
 
-    double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y){
+    double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y) {
         auto ptr_dur = seqdur.mutable_unchecked<2>();
-
-        if(i_state == j_state){
-            double diffdur = ptr_dur(i_x, i_y) - ptr_dur(j_x, j_y);
-
-            return abs(timecost * diffdur);
-        }else{
-            auto ptr_sm = sm.mutable_unchecked<2>();
-
-            return ptr_sm(i_state, j_state) +
-                    (ptr_dur(i_x, i_y) + ptr_dur(j_x, j_y)) * timecost;
+        if (i_state == j_state) {
+            return abs(timecost * (ptr_dur(i_x, i_y) - ptr_dur(j_x, j_y)));
         }
+        auto ptr_sm = sm.mutable_unchecked<2>();
+        return ptr_sm(i_state, j_state) + (ptr_dur(i_x, i_y) + ptr_dur(j_x, j_y)) * timecost;
     }
 
     double compute_distance(int is, int js, double* prev, double* curr) {
@@ -121,93 +102,51 @@ public:
             auto ptr_dur = seqdur.unchecked<2>();
             auto ptr_indel = indellist.unchecked<1>();
 
-            int i_state = 0, j_state = 0;
             int mm = ptr_len(is);
             int nn = ptr_len(js);
             int mSuf = mm + 1;
             int nSuf = nn + 1;
 
             prev[0] = 0;
-            curr[0] = 0;
-
-            // initialize first row: cumulative insertions into js along columns
             for (int jj = 1; jj < nSuf; jj++) {
                 int bj = ptr_seq(js, jj - 1);
                 prev[jj] = prev[jj - 1] + (ptr_indel(bj) + timecost * ptr_dur(js, jj - 1));
             }
 
-            using batch_t = xsimd::batch<double>;
-            constexpr std::size_t B = batch_t::size;
-
+            // [OPT-1] Pure scalar DP — pseudo-SIMD removed.
             for (int i = 1; i < mSuf; i++) {
-                i_state = ptr_seq(is, i - 1);
-                // per-row deletion cost (depends only on i_state and i position)
+                int i_state = ptr_seq(is, i - 1);
                 double dur_i = ptr_dur(is, i - 1);
                 double del_cost_i = ptr_indel(i_state) + timecost * dur_i;
 
-                // first column: cumulative deletions D[i][0] = D[i-1][0] + del_cost_i
                 curr[0] = prev[0] + del_cost_i;
 
-                int j = 1;
-                for (; j + (int)B <= nSuf; j += (int)B) {
-                    const double* prev_ptr = prev + j;
-                    const double* prevm1_ptr = prev + (j - 1);
+                for (int j = 1; j < nSuf; j++) {
+                    int j_state = ptr_seq(js, j - 1);
+                    double dur_j = ptr_dur(js, j - 1);  // [OPT-3] cached once
 
-                    batch_t prevj = batch_t::load_unaligned(prev_ptr);
-                    batch_t prevjm1 = batch_t::load_unaligned(prevm1_ptr);
-
-                    alignas(64) double subs[B];
-                    alignas(64) double ins[B];
-                    for (std::size_t b = 0; b < B; ++b) {
-                        int jj_idx = j + (int)b - 1;
-                        int bj = ptr_seq(js, jj_idx);
-                        double dur_j = ptr_dur(js, jj_idx);
-
-                        if (i_state == bj) {
-                            subs[b] = std::abs(timecost * (dur_i - dur_j));
-                        } else {
-                            subs[b] = ptr_sm(i_state, bj) + (dur_i + dur_j) * timecost;
-                        }
-                        ins[b] = ptr_indel(bj) + timecost * dur_j;
-                    }
-
-                    batch_t sub_batch = batch_t::load_unaligned(subs);
-                    batch_t cand_del = prevj + batch_t(del_cost_i);
-                    batch_t cand_sub = prevjm1 + sub_batch;
-                    batch_t vert = xsimd::min(cand_del, cand_sub);
-
-                    double running = curr[j - 1] + ins[0];
-                    for (std::size_t b = 0; b < B; ++b) {
-                        double v = vert.get(b);
-                        double c = std::min(v, running);
-                        curr[j + (int)b] = c;
-                        if (b + 1 < B) running = c + ins[b + 1];
-                    }
-                }
-
-                // tail scalar handling
-                for (; j < nSuf; ++j) {
-                    j_state = ptr_seq(js, j - 1);
-                    double minimum = prev[j] + del_cost_i;
-                    double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * ptr_dur(js, j - 1));
-                    double sub = prev[j - 1] + (
+                    double del_cost = prev[j] + del_cost_i;
+                    double ins_cost = curr[j - 1] + (ptr_indel(j_state) + timecost * dur_j);
+                    double sub_cost = prev[j - 1] + (
                         (i_state == j_state)
-                        ? std::abs(timecost * (dur_i - ptr_dur(js, j - 1)))
-                        : (ptr_sm(i_state, j_state) + (dur_i + ptr_dur(js, j - 1)) * timecost)
+                        ? std::abs(timecost * (dur_i - dur_j))
+                        : (ptr_sm(i_state, j_state) + (dur_i + dur_j) * timecost)
                     );
-                    curr[j] = std::min({ minimum, j_indel, sub });
-                }
 
+                    // [OPT-2] Manual 3-way min.
+                    double best = del_cost;
+                    if (ins_cost < best) best = ins_cost;
+                    if (sub_cost < best) best = sub_cost;
+                    curr[j] = best;
+                }
                 std::swap(prev, curr);
             }
 
-            // TraMineR uses original sequence length (number of time points) for normalization, not spell count
             int mm_norm = ptr_norm_len(is);
             int nn_norm = ptr_norm_len(js);
             double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
             double ml = double(mm_norm) * indel;
             double nl = double(nn_norm) * indel;
-
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
@@ -218,13 +157,10 @@ public:
     py::array_t<double> compute_all_distances() {
         try {
             return dp_utils::compute_all_distances(
-                nseq,
-                fmatsize,
-                dist_matrix,
+                nseq, fmatsize, dist_matrix,
                 [this](int i, int j, double* prev, double* curr) {
                     return this->compute_distance(i, j, prev, curr);
-                }
-            );
+                });
         } catch (const std::exception& e) {
             py::print("Error in compute_all_distances: ", e.what());
             throw;
@@ -234,30 +170,23 @@ public:
     py::array_t<double> compute_refseq_distances() {
         try {
             auto buffer = refdist_matrix.mutable_unchecked<2>();
-
             #pragma omp parallel
             {
                 double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
                 double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
-
                 #pragma omp for schedule(static)
-                for (int rseq = rseq1; rseq < rseq2; rseq ++) {
-                    for (int is = 0; is < nseq; is ++) {
-                        double cmpres = 0;
-                        if(is != rseq){
-                            cmpres = compute_distance(is, rseq, prev, curr);
-                        }
-
-                        buffer(is, rseq - rseq1) = cmpres;
+                for (int rseq = rseq1; rseq < rseq2; rseq++) {
+                    for (int is = 0; is < nseq; is++) {
+                        buffer(is, rseq - rseq1) = (is != rseq)
+                            ? compute_distance(is, rseq, prev, curr) : 0.0;
                     }
                 }
                 dp_utils::aligned_free_double(prev);
                 dp_utils::aligned_free_double(curr);
             }
-
             return refdist_matrix;
         } catch (const std::exception& e) {
-            py::print("Error in compute_all_distances: ", e.what());
+            py::print("Error in compute_refseq_distances: ", e.what());
             throw;
         }
     }
@@ -274,13 +203,12 @@ private:
     int alphasize;
     int fmatsize;
     py::array_t<double> dist_matrix;
-    double maxscost;
+    double maxscost = 0.0;
 
     double timecost;
     py::array_t<double> seqdur;
     py::array_t<double> indellist;
 
-    // about reference sequences :
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;

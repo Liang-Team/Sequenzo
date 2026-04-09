@@ -592,12 +592,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # TWED: set dummy row/col (state 0) for recurrence (TraMineR TWED uses 0 as "no previous")
     if method == "TWED":
-        sm = np.asarray(sm, dtype=np.float64)
+        sm = np.array(sm, dtype=np.float64, copy=True)
         if sm.shape[0] == nstates:
             nan_col = np.full((sm.shape[0], 1), np.nan)
             sm = np.hstack([nan_col, sm])
             nan_row = np.full((1, sm.shape[1]), np.nan)
             sm = np.vstack([nan_row, sm])
+        if not sm.flags.writeable:
+            sm = sm.copy()
         indel_scalar = float(indel) if np.isscalar(indel) else float(np.max(indel))
         sm[0, 0] = 0.0
         sm[0, 1:] = indel_scalar
