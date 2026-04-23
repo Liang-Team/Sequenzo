@@ -133,7 +133,7 @@
 ### ✅ Sequenzo 已实现
 - `get_distance_matrix()` 支持的方法：
   - OM (Optimal Matching)
-  - OMslen, OMspell, OMspellNew, OMstran, OMslen
+  - OMslen, OMspell, OMspellNormalized, OMstran, OMslen
   - HAM (Hamming)
   - DHD (Dynamic Hamming Distance)
   - CHI2 (Chi-squared)

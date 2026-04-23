@@ -3,7 +3,7 @@
 #include "OMlocDistance.cpp"
 #include "OMspellDistance.cpp"
 #include "OMtspellDistance.cpp"
-#include "OMspellNewDistance.cpp"
+#include "OMspellNormalizedDistance.cpp"
 #include "OMslenDistance.cpp"
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
@@ -74,10 +74,10 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_all_distances", &OMtspellDistance::compute_all_distances)
             .def("compute_refseq_distances", &OMtspellDistance::compute_refseq_distances);
 
-    py::class_<OMspellNewDistance>(m, "OMspellNewDistance")
+    py::class_<OMspellNormalizedDistance>(m, "OMspellNormalizedDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, py::array_t<double>, py::array_t<double>, py::array_t<int>>())
-            .def("compute_all_distances", &OMspellNewDistance::compute_all_distances)
-            .def("compute_refseq_distances", &OMspellNewDistance::compute_refseq_distances);
+            .def("compute_all_distances", &OMspellNormalizedDistance::compute_all_distances)
+            .def("compute_refseq_distances", &OMspellNormalizedDistance::compute_refseq_distances);
 
     py::class_<OMslenDistance>(m, "OMslenDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())

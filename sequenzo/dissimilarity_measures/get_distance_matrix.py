@@ -10,7 +10,7 @@
         :params
             seqdata        : State sequence object of class stslist
             method         : String.The dissimilarity measure to use.
-                            It can be "OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMtspell", "OMstran", "HAM", "DHD",
+                            It can be "OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMtspell", "OMstran", "HAM", "DHD",
                             "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell",
                             "NMS", "NMSMST", "SVRspell", or "TWED".
             refseq         : Default: NULL. The baseline sequence to compute the distances from.
@@ -18,7 +18,7 @@
                             (2)When a state sequence object, it must contain a single sequence and have the same alphabet as seqdata.
                             (3)When a list, it must be a list of two sets of indexes of seqdata rows.
             norm           : Default: "none". The normalization to use when method is one of
-                            {"OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED", "HAM", "DHD",
+                            {"OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMstran", "TWED", "HAM", "DHD",
                             "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "CHI2", "EUCLID"}.
                             (1)It can be "none", "auto", or,
                                 except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", "YujianBo", or "ElzingaStuder".
@@ -26,14 +26,14 @@
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
                                 2) "gmean" when method is one of "LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
                                 3) "maxdist" when method is one of "LCPspell", "RLCPspell",
-                                4) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "TWED".
+                                4) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMstran", "TWED".
                             (3)"ElzingaStuder" applies a theoretical normalization following Elzinga & Studer (2019),
                                 dividing distances by their theoretical maxima to ensure comparability across measures.
                                 Requires a reference object (see normalization_reference_index parameter for details).
                                 Default: uses refseq if provided as single sequence index, otherwise uses index 0.
                             See developer/NORM_GUIDE.md for formulas and pitfalls (e.g. LCPspell/RLCPspell must use maxdist, not gmean).
             indel          : Insertion/deletion  cost(s).
-                            Applies when method is one of "OM", "OMslen", "OMspell", "OMspellNew", or "OMstran".
+                            Applies when method is one of "OM", "OMslen", "OMspell", "OMspellNormalized", or "OMstran".
                             (1)The single state-independent insertion/deletion cost when a double.
                             (2)The state-dependent insertion/deletion costs when a vector of doubles.
                                 The vector should contain an indel cost by state in the order of the alphabet.
@@ -41,14 +41,14 @@
                                 and is computed by means of seqcost when sm is a string specifying a cost method.
             sm             : Substitution costs. Default: NULL.
                             (1)The substitution-cost matrix when a matrix
-                                and method is one of "OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "HAM", or "TWED".
+                                and method is one of "OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMstran", "HAM", or "TWED".
                             (2)The series of the substitution-cost matrices when an array and method = "DHD".
                                 They are grouped in a 3-dimensional array with the third index referring to the position in the sequence.
                             (3)One of the strings "CONSTANT", "INDELS", "INDELSLOG", "TRATE", "FUTURE", or "FEATURES".
                                 Designates a seqcost method to build sm. "CONSTANT" is not relevant for "DHD".
                                 For "FEATURES", pass state_features (and optionally feature_weights, feature_type) via kwargs.
                                 OMtspell is selected automatically when method="OMspell" and tokdep_coeff is provided (e.g. in opts or kwargs).
-                            sm is mandatory when method is one of "OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", or "TWED".
+                            sm is mandatory when method is one of "OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMstran", or "TWED".
                             sm is autogenerated when method is one of "HAM" or "DHD" and sm = NULL.
             full.matrix    : Default: TRUE. When refseq = NULL, if TRUE, the full distance matrix is returned,
                             if FALSE, an object of class dist is returned,
@@ -61,8 +61,8 @@
                             - "lower": show only the lower triangle (including diagonal); masked cells are shown as empty for a cleaner view.
                             When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN"). The underlying distances are unchanged.
             tpow           : Default: 1.0.
-                            The exponential weight of spell length when method is one of "OMspell", "OMspellNew", "NMSMST", or "SVRspell".
-            expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "OMspellNew", "LCPspell", or "RLCPspell".
+                            The exponential weight of spell length when method is one of "OMspell", "OMspellNormalized", "NMSMST", or "SVRspell".
+            expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "OMspellNormalized", "LCPspell", or "RLCPspell".
                             It must be positive. The exact interpretation is distance-dependent.
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
@@ -176,7 +176,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     seqs_dlens = np.unique(seqlength(seqdata))
 
     # check method
-    om_methods = ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMstran", "OMtspell"]
+    om_methods = ["OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMstran", "OMtspell"]
     methods = om_methods + ["HAM", "DHD", "CHI2", "EUCLID", "TWED", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]
 
     if method not in methods:
@@ -281,7 +281,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Check Arguments Not Yet Implemented
     # ===================================
     # norm: all but  SVRspell, NMS, NMSMST (LCS and SVRspell support norm)
-    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNew", "OMtspell", "OMstran", "TWED", "HAM", "DHD", "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
+    if norm != "none" and method not in ["OM", "OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMtspell", "OMstran", "TWED", "HAM", "DHD", "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] norm is not matched with {method}.")
 
     # ===============================
@@ -314,8 +314,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if not isinstance(h, (int, float)) or h < 0:
             raise ValueError("[x] 'h' must be a number greater than or equal to 0.")
     
-    # 3. OMspell, OMspellNew, OMtspell, LCPspell, RLCPspell
-    if method in ["OMspell", "OMspellNew", "OMtspell"] and expcost < 0:
+    # 3. OMspell, OMspellNormalized, OMtspell, LCPspell, RLCPspell
+    if method in ["OMspell", "OMspellNormalized", "OMtspell"] and expcost < 0:
         raise ValueError("[x] 'expcost' must be positive.")
     # OMtspell: switch from OMspell when tokdep_coeff is provided (TraMineR: opt.args[["tokdep.coeff"]]).
     tokdep_coeff = None
@@ -361,7 +361,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             # LCPspell/RLCPspell use duration-aware raw/maxdist; gmean can yield d < 0
             # because (maxdist-raw) is not bounded by 2*sqrt(n)*sqrt(m). Use maxdist.
             norm = "maxdist"
-        elif method in ["OMloc", "OMslen", "OMspell", "OMspellNew", "OMtspell", "OMstran", "TWED"]:
+        elif method in ["OMloc", "OMslen", "OMspell", "OMspellNormalized", "OMtspell", "OMstran", "TWED"]:
             norm = "YujianBo"
         elif method in ["CHI2", "EUCLID"]:
             pass  # norm stays "auto" -> use normalization (divide by sqrt(n_breaks))
@@ -771,7 +771,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # ==============================
     # Compute Method-Specific Values
     # ==============================
-    if method in ["OMspell", "OMspellNew", "OMtspell"]:
+    if method in ["OMspell", "OMspellNormalized", "OMtspell"]:
         if indel_type == "number":
             indellist = np.repeat(indel, nstates + 1)
             indel_type = "vector"
@@ -866,7 +866,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     
     # OMspell, OMtspell
     # Redefined dseqs.num
-    elif method in ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
+    elif method in ["OMspell", "OMspellNormalized", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
         dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
 
         # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
@@ -878,14 +878,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
         # Get duration
-        c = 1 if method in ["OMspell", "OMspellNew", "OMtspell"] else 0
+        c = 1 if method in ["OMspell", "OMspellNormalized", "OMtspell"] else 0
         dseqs_dur = dseqs_dur[dseqs_oidxs, :] - c
 
         # Get DSS
         seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
-        if method in ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
+        if method in ["OMspell", "OMspellNormalized", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
             _seqlength = seqlength(dseqs_num)
             # TraMineR uses original sequence length (number of time points) for OMspell/OMtspell normalization
             _orig_seqlength = np.full((dseqs_num.shape[0],), seqdata.seqdata.shape[1], dtype=np.int32)
@@ -955,7 +955,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Modified dseqs.num for OMspell
     ndn = dseqs_num.shape[0]
     incl_refseq = " (including refseq)" if refseq_type == "sequence" else ""
-    seq_or_spell = "spell sequences" if method in ["OMspell", "OMspellNew", "OMtspell", "LCPspell", "RLCPspell"] else "sequences"
+    seq_or_spell = "spell sequences" if method in ["OMspell", "OMspellNormalized", "OMtspell", "LCPspell", "RLCPspell"] else "sequences"
     print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
     del ndn
     del seq_or_spell
@@ -1072,8 +1072,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          _orig_seqlength)
             dist_matrix = om.compute_refseq_distances()
 
-        elif method == "OMspellNew":
-            om = c_code.OMspellNewDistance(dseqs_num,
+        elif method == "OMspellNormalized":
+            om = c_code.OMspellNormalizedDistance(dseqs_num,
                                             sm,
                                             indel,
                                             norm_num,
@@ -1237,8 +1237,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          _orig_seqlength)
             dist_matrix = om.compute_all_distances()
 
-        elif method == "OMspellNew":
-            om = c_code.OMspellNewDistance(dseqs_num,
+        elif method == "OMspellNormalized":
+            om = c_code.OMspellNormalizedDistance(dseqs_num,
                                             sm,
                                             indel,
                                             norm_num,
