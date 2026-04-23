@@ -51,6 +51,7 @@ dependencies = [
     "missingno>=0.5.2,<0.6.0",
     "cffi>=1.15.0",  # Required for C extensions and FFI functionality
     "hmmlearn>=0.2.0",  # Required for seqhmm module
+    "statsmodels>=0.13.5",  # Required for feature extraction/selection regressions
 ]
 
 [project.optional-dependencies]
