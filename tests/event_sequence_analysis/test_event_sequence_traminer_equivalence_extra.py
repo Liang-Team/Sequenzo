@@ -5,7 +5,7 @@ import pytest
 
 from sequenzo.datasets import load_dataset
 from sequenzo import SequenceData
-from sequenzo.with_event_history_analysis import (
+from sequenzo.event_sequences import (
     create_event_sequences,
     convert_event_sequences_to_tse,
     compute_event_transition_matrix,
@@ -200,7 +200,7 @@ def test_convert_event_sequences_to_tse_traminer_reference(lsog_seqdata):
         tse <- seqe2tse(eseq)
         write.csv(tse, "ref_eseq_tse.csv", row.names=FALSE)
     """
-    from sequenzo.with_event_history_analysis import create_event_sequences
+    from sequenzo.event_sequences import create_event_sequences
 
     ref = _load_additional_ref_if_exists()
     if ref is None:
@@ -250,7 +250,7 @@ def test_compute_event_transition_matrix_traminer_reference(lsog_seqdata):
         etm <- seqetm(eseq)
         write.csv(etm, \"ref_eseq_etm.csv\")
     """
-    from sequenzo.with_event_history_analysis import create_event_sequences
+    from sequenzo.event_sequences import create_event_sequences
 
     ref = _load_additional_ref_if_exists()
     if ref is None:
@@ -297,7 +297,7 @@ def test_check_event_subsequence_containment_traminer_reference(lsog_seqdata):
         write.csv(data.frame(contains_subseq=contains),
                   \"ref_eseq_contain.csv\", row.names=FALSE)
     """
-    from sequenzo.with_event_history_analysis import create_event_sequences
+    from sequenzo.event_sequences import create_event_sequences
 
     ref = _load_additional_ref_if_exists()
     if ref is None:

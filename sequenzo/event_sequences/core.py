@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : event_sequence.py
+@File    : core.py
 @Time    : 09/02/2026 11:14
 @Desc    : Event Sequence Analysis 
 
@@ -35,7 +35,7 @@ Key Classes:
 Example Usage:
 --------------
     >>> import pandas as pd
-    >>> from sequenzo.with_event_history_analysis import create_event_sequences, find_frequent_subsequences
+    >>> from sequenzo.event_sequences import create_event_sequences, find_frequent_subsequences
     >>> 
     >>> # Create event sequences from TSE format data
     >>> tse_data = pd.DataFrame({

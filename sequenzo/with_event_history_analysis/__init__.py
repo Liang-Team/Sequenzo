@@ -2,7 +2,11 @@
 @Author  : Yuqi Liang 梁彧祺
 @File    : __init__.py
 @Time    : 30/09/2025 23:34
-@Desc    : Event History Analysis module for sequence analysis
+@Desc    : Event History Analysis module (SAMM / sequence history only)
+
+Boundary note:
+- Event-sequence construction/mining/visualization is now in `sequenzo.event_sequences`.
+- This module is reserved for event-history methods (e.g., SAMM, seqsha).
 """
 
 from .sequence_analysis_multi_state_model import (
@@ -21,25 +25,6 @@ from .sequence_history_analysis import (
     person_level_to_person_period
 )
 
-# Event Sequence Analysis (TraMineR-compatible)
-from .event_sequence import (
-    create_event_sequences,
-    find_frequent_subsequences,
-    compare_groups,
-    count_subsequence_occurrences,
-    convert_event_sequences_to_tse,
-    compute_event_transition_matrix,
-    check_event_subsequence_containment,
-    EventSequence,
-    EventSequenceList,
-    EventSequenceConstraint,
-    SubsequenceList,
-)
-from .event_sequence_visualization import (
-    plot_event_sequences,
-    plot_subsequence_frequencies,
-)
-
 __all__ = [
     # Event History Analysis (SAMM)
     'SAMM',
@@ -52,18 +37,4 @@ __all__ = [
     'person_level_to_person_period',
     # Keep old names for backward compatibility
     'seqsamm',
-    # Event Sequence Analysis
-    'create_event_sequences',
-    'find_frequent_subsequences',
-    'compare_groups',
-    'count_subsequence_occurrences',
-    'convert_event_sequences_to_tse',
-    'compute_event_transition_matrix',
-    'check_event_subsequence_containment',
-    'plot_event_sequences',
-    'plot_subsequence_frequencies',
-    'EventSequence',
-    'EventSequenceList',
-    'EventSequenceConstraint',
-    'SubsequenceList'
 ]

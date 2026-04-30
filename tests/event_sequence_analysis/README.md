@@ -1,6 +1,6 @@
 # Event sequence analysis tests (LSOG)
 
-Tests for `sequenzo.with_event_history_analysis` event sequence API, using the **dyadic_children (LSOG)** dataset. Results are compared to **TraMineR** when reference files are present.
+Tests for `sequenzo.event_sequences` event sequence API, using the **dyadic_children (LSOG)** dataset. Results are compared to **TraMineR** when reference files are present.
 
 ## Why 3 tests are skipped
 

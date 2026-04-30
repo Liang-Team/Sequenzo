@@ -22,8 +22,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-# Import types from event_sequence to avoid circular imports when __init__ pulls from both modules
-from .event_sequence import EventSequenceList, SubsequenceList
+# Import types from canonical event_sequences core module
+from sequenzo.event_sequences.core import EventSequenceList, SubsequenceList
 
 
 def plot_event_sequences(

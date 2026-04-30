@@ -4,7 +4,7 @@
 本文档对比 Sequenzo 和 TraMineR 的功能，识别 Sequenzo 中缺失的功能。
 
 **TraMineR 版本**: 2.2-13 (2025-12-14)  
-**对比日期**: 2026-02-09
+**对比日期**: 2026-04-30
 
 ---
 
@@ -18,12 +18,12 @@
 ### ❌ Sequenzo 缺失的功能
 
 #### 1.1 事件序列支持
-- **`seqecreate()`** - 创建事件序列对象（Event Sequence）
-- **`seqelist`** - 事件序列列表对象
-- **`eseq`** - 单个事件序列对象
-- **`is.eseq()` / `is.seqelist()`** - 检查事件序列对象类型
-- **`seqelength()`** - 事件序列长度
-- **`seqeweight()`** - 事件序列权重
+- **`seqecreate()`** → `create_event_sequences()`（已实现）
+- **`seqelist`** → `EventSequenceList`（已实现）
+- **`eseq`** → `EventSequence`（已实现）
+- **`is.eseq()` / `is.seqelist()`** - 仅缺同名便捷检查函数；当前可用 `isinstance(x, EventSequence)` / `isinstance(x, EventSequenceList)` 等价实现
+- **`seqelength()`** - 已可通过 `EventSequenceList.lengths`（以及单序列 `len(EventSequence)`）获取
+- **`seqeweight()`** - 已可通过 `EventSequenceList.weights` 获取
 
 #### 1.2 格式转换功能
 - **`seqformat()`** - 更全面的格式转换功能：
@@ -32,14 +32,14 @@
   - STS ↔ SRS (Sequence of Repeated States) 转换
   - SPS (State-Period-Sequence) 格式支持
   - DSS (Distinct State Sequence) 格式转换
-- **`seqdecomp()`** - 序列分解
-- **`seqconc()`** - 序列连接
-- **`seqsep()`** - 序列分离
+- **`seqdecomp()`** → `sequenzo.sequence_operations.seqdecomp()`（已实现）
+- **`seqconc()`** → `sequenzo.sequence_operations.seqconc()`（已实现）
+- **`seqsep()`** → `sequenzo.sequence_operations.seqsep()`（已实现）
 
 #### 1.3 序列操作
-- **`seqrecode()`** - 重新编码序列（合并状态）
-- **`seqshift()`** - 序列移位
-- **`seqasnum()`** - 序列转数字
+- **`seqrecode()`** → `sequenzo.sequence_operations.seqrecode()`（已实现）
+- **`seqshift()`** → `sequenzo.sequence_operations.seqshift()`（已实现）
+- **`seqasnum()`** → `sequenzo.sequence_operations.seqasnum()`（已实现）
 
 ---
 
@@ -114,7 +114,7 @@
 - **`seqstatf()`** - 序列频率统计
 - **`seqstatl()`** - 序列长度统计
 - **`seqnum()`** - 序列数量统计
-- **`seqsubsn()`** - 子序列数量（更完整的实现）
+- **`seqsubsn()`** - 已有基础实现（`sequence_characteristics/simple_characteristics.py`），但与 TraMineR 仍有参数与输出细节差异
 
 #### 3.3 转换相关指标
 - **`seqtransn()`** - 转换次数（归一化版本）
@@ -133,7 +133,7 @@
 ### ✅ Sequenzo 已实现
 - `get_distance_matrix()` 支持的方法：
   - OM (Optimal Matching)
-  - OMslen, OMspell, OMspellNormalized, OMstran, OMslen
+  - OMloc, OMslen, OMspell, OMspellUnitFree, OMtspell, OMstran
   - HAM (Hamming)
   - DHD (Dynamic Hamming Distance)
   - CHI2 (Chi-squared)
@@ -150,8 +150,7 @@
 ### ❌ Sequenzo 缺失的距离度量
 
 #### 4.1 距离方法
-- **`OMloc`** - Localized Optimal Matching（可能已实现但需确认）
-- **`OMtspell`** - Token-dependent spell OM（可能已实现但需确认）
+- （当前已无明显遗漏；`OMloc` 与 `OMtspell` 已在 `get_distance_matrix()` 中实现）
 
 #### 4.2 距离相关功能
 - **`seqalign()`** - 序列对齐可视化（显示两个序列的对齐细节）
@@ -209,15 +208,15 @@
 - **`seqecmpgroup()`** → `compare_groups()`
   - 使用卡方检验（可选 Bonferroni 校正）比较组间子序列分布差异
   - 返回的统计结果与 TraMineR 输出结构对应（p-value, statistic, group-specific frequencies/residuals）
-- **`seqecontain()`** → `seqecontain()`（新增高层封装）
+- **`seqecontain()`** → `check_event_subsequence_containment()`
   - 内部基于 `_find_subsequence_presence()`，对每条序列返回是否包含指定子序列的布尔向量
   - 支持字符串子序列和 `EventSequence` 两种输入形式
 
 #### 6.3 事件序列转换
-- **`seqe2tse()`** → `seqe2tse()`（新增接口）
+- **`seqe2tse()`** → `convert_event_sequences_to_tse()`
   - 将 `EventSequenceList` 转换为 TSE 数据框，列名为 `id`, `timestamp`, `event`
   - 同一 ID 内按时间戳和事件名排序，结构与 TraMineR `seqe2tse()` 输出保持一致
-- **`seqetm()`** → `seqetm()`（新增接口）
+- **`seqetm()`** → `compute_event_transition_matrix()`
   - 在所有事件序列上计算事件转换矩阵：
     - 行：起始事件
     - 列：目标事件
@@ -275,9 +274,8 @@
 - **`seqplotMD()`** - 多域/多通道序列图（按域和组绘图）
 
 #### 8.3 域间关联分析
-- **`seqdomassoc()`** - 域间状态关联（Piccarreta方法）
-  - 支持Spearman相关
-  - 返回p值
+- **`seqdomassoc()`** → `get_association_between_domains()`（已实现主要统计框架）
+  - 当前仍建议核对与 TraMineR 的逐参数语义一致性（如细粒度选项与默认值）
 
 ---
 
@@ -339,8 +337,8 @@
 
 #### 12.2 序列操作
 - **`seqmaintokens()`** - 返回最频繁tokens的索引
-- **`seqdss()`** - 更完整的DSS（Distinct State Sequence）实现
-- **`seqdur()`** - 更完整的持续时间计算（支持更多选项）
+- **`seqdss()`** - 底层实现已存在（`dissimilarity_measures/utils/seqdss.pyx`），但缺少用户级公开 API
+- **`seqdur()`** - 底层实现已存在（`dissimilarity_measures/utils/seqdur.pyx`），但缺少用户级公开 API
 
 #### 12.3 其他工具
 - **`alphabet()`** - 获取/设置字母表（支持 `with.missing` 参数）
@@ -392,9 +390,25 @@
 
 ---
 
+## 15. TraMineRextras 对比（新增）
+
+### ✅ Sequenzo 已部分覆盖 / 有近似能力
+- `dissindic()` / `dissvar.grp` 相关能力可由 `compute_distance_association()`、`compute_pseudo_variance()`、`dissmfacw()`、`dissmergegroups()` 组合实现。
+- `seqCompare` / `dissCompare` 相关“组间比较”场景，可由 `compare_groups_overall()` 与 `compare_groups_across_positions()` 覆盖核心需求。
+- `seqsamm` 家族在 Sequenzo 中有完整实现（并且是重点能力）。
+
+### ❌ 目前仍缺失（TraMineRextras 主要未覆盖项）
+- 事件序列扩展：`seqeformat`, `seqedist`, `seqedplot`, `seqerulesdisc`, `seqentrans`, `seqe2stm`
+- 序列增强分析：`seqindic.dyn`, `seqsurv`, `seqimplic`, `seqauto`, `seqcta`（TraMineRextras 版本功能面）
+- 格式与数据变换：`TSE_to_STS`, `HSPELL_to_STS`, `FCE_to_TSE`, `toPersonPeriod`, `createdatadiscrete`, `convert.g`
+- 代表性与可视化扩展：`seqrep.grp`, `seqplot.rf`, `seqplot.tentrop`, `seqsplot`
+- 其他工具：`seqgen.missing`, `seqgranularity`, `pamward`, `sortv`, `rowmode`, `group.p`
+
+---
+
 ## 总结
 
-### 主要缺失的功能模块（2026-03 更新后）：
+### 主要缺失的功能模块（2026-04 更新后）：
 
 1. **代表性序列提取** - 仍部分缺失
    - `seqrep()` 和 `dissrep()` 的统一高层封装
@@ -413,6 +427,10 @@
    - 更全面的 `seqformat()` 家族（尤其是 SRS、SPS、DSS 等格式的用户级 API）
    - 部分检查 / 对齐 / 查找函数（如 `seqhasmiss()`, `seqfcheck()`, `seqalign()` 及其可视化家族）目前只在内部或底层工具中部分覆盖
 
+5. **TraMineRextras 扩展功能** - 覆盖面仍有限
+   - 事件序列扩展（`seqeformat`, `seqedist`, `seqerulesdisc` 等）
+   - 动态指标与扩展可视化（`seqindic.dyn`, `seqplot.rf`, `seqplot.tentrop` 等）
+
 ### 建议优先级：
 
 **高优先级**：
@@ -422,6 +440,7 @@
 **中优先级**：
 3. 高级可视化（平行坐标图、熵图、多域序列图等）
 4. 格式转换增强（完善 `seqformat()` 家族接口）
+5. TraMineRextras 常用扩展（优先 `seqindic.dyn`, `seqplot.rf`, `seqeformat`）
 
 **低优先级**：
 5. 序列生成和模拟（`seqgen()` 等）

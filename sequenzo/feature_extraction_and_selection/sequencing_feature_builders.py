@@ -13,7 +13,7 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from sequenzo.with_event_history_analysis.event_sequence import (
+from sequenzo.event_sequences import (
     EventSequenceConstraint,
     count_subsequence_occurrences,
     create_event_sequences,

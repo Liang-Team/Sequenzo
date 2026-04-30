@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
-from sequenzo.with_event_history_analysis import (
+from sequenzo.event_sequences import (
     create_event_sequences,
     find_frequent_subsequences,
     count_subsequence_occurrences,
@@ -254,7 +254,7 @@ def test_plot_subsequence_frequencies(lsog_eseq):
 
 def test_plot_subsequence_frequencies_empty_raises(lsog_eseq):
     """plot_subsequence_frequencies on empty SubsequenceList raises."""
-    from sequenzo.with_event_history_analysis import (
+    from sequenzo.event_sequences import (
         SubsequenceList,
         EventSequenceConstraint,
     )

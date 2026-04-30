@@ -1,5 +1,5 @@
 /*
- * OMspellNormalizedDistance: Optimal Matching on spells with dimensionless duration and correct maxdist.
+ * OMspellUnitFreeDistance: Optimal Matching on spells with dimensionless duration and correct maxdist.
  *
  * Same DP as OMspell, but with two methodological improvements (Revisiting OMspell, 2026):
  *
@@ -17,7 +17,7 @@
  *
  * Parameter timecost (Python expcost) is the linear duration_weight, not exponential.
  * @Author  : Yuqi Liang 梁彧祺
- * @File    : OMspellNormalizedDistance.cpp
+ * @File    : OMspellUnitFreeDistance.cpp
  * @Time    : 2026/1/31 22:12
  */
 
@@ -35,13 +35,13 @@
 
 namespace py = pybind11;
 
-class OMspellNormalizedDistance {
+class OMspellUnitFreeDistance {
 public:
-    OMspellNormalizedDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
+    OMspellUnitFreeDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
                               double timecost, py::array_t<double> seqdur, py::array_t<double> indellist, py::array_t<int> seqlength)
             : indel(indel), norm(norm), timecost(timecost) {
 
-        py::print("[>] Starting Optimal Matching with spell (OMspell-normalized, duration normalized)...");
+        py::print("[>] Starting Optimal Matching with spell (OMspell-unit-free, duration normalized)...");
         std::cout << std::flush;
 
         try {
@@ -97,7 +97,7 @@ public:
             }
             refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
-            py::print("Error in OMspellNormalizedDistance constructor: ", e.what());
+            py::print("Error in OMspellUnitFreeDistance constructor: ", e.what());
             throw;
         }
     }
@@ -199,7 +199,7 @@ public:
             double nl = double(nn) * indel;
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
-            py::print("Error in OMspellNormalizedDistance::compute_distance: ", e.what());
+            py::print("Error in OMspellUnitFreeDistance::compute_distance: ", e.what());
             throw;
         }
     }
@@ -215,7 +215,7 @@ public:
                 }
             );
         } catch (const std::exception& e) {
-            py::print("Error in OMspellNormalizedDistance::compute_all_distances: ", e.what());
+            py::print("Error in OMspellUnitFreeDistance::compute_all_distances: ", e.what());
             throw;
         }
     }
@@ -238,7 +238,7 @@ public:
             }
             return refdist_matrix;
         } catch (const std::exception& e) {
-            py::print("Error in OMspellNormalizedDistance::compute_refseq_distances: ", e.what());
+            py::print("Error in OMspellUnitFreeDistance::compute_refseq_distances: ", e.what());
             throw;
         }
     }
