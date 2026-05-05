@@ -339,8 +339,8 @@
 
 #### 12.2 序列操作
 - **`seqmaintokens()`** - 返回最频繁tokens的索引
-- **`seqdss()`** - 底层实现已存在（`dissimilarity_measures/utils/seqdss.pyx`），但缺少用户级公开 API
-- **`seqdur()`** - 底层实现已存在（`dissimilarity_measures/utils/seqdur.pyx`），但缺少用户级公开 API
+- **`seqdss()`** → `get_distinct_state_sequences()`（已实现，用户级公开 API）
+- **`seqdur()`** → `get_state_spell_durations()`（已实现，用户级公开 API）
 
 #### 12.3 其他工具
 - **`alphabet()`** - 获取/设置字母表（支持 `with.missing` 参数）
@@ -375,20 +375,20 @@
 
 ## 14. 权重和统计增强
 
-### ✅ Sequenzo 已实现
-- 基本权重支持
-
-### ❌ Sequenzo 缺失的功能
+### ✅ Sequenzo 已实现（统计模块与用户级 API）
 
 #### 14.1 加权统计
-- **`weighted.mean()`** → `weighted_mean()`（位于 `sequenzo/utils/weighted_stats.py`）
-- **`weighted.var()`** → `weighted_variance()`（同上）
-- **`weighted.fivenum()`** → `weighted_five_number_summary()`（同上）
-- 这些函数在序列特征计算、树分析及其他模块中作为内部工具被广泛使用，与 TraMineR 的 Hmisc-based 实现保持逻辑一致
+- **`weighted.mean()`** → `get_weighted_mean()`（用户级 API，位于 `sequenzo/statistics/weighted.py`）
+- **`weighted.var()`** → `get_weighted_variance()`（同上）
+- **`weighted.fivenum()`** → `get_weighted_five_number_summary()`（同上）
+- 同时保留底层实现：`sequenzo/utils/weighted_stats.py`，用于内部计算复用
 
 #### 14.2 统计增强
-- **`seqmeant()`** - 平均时间（支持 `serr` 参数显示标准误差）
-- **`seqistatd()`** - 个体状态分布统计（支持 `prop` 参数计算比例）
+- **`seqmeant()`** → `get_mean_time_by_state()`（支持 `show_standard_error` 参数显示标准误差）
+- **`seqistatd()`** → `get_individual_state_distribution()`（支持 `as_proportion` 参数计算比例）
+- **汇总统计（小白友好）**：
+  - `get_sequence_length_summary()`（长度的 count/mean/median/q1/q3 等汇总）
+  - `get_transition_count_summary()`（转变次数的 count/mean/median/q1/q3 等汇总）
 
 ---
 

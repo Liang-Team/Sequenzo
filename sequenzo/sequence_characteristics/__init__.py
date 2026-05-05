@@ -42,8 +42,7 @@ from .ranked_indicators import (get_badness_index, get_degradation_index,
                                get_precarity_index, get_insecurity_index)
 
 # Cross-sectional indicators
-from .cross_sectional_indicators import (get_mean_time_in_states,
-                                        get_modal_state_sequence)
+from .cross_sectional_indicators import get_mean_time_in_states
 
 __all__ = [
     # Original functions
@@ -85,5 +84,4 @@ __all__ = [
     
     # Cross-sectional indicators
     "get_mean_time_in_states",
-    "get_modal_state_sequence",
 ]
