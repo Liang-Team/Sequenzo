@@ -971,7 +971,8 @@ def plot_sequence_index(seqdata: SequenceData,
         
         # Save or show the main plot directly
         plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows))
-        plt.imshow(main_buffer)
+        main_img = plt.imread(main_buffer, format="png")
+        plt.imshow(main_img)
         plt.axis('off')
         
         if save_as:

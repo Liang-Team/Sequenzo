@@ -153,10 +153,11 @@
 - （当前已无明显遗漏；`OMloc` 与 `OMtspell` 已在 `get_distance_matrix()` 中实现）
 
 #### 4.2 距离相关功能
-- **`seqalign()`** - 序列对齐可视化（显示两个序列的对齐细节）
-- **`seqfind()`** - 查找序列（在序列集中查找特定序列）
-- **`seqLLCP()`** - 最长公共前缀长度（两个序列之间）
-- **`seqLLCS()`** - 最长公共子序列长度（两个序列之间）
+- （已实现，TraMineR 语义对齐）
+  - **`seqalign()`** - 序列对齐细节（返回操作序列、逐步成本和动态规划矩阵）
+  - **`seqfind()`** - 查找序列（返回在目标序列集中的出现位置，1-based）
+  - **`seqLLCP()`** - 最长公共前缀长度（两个序列之间）
+  - **`seqLLCS()`** - 最长公共子序列长度（两个序列之间）
 
 ---
 
@@ -171,11 +172,12 @@
 ### ❌ Sequenzo 缺失的功能
 
 #### 5.1 代表性序列提取
-- **`seqrep()`** - 提取代表性序列集（支持多种标准：`'density'`, `'frequency'`）
-- **`seqrf()`** - RF组中位数序列
-- **`dissrep()`** - 从距离矩阵提取代表性对象
-- **`dissrf()`** - RF组中位数
-- **`disscenter()`** - 距离中心（虚拟中心或中位数）
+- （已实现，核心计算层可调用）
+  - **`get_representative_sequences()`**（TraMineR: `seqrep()`）- 提取代表性序列集（支持 `density` / `freq` / `dist` / `random` 标准）
+  - **`get_relative_frequency_representatives()`**（TraMineR: `seqrf()`）- Relative Frequency（RF）分组代表序列提取（可供可视化复用）
+  - **`get_representative_objects()`**（TraMineR: `dissrep()`）- 从距离矩阵提取代表性对象
+  - **`get_relative_frequency_groups()`**（TraMineR: `dissrf()`）- 基于距离矩阵的 RF 分组代表对象提取
+  - **`get_distance_center()`**（TraMineR: `disscenter()`）- 距离中心/组中位数计算
 
 #### 5.2 代表性序列可视化
 - **`seqrplot()`** - 代表性序列图
