@@ -3,7 +3,11 @@
 @File    : idcd.py
 @Time    : 15/04/2025 16:38
 @Desc    :
-    IDCD strategy for multidomain sequence analysis in Python, with custom time, states, and labels.
+    IDCD-style multidomain sequence construction for Python.
+    Note: IDCD refers to "independence from domain costs and distances"
+    (Ritschard et al., 2023), i.e., compute dissimilarities directly at the
+    multidomain level rather than deriving them additively from domain costs
+    or domain distances.
 """
 from typing import List, Dict
 import pandas as pd
@@ -156,8 +160,9 @@ def create_idcd_sequence_from_csvs(
     domain_state_labels: List[Dict] = None
 ) -> SequenceData:
     """
-    Create IDCD-style SequenceData from multiple CSVs.
-    Combines real observed joint states and builds sequence data.
+    Create multidomain SequenceData from multiple CSVs in an IDCD workflow.
+    Combines observed joint states and builds sequence data to be analyzed
+    directly at the multidomain level.
 
     Parameters:
     - csv_paths: List of paths to domain CSVs
@@ -179,8 +184,9 @@ def create_idcd_sequence_from_dfs(
     domain_state_labels: List[Dict] = None
 ) -> SequenceData:
     """
-    Create IDCD-style SequenceData from multiple domain DataFrames (e.g. from load_dataset).
-    Combines real observed joint states and builds sequence data.
+    Create multidomain SequenceData from multiple domain DataFrames in an
+    IDCD workflow (e.g. from load_dataset).
+    Combines observed joint states and builds sequence data.
 
     Parameters:
     - domain_dfs: List of DataFrames, each containing one domain's sequence data

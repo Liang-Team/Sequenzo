@@ -14,6 +14,10 @@ from .plot_mean_time import plot_mean_time
 from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
 from .plot_state_distribution import plot_state_distribution
 from .plot_modal_state import plot_modal_state
+from .plot_characteristics import (
+    plot_longitudinal_characteristics,
+    plot_cross_sectional_characteristics,
+)
 
 
 __all__ = [
@@ -25,5 +29,6 @@ __all__ = [
     "plot_state_distribution",
     "plot_transition_matrix",
     "plot_modal_state",
-    # Add other functions as needed
+    "plot_longitudinal_characteristics",
+    "plot_cross_sectional_characteristics",
 ]

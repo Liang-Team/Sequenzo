@@ -20,7 +20,10 @@ from .turbulence import get_turbulence
 
 from .complexity_index import get_complexity_index
 
-from .plot_characteristics import plot_longitudinal_characteristics, plot_cross_sectional_characteristics
+from ..visualization.plot_characteristics import (
+    plot_longitudinal_characteristics,
+    plot_cross_sectional_characteristics,
+)
 
 # Basic indicators
 from .basic_indicators import (get_sequence_length, get_spell_durations,

@@ -109,8 +109,8 @@ _LAZY: dict[str, tuple[str, str]] = {
     "get_spell_duration_variance": ("sequenzo.sequence_characteristics", "get_spell_duration_variance"),
     "get_state_freq_and_entropy_per_seq": ("sequenzo.sequence_characteristics", "get_state_freq_and_entropy_per_seq"),
     "get_cross_sectional_entropy": ("sequenzo.sequence_characteristics", "get_cross_sectional_entropy"),
-    "plot_cross_sectional_characteristics": ("sequenzo.sequence_characteristics", "plot_cross_sectional_characteristics"),
-    "plot_longitudinal_characteristics": ("sequenzo.sequence_characteristics", "plot_longitudinal_characteristics"),
+    "plot_cross_sectional_characteristics": ("sequenzo.visualization", "plot_cross_sectional_characteristics"),
+    "plot_longitudinal_characteristics": ("sequenzo.visualization", "plot_longitudinal_characteristics"),
     # utils
     "weighted_mean": ("sequenzo.utils", "weighted_mean"),
     "weighted_variance": ("sequenzo.utils", "weighted_variance"),
