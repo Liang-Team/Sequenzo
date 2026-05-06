@@ -10,7 +10,7 @@ def test_get_computer_performance_returns_friendly_summary(monkeypatch):
         lambda: (16 * computer_performance.BYTES_PER_GB, 6 * computer_performance.BYTES_PER_GB),
     )
     monkeypatch.setattr(computer_performance, "_get_os_name", lambda: "TestOS 1.0")
-    monkeypatch.setattr(computer_performance.platform, "machine", lambda: "test64")
+    monkeypatch.setattr(computer_performance, "_get_machine_name", lambda: "test64")
 
     info = get_computer_performance()
 
@@ -28,16 +28,22 @@ def test_get_computer_performance_returns_friendly_summary(monkeypatch):
             "large_scale": "12+ CPU cores and 32+ GB RAM for larger benchmarks or repeated runs",
         },
         "suggested_threads": 8,
+        "distance_matrix_memory_gb": {
+            "N=1000": 0.01,
+            "N=10000": 0.75,
+            "N=30000": 6.71,
+        },
         "advice": [
             "Start OpenMP-enabled runs with about 8 threads, then compare 4 and 8 if timing matters.",
             "Memory looks comfortable for regular workflows; be cautious when N becomes large.",
+            "As a rough reference, a full 10,000 x 10,000 distance matrix needs about 0.75 GB before table overhead.",
         ],
         "summary": (
             "This computer has 8 CPU cores, 16.0 GB total memory "
             "(6.0 GB currently available), and runs TestOS 1.0 on test64. "
             "For typical Sequenzo work, this looks like a strong machine, suitable for "
             "regular Sequenzo analyses and medium-size benchmarks. "
-            "A practical starting point is 8 OpenMP thread(s)."
+            "A practical starting point is 8 OpenMP threads."
         ),
     }
 
@@ -46,7 +52,7 @@ def test_get_computer_performance_handles_unknown_memory(monkeypatch):
     monkeypatch.setattr(computer_performance.os, "cpu_count", lambda: None)
     monkeypatch.setattr(computer_performance, "_get_memory_bytes", lambda: (None, None))
     monkeypatch.setattr(computer_performance, "_get_os_name", lambda: "MysteryOS")
-    monkeypatch.setattr(computer_performance.platform, "machine", lambda: "")
+    monkeypatch.setattr(computer_performance, "_get_machine_name", lambda: "unknown machine")
 
     info = get_computer_performance()
 
@@ -84,7 +90,7 @@ def test_get_computer_performance_can_print_summary(monkeypatch, capsys):
         lambda: (8 * computer_performance.BYTES_PER_GB, 2 * computer_performance.BYTES_PER_GB),
     )
     monkeypatch.setattr(computer_performance, "_get_os_name", lambda: "TestOS 2.0")
-    monkeypatch.setattr(computer_performance.platform, "machine", lambda: "test64")
+    monkeypatch.setattr(computer_performance, "_get_machine_name", lambda: "test64")
 
     info = get_computer_performance(print_summary=True)
     captured = capsys.readouterr()
@@ -97,3 +103,17 @@ def test_get_computer_performance_is_top_level_export():
     import sequenzo
 
     assert callable(sequenzo.get_computer_performance)
+
+
+def test_get_machine_name_uses_friendly_macos_labels(monkeypatch):
+    monkeypatch.setattr(computer_performance.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(computer_performance.platform, "machine", lambda: "arm64")
+
+    assert computer_performance._get_machine_name() == "Apple Silicon (arm64)"
+
+
+def test_get_os_name_uses_macos_when_available(monkeypatch):
+    monkeypatch.setattr(computer_performance.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(computer_performance, "_run_text_command", lambda command: "15.5\n")
+
+    assert computer_performance._get_os_name() == "macOS 15.5"

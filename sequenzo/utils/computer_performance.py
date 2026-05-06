@@ -1,7 +1,5 @@
 """
-@Author  : Sequenzo contributors
-@File    : computer_performance.py
-@Desc    :
+@Author  : Yapeng Wei
 User-friendly computer performance helper.
 
 This module uses only the Python standard library so users can inspect their
@@ -51,7 +49,7 @@ def get_computer_performance(print_summary: bool = False) -> dict:
     cpu_cores = os.cpu_count() or 1
     total_memory, available_memory = _get_memory_bytes()
     os_name = _get_os_name()
-    machine = platform.machine() or "unknown machine"
+    machine = _get_machine_name()
     tier = _estimate_tier(cpu_cores, _bytes_to_gb(total_memory))
 
     total_memory_gb = _bytes_to_gb(total_memory)
@@ -86,6 +84,7 @@ def get_computer_performance(print_summary: bool = False) -> dict:
         "recommended_for": recommended_for,
         "recommended_hardware": recommended_hardware,
         "suggested_threads": suggested_threads,
+        "distance_matrix_memory_gb": _distance_matrix_memory_examples(),
         "advice": advice,
         "summary": summary,
     }
@@ -217,8 +216,23 @@ def _run_text_command(command: list[str]) -> Optional[str]:
 
 def _get_os_name() -> str:
     system = platform.system() or "Unknown OS"
+    if system == "Darwin":
+        version = _run_text_command(["sw_vers", "-productVersion"])
+        if version:
+            return f"macOS {version.strip()}"
+        return "macOS"
     release = platform.release()
     return f"{system} {release}".strip()
+
+
+def _get_machine_name() -> str:
+    machine = platform.machine() or ""
+    system = platform.system()
+    if system == "Darwin" and machine == "arm64":
+        return "Apple Silicon (arm64)"
+    if system == "Darwin" and machine in {"x86_64", "AMD64"}:
+        return "Intel Mac (x86_64)"
+    return machine or "unknown machine"
 
 
 def _bytes_to_gb(value: Optional[int]) -> Optional[float]:
@@ -263,6 +277,13 @@ def _suggested_threads(cpu_cores: int) -> int:
     return max(1, min(cpu_cores, 8))
 
 
+def _distance_matrix_memory_examples() -> dict:
+    examples = {}
+    for n in (1000, 10000, 30000):
+        examples[f"N={n}"] = round((n * n * 8) / BYTES_PER_GB, 2)
+    return examples
+
+
 def _build_advice(
     cpu_cores: int,
     total_memory_gb: Optional[float],
@@ -292,6 +313,10 @@ def _build_advice(
     else:
         advice.append("Memory is limited for sequence distance matrices; start with small samples.")
 
+    advice.append(
+        "As a rough reference, a full 10,000 x 10,000 distance matrix needs about 0.75 GB before table overhead."
+    )
+
     if (
         available_memory_gb is not None
         and total_memory_gb is not None
@@ -314,6 +339,12 @@ def _format_cpu_cores(cpu_cores: int) -> str:
     return f"{cpu_cores} CPU cores"
 
 
+def _format_threads(thread_count: int) -> str:
+    if thread_count == 1:
+        return "1 OpenMP thread"
+    return f"{thread_count} OpenMP threads"
+
+
 def _build_summary(
     cpu_cores: int,
     total_memory_gb: Optional[float],
@@ -327,9 +358,10 @@ def _build_summary(
     cores = _format_cpu_cores(cpu_cores)
     total = _format_memory(total_memory_gb)
     available = _format_memory(available_memory_gb)
+    threads = _format_threads(suggested_threads)
     return (
         f"This computer has {cores}, {total} total memory "
         f"({available} currently available), and runs {os_name} on {machine}. "
         f"For typical Sequenzo work, this looks like a {tier} machine, suitable for {recommended_for}. "
-        f"A practical starting point is {suggested_threads} OpenMP thread(s)."
+        f"A practical starting point is {threads}."
     )
