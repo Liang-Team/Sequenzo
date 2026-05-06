@@ -13,9 +13,11 @@ from .weighted_stats import (
     weighted_variance,
     weighted_five_number_summary
 )
+from .computer_performance import get_computer_performance
 
 __all__ = [
     'weighted_mean',
     'weighted_variance',
     'weighted_five_number_summary',
+    'get_computer_performance',
 ]

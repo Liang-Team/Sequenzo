@@ -115,6 +115,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "weighted_mean": ("sequenzo.utils", "weighted_mean"),
     "weighted_variance": ("sequenzo.utils", "weighted_variance"),
     "weighted_five_number_summary": ("sequenzo.utils", "weighted_five_number_summary"),
+    "get_computer_performance": ("sequenzo.utils", "get_computer_performance"),
     # statistics (user-facing)
     "get_weighted_mean": ("sequenzo.statistics", "get_weighted_mean"),
     "get_weighted_variance": ("sequenzo.statistics", "get_weighted_variance"),
@@ -347,6 +348,7 @@ __all__ = [
     "weighted_mean",
     "weighted_variance",
     "weighted_five_number_summary",
+    "get_computer_performance",
     "get_weighted_mean",
     "get_weighted_variance",
     "get_weighted_five_number_summary",

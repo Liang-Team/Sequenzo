@@ -7,6 +7,7 @@
 #include "OMslenDistance.cpp"
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
+#include "EUCLIDCategoricalDistance.cpp"
 #include "CHI2distance.cpp"
 #include "LCPdistance.cpp"
 #include "LCPspellDistance.cpp"
@@ -63,6 +64,11 @@ PYBIND11_MODULE(c_code, m) {
             .def(py::init<py::array_t<int>, py::array_t<double>, int, double, py::array_t<int>>())
             .def("compute_all_distances", &DHDdistance::compute_all_distances)
             .def("compute_refseq_distances", &DHDdistance::compute_refseq_distances);
+
+    py::class_<EUCLIDCategoricalDistance>(m, "EUCLIDCategoricalDistance")
+            .def(py::init<py::array_t<int>, bool, py::array_t<int>>())
+            .def("compute_all_distances", &EUCLIDCategoricalDistance::compute_all_distances)
+            .def("compute_refseq_distances", &EUCLIDCategoricalDistance::compute_refseq_distances);
 
     py::class_<OMspellDistance>(m, "OMspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, py::array_t<double>, py::array_t<double>, py::array_t<int>, py::array_t<int>>())

@@ -129,6 +129,16 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         weighted = opts.get('weighted') or True
         matrix_display = opts.get('matrix_display') or "full"
 
+    euclid_backend = kwargs.get("euclid_backend", None)
+    if opts is not None:
+        euclid_backend = opts.get("euclid_backend", euclid_backend)
+    if euclid_backend is None:
+        euclid_backend = "auto"
+    if euclid_backend == "hamming":
+        euclid_backend = "categorical"
+    if euclid_backend not in {"auto", "categorical", "dense"}:
+        raise ValueError("[!] 'euclid_backend' must be one of 'auto', 'categorical', or 'dense'.")
+
     if 'with_missing' in kwargs:
         print("[!] 'with_missing' has been removed and is ignored.")
         print("    Missing values are always included by default, consistent with TraMineR.")
@@ -387,6 +397,53 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         overlap = kwargs.get("overlap", False)
         global_pdotj = kwargs.get("global_pdotj", None)
         seqdata_mat = seqdata.values
+
+        categorical_euclid_conditions = (
+            method == "EUCLID"
+            and euclid_backend in {"auto", "categorical"}
+            and step == 1
+            and breaks is None
+            and not overlap
+            and refseq_type == "none"
+            and seqs_dlens.shape[0] == 1
+            and np.all(seqdata_mat > 0)
+        )
+        has_cpp_euclid_fast_path = (
+            c_code is not None
+            and hasattr(c_code, "EUCLIDCategoricalDistance")
+            and hasattr(c_code, "dist2matrix")
+            and hasattr(c_code, "find_unique_sequences")
+        )
+        if method == "EUCLID" and euclid_backend == "categorical" and not categorical_euclid_conditions:
+            raise ValueError(
+                "[!] euclid_backend='categorical' is only valid for complete categorical EUCLID "
+                "with step=1, no custom breaks, no overlap, no missing values, and no refseq."
+            )
+        if method == "EUCLID" and euclid_backend == "categorical" and not has_cpp_euclid_fast_path:
+            raise RuntimeError(
+                "[!] euclid_backend='categorical' requires the Sequenzo C++ extension. "
+                "Use euclid_backend='dense' for the portable CHI2-style backend."
+            )
+        if categorical_euclid_conditions and has_cpp_euclid_fast_path:
+            print("[>] Using categorical EUCLID fast path via mismatch-count C++ kernel.")
+            dseqs_num, seqdata_didxs, _ = c_code.find_unique_sequences(
+                np.ascontiguousarray(seqdata_mat, dtype=np.int32)
+            )
+            refseq_id = np.array([-1, -1], dtype=np.int32)
+            euclid = c_code.EUCLIDCategoricalDistance(
+                dseqs_num,
+                bool(norm_chi2euclid),
+                refseq_id,
+            )
+            unique_dist = euclid.compute_all_distances()
+            matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
+
+            result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
+            dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
+
+            print("[>] Computed Successfully.")
+            return dist_matrix
+
         alphabet = np.arange(1, nstates + 1, dtype=seqdata_mat.dtype)
         w = seqdata.weights
         if w is None or len(w) != nseqs:
