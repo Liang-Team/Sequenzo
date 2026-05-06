@@ -5,7 +5,7 @@ This module is the user-friendly entry point for descriptive sequence statistics
 ## Quick Rule (Beginner Friendly)
 
 - Use `sequenzo.statistics` when you want summary numbers and tables.
-- Use `sequenzo.sequence_characteristics` when you want theory-driven indicators (entropy, turbulence, complexity, etc.).
+- Use `sequenzo.sequence_characteristics_indicators` when you want theory-driven indicators (entropy, turbulence, complexity, etc.).
 
 ## What Is Included Here
 
@@ -28,4 +28,4 @@ This module is the user-friendly entry point for descriptive sequence statistics
 ## Why This Is Separate
 
 `statistics` focuses on descriptive summaries for quick understanding and reporting.
-`sequence_characteristics` focuses on methodological indicators used for deeper analytical modeling.
+`sequence_characteristics_indicators` focuses on methodological indicators used for deeper analytical modeling.

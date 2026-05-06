@@ -288,7 +288,7 @@ function(seqdata, weighted=False)
 
 Before the creation of this module, weighted statistical calculations were implemented **inline** within various functions throughout Sequenzo. For example:
 
-**In `sequenzo/sequence_characteristics/cross_sectional_indicators.py`:**
+**In `sequenzo/sequence_characteristics_indicators/cross_sectional_indicators.py`:**
 - The `get_mean_time_in_states()` function calculated weighted means directly:
   ```python
   # Line 82: Inline weighted mean calculation
@@ -566,7 +566,7 @@ The five-number summary uses weighted quantile interpolation for unequal weights
 
 ## See Also
 
-- `sequenzo/sequence_characteristics/cross_sectional_indicators.py` - Example of functions that could use these utilities
+- `sequenzo/sequence_characteristics_indicators/cross_sectional_indicators.py` - Example of functions that could use these utilities
 - `sequenzo/visualization/plot_mean_time.py` - Example of weighted calculations in visualization
 - `sequenzo/define_sequence_data.py` - SequenceData class with weights support
 - `sequenzo/dissimilarity_measures/get_distance_matrix.py` - Weighted distance calculations

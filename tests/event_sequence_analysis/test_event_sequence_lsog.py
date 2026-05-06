@@ -36,7 +36,7 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture
 def lsog_seqdata():
-    """Load dyadic_children (LSOG) and build SequenceData (same as sequence_characteristics tests)."""
+    """Load dyadic_children (LSOG) and build SequenceData (same as sequence_characteristics_indicators tests)."""
     df = load_dataset("dyadic_children")
     time_list = [c for c in df.columns if str(c).isdigit()]
     time_list = sorted(time_list, key=int)

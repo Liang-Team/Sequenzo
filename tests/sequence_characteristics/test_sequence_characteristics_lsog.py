@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : test_sequence_characteristics_lsog.py
+@File    : test_sequence_characteristics_indicators_lsog.py
 @Time    : 09/02/2026 09:37
 @Desc    : Comprehensive tests for sequence characteristics using lsog (dyadic_children) dataset
 
@@ -14,9 +14,10 @@ import pandas as pd
 import numpy as np
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
+from sequenzo.statistics import get_modal_state_sequence
 
 # Import all sequence characteristics functions
-from sequenzo.sequence_characteristics import (
+from sequenzo.sequence_characteristics_indicators import (
     # Basic indicators
     get_sequence_length,
     get_spell_durations,
@@ -38,7 +39,6 @@ from sequenzo.sequence_characteristics import (
     get_insecurity_index,
     # Cross-sectional indicators
     get_mean_time_in_states,
-    get_modal_state_sequence,
 )
 
 

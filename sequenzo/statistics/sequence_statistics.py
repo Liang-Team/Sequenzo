@@ -10,13 +10,13 @@ import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.utils.seqdss import seqdss
 from sequenzo.dissimilarity_measures.utils.seqdur import seqdur
-from sequenzo.sequence_characteristics.cross_sectional_indicators import get_mean_time_in_states
-from sequenzo.sequence_characteristics.cross_sectional_indicators import (
+from sequenzo.sequence_characteristics_indicators.cross_sectional_indicators import get_mean_time_in_states
+from sequenzo.sequence_characteristics_indicators.cross_sectional_indicators import (
     get_modal_state_sequence as _get_modal_state_sequence,
 )
-from sequenzo.sequence_characteristics.basic_indicators import get_sequence_length
-from sequenzo.sequence_characteristics.simple_characteristics import get_number_of_transitions
-from sequenzo.sequence_characteristics.state_frequencies_and_entropy_per_sequence import (
+from sequenzo.sequence_characteristics_indicators.basic_indicators import get_sequence_length
+from sequenzo.sequence_characteristics_indicators.simple_characteristics import get_number_of_transitions
+from sequenzo.sequence_characteristics_indicators.state_frequencies_and_entropy_per_sequence import (
     get_state_freq_and_entropy_per_seq,
 )
 

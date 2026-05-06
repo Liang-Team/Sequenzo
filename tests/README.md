@@ -30,8 +30,8 @@ tests/
 ├── dissimilarity_measures/            # Distance measure tests
 │   ├── test_dissimilarity_measures_traminer.py
 │   └── ref_*.csv                       # TraMineR reference outputs
-├── sequence_characteristics/          # Sequence characteristic tests
-│   └── test_sequence_characteristics_lsog.py
+├── sequence_characteristics_indicators/          # Sequence characteristic tests
+│   └── test_sequence_characteristics_indicators_lsog.py
 ├── event_sequence_analysis/            # Event sequence (TraMineR parity)
 │   ├── README.md                       # Why 3 tests skip, how to generate refs
 │   ├── test_event_sequence_lsog.py
@@ -98,7 +98,7 @@ pytest tests/dissimilarity_measures/test_dissimilarity_measures_traminer.py -v
 Tests for sequence characteristic calculations:
 
 ```bash
-pytest tests/sequence_characteristics/test_sequence_characteristics_lsog.py -v
+pytest tests/sequence_characteristics_indicators/test_sequence_characteristics_indicators_lsog.py -v
 ```
 
 #### Event Sequence Analysis Tests
@@ -120,7 +120,7 @@ pytest tests/test_quickstart_integration.py::test_complete_workflow -v -s
 pytest tests/test_quickstart_integration.py::test_visualizations_no_save -v -s
 
 # Run a specific sequence characteristic test
-pytest tests/sequence_characteristics/test_sequence_characteristics_lsog.py::test_get_spell_durations -v
+pytest tests/sequence_characteristics_indicators/test_sequence_characteristics_indicators_lsog.py::test_get_spell_durations -v
 ```
 
 ### Run Tests with Coverage
@@ -218,7 +218,7 @@ pip install pytest pytest-cov
 
 **Reference Files**: The `ref_*.csv` files contain expected outputs from TraMineR R package, ensuring our Python implementation produces identical results.
 
-### 5. Sequence Characteristics Tests (`sequence_characteristics/`)
+### 5. Sequence Characteristics Tests (`sequence_characteristics_indicators/`)
 
 **Purpose**: Validate sequence characteristic calculations
 

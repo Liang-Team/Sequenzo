@@ -49,7 +49,7 @@ We read the same CSV and build a state sequence object with `seqdef()`. States a
 #| label: load-data
 #| eval: true
 library(TraMineR)
-# Path relative to this QMD (Tutorials/sequence_characteristics/)
+# Path relative to this QMD (Tutorials/sequence_characteristics_indicators/)
 csv_path <- "../../sequenzo/datasets/dyadic_children.csv"
 if (!file.exists(csv_path)) csv_path <- "sequenzo/datasets/dyadic_children.csv"
 dat <- read.csv(csv_path, check.names = FALSE)

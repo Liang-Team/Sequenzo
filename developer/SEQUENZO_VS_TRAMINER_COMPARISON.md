@@ -114,7 +114,7 @@
 - **`seqstatf()`** - 序列频率统计
 - **`seqstatl()`** - 序列长度统计
 - **`seqnum()`** - 序列数量统计
-- **`seqsubsn()`** - 已有基础实现（`sequence_characteristics/simple_characteristics.py`），但与 TraMineR 仍有参数与输出细节差异
+- **`seqsubsn()`** - 已有基础实现（`sequence_characteristics_indicators/simple_characteristics.py`），但与 TraMineR 仍有参数与输出细节差异
 
 #### 3.3 转换相关指标
 - **`seqtransn()`** - 转换次数（归一化版本）

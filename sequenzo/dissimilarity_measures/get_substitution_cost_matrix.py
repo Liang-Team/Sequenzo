@@ -11,7 +11,7 @@ import numpy as np
 
 from .utils.get_sm_trate_substitution_cost_matrix import get_sm_trate_substitution_cost_matrix
 from sequenzo.define_sequence_data import SequenceData
-from sequenzo.sequence_characteristics.overall_cross_sectional_entropy import get_cross_sectional_entropy
+from sequenzo.sequence_characteristics_indicators.overall_cross_sectional_entropy import get_cross_sectional_entropy
 from .get_distance_matrix import with_missing_warned
 
 def get_substitution_cost_matrix(seqdata, method, cval=None, miss_cost=None, time_varying=False,
