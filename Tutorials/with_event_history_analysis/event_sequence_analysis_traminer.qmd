@@ -44,7 +44,7 @@ id_col <- "dyadID"
 states <- as.character(1:6)
 
 # State sequence object (TraMineR::seqdef)
-seqdata <- seqdef(dat[, time_cols, drop = FALSE], alphabet = states, id = dat[[id_col]])
+seqdata <- seqdef(dat[, time_cols, drop = FALSE], event_labels_order = states, id = dat[[id_col]])
 print(dim(seqdata))
 head(dat[, c(id_col, time_cols[1:5])])
 ```
@@ -59,7 +59,7 @@ Convert the state sequence object to an event sequence with **transition** or **
 # Transition method: one event per state change (e.g. "1-2", "2-3")
 eseq <- seqecreate(seqdata, tevent = "transition")
 print(eseq)
-# Event alphabet
+# Event event_labels_order
 alphabet(eseq)
 # First sequence
 eseq[1]
@@ -111,13 +111,13 @@ head(fsub_c$data)
 
 ### 3.3 Search for specific subsequences — `str.subseq`
 
-Subsequences are given as strings: each transition (or event) in parentheses, separated by `-`, e.g. `"(1-2)-(2-3)"` (format depends on `alphabet(eseq)`). Events must be from the alphabet of `eseq`. See `str.seqelist` in TraMineR for the display format.
+Subsequences are given as strings: each transition (or event) in parentheses, separated by `-`, e.g. `"(1-2)-(2-3)"` (format depends on `alphabet(eseq)`). Events must be from the event_labels_order of `eseq`. See `str.seqelist` in TraMineR for the display format.
 
 ```{r}
 #| label: str-subseq
 #| eval: true
-# Example: search for specific patterns (use labels from alphabet(eseq))
-alph <- alphabet(eseq)
+# Example: search for specific patterns (use labels from event_labels_order(eseq))
+alph <- event_labels_order(eseq)
 str_subseq <- c(
   paste0("(", alph[1], ")-(", alph[2], ")"),
   paste0("(", alph[1], ")-(", alph[3], ")")
@@ -200,14 +200,14 @@ plot(fsub[1:15], freq = fsub$data$Count[1:15], main = "Top 15 by Count", cex = 1
 
 | Step | TraMineR (R) | Sequenzo (Python) |
 |------|--------------|-------------------|
-| Load & state sequence | `read.csv` + `seqdef(..., alphabet, id)` | `load_dataset` + `SequenceData(..., time, id_col, states)` |
-| Event sequences | `seqecreate(seqdata, tevent = "transition")` | `create_event_sequences(data=seqdata, tevent="transition")` |
+| Load & state sequence | `read.csv` + `seqdef(..., event_labels_order, id)` | `load_dataset` + `SequenceData(..., time, id_col, states)` |
+| Event sequences | `seqecreate(seqdata, tevent = "transition")` | `EventSequenceData.from_state_sequences(seqdata=seqdata, event_representation="transition")` |
 | Constraints | `seqeconstraint(max.gap, window.size, age.min, age.max, count.method)` | `EventSequenceConstraint(...)` |
-| Frequent subsequences | `seqefsub(eseq, min.support, constraint, str.subseq)` | `find_frequent_subsequences(eseq, min_support, constraint, str_subseq)` |
-| Occurrence matrix | `seqeapplysub(fsub, method = "presence" \| "count")` | `count_subsequence_occurrences(fsub, method="presence" \| "count")` |
-| Group comparison | `seqecmpgroup(fsub, group, method="chisq", pvalue.limit)` | `compare_groups(fsub, group, method="chisq", pvalue_limit)` |
-| Plot event sequences | `plot(eseq)` / `seqpcplot(eseq)`; `plot(eseq, group=...)` | `plot_event_sequences(eseq, type="index" \| "parallel", group=...)` |
-| Plot subseq frequencies | `plot(fsub[1:n])`; `plot(..., freq=Count)` | `plot_subsequence_frequencies(fsub, top_n, use_count)` |
+| Frequent subsequences | `seqefsub(eseq, min.support, constraint, str.subseq)` | `find_frequent_subsequences(event_sequences=eseq, min_support=min_support, search_constraint=constraint, target_subsequences=str_subseq)` |
+| Occurrence matrix | `seqeapplysub(fsub, method = "presence" \| "count")` | `count_subsequence_occurrences(subsequence_results=fsub, counting_method="presence" \| "count")` |
+| Group comparison | `seqecmpgroup(fsub, group, method="chisq", pvalue.limit)` | `compare_groups(subsequence_results=fsub, group_labels=group, test_method="chisq", pvalue_threshold=0.05)` |
+| Plot event sequences | `plot(eseq)` / `seqpcplot(eseq)`; `plot(eseq, group=...)` | `plot_event_parallel_coordinates(event_sequences=eseq, group_labels=group)` |
+| Plot subseq frequencies | `plot(fsub[1:n])`; `plot(..., freq=Count)` | `plot_subsequence_frequencies(subsequence_results=fsub, frequency_values=fsub.data["Count"])` |
 
 ## References (from TraMineR man pages)
 

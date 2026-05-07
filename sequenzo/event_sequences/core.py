@@ -18,12 +18,13 @@ Function Mapping: Sequenzo ↔ TraMineR
 --------------------------------------
 Sequenzo Function Name              TraMineR Equivalent    Description
 ----------------------------         -------------------    -----------
-create_event_sequences()             seqecreate()          Create event sequence objects from TSE data or state sequences
+EventSequenceData.from_tse()         seqecreate()          Create event sequence objects from TSE data
+EventSequenceData.from_state_sequences() seqecreate()      Create event sequence objects from state sequences
 find_frequent_subsequences()         seqefsub()            Find frequently occurring event patterns above a support threshold
 count_subsequence_occurrences()      seqeapplysub()        Count how many times each subsequence appears in each sequence
 compare_groups()                     seqecmpgroup()        Compare groups to find discriminating subsequences (chi-square tests)
-plot_event_sequences()                plot.seqelist()       Visualize event sequences (see event_sequence_visualization.py)
-plot_subsequence_frequencies()       plot.subseqelist()     Plot bar chart of subsequence frequencies (see event_sequence_visualization.py)
+plot_event_parallel_coordinates()     seqpcplot()           Parallel-coordinate event-sequence visualization
+plot_subsequence_frequencies()        plot.subseqelist()    Plot bar chart of subsequence frequencies
 
 Key Classes:
 ------------
@@ -35,7 +36,7 @@ Key Classes:
 Example Usage:
 --------------
     >>> import pandas as pd
-    >>> from sequenzo.event_sequences import create_event_sequences, find_frequent_subsequences
+    >>> from sequenzo.event_sequences import EventSequenceData, find_frequent_subsequences
     >>> 
     >>> # Create event sequences from TSE format data
     >>> tse_data = pd.DataFrame({
@@ -43,7 +44,7 @@ Example Usage:
     ...     'timestamp': [18, 22, 17, 20],
     ...     'event': ['EnterUni', 'Graduate', 'EnterUni', 'Graduate']
     ... })
-    >>> eseq = create_event_sequences(data=tse_data)
+    >>> eseq = EventSequenceData.from_tse(data=tse_data)
     >>> 
     >>> # Find frequent subsequences
     >>> fsubseq = find_frequent_subsequences(eseq, min_support=2)
@@ -200,6 +201,75 @@ class EventSequenceList:
         return f"EventSequenceList(n={self.n_sequences}, events={len(self.dictionary)})"
 
 
+class EventSequenceData(EventSequenceList):
+    """
+    Primary event-sequence container, parallel to ``SequenceData``.
+
+    This class is the recommended public object for event-sequence workflows.
+    """
+
+    @classmethod
+    def from_tse(cls,
+                 data: Optional[pd.DataFrame] = None,
+                 id: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                 timestamp: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                 event: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                 end_event: Optional[str] = None,
+                 event_labels_order: Optional[List[str]] = None):
+        """Create event sequences from TSE-style data.
+
+        TraMineR parameter mapping: ``event_labels_order`` -> ``alphabet``.
+        """
+        return _create_event_sequences(
+            data=data,
+            id=id,
+            timestamp=timestamp,
+            event=event,
+            end_event=end_event,
+            event_labels_order=event_labels_order,
+        )
+
+    @classmethod
+    def from_state_sequences(cls,
+                             seqdata,
+                             event_representation: Union[str, np.ndarray] = "transition",
+                             use_labels: bool = True,
+                             weighted: bool = True,
+                             end_event: Optional[str] = None,
+                             event_labels_order: Optional[List[str]] = None):
+        """Create event sequences from a ``SequenceData`` object.
+
+        TraMineR parameter mapping: ``event_representation`` -> ``tevent``,
+        ``event_labels_order`` -> ``alphabet``, ``weighted`` -> ``weighted``.
+        """
+        return _create_event_sequences(
+            data=seqdata,
+            event_representation=event_representation,
+            use_labels=use_labels,
+            weighted=weighted,
+            end_event=end_event,
+            event_labels_order=event_labels_order,
+        )
+
+    def to_tse(self) -> pd.DataFrame:
+        """Convert this event-sequence object to TSE format."""
+        return convert_event_sequences_to_tse(self)
+
+    def transition_matrix(self, weighted: bool = True, normalize: bool = True) -> pd.DataFrame:
+        """Compute event transition matrix."""
+        return compute_event_transition_matrix(self, weighted=weighted, normalize=normalize)
+
+    def contains(self,
+                 target_subsequence: Union["EventSequence", str],
+                 search_constraint: Optional["EventSequenceConstraint"] = None) -> pd.Series:
+        """Check per-sequence containment of a target subsequence."""
+        return check_event_subsequence_containment(
+            self,
+            target_subsequence=target_subsequence,
+            search_constraint=search_constraint,
+        )
+
+
 class EventSequenceConstraint:
     """
     Time constraints for event sequence analysis.
@@ -327,16 +397,16 @@ class SubsequenceList:
 # Main Functions with Intuitive Names
 # ============================================================================
 
-def create_event_sequences(data: Optional[pd.DataFrame] = None,
-                           id: Optional[Union[np.ndarray, pd.Series, List]] = None,
-                           timestamp: Optional[Union[np.ndarray, pd.Series, List]] = None,
-                           event: Optional[Union[np.ndarray, pd.Series, List]] = None,
-                           end_event: Optional[str] = None,
-                           tevent: Union[str, np.ndarray] = "transition",
-                           use_labels: bool = True,
-                           weighted: bool = True,
-                           alphabet: Optional[List[str]] = None,
-                           seqdata=None) -> EventSequenceList:
+def _create_event_sequences(data: Optional[pd.DataFrame] = None,
+                            id: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                            timestamp: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                            event: Optional[Union[np.ndarray, pd.Series, List]] = None,
+                            end_event: Optional[str] = None,
+                            event_representation: Union[str, np.ndarray] = "transition",
+                            use_labels: bool = True,
+                            weighted: bool = True,
+                            event_labels_order: Optional[List[str]] = None,
+                            seqdata=None) -> EventSequenceData:
     """
     Create an event sequence object from state sequences or timestamped event data.
     
@@ -349,19 +419,19 @@ def create_event_sequences(data: Optional[pd.DataFrame] = None,
         timestamp: Event timestamps (required if data is None or not a DataFrame)
         event: Event names/types (required if data is None or not a DataFrame)
         end_event: Optional event name indicating end of observation
-        tevent: Transition method for state-to-event conversion:
+        event_representation: Transition method for state-to-event conversion:
                 - "transition": One event per transition (default)
                 - "state": One event per state entry
                 - "period": Pair of start/end events
                 - Or a transition matrix (numpy array)
         use_labels: If True, use state labels instead of codes
         weighted: If True, preserve weights from state sequences
-        alphabet: Optional list of event labels in a specific order (e.g. TraMineR alphabet
+        event_labels_order: Optional list of event labels in a specific order (e.g. TraMineR event_labels_order
                   for reference comparison). If provided, the event dictionary uses this order.
         seqdata: Deprecated, use data instead
     
     Returns:
-        EventSequenceList object containing event sequences
+        EventSequenceData object containing event sequences
     
     Examples:
         >>> # From TSE format DataFrame
@@ -370,10 +440,10 @@ def create_event_sequences(data: Optional[pd.DataFrame] = None,
         ...     'timestamp': [18, 22, 17, 20],
         ...     'event': ['EnterUni', 'Graduate', 'EnterUni', 'Graduate']
         ... })
-        >>> eseq = create_event_sequences(data=tse_data)
+        >>> eseq = EventSequenceData.from_tse(data=tse_data)
         
         >>> # From state sequence (SequenceData object)
-        >>> eseq = create_event_sequences(data=state_seq, tevent="transition")
+        >>> eseq = EventSequenceData.from_state_sequences(state_seq, event_representation="transition")
     """
     # Handle deprecated parameter
     if seqdata is not None:
@@ -385,7 +455,14 @@ def create_event_sequences(data: Optional[pd.DataFrame] = None,
         # Check if it's a SequenceData object (state sequence)
         if hasattr(data, 'seqdata') and hasattr(data, 'states'):
             # Convert state sequence to event sequence
-            return _state_to_event_sequence(data, tevent, use_labels, weighted, end_event, alphabet)
+            return _state_to_event_sequence(
+                data,
+                event_representation,
+                use_labels,
+                weighted,
+                end_event,
+                event_labels_order,
+            )
         
         # Otherwise, assume it's a DataFrame
         elif isinstance(data, pd.DataFrame):
@@ -421,7 +498,14 @@ def create_event_sequences(data: Optional[pd.DataFrame] = None,
         event = event.values
     
     unique_events = pd.Series(event).unique()
-    dictionary = sorted([str(e) for e in unique_events])
+    observed_events = [str(e) for e in unique_events]
+    if event_labels_order is not None:
+        dictionary = [ev for ev in event_labels_order if ev in observed_events]
+        for ev in sorted(observed_events):
+            if ev not in dictionary:
+                dictionary.append(ev)
+    else:
+        dictionary = sorted(observed_events)
     
     # Check for special characters in event names
     special_chars = ['(', ')', ',']
@@ -470,29 +554,33 @@ def create_event_sequences(data: Optional[pd.DataFrame] = None,
         ))
     
     # Create EventSequenceList
-    eseq_list = EventSequenceList(sequences, dictionary)
+    eseq_list = EventSequenceData(sequences, dictionary)
     
     return eseq_list
 
 
-def find_frequent_subsequences(eseq: EventSequenceList,
-                               str_subseq: Optional[List[str]] = None,
+def find_frequent_subsequences(event_sequences: EventSequenceList,
+                               target_subsequences: Optional[List[str]] = None,
                                min_support: Optional[float] = None,
-                               pmin_support: Optional[float] = None,
-                               constraint: Optional[EventSequenceConstraint] = None,
+                               min_support_ratio: Optional[float] = None,
+                               search_constraint: Optional[EventSequenceConstraint] = None,
                                max_k: int = -1,
                                weighted: bool = True) -> SubsequenceList:
     """
     Find frequent subsequences in event sequences.
     
     TraMineR equivalent: seqefsub()
+    TraMineR parameter mapping: ``event_sequences`` -> ``eseq``,
+    ``target_subsequences`` -> ``str.subseq``,
+    ``min_support_ratio`` -> ``pmin.support``,
+    ``search_constraint`` -> ``constraint``.
     
     Args:
-        eseq: EventSequenceList object
-        str_subseq: Optional list of specific subsequences to search for (as strings)
+        event_sequences: EventSequenceList object
+        target_subsequences: Optional list of specific subsequences to search for (as strings)
         min_support: Minimum support in number of sequences
-        pmin_support: Minimum support as proportion (0-1)
-        constraint: EventSequenceConstraint object
+        min_support_ratio: Minimum support as proportion (0-1)
+        search_constraint: EventSequenceConstraint object
         max_k: Maximum number of events in subsequence (-1 = no limit)
         weighted: If True, use sequence weights
     
@@ -501,52 +589,52 @@ def find_frequent_subsequences(eseq: EventSequenceList,
     
     Examples:
         >>> # Find subsequences with at least 20 occurrences
-        >>> fsubseq = find_frequent_subsequences(eseq, min_support=20)
+        >>> fsubseq = find_frequent_subsequences(event_sequences, min_support=20)
         
         >>> # Find subsequences with at least 1% support
-        >>> fsubseq = find_frequent_subsequences(eseq, pmin_support=0.01)
+        >>> fsubseq = find_frequent_subsequences(event_sequences, min_support_ratio=0.01)
         
         >>> # Search for specific subsequences
-        >>> fsubseq = find_frequent_subsequences(eseq, str_subseq=["(A)-(B)", "(B)-(C)"])
+        >>> fsubseq = find_frequent_subsequences(event_sequences, target_subsequences=["(A)-(B)", "(B)-(C)"])
     """
-    if not isinstance(eseq, EventSequenceList):
-        raise TypeError("eseq must be an EventSequenceList object")
+    if not isinstance(event_sequences, EventSequenceList):
+        raise TypeError("event_sequences must be an EventSequenceList object")
     
-    if constraint is None:
-        constraint = EventSequenceConstraint()
+    if search_constraint is None:
+        search_constraint = EventSequenceConstraint()
     
-    if not isinstance(constraint, EventSequenceConstraint):
-        warnings.warn("constraint should be an EventSequenceConstraint object. Using default.", UserWarning)
-        constraint = EventSequenceConstraint()
+    if not isinstance(search_constraint, EventSequenceConstraint):
+        warnings.warn("search_constraint should be an EventSequenceConstraint object. Using default.", UserWarning)
+        search_constraint = EventSequenceConstraint()
     
     # Validate constraint
-    if constraint.count_method == 3 and constraint.window_size == -1:
+    if search_constraint.count_method == 3 and search_constraint.window_size == -1:
         raise ValueError("CWIN method requires window_size constraint")
     
     # Handle weights
     if weighted:
-        total_weight = eseq.get_total_weight()
+        total_weight = event_sequences.get_total_weight()
     else:
-        total_weight = float(len(eseq))
+        total_weight = float(len(event_sequences))
         # Temporarily set weights to 1
-        original_weights = eseq.weights.copy()
-        eseq.weights = np.ones(len(eseq), dtype=np.float64)
+        original_weights = event_sequences.weights.copy()
+        event_sequences.weights = np.ones(len(event_sequences), dtype=np.float64)
     
     try:
         # Handle user-specified subsequences
-        if str_subseq is not None:
-            return _search_specific_subsequences(eseq, str_subseq, constraint, total_weight, weighted)
+        if target_subsequences is not None:
+            return _search_specific_subsequences(event_sequences, target_subsequences, search_constraint, total_weight, weighted)
         
         # Validate support threshold
         if min_support is None:
-            if pmin_support is None:
-                raise ValueError("You should specify a minimum support through min_support or pmin_support")
-            min_support = pmin_support * total_weight
+            if min_support_ratio is None:
+                raise ValueError("You should specify a minimum support through min_support or min_support_ratio")
+            min_support = min_support_ratio * total_weight
         
         # Find frequent subsequences
         # This is a simplified implementation - full version would use prefix tree algorithm
         subsequences, supports, counts = _find_frequent_subsequences(
-            eseq, min_support, constraint, max_k
+            event_sequences, min_support, search_constraint, max_k
         )
         
         # Create data frame
@@ -560,56 +648,58 @@ def find_frequent_subsequences(eseq: EventSequenceList,
         subsequences = [subsequences[i] for i in sort_idx]
         data = data.iloc[sort_idx].reset_index(drop=True)
         
-        return SubsequenceList(eseq, subsequences, data, constraint, type="frequent")
+        return SubsequenceList(event_sequences, subsequences, data, search_constraint, type="frequent")
     
     finally:
         # Restore original weights if we modified them
         if not weighted:
-            eseq.weights = original_weights
+            event_sequences.weights = original_weights
 
 
-def count_subsequence_occurrences(subseq: SubsequenceList,
-                                  method: Optional[Union[str, int]] = None,
-                                  constraint: Optional[EventSequenceConstraint] = None,
-                                  rules: bool = False) -> np.ndarray:
+def count_subsequence_occurrences(subsequence_results: SubsequenceList,
+                                  counting_method: Optional[Union[str, int]] = None,
+                                  search_constraint: Optional[EventSequenceConstraint] = None,
+                                  include_rules: bool = False) -> np.ndarray:
     """
     Count occurrences of subsequences in sequences.
     
     TraMineR equivalent: seqeapplysub()
+    TraMineR parameter mapping: ``subsequence_results`` -> ``fsub``,
+    ``counting_method`` -> ``method``, ``search_constraint`` -> ``constraint``.
     
     Args:
-        subseq: SubsequenceList object (result from find_frequent_subsequences)
-        method: Counting method:
+        subsequence_results: SubsequenceList object (result from find_frequent_subsequences)
+        counting_method: Counting method:
                 - "presence" or "COBJ" (1): Count per sequence (0/1)
                 - "count" or "CDIST_O" (2): Count distinct occurrences
                 - "CWIN" (3): Count within time windows
                 - "CMINWIN" (4): Count minimum windows
                 - "CDIST" (5): Count with distance constraints
                 - Or integer 1-5
-        constraint: EventSequenceConstraint object (uses subseq.constraint if None)
-        rules: If True, count subsequences within subsequences (for rule mining)
+        search_constraint: EventSequenceConstraint object (uses subsequence_results.constraint if None)
+        include_rules: If True, count subsequences within subsequences (for rule mining)
     
     Returns:
         numpy array of shape (n_sequences, n_subsequences) with counts
     
     Examples:
         >>> fsubseq = find_frequent_subsequences(eseq, min_support=10)
-        >>> counts = count_subsequence_occurrences(fsubseq, method="presence")
+        >>> counts = count_subsequence_occurrences(fsubseq, counting_method="presence")
         >>> # counts[i, j] = 1 if sequence i contains subsequence j, else 0
     """
-    if not isinstance(subseq, SubsequenceList):
-        raise TypeError("subseq must be a SubsequenceList object")
+    if not isinstance(subsequence_results, SubsequenceList):
+        raise TypeError("subsequence_results must be a SubsequenceList object")
     
-    if constraint is None:
-        constraint = subseq.constraint
+    if search_constraint is None:
+        search_constraint = subsequence_results.constraint
     
-    if not isinstance(constraint, EventSequenceConstraint):
-        warnings.warn("constraint should be an EventSequenceConstraint object. Using default.", UserWarning)
-        constraint = EventSequenceConstraint()
+    if not isinstance(search_constraint, EventSequenceConstraint):
+        warnings.warn("search_constraint should be an EventSequenceConstraint object. Using default.", UserWarning)
+        search_constraint = EventSequenceConstraint()
     
     # Handle method parameter
-    if method is not None:
-        if isinstance(method, str):
+    if counting_method is not None:
+        if isinstance(counting_method, str):
             method_map = {
                 "presence": 1, "COBJ": 1,
                 "count": 2, "CDIST_O": 2,
@@ -617,52 +707,55 @@ def count_subsequence_occurrences(subseq: SubsequenceList,
                 "CMINWIN": 4,
                 "CDIST": 5
             }
-            if method not in method_map:
-                raise ValueError(f"Unknown method: {method}")
-            constraint.count_method = method_map[method]
-        elif isinstance(method, int):
-            if method not in [1, 2, 3, 4, 5]:
-                raise ValueError(f"method must be 1-5, got {method}")
-            constraint.count_method = method
+            if counting_method not in method_map:
+                raise ValueError(f"Unknown counting_method: {counting_method}")
+            search_constraint.count_method = method_map[counting_method]
+        elif isinstance(counting_method, int):
+            if counting_method not in [1, 2, 3, 4, 5]:
+                raise ValueError(f"counting_method must be 1-5, got {counting_method}")
+            search_constraint.count_method = counting_method
     
     # Get sequences to search in
-    if rules:
-        search_sequences = subseq.subsequences
+    if include_rules:
+        search_sequences = subsequence_results.subsequences
     else:
-        search_sequences = subseq.eseq.sequences
+        search_sequences = subsequence_results.eseq.sequences
     
     n_seqs = len(search_sequences)
-    n_subseqs = len(subseq.subsequences)
+    n_subseqs = len(subsequence_results.subsequences)
     
     # Initialize result matrix
     result = np.zeros((n_seqs, n_subseqs), dtype=np.float64)
     
     # Count occurrences for each subsequence in each sequence
-    for j, subseq_seq in enumerate(subseq.subsequences):
+    for j, subseq_seq in enumerate(subsequence_results.subsequences):
         for i, seq in enumerate(search_sequences):
             count = _count_subsequence_in_sequence(
-                subseq_seq, seq, constraint
+                subseq_seq, seq, search_constraint
             )
             result[i, j] = count
     
     return result
 
 
-def compare_groups(subseq: SubsequenceList,
-                   group: Union[np.ndarray, pd.Series, List],
-                   method: str = "chisq",
-                   pvalue_limit: Optional[float] = None,
+def compare_groups(subsequence_results: SubsequenceList,
+                   group_labels: Union[np.ndarray, pd.Series, List],
+                   test_method: str = "chisq",
+                   pvalue_threshold: Optional[float] = None,
                    weighted: bool = True) -> SubsequenceList:
     """
     Compare groups to find discriminating subsequences.
     
     TraMineR equivalent: seqecmpgroup()
+    TraMineR parameter mapping: ``subsequence_results`` -> ``fsub``,
+    ``group_labels`` -> ``group``, ``test_method`` -> ``method``,
+    ``pvalue_threshold`` -> ``pvalue.limit``.
     
     Args:
-        subseq: SubsequenceList object (result from find_frequent_subsequences)
-        group: Group membership for each sequence (array-like)
-        method: Test method ("chisq" for chi-square test, "bonferroni" for Bonferroni correction)
-        pvalue_limit: Maximum p-value threshold (default: 2.0 for display)
+        subsequence_results: SubsequenceList object (result from find_frequent_subsequences)
+        group_labels: Group membership for each sequence (array-like)
+        test_method: Test method ("chisq" for chi-square test, "bonferroni" for Bonferroni correction)
+        pvalue_threshold: Maximum p-value threshold (default: 2.0 for display)
         weighted: If True, use sequence weights
     
     Returns:
@@ -671,68 +764,69 @@ def compare_groups(subseq: SubsequenceList,
     Examples:
         >>> fsubseq = find_frequent_subsequences(eseq, min_support=10)
         >>> groups = np.array(['Male', 'Female', 'Male', 'Female', 'Male'])
-        >>> discr = compare_groups(fsubseq, groups, pvalue_limit=0.05)
+        >>> discr = compare_groups(fsubseq, groups, pvalue_threshold=0.05)
     """
-    if not isinstance(subseq, SubsequenceList):
-        raise TypeError("subseq must be a SubsequenceList object")
+    if not isinstance(subsequence_results, SubsequenceList):
+        raise TypeError("subsequence_results must be a SubsequenceList object")
     
-    group = np.array(group)
-    if len(group) != len(subseq.eseq):
-        raise ValueError(f"group length ({len(group)}) must match number of sequences ({len(subseq.eseq)})")
+    group_labels = np.array(group_labels)
+    if len(group_labels) != len(subsequence_results.eseq):
+        raise ValueError(f"group_labels length ({len(group_labels)}) must match number of sequences ({len(subsequence_results.eseq)})")
     
-    if pvalue_limit is None:
-        pvalue_limit = 2.0  # TraMineR default
+    if pvalue_threshold is None:
+        pvalue_threshold = 2.0  # TraMineR default
     
     # Handle weights
     if not weighted:
-        original_weights = subseq.eseq.weights.copy()
-        subseq.eseq.weights = np.ones(len(subseq.eseq), dtype=np.float64)
-        total_weight = float(len(subseq.eseq))
+        original_weights = subsequence_results.eseq.weights.copy()
+        subsequence_results.eseq.weights = np.ones(len(subsequence_results.eseq), dtype=np.float64)
+        total_weight = float(len(subsequence_results.eseq))
     else:
-        total_weight = subseq.eseq.get_total_weight()
+        total_weight = subsequence_results.eseq.get_total_weight()
     
     try:
-        if method == "chisq" or method == "bonferroni":
-            bonferroni = (method == "bonferroni")
-            results = _chi_square_tests(subseq, group, bonferroni, weighted)
+        if test_method == "chisq" or test_method == "bonferroni":
+            bonferroni = (test_method == "bonferroni")
+            results = _chi_square_tests(subsequence_results, group_labels, bonferroni, weighted)
         else:
-            raise ValueError(f"Unknown method: {method}")
+            raise ValueError(f"Unknown test_method: {test_method}")
         
         # Filter by p-value
-        significant = results['p.value'] <= pvalue_limit
+        significant = results['p.value'] <= pvalue_threshold
         significant_idx = np.where(significant)[0]
         
         if len(significant_idx) == 0:
-            warnings.warn("No subsequences found with p-value <= pvalue_limit", UserWarning)
+            warnings.warn("No subsequences found with p-value <= pvalue_threshold", UserWarning)
             return SubsequenceList(
-                subseq.eseq, [], pd.DataFrame(), subseq.constraint, type="chisq"
+                subsequence_results.eseq, [], pd.DataFrame(), subsequence_results.constraint, type="chisq"
             )
         
         # Sort by test statistic (descending)
         sort_idx = significant_idx[np.argsort(results.loc[significant_idx, 'statistic'].values)[::-1]]
         
         # Create filtered subsequence list
-        filtered_subseqs = [subseq.subsequences[i] for i in sort_idx]
+        filtered_subseqs = [subsequence_results.subsequences[i] for i in sort_idx]
         filtered_data = results.loc[sort_idx].reset_index(drop=True)
         
         result = SubsequenceList(
-            subseq.eseq, filtered_subseqs, filtered_data, subseq.constraint, type="chisq"
+            subsequence_results.eseq, filtered_subseqs, filtered_data, subsequence_results.constraint, type="chisq"
         )
-        result.labels = np.unique(group)
-        result.bonferroni = {'used': bonferroni, 'ntest': len(subseq)}
+        result.labels = np.unique(group_labels)
+        result.bonferroni = {'used': bonferroni, 'ntest': len(subsequence_results)}
         
         return result
     
     finally:
         if not weighted:
-            subseq.eseq.weights = original_weights
+            subsequence_results.eseq.weights = original_weights
 
 
-def convert_event_sequences_to_tse(eseq: EventSequenceList) -> pd.DataFrame:
+def convert_event_sequences_to_tse(event_sequences: EventSequenceList) -> pd.DataFrame:
     """
     Convert an EventSequenceList to TraMineR-style TSE (Time-Stamped Event) format.
 
     TraMineR equivalent: seqe2tse()
+    TraMineR parameter mapping: ``event_sequences`` -> ``eseq``.
 
     The resulting DataFrame has three columns:
         - 'id'      : individual identifier
@@ -746,7 +840,7 @@ def convert_event_sequences_to_tse(eseq: EventSequenceList) -> pd.DataFrame:
     - Timestamps are taken as-is from the EventSequence objects.
     """
     rows = []
-    for seq in eseq.sequences:
+    for seq in event_sequences.sequences:
         # For each event in the sequence, create one TSE row
         for t, e in zip(seq.timestamps, seq.events):
             # Map integer code back to event label using dictionary
@@ -772,7 +866,7 @@ def convert_event_sequences_to_tse(eseq: EventSequenceList) -> pd.DataFrame:
 
 
 def compute_event_transition_matrix(
-    eseq: EventSequenceList,
+    event_sequences: EventSequenceList,
     weighted: bool = True,
     normalize: bool = True,
 ) -> pd.DataFrame:
@@ -780,6 +874,8 @@ def compute_event_transition_matrix(
     Compute the event transition matrix for an EventSequenceList.
 
     TraMineR equivalent: seqetm()
+    TraMineR parameter mapping: ``event_sequences`` -> ``eseq``,
+    ``weighted`` -> ``weighted``.
 
     This function counts how often each ordered pair of events (i -> j)
     occurs across all sequences and optionally normalizes the counts
@@ -787,11 +883,11 @@ def compute_event_transition_matrix(
 
     Parameters
     ----------
-    eseq : EventSequenceList
+    event_sequences : EventSequenceList
         Collection of event sequences.
     weighted : bool, default True
         If True, each sequence contributes according to its weight stored in
-        eseq.weights. If False, all sequences are equally weighted.
+        event_sequences.weights. If False, all sequences are equally weighted.
     normalize : bool, default True
         If True, each row of the resulting matrix is normalized so that:
             sum_j P(i -> j) = 1  (when row i has at least one outgoing transition)
@@ -806,7 +902,7 @@ def compute_event_transition_matrix(
             - the weighted count of transitions i -> j       (normalize=False), or
             - the transition probability P(i -> j)           (normalize=True).
     """
-    n_events = len(eseq.dictionary)
+    n_events = len(event_sequences.dictionary)
     if n_events == 0:
         return pd.DataFrame()
 
@@ -815,12 +911,12 @@ def compute_event_transition_matrix(
 
     # Decide which weights to use
     if weighted:
-        weights = eseq.weights
+        weights = event_sequences.weights
     else:
-        weights = np.ones(eseq.n_sequences, dtype=np.float64)
+        weights = np.ones(event_sequences.n_sequences, dtype=np.float64)
 
     # Loop over sequences and accumulate transitions
-    for idx, seq in enumerate(eseq.sequences):
+    for idx, seq in enumerate(event_sequences.sequences):
         w = float(weights[idx])
         # Need at least two events to define a transition
         if len(seq.events) < 2 or w == 0.0:
@@ -836,7 +932,7 @@ def compute_event_transition_matrix(
                 counts[src_code - 1, dst_code - 1] += w
 
     # Convert to DataFrame with readable labels
-    labels = list(eseq.dictionary)
+    labels = list(event_sequences.dictionary)
     tm = pd.DataFrame(counts, index=labels, columns=labels, dtype=float)
 
     if normalize:
@@ -849,14 +945,17 @@ def compute_event_transition_matrix(
 
 
 def check_event_subsequence_containment(
-    eseq: EventSequenceList,
-    subseq: Union[EventSequence, str],
-    constraint: Optional[EventSequenceConstraint] = None,
+    event_sequences: EventSequenceList,
+    target_subsequence: Union[EventSequence, str],
+    search_constraint: Optional[EventSequenceConstraint] = None,
 ) -> pd.Series:
     """
     Check whether each event sequence contains a given subsequence.
 
     TraMineR equivalent: seqecontain()
+    TraMineR parameter mapping: ``event_sequences`` -> ``eseq``,
+    ``target_subsequence`` -> ``subseq``,
+    ``search_constraint`` -> ``constraint``.
 
     This is a high-level convenience wrapper built on top of the internal
     subsequence search utilities. It returns a boolean indicator for each
@@ -864,14 +963,14 @@ def check_event_subsequence_containment(
 
     Parameters
     ----------
-    eseq : EventSequenceList
+    event_sequences : EventSequenceList
         Collection of event sequences to be scanned.
-    subseq : EventSequence or str
+    target_subsequence : EventSequence or str
         Target subsequence specification:
         - If EventSequence: used directly, its dictionary must be compatible
-          with eseq.dictionary.
+          with event_sequences.dictionary.
         - If str: parsed using the same syntax as TraMineR, e.g. "(A)-(B,C)".
-    constraint : EventSequenceConstraint, optional
+    search_constraint : EventSequenceConstraint, optional
         Time and counting constraints controlling what counts as a valid
         occurrence (maximum gap, window size, age limits, etc.). When None,
         a default unconstrained EventSequenceConstraint is used.
@@ -883,26 +982,26 @@ def check_event_subsequence_containment(
         - True  : subsequence occurs at least once in the sequence
         - False : subsequence does not occur
     """
-    if constraint is None:
-        constraint = EventSequenceConstraint()
+    if search_constraint is None:
+        search_constraint = EventSequenceConstraint()
 
     # Ensure we have an EventSequence representation of the target subsequence
-    if isinstance(subseq, EventSequence):
-        target = subseq
-    elif isinstance(subseq, str):
-        target = _parse_subsequence_string(subseq, eseq.dictionary)
+    if isinstance(target_subsequence, EventSequence):
+        target = target_subsequence
+    elif isinstance(target_subsequence, str):
+        target = _parse_subsequence_string(target_subsequence, event_sequences.dictionary)
     else:
         raise TypeError(
-            "subseq must be either an EventSequence or a subsequence string "
+            "target_subsequence must be either an EventSequence or a subsequence string "
             "such as '(A)-(B,C)'."
         )
 
     results = []
-    for seq in eseq.sequences:
+    for seq in event_sequences.sequences:
         present = _find_subsequence_presence(
             subseq_seq=target,
             seq=seq,
-            constraint=constraint,
+            constraint=search_constraint,
         )
         results.append(bool(present))
 
@@ -913,13 +1012,61 @@ def check_event_subsequence_containment(
 # Internal Helper Functions
 # ============================================================================
 
-def _state_to_event_sequence(seqdata, tevent, use_labels, weighted, end_event, alphabet=None):
+def _tevent_grid_lookup(tevent_matrix, i0: int, j0: int, n_states: int) -> str:
+    """Event label at row i0, column j0 (0-based) in a full n×n event_representation grid."""
+    if isinstance(tevent_matrix, np.ndarray):
+        if event_representation_matrix.ndim != 2:
+            raise ValueError("event_representation ndarray must be 2-D")
+        return str(tevent_matrix[i0, j0])
+    return str(tevent_matrix[i0 * n_states + j0])
+
+
+def _is_full_nxn_tevent(tevent_matrix, n_states: int) -> bool:
+    """True if event_representation is an n×n grid (ndarray or row-major flat list of length n²)."""
+    if isinstance(tevent_matrix, np.ndarray):
+        return event_representation_matrix.ndim == 2 and event_representation_matrix.shape == (n_states, n_states)
+    if isinstance(tevent_matrix, (list, tuple)):
+        return len(tevent_matrix) == n_states * n_states
+    return False
+
+
+def _initial_event_label(seqdata, event_representation, event_representation_matrix, state_code, n_states: int) -> str:
+    """Label for entering the first observed state (time 0); diagonal of event_representation grid."""
+    j = int(state_code) - 1
+    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(tevent_matrix, n_states):
+        return _tevent_grid_lookup(tevent_matrix, j, j, n_states)
+    return str(seqdata.states[j])
+
+
+def _transition_event_label(seqdata, event_representation, event_representation_matrix, prev_code, state_code, n_states: int) -> str:
+    """Label for a change from prev_code to state_code."""
+    i = int(prev_code) - 1
+    j = int(state_code) - 1
+    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(tevent_matrix, n_states):
+        return _tevent_grid_lookup(tevent_matrix, i, j, n_states)
+    if event_representation == "state":
+        return str(seqdata.states[j])
+    if event_representation == "transition":
+        return f"{seqdata.states[i]}>{seqdata.states[j]}"
+    if event_representation == "period":
+        return f"end{seqdata.states[i]},begin{seqdata.states[j]}"
+    return f"{seqdata.states[i]}>{seqdata.states[j]}"
+
+
+def _state_to_event_sequence(
+    seqdata,
+    event_representation,
+    use_labels,
+    weighted,
+    end_event,
+    event_labels_order=None,
+):
     """Convert a state sequence (SequenceData) to an event sequence.
 
-    Aligned with TraMineR seqecreate(tevent=...) via seqformat(STS->TSE) and seqetm():
-    - First event: initial state at time 0 (diagonal of tevent matrix).
+    Aligned with TraMineR seqecreate(event_representation=...) via seqformat(STS->TSE) and seqetm():
+    - First event: initial state at time 0 (diagonal of event_representation matrix).
     - Transition events: at times 1, 2, ... (j in 1:(slength-1) in STS_to_TSE).
-    - Event dictionary: observed events only (matches alphabet(eseq) when alphabet=None).
+    - Event dictionary: observed events only (matches event_labels_order(eseq) when event_labels_order=None).
     """
     from sequenzo.define_sequence_data import SequenceData
     
@@ -927,17 +1074,18 @@ def _state_to_event_sequence(seqdata, tevent, use_labels, weighted, end_event, a
         raise TypeError("seqdata must be a SequenceData object")
     
     # Get transition matrix
-    if isinstance(tevent, str):
-        tevent_matrix = _create_transition_matrix(seqdata, tevent, use_labels)
-    elif isinstance(tevent, np.ndarray):
-        tevent_matrix = tevent
+    if isinstance(event_representation, str):
+        event_representation_matrix = _create_transition_matrix(seqdata, event_representation, use_labels)
+    elif isinstance(event_representation, np.ndarray):
+        event_representation_matrix = event_representation
     else:
-        raise TypeError("tevent must be a string or numpy array")
+        raise TypeError("event_representation must be a string or numpy array")
     
     # Convert state sequence to TSE format
     sequences = []
     seq_matrix = seqdata.seqdata.values
     ids = seqdata.ids
+    n_states = len(seqdata.states)
 
     # First pass: collect observed events (transitions + initial state per sequence, to match TraMineR)
     observed_events = set()
@@ -947,42 +1095,62 @@ def _state_to_event_sequence(seqdata, tevent, use_labels, weighted, end_event, a
             if pd.isna(state):
                 continue
             if prev_state is None:
-                observed_events.add(str(state))  # TraMineR includes initial state in alphabet
+                observed_events.add(
+                    _initial_event_label(seqdata, event_representation, event_representation_matrix, state, n_states)
+                )
             if prev_state is not None and state != prev_state:
-                if tevent == "transition":
-                    event_name = f"{prev_state}>{state}"
-                elif tevent == "state":
-                    event_name = str(state)
-                elif tevent == "period":
-                    event_name = f"end{prev_state},begin{state}"
-                else:
-                    event_name = f"{prev_state}>{state}"
-                observed_events.add(event_name)
+                observed_events.add(
+                    _transition_event_label(seqdata, event_representation, event_representation_matrix, prev_state, state, n_states)
+                )
             prev_state = state
 
-    # Build event dictionary: use provided alphabet order (e.g. TraMineR) or sorted observed
-    if alphabet is not None:
-        dictionary = [x for x in alphabet if x in observed_events]
+    # Build event dictionary:
+    # - If user provided event_labels_order, keep that order (then append any observed extras)
+    # - Otherwise, prefer transition-matrix order (TraMineR-like), not lexical sorting.
+    if event_labels_order is not None:
+        dictionary = [x for x in event_labels_order if x in observed_events]
         if set(dictionary) != observed_events:
             for x in sorted(observed_events):
                 if x not in dictionary:
                     dictionary.append(x)
     else:
-        dictionary = sorted(list(observed_events))
+        ordered = []
+        # event_representation_matrix can be a list/array of candidate event names
+        try:
+            if isinstance(tevent_matrix, np.ndarray):
+                flat = event_representation_matrix.ravel().tolist()
+            else:
+                flat = list(tevent_matrix)
+        except Exception:
+            flat = []
+
+        for ev in flat:
+            evs = str(ev)
+            if evs in observed_events and evs not in ordered:
+                ordered.append(evs)
+
+        # Keep deterministic completion for any event not present in event_representation ordering
+        for ev in sorted(observed_events):
+            if ev not in ordered:
+                ordered.append(ev)
+
+        dictionary = ordered
 
     # Convert each sequence
     for idx, (seq_id, seq_row) in enumerate(zip(ids, seq_matrix)):
         timestamps = []
         events = []
 
-        # First event: initial state at time 0 (TraMineR STS_to_TSE: "First status=> entrance event", times[myi] <- 0)
+        # First event: initial state at time 0 (TraMineR STS_to_TSE: diagonal event_representation cell)
         prev_state = None
         for state in seq_row:
             if pd.isna(state):
                 continue
-            if prev_state is None and str(state) in dictionary:
-                timestamps.append(0.0)
-                events.append(dictionary.index(str(state)) + 1)
+            if prev_state is None:
+                init_label = _initial_event_label(seqdata, event_representation, event_representation_matrix, state, n_states)
+                if init_label in dictionary:
+                    timestamps.append(0.0)
+                    events.append(dictionary.index(init_label) + 1)
             prev_state = state
 
         # Then transitions at times 1, 2, ... (TraMineR: times[myi] <- j for j in 1:(slength-1))
@@ -992,14 +1160,9 @@ def _state_to_event_sequence(seqdata, tevent, use_labels, weighted, end_event, a
                 continue
 
             if prev_state is not None and state != prev_state:
-                if tevent == "transition":
-                    event_name = f"{prev_state}>{state}"
-                elif tevent == "state":
-                    event_name = str(state)
-                elif tevent == "period":
-                    event_name = f"end{prev_state},begin{state}"
-                else:
-                    event_name = f"{prev_state}>{state}"
+                event_name = _transition_event_label(
+                    seqdata, event_representation, event_representation_matrix, prev_state, state, n_states
+                )
 
                 if event_name in dictionary:
                     # TraMineR: times[myi] <- j for j in 1:(slength-1); j is 1-based index of first state
@@ -1024,8 +1187,52 @@ def _state_to_event_sequence(seqdata, tevent, use_labels, weighted, end_event, a
     
     if hasattr(seqdata, 'seqdata'):
         lengths = np.array([len(seq) for seq in seqdata.seqdata.values])
-    
-    return EventSequenceList(sequences, dictionary, weights=weights, lengths=lengths)
+
+    eseq_list = EventSequenceData(sequences, dictionary, weights=weights, lengths=lengths)
+
+    # ------------------------------------------------------------------
+    # Attach state-consistent event colors when source is SequenceData.
+    # This ensures event-sequence plots can reuse the same color semantics
+    # as state-sequence plots (e.g., A/B/C/D keep identical colors).
+    # ------------------------------------------------------------------
+    event_color_map = {}
+    try:
+        state_color_map = getattr(seqdata, "color_map", None)  # keys are 1..K
+        if isinstance(state_color_map, dict) and state_color_map:
+            for ev in dictionary:
+                s_code = None
+                ev_str = str(ev)
+
+                # Event is a raw state (e.g., "1", "A")
+                if ev_str.isdigit():
+                    s_code = int(ev_str)
+                # Transition event (e.g., "1>3"): use destination state's color
+                elif ">" in ev_str:
+                    right = ev_str.split(">")[-1].strip()
+                    if right.isdigit():
+                        s_code = int(right)
+                    elif hasattr(seqdata, "state_mapping") and right in seqdata.state_mapping:
+                        s_code = seqdata.state_mapping[right]
+                # Period event (e.g., "end1,begin3"): use begin state's color
+                elif "begin" in ev_str:
+                    marker = "begin"
+                    idx = ev_str.rfind(marker)
+                    tail = ev_str[idx + len(marker):].strip() if idx >= 0 else ""
+                    # Keep only trailing digits if mixed punctuation exists
+                    digits = "".join(ch for ch in tail if ch.isdigit())
+                    if digits:
+                        s_code = int(digits)
+                    elif tail and hasattr(seqdata, "state_mapping") and tail in seqdata.state_mapping:
+                        s_code = seqdata.state_mapping[tail]
+
+                if s_code is not None and s_code in state_color_map:
+                    event_color_map[ev] = state_color_map[s_code]
+    except Exception:
+        # If any mapping step fails, plotting falls back to default palettes.
+        event_color_map = {}
+
+    eseq_list.event_color_map = event_color_map
+    return eseq_list
 
 
 def _create_transition_matrix(seqdata, method, use_labels):
@@ -1079,11 +1286,11 @@ def _search_specific_subsequences(eseq: EventSequenceList,
     constraint_presence = EventSequenceConstraint(count_method=1)
     counts = count_subsequence_occurrences(
         SubsequenceList(eseq, subsequences, pd.DataFrame(), constraint, "user"),
-        method="presence", constraint=constraint
+        counting_method="presence", search_constraint=constraint
     )
     counts_distinct = count_subsequence_occurrences(
         SubsequenceList(eseq, subsequences, pd.DataFrame(), constraint, "user"),
-        method="count", constraint=constraint
+        counting_method="count", search_constraint=constraint
     )
     
     # Calculate support
@@ -1153,7 +1360,7 @@ def _find_frequent_subsequences(eseq: EventSequenceList,
         subseq = EventSequence(-1, np.array([1.0]), np.array([event_code]), eseq.dictionary)
         count_array = count_subsequence_occurrences(
             SubsequenceList(eseq, [subseq], pd.DataFrame(), constraint, "frequent"),
-            method="presence"
+            counting_method="presence"
         )
         support = np.sum(eseq.weights * count_array[:, 0])
         
@@ -1176,7 +1383,7 @@ def _find_frequent_subsequences(eseq: EventSequenceList,
                     )
                     count_array = count_subsequence_occurrences(
                         SubsequenceList(eseq, [subseq], pd.DataFrame(), constraint, "frequent"),
-                        method="presence"
+                        counting_method="presence"
                     )
                     support = np.sum(eseq.weights * count_array[:, 0])
                     
@@ -1354,7 +1561,7 @@ def _chi_square_tests(subseq: SubsequenceList,
         raise ImportError("scipy is required for compare_groups. Please install scipy.")
     
     # Get presence matrix
-    presence_matrix = count_subsequence_occurrences(subseq, method="presence")
+    presence_matrix = count_subsequence_occurrences(subseq, counting_method="presence")
     
     group_factor = pd.Categorical(group)
     n_groups = len(group_factor.categories)

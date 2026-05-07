@@ -89,7 +89,7 @@ def test_find_frequent_subsequences(lsog_eseq):
 def test_count_subsequence_occurrences(lsog_eseq):
     """count_subsequence_occurrences returns matrix of correct shape."""
     fsub = find_frequent_subsequences(lsog_eseq, min_support=2)
-    pres = count_subsequence_occurrences(fsub, method="presence")
+    pres = count_subsequence_occurrences(fsub, counting_method="presence")
     assert pres.shape[0] == len(lsog_eseq)
     assert pres.shape[1] == len(fsub)
     assert np.all((pres == 0) | (pres == 1))
@@ -103,7 +103,7 @@ def test_compare_groups(lsog_eseq):
     # Use sex as group (from dyadic_children: column 'sex')
     df = load_dataset("dyadic_children").head(20)
     group = df["sex"].values  # 0/1
-    discr = compare_groups(fsub, group, method="chisq", pvalue_limit=1.0)
+    discr = compare_groups(fsub, group, test_method="chisq", pvalue_threshold=1.0)
     assert discr is not None
     if len(discr) > 0:
         assert "p.value" in discr.data.columns
@@ -179,7 +179,7 @@ def test_event_sequences_match_traminer_fsub(lsog_seqdata):
 
     ref_data = ref_sup[["Support", "Count"]].copy()
     subseq_list = SubsequenceList(eseq, subsequences, ref_data, constraint, "frequent")
-    pres = count_subsequence_occurrences(subseq_list, method="presence")
+    pres = count_subsequence_occurrences(subseq_list, counting_method="presence")
 
     total_weight = np.sum(eseq.weights)
     our_support = np.sum(eseq.weights[:, np.newaxis] * pres, axis=0) / total_weight
@@ -212,7 +212,7 @@ def test_event_sequences_match_traminer_applysub(lsog_seqdata):
 
     ref_data = ref_sup[["Support", "Count"]].copy()
     subseq_list = SubsequenceList(eseq, subsequences, ref_data, constraint, "frequent")
-    pres = count_subsequence_occurrences(subseq_list, method="presence")
+    pres = count_subsequence_occurrences(subseq_list, counting_method="presence")
 
     assert pres.shape == ref_mat.shape, (
         f"applysub shape: Sequenzo={pres.shape}, TraMineR={ref_mat.shape}"

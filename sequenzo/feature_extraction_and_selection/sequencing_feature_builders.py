@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 
 from sequenzo.event_sequences import (
+    EventSequenceData,
     EventSequenceConstraint,
     count_subsequence_occurrences,
-    create_event_sequences,
     find_frequent_subsequences,
 )
 
@@ -74,15 +74,15 @@ def build_sequencing_features(
         event_label_mode=event_label_mode,
         use_start_time=use_start_time,
     )
-    eseq = create_event_sequences(data=tse, tevent="transition", weighted=weighted)
+    eseq = EventSequenceData.from_tse(data=tse)
     if constraint is None:
         constraint = EventSequenceConstraint()
 
     if isinstance(min_support, float) and 0 < min_support <= 1:
         fsub = find_frequent_subsequences(
             eseq,
-            pmin_support=min_support,
-            constraint=constraint,
+            min_support_ratio=min_support,
+            search_constraint=constraint,
             max_k=max_k,
             weighted=weighted,
         )
@@ -90,7 +90,7 @@ def build_sequencing_features(
         fsub = find_frequent_subsequences(
             eseq,
             min_support=int(min_support),
-            constraint=constraint,
+            search_constraint=constraint,
             max_k=max_k,
             weighted=weighted,
         )
@@ -99,7 +99,11 @@ def build_sequencing_features(
         fsub.subsequences = fsub.subsequences[:top_mined_subsequences]
         fsub.data = fsub.data.iloc[:top_mined_subsequences].reset_index(drop=True)
 
-    counts = count_subsequence_occurrences(fsub, method=count_method, constraint=constraint)
+    counts = count_subsequence_occurrences(
+        fsub,
+        counting_method=count_method,
+        search_constraint=constraint,
+    )
     feature_names: List[str] = []
     for sub in fsub.subsequences:
         name = _sanitize_event_string(getattr(sub, "to_string", lambda: str(sub))())

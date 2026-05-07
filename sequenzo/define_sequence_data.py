@@ -199,6 +199,32 @@ class SequenceData:
     def __repr__(self):
         return f"SequenceData({len(self.seqdata)} sequences, States: {self.states})"
 
+    def to_event_sequences(
+        self,
+        event_representation: Union[str, np.ndarray] = "transition",
+        use_labels: bool = True,
+        weighted: bool = True,
+        end_event: str = None,
+        event_labels_order: list = None,
+    ):
+        """
+        Convert this ``SequenceData`` object into event sequences.
+
+        This is a convenience bridge to ``sequenzo.event_sequences.EventSequenceData``
+        so users can move from state-sequence analysis to event-sequence analysis
+        with a single method call.
+        """
+        from sequenzo.event_sequences import EventSequenceData
+
+        return EventSequenceData.from_state_sequences(
+            seqdata=self,
+            event_representation=event_representation,
+            use_labels=use_labels,
+            weighted=weighted,
+            end_event=end_event,
+            event_labels_order=event_labels_order,
+        )
+
     def _validate_parameters(self):
         """Ensures correct input parameters and checks consistency with data."""
         # Check states, alphabet, labels

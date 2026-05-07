@@ -1,0 +1,140 @@
+---
+title: "Event Sequence Visualization Case Study (R / TraMineR)"
+subtitle: "Reference visual outputs for side-by-side comparison with Sequenzo Python"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+---
+
+## Goal
+
+This tutorial demonstrates the key **event-sequence visualizations** in the original R ecosystem:
+
+- `seqpcplot()` / `plot(seqelist, type = "pc")`
+- `plot.subseqelist()`
+- `plot.subseqelistchisq()`
+- `seqedplot(type = "survival" | "hazard")`
+
+The purpose is to produce a clear R baseline so that your audience can compare it directly with the Python notebook in the same folder.
+
+## 1) Load packages and data
+
+```{r}
+#| label: setup
+#| eval: true
+suppressPackageStartupMessages({
+  library(TraMineR)
+  library(TraMineRextras)
+})
+
+# Use built-in TraMineR example datasets
+data(actcal)      # state-sequence style table
+data(actcal.tse)  # time-stamped event format
+
+cat("Rows in actcal:", nrow(actcal), "\n")
+cat("Rows in actcal.tse:", nrow(actcal.tse), "\n")
+head(actcal.tse)
+```
+
+## 2) Build state sequence and event sequence objects
+
+```{r}
+#| label: build-sequences
+#| eval: true
+# State sequences from monthly activity columns
+actcal.seq <- seqdef(actcal[, 13:24])
+
+# Transition matrix and event sequence object
+transition <- seqetm(actcal.seq, method = "transition")
+transition[1, 1:4] <- c("FullTime", "Decrease,PartTime", "Decrease,LowPartTime", "Stop")
+transition[2, 1:4] <- c("Increase,FullTime", "PartTime", "Decrease,LowPartTime", "Stop")
+transition[3, 1:4] <- c("Increase,FullTime", "Increase,PartTime", "LowPartTime", "Stop")
+transition[4, 1:4] <- c("Start,FullTime", "Start,PartTime", "Start,LowPartTime", "NoActivity")
+
+actcal.eseq <- seqecreate(actcal.seq, event_representation = transition)
+actcal.eseq
+alphabet(actcal.eseq)
+```
+
+## 3) Frequent subsequences and discriminating subsequences
+
+```{r}
+#| label: frequent-subseq
+#| eval: true
+# Frequent subsequences with support >= 1%
+fsub <- seqefsub(actcal.eseq, pmin.support = 0.01)
+fsub
+head(fsub$data, 10)
+
+# Group comparison by sex (Bonferroni-corrected chi-square)
+discr <- seqecmpgroup(fsub, group = actcal$sex, method = "bonferroni")
+discr
+head(discr$data, 10)
+```
+
+## 4) Visualization A — Parallel coordinates (`seqpcplot`)
+
+```{r}
+#| label: plot-seqpc
+#| eval: true
+#| fig-cap: "TraMineR event-sequence parallel coordinates (overall and by sex)."
+par(mfrow = c(1, 2))
+seqpcplot(actcal.eseq, main = "seqpcplot: all sequences")
+# seqpcplot(actcal.eseq, group = actcal$sex, main = "seqpcplot: grouped by sex")
+par(mfrow = c(1, 1))
+```
+
+## 5) Visualization B — Frequent subsequence bars (`plot.subseqelist`)
+
+```{r}
+#| label: plot-subseqelist
+#| eval: true
+#| fig-cap: "Top frequent subsequences by support and by count."
+par(mfrow = c(1, 2))
+plot(fsub[1:12], main = "plot.subseqelist (Support)")
+plot(fsub[1:12], freq = fsub$data$Count[1:12], main = "plot.subseqelist (Count)")
+par(mfrow = c(1, 1))
+```
+
+## 6) Visualization C — Group discriminating subsequences (`plot.subseqelistchisq`)
+
+```{r}
+#| label: plot-subseqelistchisq
+#| eval: true
+#| fig-cap: "Discriminating subsequences: frequency and Pearson residual views."
+par(mfrow = c(1, 2))
+plot(discr[1:10], ptype = "freq")
+plot(discr[1:10], ptype = "resid")
+par(mfrow = c(1, 1))
+```
+
+## 7) Visualization D — Event survival/hazard (`seqedplot`)
+
+```{r}
+#| label: plot-seqed
+#| eval: true
+#| fig-cap: "Event-sequence survival and hazard visualizations from TraMineRextras."
+# Keep first 200 ids for fast rendering and cleaner visuals
+actcal.tse.small <- actcal.tse[1:200, ]
+iseq <- unique(actcal.tse.small$id)
+actcal.small <- actcal[rownames(actcal) %in% iseq, ]
+
+actcal.seqe.small <- seqecreate(actcal.tse.small)
+seqelength(actcal.seqe.small) <- rep(12, length(iseq))
+
+par(mfrow = c(1, 2))
+seqedplot(actcal.seqe.small, type = "survival", group = actcal.small$sex, lwd = 2)
+seqedplot(actcal.seqe.small, type = "hazard", breaks = 6, group = actcal.small$sex, lwd = 2)
+par(mfrow = c(1, 1))
+```
+
+## Notes for comparison
+
+- This file is the **R reference**.
+- The Python counterpart in this folder reproduces the same four visualization families with Sequenzo.
+- For fair comparison in your presentation, keep:
+  - same subset size,
+  - same grouping variable,
+  - similar color palette and figure size.

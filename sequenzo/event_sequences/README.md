@@ -5,7 +5,7 @@ This module provides a dedicated, easy-to-find entrypoint for event-sequence ana
 It is designed to be explicit and TraMineR-friendly:
 - focused namespace: `sequenzo.event_sequences`
 - clear mapping from TraMineR names to Sequenzo names
-- lightweight compatibility helpers (`is_eseq`, `is_seqelist`, `seqelength`, `seqeweight`)
+- lightweight helper utilities (`is_event_sequence`, `is_event_sequence_collection`, `get_event_sequence_lengths`, `get_event_sequence_weights`)
 
 ## Why This Module Exists
 
@@ -33,19 +33,19 @@ If your task is "history/modeling of transitions", use `with_event_history_analy
 
 ```python
 from sequenzo.event_sequences import (
-    create_event_sequences,
+    EventSequenceData,
     find_frequent_subsequences,
     compare_groups,
-    is_eseq,
-    is_seqelist,
-    seqelength,
-    seqeweight,
+    is_event_sequence,
+    is_event_sequence_collection,
+    get_event_sequence_lengths,
+    get_event_sequence_weights,
 )
 ```
 
 ## TraMineR Mapping
 
-- `seqecreate()` -> `create_event_sequences()`
+- `seqecreate()` -> `EventSequenceData.from_tse()` / `EventSequenceData.from_state_sequences()`
 - `seqefsub()` -> `find_frequent_subsequences()`
 - `seqeapplysub()` -> `count_subsequence_occurrences()`
 - `seqecmpgroup()` -> `compare_groups()`
@@ -55,26 +55,99 @@ from sequenzo.event_sequences import (
 - `seqelist` -> `EventSequenceList`
 - `eseq` -> `EventSequence`
 
-## About `is.eseq()` / `is.seqelist()`
+## Recommended Constructor Pattern
 
-TraMineR uses R-style type check helpers:
-- `is.eseq()`
-- `is.seqelist()`
+- Preferred object-oriented API:
+  - `EventSequenceData.from_tse(...)`
+  - `EventSequenceData.from_state_sequences(seqdata, ...)`
+
+## Visualization API (Unified Common Parameters)
+
+Event-sequence plotting functions now share a common set of practical plotting arguments:
+
+- `save_as`: output file path (auto-appends `.png` if extension is missing)
+- `dpi`: save resolution (default `200`)
+- `show`: whether to call `plt.show()` inside the function (default `False`)
+- `x_label` / `y_label`: axis label overrides (where applicable)
+
+Supported plotting functions:
+
+- `plot_event_parallel_coordinates(...)`
+- `plot_subsequence_frequencies(...)`
+- `plot_subsequence_group_contrasts(...)`
+- `plot_event_dynamics(...)`
+
+Example:
+
+```python
+from sequenzo.event_sequences import (
+    plot_event_parallel_coordinates,
+    plot_subsequence_frequencies,
+    plot_subsequence_group_contrasts,
+    plot_event_dynamics,
+)
+
+# Parallel coordinates
+fig = plot_event_parallel_coordinates(
+    eseq,
+    group_labels=group,
+    x_label="Position",
+    y_label="Event",
+    save_as="outputs/event_parallel_by_group",
+    dpi=300,
+    show=True,
+)
+
+# Frequent subsequences
+fig = plot_subsequence_frequencies(
+    fsub[:12],
+    x_label="Support",
+    y_label="Subsequence",
+    save_as="outputs/subsequence_support_top12",
+    dpi=300,
+    show=True,
+)
+
+# Group contrasts
+fig = plot_subsequence_group_contrasts(
+    discr[:10],
+    plot_type="resid",
+    x_label="Pearson residual",
+    y_label="Subsequence",
+    save_as="outputs/subsequence_group_contrasts_resid",
+    dpi=300,
+    show=True,
+)
+
+# Event dynamics (survival/hazard)
+fig = plot_event_dynamics(
+    eseq,
+    group_labels=group,
+    curve_type="hazard",
+    x_label="Time",
+    y_label="Mean number of events",
+    save_as="outputs/event_dynamics_hazard",
+    dpi=300,
+    show=True,
+)
+```
+
+## About Type Checks
 
 In Python, idiomatic checking is `isinstance(...)`.
-This module supports both styles:
+This module provides explicit helper names:
 
-- `isinstance(x, EventSequence)` is equivalent to `is_eseq(x)`
-- `isinstance(x, EventSequenceList)` is equivalent to `is_seqelist(x)`
+- `is_event_sequence(x)`
+- `is_event_sequence_collection(x)`
 
 ## Length and Weight Helpers
 
 For convenience and TraMineR-style readability:
 
-- `seqelength(obj)`
+- `get_event_sequence_lengths(obj)`
   - `EventSequence` -> scalar length
   - `EventSequenceList` -> vector of lengths
-- `seqeweight(seqelist)` -> vector of sequence weights
+- `get_event_sequence_weights(seqelist)` -> vector of sequence weights
 
 ## Notes
 

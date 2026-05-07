@@ -100,7 +100,7 @@ def test_compute_event_transition_matrix_simple_counts(small_eseq_from_tse):
     All other cells are zero.
     """
     eseq, _ = small_eseq_from_tse
-    tm = compute_event_transition_matrix(eseq, weighted=True, normalize=False)
+    tm = compute_event_transition_matrix(eseq, use_weights=True, normalize=False)
 
     # Ensure we have the expected alphabet ordering
     assert list(tm.index) == eseq.dictionary
@@ -124,7 +124,7 @@ def test_compute_event_transition_matrix_row_normalization(small_eseq_from_tse):
     probability-normalised event transition matrix.
     """
     eseq, _ = small_eseq_from_tse
-    tm = compute_event_transition_matrix(eseq, weighted=True, normalize=True)
+    tm = compute_event_transition_matrix(eseq, use_weights=True, normalize=True)
 
     row_sums = tm.sum(axis=1).values
 
@@ -158,8 +158,8 @@ def test_check_event_subsequence_containment_basic():
     # Use the same subsequence string syntax that TraMineR expects
     contains = check_event_subsequence_containment(
         eseq,
-        subseq="(A)-(B)",
-        constraint=constraint,
+        target_subsequence="(A)-(B)",
+        search_constraint=constraint,
     )
 
     assert len(contains) == len(eseq)
@@ -269,7 +269,7 @@ def test_compute_event_transition_matrix_traminer_reference(lsog_seqdata):
     )
     eseq = create_event_sequences(data=seqdata, tevent="transition")
 
-    etm_out = compute_event_transition_matrix(eseq, weighted=True, normalize=True)
+    etm_out = compute_event_transition_matrix(eseq, use_weights=True, normalize=True)
 
     ref_etm = ref["etm"].copy()
 
@@ -324,8 +324,8 @@ def test_check_event_subsequence_containment_traminer_reference(lsog_seqdata):
 
     contains = check_event_subsequence_containment(
         eseq,
-        subseq="(A)-(B)",  # must match the subsequence used in the R script
-        constraint=constraint,
+        target_subsequence="(A)-(B)",  # must match the subsequence used in the R script
+        search_constraint=constraint,
     )
 
     # Align and compare as boolean vectors

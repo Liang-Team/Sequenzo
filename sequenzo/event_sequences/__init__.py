@@ -17,6 +17,7 @@ from typing import Any
 from .core import (
     EventSequence,
     EventSequenceConstraint,
+    EventSequenceData,
     EventSequenceList,
     SubsequenceList,
     check_event_subsequence_containment,
@@ -24,25 +25,29 @@ from .core import (
     compute_event_transition_matrix,
     convert_event_sequences_to_tse,
     count_subsequence_occurrences,
-    create_event_sequences,
     find_frequent_subsequences,
 )
-from .visualization import plot_event_sequences, plot_subsequence_frequencies
+from .visualization import (
+    plot_event_dynamics,
+    plot_event_parallel_coordinates,
+    plot_subsequence_frequencies,
+    plot_subsequence_group_contrasts,
+)
 
 
-def is_eseq(obj: Any) -> bool:
-    """TraMineR-style type check for a single event sequence."""
+def is_event_sequence(obj: Any) -> bool:
+    """Type check for a single event sequence."""
     return isinstance(obj, EventSequence)
 
 
-def is_seqelist(obj: Any) -> bool:
-    """TraMineR-style type check for an event-sequence collection."""
+def is_event_sequence_collection(obj: Any) -> bool:
+    """Type check for an event-sequence collection."""
     return isinstance(obj, EventSequenceList)
 
 
-def seqelength(obj: EventSequence | EventSequenceList):
+def get_event_sequence_lengths(obj: EventSequence | EventSequenceList):
     """
-    TraMineR-style sequence length helper.
+    Get sequence length information.
 
     - EventSequence -> int
     - EventSequenceList -> numpy array of per-sequence lengths
@@ -51,18 +56,17 @@ def seqelength(obj: EventSequence | EventSequenceList):
         return len(obj)
     if isinstance(obj, EventSequenceList):
         return obj.lengths
-    raise TypeError("seqelength expects EventSequence or EventSequenceList.")
+    raise TypeError("get_event_sequence_lengths expects EventSequence or EventSequenceList.")
 
 
-def seqeweight(obj: EventSequenceList):
-    """TraMineR-style weight accessor for EventSequenceList."""
+def get_event_sequence_weights(obj: EventSequenceList):
+    """Get sequence weights for an EventSequenceList."""
     if isinstance(obj, EventSequenceList):
         return obj.weights
-    raise TypeError("seqeweight expects EventSequenceList.")
+    raise TypeError("get_event_sequence_weights expects EventSequenceList.")
 
 
 __all__ = [
-    "create_event_sequences",
     "find_frequent_subsequences",
     "count_subsequence_occurrences",
     "compare_groups",
@@ -70,13 +74,16 @@ __all__ = [
     "compute_event_transition_matrix",
     "check_event_subsequence_containment",
     "EventSequence",
+    "EventSequenceData",
     "EventSequenceList",
     "EventSequenceConstraint",
     "SubsequenceList",
-    "plot_event_sequences",
+    "plot_event_parallel_coordinates",
     "plot_subsequence_frequencies",
-    "is_eseq",
-    "is_seqelist",
-    "seqelength",
-    "seqeweight",
+    "plot_subsequence_group_contrasts",
+    "plot_event_dynamics",
+    "is_event_sequence",
+    "is_event_sequence_collection",
+    "get_event_sequence_lengths",
+    "get_event_sequence_weights",
 ]
