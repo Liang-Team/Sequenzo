@@ -1015,7 +1015,7 @@ def check_event_subsequence_containment(
 def _tevent_grid_lookup(tevent_matrix, i0: int, j0: int, n_states: int) -> str:
     """Event label at row i0, column j0 (0-based) in a full n×n event_representation grid."""
     if isinstance(tevent_matrix, np.ndarray):
-        if event_representation_matrix.ndim != 2:
+        if tevent_matrix.ndim != 2:
             raise ValueError("event_representation ndarray must be 2-D")
         return str(tevent_matrix[i0, j0])
     return str(tevent_matrix[i0 * n_states + j0])
@@ -1024,7 +1024,7 @@ def _tevent_grid_lookup(tevent_matrix, i0: int, j0: int, n_states: int) -> str:
 def _is_full_nxn_tevent(tevent_matrix, n_states: int) -> bool:
     """True if event_representation is an n×n grid (ndarray or row-major flat list of length n²)."""
     if isinstance(tevent_matrix, np.ndarray):
-        return event_representation_matrix.ndim == 2 and event_representation_matrix.shape == (n_states, n_states)
+        return tevent_matrix.ndim == 2 and tevent_matrix.shape == (n_states, n_states)
     if isinstance(tevent_matrix, (list, tuple)):
         return len(tevent_matrix) == n_states * n_states
     return False
@@ -1033,8 +1033,8 @@ def _is_full_nxn_tevent(tevent_matrix, n_states: int) -> bool:
 def _initial_event_label(seqdata, event_representation, event_representation_matrix, state_code, n_states: int) -> str:
     """Label for entering the first observed state (time 0); diagonal of event_representation grid."""
     j = int(state_code) - 1
-    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(tevent_matrix, n_states):
-        return _tevent_grid_lookup(tevent_matrix, j, j, n_states)
+    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(event_representation_matrix, n_states):
+        return _tevent_grid_lookup(event_representation_matrix, j, j, n_states)
     return str(seqdata.states[j])
 
 
@@ -1042,8 +1042,8 @@ def _transition_event_label(seqdata, event_representation, event_representation_
     """Label for a change from prev_code to state_code."""
     i = int(prev_code) - 1
     j = int(state_code) - 1
-    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(tevent_matrix, n_states):
-        return _tevent_grid_lookup(tevent_matrix, i, j, n_states)
+    if isinstance(event_representation, np.ndarray) or _is_full_nxn_tevent(event_representation_matrix, n_states):
+        return _tevent_grid_lookup(event_representation_matrix, i, j, n_states)
     if event_representation == "state":
         return str(seqdata.states[j])
     if event_representation == "transition":
@@ -1117,10 +1117,10 @@ def _state_to_event_sequence(
         ordered = []
         # event_representation_matrix can be a list/array of candidate event names
         try:
-            if isinstance(tevent_matrix, np.ndarray):
+            if isinstance(event_representation_matrix, np.ndarray):
                 flat = event_representation_matrix.ravel().tolist()
             else:
-                flat = list(tevent_matrix)
+                flat = list(event_representation_matrix)
         except Exception:
             flat = []
 
