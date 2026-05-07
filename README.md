@@ -76,7 +76,7 @@ Leverages Python’s computational power to achieve 8× faster processing than t
 🎯 **Easy-to-Use API**
 
 Designed with simplicity in mind: intuitive functions streamline complex sequence analysis without compromising flexibility.
-As a naming convention for beginners, try `get_*` first for analysis functions and `plot_*` first for visualization functions.
+As a naming convention for beginners, Sequenzo follows four prefixes: `get_*` (analysis), `build_*` (constructors/workflows), `plot_*` (visualization), and `test_*` (hypothesis/testing utilities).
 
 🌍 **Flexible for Any Scenario**
 

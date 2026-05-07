@@ -11,7 +11,9 @@ These tests do not replicate a specific published application but ensure that:
 
 import numpy as np
 
-from sequenzo.compare_differences import kob_decomposition
+from sequenzo.group_comparison import get_kob_decomposition
+
+kob_decomposition = get_kob_decomposition
 
 
 def test_kob_decomposition_identity_simple():

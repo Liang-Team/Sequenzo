@@ -44,14 +44,21 @@ import pandas as pd
 import numpy as np
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
-from sequenzo.compare_differences import (
-    compare_groups_across_positions,
-    plot_group_differences_across_positions,
-    print_group_differences_across_positions,
-    compare_groups_overall,
-    compute_likelihood_ratio_test,
-    compute_bayesian_information_criterion_test,
+from sequenzo.group_comparison import (
+    get_group_differences_by_position,
+    plot_group_differences_by_position,
+    get_group_differences_report_by_position,
+    get_group_differences_overall,
+    get_lrt_test,
+    get_bic_test,
 )
+
+compare_groups_across_positions = get_group_differences_by_position
+plot_group_differences_across_positions = plot_group_differences_by_position
+print_group_differences_across_positions = get_group_differences_report_by_position
+compare_groups_overall = get_group_differences_overall
+compute_likelihood_ratio_test = get_lrt_test
+compute_bayesian_information_criterion_test = get_bic_test
 
 
 # Test dataset setup - using dyadic_children (lsog)
