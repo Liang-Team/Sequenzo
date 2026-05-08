@@ -21,10 +21,6 @@ from sklearn.metrics import accuracy_score, r2_score
 from sequenzo.define_sequence_data import SequenceData
 
 from .boruta_feature_selection import select_all_relevant_features_boruta
-from .duration_timing_feature_builders import build_duration_features, build_timing_features
-from .monthly_state_to_spells import extract_spells_with_times
-from .sequencing_feature_builders import build_sequencing_features
-from .time_binning_utils import coerce_numeric_time_labels, make_equal_width_bins
 
 
 @dataclass(frozen=True)
@@ -46,6 +42,46 @@ class FeatureExtractionAndSelectionConfig:
 
     residualize_target_with_controls: bool = True
     include_controls_in_final_model: bool = True
+
+
+def get_feature_extraction_and_selection_config_preset(
+    preset: str,
+) -> FeatureExtractionAndSelectionConfig:
+    """
+    Return a named configuration preset for reproducible FES runs.
+
+    Parameters
+    ----------
+    preset : str
+        Preset name. Currently supported:
+        - "unterlerchner2023"
+
+    Returns
+    -------
+    FeatureExtractionAndSelectionConfig
+        A frozen config object with preset parameters.
+    """
+    key = preset.strip().lower()
+    if key == "unterlerchner2023":
+        return FeatureExtractionAndSelectionConfig(
+            sequencing_max_k=3,
+            sequencing_min_support=0.05,
+            sequencing_top_mined_subsequences=1000,
+            sequencing_count_method="presence",
+            sequencing_event_label_mode="state",
+            timing_bin_width=12.0,
+            timing_include_start=True,
+            timing_include_end=False,
+            timing_count_method="any",
+            timing_bin_include_left=True,
+            boruta_n_iter=50,
+            boruta_perc=100.0,
+            residualize_target_with_controls=True,
+            include_controls_in_final_model=True,
+        )
+    raise ValueError(
+        f"Unknown preset '{preset}'. Available presets: unterlerchner2023"
+    )
 
 
 def _infer_problem_type(y: np.ndarray) -> str:
@@ -84,10 +120,29 @@ def run_feature_extraction_and_selection_pipeline(
     state_groups: Optional[Dict[str, List[Any]]] = None,
     problem_type: Optional[str] = None,
     config: Optional[FeatureExtractionAndSelectionConfig] = None,
+    preset: Optional[str] = None,
     ids: Optional[Sequence[Any]] = None,
     verbose: bool = True,
 ) -> Dict[str, Any]:
-    cfg = config or FeatureExtractionAndSelectionConfig()
+    from .duration_timing_feature_builders import (
+        build_duration_features,
+        build_timing_features,
+    )
+    from .monthly_state_to_spells import extract_spells_with_times
+    from .sequencing_feature_builders import build_sequencing_features
+    from .time_binning_utils import coerce_numeric_time_labels, make_equal_width_bins
+
+    if config is not None and preset is not None:
+        raise ValueError("Provide either 'config' or 'preset', not both.")
+    cfg = (
+        config
+        if config is not None
+        else (
+            get_feature_extraction_and_selection_config_preset(preset)
+            if preset is not None
+            else FeatureExtractionAndSelectionConfig()
+        )
+    )
 
     y_raw = np.asarray(outcome)
     if y_raw.ndim != 1:

@@ -144,24 +144,27 @@ _LAZY: dict[str, tuple[str, str]] = {
     "get_representative_objects": ("sequenzo.representative_sequences", "get_representative_objects"),
     "get_relative_frequency_representatives": ("sequenzo.representative_sequences", "get_relative_frequency_representatives"),
     "get_representative_sequences": ("sequenzo.representative_sequences", "get_representative_sequences"),
-    # group_comparison (unified discrepancy/BIC-LRT/KOB/tree comparison layer)
-    "get_discrepancy": ("sequenzo.group_comparison", "get_discrepancy"),
-    "get_group_distance_association": ("sequenzo.group_comparison", "get_group_distance_association"),
-    "get_permutation_test": ("sequenzo.group_comparison", "get_permutation_test"),
-    "get_discrepancy_permutation_test": ("sequenzo.group_comparison", "get_discrepancy_permutation_test"),
-    "get_multifactor_discrepancy_anova": ("sequenzo.group_comparison", "get_multifactor_discrepancy_anova"),
-    "get_discrepancy_indicators": ("sequenzo.group_comparison", "get_discrepancy_indicators"),
-    "build_distance_tree": ("sequenzo.group_comparison", "build_distance_tree"),
-    "build_sequence_tree": ("sequenzo.group_comparison", "build_sequence_tree"),
+    # discrepancy_analysis
+    "get_discrepancy": ("sequenzo.discrepancy_analysis", "get_discrepancy"),
+    "get_group_distance_association": ("sequenzo.discrepancy_analysis", "get_group_distance_association"),
+    "get_permutation_test": ("sequenzo.discrepancy_analysis", "get_permutation_test"),
+    "get_discrepancy_permutation_test": ("sequenzo.discrepancy_analysis", "get_discrepancy_permutation_test"),
+    "get_multifactor_discrepancy_anova": ("sequenzo.discrepancy_analysis", "get_multifactor_discrepancy_anova"),
+    "get_discrepancy_indicators": ("sequenzo.discrepancy_analysis", "get_discrepancy_indicators"),
+    "build_distance_tree": ("sequenzo.discrepancy_analysis", "build_distance_tree"),
+    "build_sequence_tree": ("sequenzo.discrepancy_analysis", "build_sequence_tree"),
+    "test_tree_split": ("sequenzo.discrepancy_analysis", "test_tree_split"),
+    # group_comparison
     "get_group_differences_by_position": ("sequenzo.group_comparison", "get_group_differences_by_position"),
     "plot_group_differences_by_position": ("sequenzo.group_comparison", "plot_group_differences_by_position"),
     "get_group_differences_report_by_position": ("sequenzo.group_comparison", "get_group_differences_report_by_position"),
     "get_group_differences_overall": ("sequenzo.group_comparison", "get_group_differences_overall"),
     "get_lrt_test": ("sequenzo.group_comparison", "get_lrt_test"),
     "get_bic_test": ("sequenzo.group_comparison", "get_bic_test"),
-    "get_oaxaca_blinder_decomposition": ("sequenzo.group_comparison", "get_oaxaca_blinder_decomposition"),
-    "get_kob_decomposition": ("sequenzo.group_comparison", "get_kob_decomposition"),
-    "KOBDecompositionResult": ("sequenzo.group_comparison", "KOBDecompositionResult"),
+    # inequality_decomposition
+    "get_oaxaca_blinder_decomposition": ("sequenzo.inequality_decomposition", "get_oaxaca_blinder_decomposition"),
+    "get_kob_decomposition": ("sequenzo.inequality_decomposition", "get_kob_decomposition"),
+    "KOBDecompositionResult": ("sequenzo.inequality_decomposition", "KOBDecompositionResult"),
     # event_sequences (focused entrypoint)
     "find_frequent_subsequences": ("sequenzo.event_sequences", "find_frequent_subsequences"),
     "count_subsequence_occurrences": ("sequenzo.event_sequences", "count_subsequence_occurrences"),
@@ -228,6 +231,14 @@ _LAZY: dict[str, tuple[str, str]] = {
         "sequenzo.feature_extraction_and_selection",
         "clustassoc_like_typology_validation",
     ),
+    "get_feature_extraction_and_selection_config_preset": (
+        "sequenzo.feature_extraction_and_selection",
+        "get_feature_extraction_and_selection_config_preset",
+    ),
+    # feature_extraction_and_selection (split APIs)
+    "extract_sequence_features": ("sequenzo.feature_extraction_and_selection", "extract_sequence_features"),
+    "select_relevant_features": ("sequenzo.feature_extraction_and_selection", "select_relevant_features"),
+    "interpret_selected_features": ("sequenzo.feature_extraction_and_selection", "interpret_selected_features"),
 }
 
 # Modules that need OpenMP setup before import (clustering, etc.)
@@ -395,6 +406,7 @@ __all__ = [
     "get_discrepancy_indicators",
     "build_distance_tree",
     "build_sequence_tree",
+    "test_tree_split",
     "get_group_differences_by_position",
     "plot_group_differences_by_position",
     "get_group_differences_report_by_position",
@@ -458,6 +470,10 @@ __all__ = [
     "run_feature_extraction_and_selection_pipeline",
     "FeatureExtractionAndSelectionConfig",
     "clustassoc_like_typology_validation",
+    "get_feature_extraction_and_selection_config_preset",
+    "extract_sequence_features",
+    "select_relevant_features",
+    "interpret_selected_features",
 ]
 
 # Version check (async, non-blocking)

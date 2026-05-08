@@ -64,7 +64,7 @@ def plot_tree(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import build_distance_tree, plot_tree
+    >>> from sequenzo.discrepancy_analysis import build_distance_tree, plot_tree
     >>> 
     >>> # Build tree
     >>> tree = build_distance_tree(...)
@@ -223,7 +223,7 @@ def print_tree(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import build_distance_tree, print_tree
+    >>> from sequenzo.discrepancy_analysis import build_distance_tree, print_tree
     >>> 
     >>> tree = build_distance_tree(...)
     >>> print_tree(tree)
@@ -305,7 +305,7 @@ def export_tree_to_dot(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import build_distance_tree, export_tree_to_dot
+    >>> from sequenzo.discrepancy_analysis import build_distance_tree, export_tree_to_dot
     >>> 
     >>> tree = build_distance_tree(...)
     >>> export_tree_to_dot(tree, "tree")

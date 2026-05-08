@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 
-from sequenzo.tree_analysis.dissassoc_permutation import distance_multifactor_anova
+from sequenzo.discrepancy_analysis.dissassoc_permutation import distance_multifactor_anova
 
 
 def _one_hot(x: np.ndarray, *, drop_first: bool = False) -> np.ndarray:

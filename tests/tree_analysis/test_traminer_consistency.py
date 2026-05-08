@@ -51,7 +51,7 @@ import os
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
 from sequenzo.dissimilarity_measures import get_distance_matrix
-from sequenzo.tree_analysis import (
+from sequenzo.discrepancy_analysis import (
     compute_pseudo_variance,
     compute_distance_association,
     build_distance_tree,
@@ -60,7 +60,7 @@ from sequenzo.tree_analysis import (
     get_classification_rules,
     assign_to_leaves,
 )
-from sequenzo.tree_analysis.dissassoc_permutation import compute_distance_indicators
+from sequenzo.discrepancy_analysis.dissassoc_permutation import compute_distance_indicators
 
 
 # Tolerance for numerical comparisons

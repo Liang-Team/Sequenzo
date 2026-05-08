@@ -50,7 +50,7 @@ def get_leaf_membership(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import build_distance_tree, get_leaf_membership
+    >>> from sequenzo.discrepancy_analysis import build_distance_tree, get_leaf_membership
     >>> 
     >>> # Build tree (example)
     >>> tree = build_distance_tree(...)
@@ -186,7 +186,7 @@ def get_classification_rules(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import build_sequence_tree, get_classification_rules
+    >>> from sequenzo.discrepancy_analysis import build_sequence_tree, get_classification_rules
     >>> 
     >>> # Build tree
     >>> tree = build_sequence_tree(...)
@@ -332,7 +332,7 @@ def assign_to_leaves(
         
     Examples
     --------
-    >>> from sequenzo.tree_analysis import get_classification_rules, assign_to_leaves
+    >>> from sequenzo.discrepancy_analysis import get_classification_rules, assign_to_leaves
     >>> 
     >>> # Get rules from tree
     >>> rules = get_classification_rules(tree)

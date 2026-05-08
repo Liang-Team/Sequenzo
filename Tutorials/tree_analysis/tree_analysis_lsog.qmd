@@ -1,5 +1,5 @@
 ---
-title: "Tree Analysis Tutorial: Understanding Sequence Patterns with Regression Trees"
+title: "Discrepancy Analysis Tutorial: Understanding Sequence Patterns with Regression Trees"
 subtitle: "Step-by-step guide using LSOG dyadic_children dataset - TraMineR (R) Implementation"
 author: "Sequenzo Tutorial"
 date: today
@@ -24,7 +24,7 @@ execute:
 
 # Introduction
 
-Welcome to the **Tree Analysis** tutorial using **TraMineR (R)**! 🌳
+Welcome to the **Discrepancy Analysis** tutorial using **TraMineR (R)**! 🌳
 
 This tutorial demonstrates how to use **regression trees** in TraMineR to understand how different factors (like age, gender, education) explain differences in sequence patterns. This R-based tutorial corresponds to the Python Sequenzo implementation.
 

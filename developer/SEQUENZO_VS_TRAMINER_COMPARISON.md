@@ -239,13 +239,13 @@
 ### ✅ Sequenzo 已基本实现（基于距离矩阵的树分析）
 
 #### 7.1 序列回归树
-- **`seqtree()`** → `build_sequence_tree()`（位于 `sequenzo/tree_analysis/seqtree.py`）
+- **`seqtree()`** → `build_sequence_tree()`（位于 `sequenzo/discrepancy_analysis/seqtree.py`）
   - 从 `SequenceData` 提取或计算距离矩阵，再调用距离树引擎
 - **`seqtreedisplay()`** → `plot_tree()` / `print_tree()`（位于 `tree_visualization.py`）
 - **`seqtree2dot()`** → `export_tree_to_dot()`（同上，导出 GraphViz DOT）
 
 #### 7.2 距离树
-- **`disstree()`** → `build_distance_tree()`（位于 `sequenzo/tree_analysis/disstree.py`）
+- **`disstree()`** → `build_distance_tree()`（位于 `sequenzo/discrepancy_analysis/disstree.py`）
 - **`disstreedisplay()`** → `plot_tree()` / `print_tree()`（与序列树共用）
 - **`disstree2dot()` / `disstree2dotp()`** → `export_tree_to_dot()`  
   - 支持带参数导出（如控制节点信息、标签等）
@@ -286,7 +286,7 @@
 ### ✅ Sequenzo 已部分实现
 
 #### 9.1 距离矩阵统计
-- **`dissvar()`** → `compute_pseudo_variance()`（位于 `sequenzo/tree_analysis/tree_utils.py`）
+- **`dissvar()`** → `compute_pseudo_variance()`（位于 `sequenzo/discrepancy_analysis/tree_utils.py`）
 - **`dissassoc()`** → `compute_distance_association()`（同上）
 - **`dissmfacw()`** → `dissmfacw()`（同上，新增）
   - 对多个因子（列）逐个调用 `compute_distance_association()`，返回每个因子的 Pseudo R² / Pseudo F / p-value 等汇总表
@@ -307,7 +307,7 @@
 
 ### ✅ Sequenzo 已实现
 
-- **`seqdiff()`** → `compare_groups_across_positions()`（位于 `sequenzo/compare_differences/seqdiff.py`）
+- **`seqdiff()`** → `compare_groups_across_positions()`（位于 `sequenzo/group_comparison/seqdiff.py`）
   - 按时间位置做滑动窗口的差异分析，内部使用 `get_distance_matrix()` + `compute_distance_association()`
   - 输出含有 Pseudo F / Pseudo Fbf / Pseudo R² / Bartlett / Levene 等统计量的表格
 - **`print.seqdiff()`** → `print_group_differences_across_positions()`

@@ -115,7 +115,7 @@ def build_distance_tree(
     --------
     >>> import numpy as np
     >>> import pandas as pd
-    >>> from sequenzo.tree_analysis import build_distance_tree
+    >>> from sequenzo.discrepancy_analysis import build_distance_tree
     >>> 
     >>> # Create distance matrix and predictors
     >>> dist_matrix = np.array([[0, 1, 2], [1, 0, 1.5], [2, 1.5, 0]])

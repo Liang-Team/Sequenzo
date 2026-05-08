@@ -106,7 +106,7 @@ def build_sequence_tree(
     Examples
     --------
     >>> from sequenzo import SequenceData, load_dataset
-    >>> from sequenzo.tree_analysis import build_sequence_tree
+    >>> from sequenzo.discrepancy_analysis import build_sequence_tree
     >>> 
     >>> # Load data
     >>> df = load_dataset('dyadic_children')

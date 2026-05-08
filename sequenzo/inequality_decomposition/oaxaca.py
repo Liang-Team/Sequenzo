@@ -1,29 +1,20 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : kob_decomposition.py
-@Time    : 2026-02-17 19:31
+@File    : oaxaca.py
+@Time    : 2026-03-02 14:28
 @Desc    : 
-Generic Kitagawa-Oaxaca-Blinder decomposition for group inequalities.
+Oaxaca-Blinder decomposition implementation.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional, Literal, Sequence
+from typing import Optional, Sequence, Literal, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
-
-@dataclass
-class KOBDecompositionResult:
-    total_gap: float
-    explained: float
-    unexplained_returns: float
-    unexplained_intercept: float
-    by_variable: pd.DataFrame
-    group0_mean: float
-    group1_mean: float
+if TYPE_CHECKING:
+    from .kob import KOBDecompositionResult
 
 
 def _fit_ols(y: np.ndarray, X: np.ndarray) -> tuple[float, np.ndarray]:
@@ -79,15 +70,14 @@ def _compute_reference_coefficients(
             beta_star[j] = beta0[j]
         elif owner == 1:
             beta_star[j] = beta1[j]
+        elif reference == "group0":
+            beta_star[j] = beta0[j]
+        elif reference == "group1":
+            beta_star[j] = beta1[j]
+        elif reference == "pooled":
+            beta_star[j] = pooled_beta[j]
         else:
-            if reference == "group0":
-                beta_star[j] = beta0[j]
-            elif reference == "group1":
-                beta_star[j] = beta1[j]
-            elif reference == "pooled":
-                beta_star[j] = pooled_beta[j]
-            else:
-                raise ValueError(f"[_compute_reference_coefficients] Unknown reference='{reference}'.")
+            raise ValueError(f"[_compute_reference_coefficients] Unknown reference='{reference}'.")
     return beta_star
 
 
@@ -100,6 +90,8 @@ def oaxaca_blinder_decomposition(
     reference: Literal["group0", "group1", "pooled"] = "group0",
     majority_owner: Optional[Sequence[int]] = None,
 ) -> KOBDecompositionResult:
+    from .kob import KOBDecompositionResult
+
     y = np.asarray(y, dtype=float)
     g = np.asarray(group)
     X = np.asarray(X, dtype=float)
@@ -109,10 +101,12 @@ def oaxaca_blinder_decomposition(
         raise ValueError("[oaxaca_blinder_decomposition] X must be 2D.")
     if X.shape[0] != y.shape[0] or g.shape[0] != y.shape[0]:
         raise ValueError("[oaxaca_blinder_decomposition] y, group, and X must have the same length.")
+
     n, p = X.shape
     unique_groups = np.unique(g)
     if unique_groups.size != 2:
         raise ValueError("[oaxaca_blinder_decomposition] group must have exactly two distinct values.")
+
     g01 = (g == unique_groups[1]).astype(int)
     mask0 = g01 == 0
     mask1 = g01 == 1
@@ -120,6 +114,7 @@ def oaxaca_blinder_decomposition(
     X0, X1 = X[mask0, :], X[mask1, :]
     alpha0, beta0 = _fit_ols(y0, X0)
     alpha1, beta1 = _fit_ols(y1, X1)
+
     beta_pooled = None
     if reference == "pooled":
         _, beta_pooled = _fit_ols(y, X)
@@ -166,6 +161,7 @@ def oaxaca_blinder_decomposition(
     with np.errstate(divide="ignore", invalid="ignore"):
         explained_share = explained_var / total_gap if total_gap != 0 else np.nan
         returns_share = returns_var / total_gap if total_gap != 0 else np.nan
+
     by_variable = pd.DataFrame(
         {
             "variable": variable_names,
@@ -186,21 +182,9 @@ def oaxaca_blinder_decomposition(
     )
 
 
-def kob_decomposition(
-    y: np.ndarray,
-    group: np.ndarray,
-    X: np.ndarray,
-    variable_names: Optional[Sequence[str]] = None,
-    term_ids: Optional[Sequence[int]] = None,
-    reference: Literal["group0", "group1", "pooled"] = "group0",
-    majority_owner: Optional[Sequence[int]] = None,
-) -> KOBDecompositionResult:
-    return oaxaca_blinder_decomposition(
-        y=y,
-        group=group,
-        X=X,
-        variable_names=variable_names,
-        term_ids=term_ids,
-        reference=reference,
-        majority_owner=majority_owner,
-    )
+get_oaxaca_blinder_decomposition = oaxaca_blinder_decomposition
+
+__all__ = [
+    "oaxaca_blinder_decomposition",
+    "get_oaxaca_blinder_decomposition",
+]

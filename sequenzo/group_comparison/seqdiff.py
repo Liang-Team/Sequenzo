@@ -12,7 +12,7 @@ from typing import Optional, Union, List
 import warnings
 import gc
 
-from ..tree_analysis.tree_utils import compute_distance_association
+from ..discrepancy_analysis.tree_utils import compute_distance_association
 from ..dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from ..define_sequence_data import SequenceData
 

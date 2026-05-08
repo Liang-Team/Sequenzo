@@ -1,7 +1,7 @@
 # 聚类功能对标：WeightedCluster (R) vs Sequenzo (Python)
 
 本文档对照 **WeightedCluster**（R 包，`developer/WeightedCluster-master`）与 **Sequenzo** 的 **clustering** 相关功能，便于查漏补缺与对标。  
-**说明**：Sequenzo 的「大样本 CLARA」在 `sequenzo.big_data.clara`，树分析在 `sequenzo.tree_analysis`，此处只对标 **clustering** 模块及与聚类直接相关的“序列→变量”能力。
+**说明**：Sequenzo 的「大样本 CLARA」在 `sequenzo.big_data.clara`，树分析在 `sequenzo.discrepancy_analysis`，此处只对标 **clustering** 模块及与聚类直接相关的“序列→变量”能力。
 
 ---
 
@@ -29,7 +29,7 @@
 | **8. 验证与关联** | 聚类质量 bootstrap（选 k 稳定性） | ✅ bootclustrange | ❌ 无 | 见 二.8 |
 | **8. 验证与关联** | 聚类与协变量关联 (dissmfacw + BIC) | ✅ clustassoc | ❌ 无 | 见 二.8 |
 | **8. 验证与关联** | RARCAT（typology + 回归的稳健性） | ✅ rarcat | ❌ 无 | 见 二.8 |
-| **9. 属性/树聚类** | 基于协变量的 disstree / seqtree | ✅ propclustering, seqpropclust | ✅ tree_analysis (disstree, seqtree) | 不在 clustering 内 | 见 二.9 |
+| **9. 属性/树聚类** | 基于协变量的 disstree / seqtree | ✅ propclustering, seqpropclust | ✅ discrepancy_analysis (disstree, seqtree) | 不在 clustering 内 | 见 二.9 |
 | **10. 其他** | Davies-Bouldin 等 | ✅ davies_bouldin_internal | ❌ 未单独暴露 | 见 二.10 |
 
 ---
@@ -139,9 +139,9 @@
 
 | 项目 | WeightedCluster | Sequenzo |
 |------|-----------------|----------|
-| **基于距离 + 协变量的树** | `seqtree`, `disstree`（TraMineR 等），`propclustering` 中的 `dtprune`, `clusterSplitSchedule` | `tree_analysis.build_sequence_tree` / `build_distance_tree` 等 |
+| **基于距离 + 协变量的树** | `seqtree`, `disstree`（TraMineR 等），`propclustering` 中的 `dtprune`, `clusterSplitSchedule` | `discrepancy_analysis.build_sequence_tree` / `build_distance_tree` 等 |
 
-**结论**：两边都有「用协变量切分距离」的树，Sequenzo 在 `tree_analysis`，不在 `clustering`。
+**结论**：两边都有「用协变量切分距离」的树，Sequenzo 在 `discrepancy_analysis`，不在 `clustering`。
 
 ---
 

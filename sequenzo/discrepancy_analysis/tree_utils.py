@@ -72,7 +72,7 @@ def compute_pseudo_variance(
     Examples
     --------
     >>> import numpy as np
-    >>> from sequenzo.tree_analysis import compute_pseudo_variance
+    >>> from sequenzo.discrepancy_analysis import compute_pseudo_variance
     >>> 
     >>> # Create a simple distance matrix
     >>> dist_matrix = np.array([
@@ -234,7 +234,7 @@ def compute_distance_association(
     Examples
     --------
     >>> import numpy as np
-    >>> from sequenzo.tree_analysis import test_distance_association
+    >>> from sequenzo.discrepancy_analysis import compute_distance_association
     >>> 
     >>> # Create distance matrix and grouping variable
     >>> dist_matrix = np.array([
@@ -366,7 +366,7 @@ def compute_distance_association(
     SCtot = discrepancy * totweights
     
     # Compute distance to center for Levene test (Pseudo W)
-    # Import disscenter from tree_analysis - but avoid circular import
+    # Import disscenter helper while avoiding circular imports
     try:
         from ..clustering.clustering_c_code import WeightedInertiaContrib
         has_c_code = True

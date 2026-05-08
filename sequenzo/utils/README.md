@@ -224,7 +224,7 @@ dist = get_distance_matrix(
 
 **Example:**
 ```python
-from sequenzo.tree_analysis import build_sequence_tree
+from sequenzo.discrepancy_analysis import build_sequence_tree
 
 # Build tree with weighted analysis
 tree_result = build_sequence_tree(
