@@ -20,10 +20,7 @@ from .turbulence import get_turbulence
 
 from .complexity_index import get_complexity_index
 
-from ..visualization.plot_characteristics import (
-    plot_longitudinal_characteristics,
-    plot_cross_sectional_characteristics,
-)
+from importlib import import_module
 
 # Basic indicators
 from .basic_indicators import (get_sequence_length, get_spell_durations,
@@ -88,3 +85,10 @@ __all__ = [
     # Cross-sectional indicators
     "get_mean_time_in_states",
 ]
+
+
+def __getattr__(name):
+    if name in {"plot_longitudinal_characteristics", "plot_cross_sectional_characteristics"}:
+        mod = import_module("sequenzo.visualization.plot_characteristics")
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

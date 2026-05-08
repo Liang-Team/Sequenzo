@@ -6,11 +6,6 @@
 Group comparison API (position-wise and overall tests).
 """
 
-from .positionwise import (
-    get_group_differences_by_position,
-    plot_group_differences_by_position,
-    get_group_differences_report_by_position,
-)
 from .bic_lrt import (
     get_group_differences_overall,
     get_lrt_test,
@@ -18,9 +13,6 @@ from .bic_lrt import (
 )
 
 __all__ = [
-    "get_group_differences_by_position",
-    "plot_group_differences_by_position",
-    "get_group_differences_report_by_position",
     "get_group_differences_overall",
     "get_lrt_test",
     "get_bic_test",

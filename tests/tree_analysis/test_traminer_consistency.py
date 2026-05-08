@@ -52,8 +52,8 @@ from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.discrepancy_analysis import (
-    compute_pseudo_variance,
-    compute_distance_association,
+    get_discrepancy,
+    get_group_distance_association,
     build_distance_tree,
     build_sequence_tree,
     get_leaf_membership,
@@ -61,6 +61,9 @@ from sequenzo.discrepancy_analysis import (
     assign_to_leaves,
 )
 from sequenzo.discrepancy_analysis.dissassoc_permutation import compute_distance_indicators
+
+compute_pseudo_variance = get_discrepancy
+compute_distance_association = get_group_distance_association
 
 
 # Tolerance for numerical comparisons
@@ -266,18 +269,30 @@ def test_disstree_structure_consistency(lsog_distance_matrix, lsog_predictors):
         squared=False
     )
     
-    # Compare number of leaves
-    leaf_ids = tree['fitted']['(fitted)'].values
+    # Strict comparison with TraMineR reference
+    leaf_ids = tree["fitted"]["(fitted)"].values
+    ref_leaf_ids = ref_leaves["leaf_id"].values
+    assert np.array_equal(leaf_ids, ref_leaf_ids), \
+        "Leaf membership mismatch between Sequenzo disstree and TraMineR disstree"
+
     n_leaves = len(np.unique(leaf_ids))
-    ref_n_leaves = ref_info['n_leaves'].values[0]
-    
-    # Note: Tree structure may differ due to permutation test randomness
-    # We check that tree was built successfully and has reasonable structure
-    assert n_leaves > 0, "Tree should have at least one leaf"
-    assert n_leaves <= ref_n_leaves * 2, \
-        f"Number of leaves ({n_leaves}) should be reasonable compared to TraMineR ({ref_n_leaves})"
-    
-    print(f"[✓] Tree built successfully: {n_leaves} leaves (TraMineR: {ref_n_leaves})")
+    ref_n_leaves = ref_info["n_leaves"].values[0]
+    assert n_leaves == ref_n_leaves, \
+        f"Number of leaves mismatch: Sequenzo={n_leaves}, TraMineR={ref_n_leaves}"
+
+    # Rules should also match the saved reference
+    ref_rules = _load_reference_file("ref_disstree_rules.csv")
+    if ref_rules is not None:
+        rules = get_classification_rules(tree)
+        ref_rule_values = ref_rules["rule"].fillna("NA").astype(str).tolist()
+        rule_values = [
+            ("NA" if (r is None or (isinstance(r, float) and np.isnan(r)) or str(r).strip() == "True") else str(r))
+            for r in rules
+        ]
+        assert rule_values == ref_rule_values, \
+            "Classification rules mismatch between Sequenzo disstree and TraMineR disstree"
+
+    print(f"[✓] disstree exact match: {n_leaves} leaves")
 
 
 # ============================================================================
@@ -309,14 +324,28 @@ def test_seqtree_structure_consistency(lsog_seqdata, lsog_predictors):
         squared=False
     )
     
-    leaf_ids = tree['fitted']['(fitted)'].values
+    leaf_ids = tree["fitted"]["(fitted)"].values
+    ref_leaf_ids = ref_leaves["leaf_id"].values
+    assert np.array_equal(leaf_ids, ref_leaf_ids), \
+        "Leaf membership mismatch between Sequenzo seqtree and TraMineR seqtree"
+
     n_leaves = len(np.unique(leaf_ids))
-    ref_n_leaves = len(np.unique(ref_leaves['leaf_id'].values))
-    
-    # Tree structure may differ, but should be reasonable
-    assert n_leaves > 0, "Tree should have at least one leaf"
-    
-    print(f"[✓] Sequence tree built successfully: {n_leaves} leaves (TraMineR: {ref_n_leaves})")
+    ref_n_leaves = len(np.unique(ref_leaf_ids))
+    assert n_leaves == ref_n_leaves, \
+        f"Number of seqtree leaves mismatch: Sequenzo={n_leaves}, TraMineR={ref_n_leaves}"
+
+    ref_rules = _load_reference_file("ref_seqtree_rules.csv")
+    if ref_rules is not None:
+        rules = get_classification_rules(tree)
+        ref_rule_values = ref_rules["rule"].fillna("NA").astype(str).tolist()
+        rule_values = [
+            ("NA" if (r is None or (isinstance(r, float) and np.isnan(r)) or str(r).strip() == "True") else str(r))
+            for r in rules
+        ]
+        assert rule_values == ref_rule_values, \
+            "Classification rules mismatch between Sequenzo seqtree and TraMineR seqtree"
+
+    print(f"[✓] seqtree exact match: {n_leaves} leaves")
 
 
 # ============================================================================

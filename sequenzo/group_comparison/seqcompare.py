@@ -279,15 +279,17 @@ def compare_groups_overall(
                     r1 = r_s1[j, :]
                     r2 = r_s2[j, :] + len(seq_a[i])
                     diss = diss_full
-                    weights_a = np.ones(len(r_s1[j, :]))
-                    weights_b = np.ones(len(r_s2[j, :]))
+                    # TraMineR seqCompare uses original group weights here,
+                    # while r1/r2 are sampled indices over those groups.
+                    weights_a = np.ones(len(seq_a[i]))
+                    weights_b = np.ones(len(seq_b[i]))
                     if isinstance(seqdata_original, SequenceData) and hasattr(seqdata_original, "weights") and weighted and group is not None:
                         mask_a = gvar == lev_g[0]
                         mask_b = gvar == lev_g[1]
                         weights_all_a = seqdata_original.weights[inotna][mask_a]
                         weights_all_b = seqdata_original.weights[inotna][mask_b]
-                        weights_a = weights_all_a[np.asarray(r_s1[j, :]).flatten()]
-                        weights_b = weights_all_b[np.asarray(r_s2[j, :]).flatten()]
+                        weights_a = weights_all_a
+                        weights_b = weights_all_b
                     weights = np.concatenate([weights_a, weights_b])
                 else:
                     indices_a = np.asarray(r_s1[j, :]).flatten().tolist()
@@ -398,7 +400,11 @@ def _disscenter(
         weights = np.ones(n)
     weights = np.asarray(weights, dtype=np.float64)
     dist_center = np.zeros(n)
+    total_weight = weights.sum()
+    if total_weight <= 0:
+        return dist_center
     for i in range(n):
-        dist_center[i] = (weights * diss[i, :]).sum()
+        # Match TraMineR C_tmrWeightedInertiaContrib: weighted sum / total weight
+        dist_center[i] = (weights * diss[i, :]).sum() / total_weight
     weighted_mean = (weights * dist_center).sum() / weights.sum()
     return dist_center - weighted_mean / 2

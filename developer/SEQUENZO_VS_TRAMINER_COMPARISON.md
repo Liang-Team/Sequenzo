@@ -307,7 +307,7 @@
 
 ### ✅ Sequenzo 已实现
 
-- **`seqdiff()`** → `compare_groups_across_positions()`（位于 `sequenzo/group_comparison/seqdiff.py`）
+- **`seqdiff()`** → `compare_groups_across_positions()`（位于 `sequenzo/discrepancy_analysis/seqdiff.py`）
   - 按时间位置做滑动窗口的差异分析，内部使用 `get_distance_matrix()` + `compute_distance_association()`
   - 输出含有 Pseudo F / Pseudo Fbf / Pseudo R² / Bartlett / Levene 等统计量的表格
 - **`print.seqdiff()`** → `print_group_differences_across_positions()`
@@ -396,7 +396,7 @@
 
 ### ✅ Sequenzo 已部分覆盖 / 有近似能力
 - `dissindic()` / `dissvar.grp` 相关能力可由 `compute_distance_association()`、`compute_pseudo_variance()`、`dissmfacw()`、`dissmergegroups()` 组合实现。
-- `seqCompare` / `dissCompare` 相关“组间比较”场景，可由 `compare_groups_overall()` 与 `compare_groups_across_positions()` 覆盖核心需求。
+- `seqCompare` / `dissCompare` 相关“组间比较”场景，可由 `compare_groups_overall()` 覆盖核心需求（LRT/BIC 的 overall 两组比较）。
 - `seqsamm` 家族在 Sequenzo 中有完整实现（并且是重点能力）。
 
 ### ❌ 目前仍缺失（TraMineRextras 主要未覆盖项）

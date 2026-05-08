@@ -44,10 +44,12 @@ import pandas as pd
 import numpy as np
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
-from sequenzo.group_comparison import (
+from sequenzo.discrepancy_analysis import (
     get_group_differences_by_position,
     plot_group_differences_by_position,
     get_group_differences_report_by_position,
+)
+from sequenzo.group_comparison import (
     get_group_differences_overall,
     get_lrt_test,
     get_bic_test,

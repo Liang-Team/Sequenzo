@@ -154,10 +154,10 @@ _LAZY: dict[str, tuple[str, str]] = {
     "build_distance_tree": ("sequenzo.discrepancy_analysis", "build_distance_tree"),
     "build_sequence_tree": ("sequenzo.discrepancy_analysis", "build_sequence_tree"),
     "test_tree_split": ("sequenzo.discrepancy_analysis", "test_tree_split"),
+    "get_group_differences_by_position": ("sequenzo.discrepancy_analysis", "get_group_differences_by_position"),
+    "plot_group_differences_by_position": ("sequenzo.discrepancy_analysis", "plot_group_differences_by_position"),
+    "get_group_differences_report_by_position": ("sequenzo.discrepancy_analysis", "get_group_differences_report_by_position"),
     # group_comparison
-    "get_group_differences_by_position": ("sequenzo.group_comparison", "get_group_differences_by_position"),
-    "plot_group_differences_by_position": ("sequenzo.group_comparison", "plot_group_differences_by_position"),
-    "get_group_differences_report_by_position": ("sequenzo.group_comparison", "get_group_differences_report_by_position"),
     "get_group_differences_overall": ("sequenzo.group_comparison", "get_group_differences_overall"),
     "get_lrt_test": ("sequenzo.group_comparison", "get_lrt_test"),
     "get_bic_test": ("sequenzo.group_comparison", "get_bic_test"),

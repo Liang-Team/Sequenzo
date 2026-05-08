@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 
 import importlib
-import sequenzo.clustering.clustering_c_code
-
-clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
+core_distance_c_code = importlib.import_module(
+    "sequenzo.utils.core_distance_operations.core_distance_c_code"
+)
 
 def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weights=None, squared=False, trim=0):
 
@@ -71,9 +71,11 @@ def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weight
             print("以后再补充")
 
         else:
-            inertia = clustering_c_code.weightedinertia(diss.astype(np.float64),
-                                                        grpindiv.astype(np.int32),
-                                                        weights.astype(np.float64))
+            inertia = core_distance_c_code.weightedinertia(
+                diss.astype(np.float64),
+                grpindiv.astype(np.int32),
+                weights.astype(np.float64),
+            )
             dc = inertia.tmrWeightedInertiaContrib()
             dc = dc - np.average(dc, weights=weights[cond]) / 2
 

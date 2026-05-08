@@ -461,6 +461,18 @@ def get_clustering_include_dirs():
     ]
 
 
+def get_core_distance_operations_include_dirs():
+    """
+    Collect include directories for core distance operations C++ extension.
+    """
+    return [
+        pybind11.get_include(),
+        pybind11.get_include(user=True),
+        numpy.get_include(),
+        'sequenzo/utils/core_distance_operations/src/',
+    ]
+
+
 def get_link_args():
     """获取平台特定的链接参数"""
     link_args = []
@@ -573,6 +585,18 @@ def configure_cpp_extension():
         )
         print("  - Clustering C++ extension configured successfully.")
 
+        core_distance_ext_module = Pybind11Extension(
+            'sequenzo.utils.core_distance_operations.core_distance_c_code',
+            sources=['sequenzo/utils/core_distance_operations/src/module.cpp'],
+            include_dirs=get_core_distance_operations_include_dirs(),
+            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_link_args=link_args,
+            language='c++',
+            define_macros=[('VERSION_INFO', '"0.1.21"'),
+                           ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
+        )
+        print("  - Core distance operations C++ extension configured successfully.")
+
         # Configure sequenzo_fastcluster as a traditional Extension (not Pybind11)
         # Note: fastcluster_python.cpp includes fastcluster.cpp via #include,
         # so we only need to compile fastcluster_python.cpp to avoid duplicate symbols
@@ -614,7 +638,7 @@ def configure_cpp_extension():
         print("  - Sequenzo fastcluster C++ extension configured successfully.")
 
         print("C++ extension configured successfully.")
-        return [diss_ext_module, clustering_ext_module, fastcluster_ext_module]
+        return [diss_ext_module, clustering_ext_module, core_distance_ext_module, fastcluster_ext_module]
     except Exception as e:
         print(f"Failed to configure C++ extension: {e}")
         print("Fallback: Python-only functionality will be used.")
@@ -766,6 +790,7 @@ class BuildExt(build_ext):
 os.makedirs("sequenzo/dissimilarity_measures/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/src", exist_ok=True)
 os.makedirs("sequenzo/clustering/utils", exist_ok=True)
+os.makedirs("sequenzo/utils/core_distance_operations/src", exist_ok=True)
 
 # Custom install command to run post-installation setup
 class InstallCommand(install):

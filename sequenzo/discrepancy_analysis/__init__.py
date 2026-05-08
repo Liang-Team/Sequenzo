@@ -17,6 +17,11 @@ from .tree import (
     build_sequence_tree,
     test_tree_split,
 )
+from .positionwise import (
+    get_group_differences_by_position,
+    plot_group_differences_by_position,
+    get_group_differences_report_by_position,
+)
 from .tree_helpers import get_leaf_membership, get_classification_rules, assign_to_leaves
 from .tree_visualization import plot_tree, print_tree, export_tree_to_dot
 from .tree_node import DissTreeNode, DissTreeSplit
@@ -31,6 +36,9 @@ __all__ = [
     "build_distance_tree",
     "build_sequence_tree",
     "test_tree_split",
+    "get_group_differences_by_position",
+    "plot_group_differences_by_position",
+    "get_group_differences_report_by_position",
     "dissmfacw",
     "dissmergegroups",
     "get_leaf_membership",

@@ -12,18 +12,8 @@
 import numpy as np
 import pandas as pd
 from typing import Optional, Union, Dict, Any, List
-import importlib
 from .dissassoc_permutation import dissassoc_permutation_test
-
-# Lazy import clustering C code for weighted inertia calculations
-_clustering_c_code = None
-
-def _get_clustering_c_code():
-    """Lazy import of clustering C code module to avoid circular dependencies."""
-    global _clustering_c_code
-    if _clustering_c_code is None:
-        _clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
-    return _clustering_c_code
+from ..utils.core_distance_operations import weighted_inertia_contrib
 
 
 def compute_pseudo_variance(
@@ -139,25 +129,11 @@ def compute_pseudo_variance(
     if np.sum(weights) == 0:
         raise ValueError("[!] Sum of weights must be greater than zero")
     
-    # Compute weighted pseudo-variance
-    # Formula: sum over all pairs (i,j) of: w_i * w_j * d_ij / (sum of weights)^2
-    # This corresponds to C_tmrWeightedInertiaDist in TraMineR
-    
     total_weight = np.sum(weights)
-    total_weight_squared = total_weight ** 2
-    
-    # Compute weighted sum of all distances
-    # We iterate over upper triangle (i < j) to avoid double counting
-    weighted_sum = 0.0
-    for i in range(n):
-        for j in range(i + 1, n):
-            weighted_sum += weights[i] * weights[j] * distance_matrix[i, j]
-    
-    # Pseudo-variance = weighted_sum / total_weight_squared
-    # This gives the average weighted distance
-    pseudo_var = weighted_sum / total_weight_squared
-    
-    return float(pseudo_var)
+    all_indices = np.arange(n, dtype=np.int32)
+    contrib = weighted_inertia_contrib(distance_matrix, all_indices, weights)
+    # TraMineR relation: dissvar = weighted.mean(disscenter_raw, w) / 2
+    return float(np.sum(weights * contrib) / (2.0 * total_weight))
 
 
 def compute_distance_association(
@@ -362,42 +338,28 @@ def compute_distance_association(
     # So SCtot = discrepancy * totweights
     
     # For unweighted case, compute discrepancy first
-    discrepancy = compute_pseudo_variance(distance_matrix, weights=weights, squared=squared)
+    discrepancy = compute_pseudo_variance(distance_matrix, weights=weights, squared=False)
     SCtot = discrepancy * totweights
     
-    # Compute distance to center for Levene test (Pseudo W)
-    # Import disscenter helper while avoiding circular imports
-    try:
-        from ..clustering.clustering_c_code import WeightedInertiaContrib
-        has_c_code = True
-    except ImportError:
-        has_c_code = False
-    
-    # Compute disscenter for all sequences
-    # This is needed for Levene test (Pseudo W statistic)
     dist_center = np.zeros(n)
     for i in range(k):
         group_mask = (group_int == (i + 1))
         group_indices = np.where(group_mask)[0]
         if len(group_indices) == 0:
             continue
-        
-        # Compute distance to center for this group
-        group_dist_matrix = distance_matrix[np.ix_(group_indices, group_indices)]
         group_w = weights[group_indices]
-        
-        # For each element in group, compute weighted sum of distances to all group members
-        for idx, global_idx in enumerate(group_indices):
-            weighted_sum = np.sum(group_w * group_dist_matrix[idx, :])
-            dist_center[global_idx] = weighted_sum
-        
+
+        group_contrib = weighted_inertia_contrib(distance_matrix, group_indices, weights)
+        dist_center[group_indices] = group_contrib
+
         # Center by subtracting weighted mean for this group
         group_dist_center = dist_center[group_indices]
         weighted_mean = np.sum(group_w * group_dist_center) / np.sum(group_w)
         dist_center[group_indices] = group_dist_center - weighted_mean / 2
     
-    # Compute total sum of squared distances to center (for Levene)
-    disscSCtot = np.sum(weights * (dist_center ** 2))
+    # TraMineR SCresi* terms are weighted residual sums around (weighted) means.
+    dc_w_mean = np.sum(weights * dist_center) / np.sum(weights)
+    disscSCtot = np.sum(weights * ((dist_center - dc_w_mean) ** 2))
     
     # Compute within-group variances and residual sum of squares
     SCres = 0.0
@@ -436,7 +398,7 @@ def compute_distance_association(
         # For consistency, compute group discrepancy first, then SCresi
         if group_size > 0:
             # Compute group discrepancy (variance) using the same formula as total
-            group_var = compute_pseudo_variance(group_dist, weights=group_weights, squared=squared)
+            group_var = compute_pseudo_variance(group_dist, weights=group_weights, squared=False)
             # Then SCresi = discrepancy * group_size (matching TraMineR's formula)
             group_ss = group_var * group_size
             
@@ -445,18 +407,20 @@ def compute_distance_association(
             vari = group_var  # group_ss / ni
             
             # For Bartlett test
-            if vari > 0 and ni > 1:
+            if vari >= 0 and ni > 1:
                 lns += (ni - 1) * (vari / (totweights - k))
-                nlnvi += (ni - 1) * np.log(vari)
+                if vari == 0:
+                    nlnvi = -np.inf
+                elif np.isfinite(nlnvi):
+                    nlnvi += (ni - 1) * np.log(vari)
                 s1ni += 1.0 / (ni - 1)
             
             # For Pseudo Fbf (F with Bonferroni correction)
             FBFdenomin += (1 - ni / totweights) * vari
             
-            # For Levene test (Pseudo W)
-            # Sum of squared distances to center within this group
             group_dist_center = dist_center[group_indices]
-            sumz += np.sum(group_weights * (group_dist_center ** 2))
+            group_dc_w_mean = np.sum(group_weights * group_dist_center) / np.sum(group_weights)
+            sumz += np.sum(group_weights * ((group_dist_center - group_dc_w_mean) ** 2))
         else:
             group_var = 0.0
             group_ss = 0.0
@@ -505,7 +469,7 @@ def compute_distance_association(
         
         # Compute Bartlett test statistic
         # Bartlett = Tcalc / Ccalc
-        if lns > 0 and nlnvi != 0:
+        if lns > 0:
             Tcalc = (totweights - k) * np.log(lns) - nlnvi
             Ccalc = 1 + 1 / (3 * (k - 1)) * (s1ni - 1 / (totweights - k))
             bartlett = Tcalc / Ccalc if Ccalc > 0 else np.nan
@@ -670,18 +634,23 @@ def dissmergegroups(
     distance_matrix: np.ndarray,
     group: Union[np.ndarray, pd.Series],
     weights: Optional[np.ndarray] = None,
-    target_n_groups: int = 2,
-    squared: bool = False
+    target_n_groups: Optional[int] = None,
+    squared: bool = False,
+    measure: str = "ASW",
+    crit: float = 0.2,
+    ref: str = "max",
+    min_group: int = 4,
+    small: float = 0.05,
+    silent: bool = False,
 ) -> Dict[str, Any]:
     """
-    Iteratively merge groups to minimize loss of distance-based partition quality.
+    Iteratively merge groups using TraMineR's dissmergegroups logic.
 
-    TraMineR equivalent: dissmergegroups()
-
-    Starting from an initial grouping of the observations, this function
-    repeatedly merges the pair of groups whose fusion yields the *smallest*
-    loss of explained discrepancy (Pseudo R²). The process stops when the
-    desired target number of groups is reached.
+    This implementation follows the original TraMineR behaviour:
+    - Quality-driven greedy merges (default quality measure: ASW),
+    - adaptive search restricted to smallest group when needed,
+    - stopping by both `min_group` and quality deterioration threshold
+      `crit * quality_ref` with `ref in {"initial","max","previous"}`.
 
     Parameters
     ----------
@@ -691,121 +660,167 @@ def dissmergegroups(
         Initial group labels (length n). Can be numeric or categorical.
     weights : np.ndarray, optional
         Optional weights for each observation.
-    target_n_groups : int, default 2
-        Target number of groups after merging. Must be at least 1 and less
-        than the initial number of distinct groups.
+    target_n_groups : int, optional
+        Compatibility alias for `min_group`: if provided, overrides `min_group`.
     squared : bool, default False
         Whether to square distances before analysis (passed to
         `compute_distance_association`).
 
+    measure : str, default "ASW"
+        Cluster quality measure. Currently only "ASW" is supported.
+    crit : float, default 0.2
+        Maximum allowed proportion of quality loss.
+    ref : {"initial", "max", "previous"}, default "max"
+        Reference quality used in the deterioration threshold.
+    min_group : int, default 4
+        Minimal number of final groups.
+    small : float, default 0.05
+        If <1, interpreted as proportion of weighted sample size. While the
+        smallest group is below this threshold, only merges involving that
+        smallest group are evaluated.
+    silent : bool, default False
+        If False, merge steps are printed.
+
     Returns
     -------
     dict
-        Dictionary with the following elements:
-            - 'history' : list of merge steps. Each step is a dict with:
-                * 'step'          : integer step index (starting at 1)
-                * 'merged'        : tuple (g1, g2) of group labels that were merged
-                * 'pseudo_r2'     : Pseudo R² after the merge
-                * 'delta_r2'      : loss in Pseudo R² caused by the merge
-                * 'n_groups'      : number of groups remaining after the merge
-            - 'final_group' : pandas.Series with the final merged grouping
+        - 'final_group': final merged grouping as integer codes (1..K)
+        - 'quality': final quality value
+        - 'history': merge log
     """
-    # Convert distance matrix if needed
     if isinstance(distance_matrix, pd.DataFrame):
         distance_matrix = distance_matrix.values
+    D = np.asarray(distance_matrix, dtype=float)
+    if D.ndim != 2 or D.shape[0] != D.shape[1]:
+        raise ValueError("diss must be a square distance matrix")
 
-    # Work with a mutable copy of the grouping variable.
-    # We first convert to a pandas Series, then to categorical codes, and finally
-    # to a standalone NumPy array to avoid any read-only backing issues.
-    group_series = pd.Series(group).copy()
-    factor = pd.Categorical(group_series)
-    codes = np.array(factor.codes, dtype=np.int32)  # make sure this is a writable copy
-    current_labels = pd.Series(codes, index=group_series.index)
+    n = D.shape[0]
+    g = pd.Categorical(pd.Series(group)).codes.astype(int) + 1
+    if len(g) != n or np.any(g <= 0):
+        raise ValueError("group must be valid and conformable with distance matrix")
 
-    # Helper to compute pseudo R² for the current grouping
-    def _current_r2(labels: pd.Series) -> float:
-        assoc = compute_distance_association(
-            distance_matrix=distance_matrix,
-            group=labels.values,
-            weights=weights,
-            R=0,
-            weight_permutation="none",
-            squared=squared,
-        )
-        return float(assoc["pseudo_r2"])
+    if weights is None:
+        w = np.ones(n, dtype=float)
+    else:
+        w = np.asarray(weights, dtype=float)
+        if len(w) != n:
+            raise ValueError("weights length must match distance matrix size")
+        if np.any(w < 0):
+            raise ValueError("weights must be non-negative")
 
-    # Initial statistics
-    unique_groups = np.unique(current_labels.values)
-    if target_n_groups < 1 or target_n_groups >= len(unique_groups):
-        raise ValueError(
-            f"'target_n_groups' must be in [1, {len(unique_groups) - 1}], "
-            f"got {target_n_groups}."
-        )
+    if squared:
+        D = D ** 2
+
+    if target_n_groups is not None:
+        min_group = int(target_n_groups)
+
+    if min_group < 1:
+        raise ValueError("min_group must be >= 1")
+
+    if measure.upper() != "ASW":
+        raise ValueError("Only measure='ASW' is currently supported")
+
+    if ref not in {"initial", "max", "previous"}:
+        raise ValueError("ref must be one of {'initial', 'max', 'previous'}")
+
+    def _asw(labels: np.ndarray) -> float:
+        unique = np.unique(labels)
+        if len(unique) <= 1:
+            return 0.0
+        s = np.zeros(n, dtype=float)
+        for i in range(n):
+            gi = labels[i]
+            in_g = np.where(labels == gi)[0]
+            in_g_other = in_g[in_g != i]
+            if len(in_g_other) == 0:
+                a_i = 0.0
+            else:
+                ww = w[in_g_other]
+                denom = float(np.sum(ww))
+                a_i = float(np.sum(ww * D[i, in_g_other]) / denom) if denom > 0 else 0.0
+
+            b_i = np.inf
+            for gj in unique:
+                if gj == gi:
+                    continue
+                out_g = np.where(labels == gj)[0]
+                ww = w[out_g]
+                denom = float(np.sum(ww))
+                if denom <= 0:
+                    continue
+                cand = float(np.sum(ww * D[i, out_g]) / denom)
+                if cand < b_i:
+                    b_i = cand
+            if not np.isfinite(b_i):
+                b_i = 0.0
+            den = max(a_i, b_i)
+            s[i] = 0.0 if den <= 0 else (b_i - a_i) / den
+        return float(np.average(s, weights=w))
+
+    N = float(np.sum(w))
+    minsize = small * N if small < 1 else float(small)
 
     history: List[Dict[str, Any]] = []
-    current_r2 = _current_r2(current_labels)
+    quality = _asw(g)
+    quality_ref = quality
+    final_quality = quality
 
-    step = 0
-    while len(unique_groups) > target_n_groups:
+    while int(np.max(g)) > min_group:
+        maxgn = int(np.max(g))
+        grp_sizes = np.bincount(g, weights=w, minlength=maxgn + 1)[1:]
+        diff = quality_ref
         best_pair = None
-        best_r2 = None
+        best_qual = None
 
-        # Try merging each unordered pair of groups and record the effect on R²
-        for g1_idx in range(len(unique_groups)):
-            for g2_idx in range(g1_idx + 1, len(unique_groups)):
-                g1 = unique_groups[g1_idx]
-                g2 = unique_groups[g2_idx]
+        if np.min(grp_sizes) > minsize:
+            pairs = [(i, j) for i in range(1, maxgn) for j in range(i + 1, maxgn + 1)]
+        else:
+            i = int(np.argmin(grp_sizes)) + 1
+            pairs = [(min(i, j), max(i, j)) for j in range(1, maxgn + 1) if j != i]
 
-                # Build candidate merged labels: replace g2 with g1
-                merged_labels = current_labels.copy()
-                mask = merged_labels == g2
-                if not mask.any():
-                    continue
-                merged_labels[mask] = g1
+        for i, j in pairs:
+            gng = g.copy()
+            gng[gng == j] = i
+            # re-factor to 1..K as TraMineR does after merge
+            gng = pd.Categorical(gng).codes.astype(int) + 1
+            qual = _asw(gng)
+            loss = quality_ref - qual
+            if loss < diff:
+                diff = loss
+                best_pair = (i, j)
+                best_qual = qual
 
-                # Re-normalize labels to consecutive integers for stability
-                # (does not change grouping structure)
-                cat = pd.Categorical(merged_labels)
-                merged_codes = pd.Series(cat.codes, index=merged_labels.index)
-
-                cand_r2 = _current_r2(merged_codes)
-
-                if (best_r2 is None) or (cand_r2 > best_r2):
-                    best_r2 = cand_r2
-                    best_pair = (int(g1), int(g2))
-
-        if best_pair is None or best_r2 is None:
-            # No valid merge found; break to avoid infinite loop
+        if best_pair is None:
             break
 
-        # Apply the best merge
-        g1, g2 = best_pair
-        merge_mask = current_labels == g2
-        current_labels[merge_mask] = g1
-        # Re-code to consecutive integers again
-        cat = pd.Categorical(current_labels)
-        current_labels = pd.Series(cat.codes, index=current_labels.index)
-        unique_groups = np.unique(current_labels.values)
+        if diff > crit * quality_ref:
+            break
 
-        step += 1
-        delta_r2 = current_r2 - best_r2
-        current_r2 = best_r2
+        i, j = best_pair
+        if not silent:
+            print(f"Merging groups {i} and {j}")
+        g[g == j] = i
+        g = pd.Categorical(g).codes.astype(int) + 1
 
+        final_quality = float(best_qual if best_qual is not None else _asw(g))
         history.append(
             {
-                "step": step,
-                "merged": (g1, g2),
-                "pseudo_r2": current_r2,
-                "delta_r2": delta_r2,
-                "n_groups": len(unique_groups),
+                "merged": (i, j),
+                "quality": final_quality,
+                "loss": float(diff),
+                "n_groups": int(np.max(g)),
             }
         )
 
-    # Map final numeric codes back to a compact set of labels 0..k-1
-    final_cat = pd.Categorical(current_labels)
-    final_group = pd.Series(final_cat.codes, index=current_labels.index, name="group")
+        if ref == "max":
+            quality_ref = max(quality_ref, final_quality)
+        elif ref == "previous":
+            quality_ref = final_quality
+        else:  # initial
+            quality_ref = quality
 
     return {
+        "final_group": pd.Series(g, name="group"),
+        "quality": final_quality,
         "history": history,
-        "final_group": final_group,
     }

@@ -83,6 +83,10 @@ include-package-data = true
   "src/**/*.cpp",
   "src/**/*.h"
 ]
+"sequenzo.utils.core_distance_operations" = [
+  "src/**/*.cpp",
+  "src/**/*.h"
+]
 # Note: .c files are auto-generated from .pyx during build via Cython
 
 

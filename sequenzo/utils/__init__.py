@@ -14,10 +14,12 @@ from .weighted_stats import (
     weighted_five_number_summary
 )
 from .computer_performance import get_computer_performance
+from .core_distance_operations import weighted_inertia_contrib
 
 __all__ = [
     'weighted_mean',
     'weighted_variance',
     'weighted_five_number_summary',
     'get_computer_performance',
+    'weighted_inertia_contrib',
 ]

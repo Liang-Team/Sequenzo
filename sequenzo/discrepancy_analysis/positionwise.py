@@ -1,8 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
-@File    : positionwise.py
-@Time    : 2026-02-16 07:35
-@Desc    : Position-wise discrepancy comparison between groups.
+@Desc: Position-wise/local-window discrepancy analysis wrappers.
 """
 
 from .seqdiff import (

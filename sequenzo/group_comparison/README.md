@@ -6,11 +6,11 @@ This module contains group-comparison methods for sequence trajectories.
 
 Use `sequenzo.group_comparison` for:
 
-- Position-wise group-difference dynamics (`seqdiff`-style)
 - Overall two-group comparison (`LRT`, `BIC`)
 
 Use `sequenzo.discrepancy_analysis` for discrepancy, permutation, and tree-based
-distance analysis (`disstree`, `seqtree`).
+distance analysis (`disstree`, `seqtree`) including position-wise/local-window
+discrepancy (`seqdiff`-style).
 
 Use `sequenzo.inequality_decomposition` for Kitagawa-Oaxaca-Blinder (`KOB`)
 decomposition.
@@ -24,7 +24,6 @@ Historically, these tools were mixed across modules. The current split keeps
 
 ```python
 from sequenzo.group_comparison import (
-    get_group_differences_by_position,
     get_group_differences_overall,
     get_lrt_test,
     get_bic_test,

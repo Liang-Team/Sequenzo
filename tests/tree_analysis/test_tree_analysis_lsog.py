@@ -46,8 +46,8 @@ from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
 from sequenzo.dissimilarity_measures import get_distance_matrix
 from sequenzo.discrepancy_analysis import (
-    compute_pseudo_variance,
-    compute_distance_association,
+    get_discrepancy,
+    get_group_distance_association,
     dissmfacw,
     dissmergegroups,
     build_distance_tree,
@@ -59,6 +59,9 @@ from sequenzo.discrepancy_analysis import (
     print_tree,
     export_tree_to_dot,
 )
+
+compute_pseudo_variance = get_discrepancy
+compute_distance_association = get_group_distance_association
 
 
 # Test dataset setup - using dyadic_children (lsog)
@@ -289,7 +292,7 @@ def test_dissmfacw_matches_single_factor_calls(lsog_distance_matrix, lsog_predic
 def test_dissmergegroups_reduces_number_of_groups(lsog_distance_matrix, lsog_predictors):
     """
     dissmergegroups should iteratively merge groups until the target number
-    of groups is reached, while tracking Pseudo R² changes.
+    of groups is reached, while tracking quality deterioration.
     """
     groups = lsog_predictors["group"].values
     initial_n_groups = len(np.unique(groups))
@@ -304,6 +307,9 @@ def test_dissmergegroups_reduces_number_of_groups(lsog_distance_matrix, lsog_pre
         group=groups,
         weights=None,
         target_n_groups=target_n_groups,
+        crit=1.0,
+        ref="max",
+        silent=True,
         squared=False,
     )
 
@@ -316,12 +322,10 @@ def test_dissmergegroups_reduces_number_of_groups(lsog_distance_matrix, lsog_pre
     # The final grouping should have exactly target_n_groups distinct labels
     assert len(np.unique(final_group.values)) == target_n_groups
 
-    # Pseudo R² should be non-increasing as we merge (each merge loses information)
-    pseudo_r2_values = [step["pseudo_r2"] for step in history]
-    assert all(
-        earlier >= later
-        for earlier, later in zip(pseudo_r2_values, pseudo_r2_values[1:])
-    ), "Pseudo R² should not increase when groups are merged"
+    # Loss should be non-negative and quality should be finite
+    losses = [step["loss"] for step in history]
+    assert all(loss >= -1e-12 for loss in losses), "Merge loss should be non-negative"
+    assert np.isfinite(result["quality"]), "Final quality should be finite"
 
 
 # ============================================================================

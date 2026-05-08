@@ -13,14 +13,14 @@ Corresponds to TraMineR functions: DTNdissassocweighted(), dissassocweighted.*()
 
 import numpy as np
 from typing import Callable, Optional
-import random
 
 
 def _compute_submatrix_inertia(
     distance_matrix: np.ndarray,
     indices: np.ndarray,
     weights: Optional[np.ndarray] = None,
-    squared: bool = False
+    squared: bool = False,
+    weights_are_local: bool = False,
 ) -> float:
     """
     Compute weighted inertia (sum of squares) for a subset of sequences.
@@ -64,7 +64,7 @@ def _compute_submatrix_inertia(
         return ss
     else:
         # Weighted: sum(w_i * w_j * d_ij)
-        sub_weights = weights[indices]
+        sub_weights = weights if weights_are_local else weights[indices]
         ss = 0.0
         for i in range(n):
             for j in range(i + 1, n):
@@ -183,109 +183,84 @@ def test_tree_split_significance(
     float
         P-value for the split
     """
-    n = len(group)
-    dmatsize = distance_matrix.shape[0]
-    
-    # Define statistic functions matching TraMineR's internal functions
-    def internal_unweighted(grp, perm_indices, indiv, dmat, grp2, use_sort):
-        """Unweighted statistic: returns -(SC1 + SC2)"""
-        groupe1 = indiv[perm_indices[grp]]
-        groupe2 = indiv[perm_indices[grp2]]
-        
-        if use_sort:
-            groupe1 = np.sort(groupe1)
-            groupe2 = np.sort(groupe2)
-        
-        r1 = _compute_submatrix_inertia(dmat, groupe1, weights=None, squared=squared)
-        r2 = _compute_submatrix_inertia(dmat, groupe2, weights=None, squared=squared)
-        return -(r1 + r2)
-    
-    def internal_weighted(grp, perm_indices, indiv, dmat, grp2, use_sort, w, permut_group):
-        """Weighted statistic: returns -(SC1 + SC2)"""
-        groupe1 = indiv[perm_indices[grp]]
-        groupe2 = indiv[perm_indices[grp2]]
-        
-        if use_sort:
-            groupe1 = np.sort(groupe1)
-            groupe2 = np.sort(groupe2)
-        
-        if permut_group:
-            # Permute weights according to permuted indices
-            # Map permuted indices back to original weight positions
-            w_perm = w.copy()
-            w_perm[indiv] = w[indiv[perm_indices]]
-            w1 = w_perm[groupe1]
-            w2 = w_perm[groupe2]
-        else:
-            # Use original weights
-            w1 = w[groupe1]
-            w2 = w[groupe2]
-        
-        r1 = _compute_submatrix_inertia(dmat, groupe1, weights=w1, squared=squared)
-        r2 = _compute_submatrix_inertia(dmat, groupe2, weights=w2, squared=squared)
-        return -(r1 + r2)
-    
-    def internal_replicate(grp, perm_indices, indiv, dmat, grp2):
-        """Replicate statistic: expand groups by weights"""
-        groupe1n = indiv[perm_indices[grp]]
-        groupe2n = indiv[perm_indices[grp2]]
-        
-        # Count occurrences (like tabulate in R)
-        wwt1 = np.bincount(groupe1n, minlength=dmatsize)
-        wwt2 = np.bincount(groupe2n, minlength=dmatsize)
-        
-        groupe1 = np.where(wwt1 > 0)[0]
-        groupe2 = np.where(wwt2 > 0)[0]
-        
-        r1 = _compute_submatrix_inertia(dmat, groupe1, weights=wwt1[groupe1], squared=squared)
-        r2 = _compute_submatrix_inertia(dmat, groupe2, weights=wwt2[groupe2], squared=squared)
-        return -(r1 + r2)
-    
-    # Map indices to original distance matrix indices
-    indiv = indices  # Original indices (0-based, for accessing distance_matrix)
-    
-    # Determine which statistic function to use
-    use_sort = len(group) > 750  # TraMineR optimization
-    
-    if weight_permutation == "none":
-        def statistic_func(grp, perm_indices):
-            grp2 = ~grp  # Complement group
-            return internal_unweighted(grp, perm_indices, indiv, distance_matrix, grp2, use_sort)
-    elif weight_permutation in ("diss", "group"):
-        permut_group = (weight_permutation == "group")
-        def statistic_func(grp, perm_indices):
-            grp2 = ~grp  # Complement group
-            return internal_weighted(grp, perm_indices, indiv, distance_matrix, grp2, use_sort, weights, permut_group)
-    elif weight_permutation == "replicate":
-        # Expand groups by weights
-        node_weights = weights[indices]
+    node_indices = np.asarray(indices, dtype=np.int32)
+    group = np.asarray(group, dtype=bool)
+
+    if len(node_indices) != len(group):
+        raise ValueError("[!] 'group' and 'indices' must have the same length")
+
+    if weight_permutation not in {"none", "replicate", "diss", "group"}:
+        raise ValueError(f"[!] Unknown weight_permutation method: {weight_permutation}")
+
+    if weight_permutation == "replicate":
+        node_weights = weights[node_indices]
         if not np.all(node_weights == np.round(node_weights)):
             raise ValueError("[!] For 'replicate' method, weights must be integers")
-        
-        # Replicate groups and indices
+
         expanded_group = []
         expanded_indices = []
-        for i, idx in enumerate(indices):
+        for i, idx in enumerate(node_indices):
             w = int(node_weights[i])
+            if w <= 0:
+                continue
             expanded_group.extend([group[i]] * w)
             expanded_indices.extend([idx] * w)
-        
-        expanded_group = np.array(expanded_group, dtype=bool)
-        expanded_indices = np.array(expanded_indices, dtype=np.int32)
-        
-        def statistic_func(grp, perm_indices):
-            grp2 = ~grp  # Complement group
-            return internal_replicate(grp, perm_indices, expanded_indices, distance_matrix, grp2)
-        
-        # Update group and indices for replicate case
-        group = expanded_group
-        indiv = expanded_indices
-        n = len(group)
+
+        perm_base_group = np.asarray(expanded_group, dtype=bool)
+        perm_base_indices = np.asarray(expanded_indices, dtype=np.int32)
+
+        def statistic_func(grp: np.ndarray, perm_indices: np.ndarray) -> float:
+            permuted = grp[perm_indices]
+            g1_rep = perm_base_indices[permuted]
+            g2_rep = perm_base_indices[~permuted]
+
+            # Equivalent to R tabulate() -> unique + local weights
+            w1 = np.bincount(g1_rep, minlength=distance_matrix.shape[0]).astype(float)
+            w2 = np.bincount(g2_rep, minlength=distance_matrix.shape[0]).astype(float)
+            i1 = np.where(w1 > 0)[0]
+            i2 = np.where(w2 > 0)[0]
+
+            r1 = _compute_submatrix_inertia(
+                distance_matrix, i1, weights=w1[i1], squared=squared, weights_are_local=True
+            )
+            r2 = _compute_submatrix_inertia(
+                distance_matrix, i2, weights=w2[i2], squared=squared, weights_are_local=True
+            )
+            return -(r1 + r2)
+
+        result = permutation_test(perm_base_group, R, statistic_func)
     else:
-        raise ValueError(f"[!] Unknown weight_permutation method: {weight_permutation}")
-    
-    # Run permutation test
-    result = permutation_test(group, R, statistic_func)
+        local_weights = np.asarray(weights[node_indices], dtype=float)
+
+        def statistic_func(grp: np.ndarray, perm_indices: np.ndarray) -> float:
+            permuted = grp[perm_indices]
+            i1 = node_indices[permuted]
+            i2 = node_indices[~permuted]
+
+            if weight_permutation == "none":
+                r1 = _compute_submatrix_inertia(distance_matrix, i1, weights=None, squared=squared)
+                r2 = _compute_submatrix_inertia(distance_matrix, i2, weights=None, squared=squared)
+                return -(r1 + r2)
+
+            # diss: keep original local weights
+            # group: permute local weights with the same permutation as group labels
+            if weight_permutation == "group":
+                permuted_local_weights = local_weights[perm_indices]
+            else:
+                permuted_local_weights = local_weights
+
+            w1 = permuted_local_weights[permuted]
+            w2 = permuted_local_weights[~permuted]
+
+            r1 = _compute_submatrix_inertia(
+                distance_matrix, i1, weights=w1, squared=squared, weights_are_local=True
+            )
+            r2 = _compute_submatrix_inertia(
+                distance_matrix, i2, weights=w2, squared=squared, weights_are_local=True
+            )
+            return -(r1 + r2)
+
+        result = permutation_test(group, R, statistic_func)
     
     # Return p-value for first test statistic
     return float(result['pval'][0])

@@ -277,10 +277,25 @@ def _build_node(
     n = len(indices)
     node_weight = np.sum(weights[indices])
     
-    # Find medoid (sequence closest to center)
-    # For now, use first sequence as placeholder
-    # TODO: Implement proper medoid calculation
-    medoid_idx = indices[0]
+    # Find medoid by minimizing weighted contribution to the node gravity center.
+    # This follows Batagelj/TraMineR logic used in DTNInit().
+    if len(indices) == 0:
+        medoid_idx = -1
+    elif len(indices) == 1:
+        medoid_idx = int(indices[0])
+    else:
+        node_w = weights[indices]
+        total_w = float(np.sum(node_w))
+        if total_w <= 0:
+            medoid_idx = int(indices[0])
+        else:
+            submat = distance_matrix[np.ix_(indices, indices)]
+            # SS for node: 1/W * sum_{i<j} w_i w_j d_ij
+            ss = variance * total_w
+            # contribution(x) = (sum_i w_i d_xi - SS) / W
+            weighted_sums = submat @ node_w
+            contrib = (weighted_sums - ss) / total_w
+            medoid_idx = int(indices[int(np.argmin(contrib))])
     
     # Create node
     node = DissTreeNode(
