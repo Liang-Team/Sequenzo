@@ -24,7 +24,7 @@ Historically, these tools were mixed across modules. The current split keeps
 
 ```python
 from sequenzo.group_comparison import (
-    get_group_differences_overall,
+    get_group_differences,
     get_lrt_test,
     get_bic_test,
 )

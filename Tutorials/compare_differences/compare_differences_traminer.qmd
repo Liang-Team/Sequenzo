@@ -23,9 +23,9 @@ The `compare_differences` module provides two main types of analysis:
 | `compare_groups_across_positions()` | `seqdiff()` |
 | `plot_group_differences_across_positions()` | `plot.seqdiff()` |
 | `print_group_differences_across_positions()` | `print.seqdiff()` |
-| `compare_groups_overall()` | `seqCompare()` |
-| `compute_likelihood_ratio_test()` | `seqLRT()` |
-| `compute_bayesian_information_criterion_test()` | `seqBIC()` |
+| `get_group_differences()` | `seqCompare()` |
+| `get_lrt_test()` | `seqLRT()` |
+| `get_bic_test()` | `seqBIC()` |
 
 TraMineR source code in this repo: `developer/TraMineR-master/` and `developer/TraMineRextras-master/` (R files in `R/`, documentation in `man/`).
 
@@ -292,7 +292,7 @@ The `seqCompare()` function compares two groups of sequences using likelihood ra
 ### 4.1 Basic usage — all statistics
 
 ```{r}
-#| label: seqcompare-basic
+#| label: group-differences-basic
 #| eval: true
 # Compare groups with all statistics (LRT and BIC)
 set.seed(36963)  # For reproducibility
@@ -378,7 +378,7 @@ if (bic_result[1, 2] > 10) {
 ### 4.4 Different distance methods
 
 ```{r}
-#| label: seqcompare-methods
+#| label: group-differences-methods
 #| eval: true
 # LCS method
 set.seed(36963)
@@ -414,7 +414,7 @@ print(compare_ham)
 The `s` parameter controls bootstrap sampling. Use `s=0` for no sampling (use all sequences).
 
 ```{r}
-#| label: seqcompare-sampling
+#| label: group-differences-sampling
 #| eval: true
 # No sampling (s=0) - use all sequences
 set.seed(36963)
@@ -448,7 +448,7 @@ print(compare_s200)
 ### 4.6 Weighted vs unweighted
 
 ```{r}
-#| label: seqcompare-weighted
+#| label: group-differences-weighted
 #| eval: true
 # Weighted (default)
 set.seed(36963)
@@ -496,9 +496,9 @@ print(compare_unweighted)
 | Position-wise analysis | `seqdiff(seqdata, group, cmprange, seqdist.args)` | `compare_groups_across_positions(seqdata, group, cmprange, seqdist_args)` |
 | Plot position-wise | `plot.seqdiff(result, stat)` | `plot_group_differences_across_positions(result, stat)` |
 | Print position-wise | `print.seqdiff(result)` | `print_group_differences_across_positions(result)` |
-| Overall comparison | `seqCompare(seqdata, group, method, s, stat)` | `compare_groups_overall(seqdata, group, method, s, stat)` |
-| LRT only | `seqLRT(seqdata, group, method, s)` | `compute_likelihood_ratio_test(seqdata, group, method, s)` |
-| BIC only | `seqBIC(seqdata, group, method, s)` | `compute_bayesian_information_criterion_test(seqdata, group, method, s)` |
+| Overall comparison | `seqCompare(seqdata, group, method, s, stat)` | `get_group_differences(seqdata, group, method, s, stat)` |
+| LRT only | `seqLRT(seqdata, group, method, s)` | `get_lrt_test(seqdata, group, method, s)` |
+| BIC only | `seqBIC(seqdata, group, method, s)` | `get_bic_test(seqdata, group, method, s)` |
 
 ## References
 

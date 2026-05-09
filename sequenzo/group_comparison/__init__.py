@@ -3,17 +3,17 @@
 @File    : __init__.py
 @Time    : 2026-02-14 20:16
 @Desc    : 
-Group comparison API (position-wise and overall tests).
+Group comparison API (overall LRT/BIC tests).
 """
 
-from .bic_lrt import (
-    get_group_differences_overall,
+from .group_differences import (
+    get_group_differences,
     get_lrt_test,
     get_bic_test,
 )
 
 __all__ = [
-    "get_group_differences_overall",
+    "get_group_differences",
     "get_lrt_test",
     "get_bic_test",
 ]

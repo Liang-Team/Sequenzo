@@ -1,9 +1,11 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : seqcompare.py
+@File    : group_differences.py
 @Time    : 2026-02-15 11:17
-@Desc    : 
+@Desc    :
+
 Likelihood Ratio Test and Bayesian Information Criterion for comparing sets of sequences.
+The TraMineR Extra equivalent is `seqcompare()`.
 """
 
 import numpy as np
@@ -16,7 +18,7 @@ from ..dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from ..define_sequence_data import SequenceData
 
 
-def compute_bayesian_information_criterion_test(
+def get_bic_test(
     seqdata: Union[pd.DataFrame, List[pd.DataFrame]],
     seqdata2: Optional[Union[pd.DataFrame, List[pd.DataFrame]]] = None,
     group: Optional[Union[np.ndarray, pd.Series]] = None,
@@ -30,7 +32,7 @@ def compute_bayesian_information_criterion_test(
     method: str = "OM",
     **kwargs
 ) -> np.ndarray:
-    return compare_groups_overall(
+    return get_group_differences(
         seqdata=seqdata,
         seqdata2=seqdata2,
         group=group,
@@ -47,7 +49,7 @@ def compute_bayesian_information_criterion_test(
     )
 
 
-def compute_likelihood_ratio_test(
+def get_lrt_test(
     seqdata: Union[pd.DataFrame, List[pd.DataFrame]],
     seqdata2: Optional[Union[pd.DataFrame, List[pd.DataFrame]]] = None,
     group: Optional[Union[np.ndarray, pd.Series]] = None,
@@ -61,7 +63,7 @@ def compute_likelihood_ratio_test(
     method: str = "OM",
     **kwargs
 ) -> np.ndarray:
-    return compare_groups_overall(
+    return get_group_differences(
         seqdata=seqdata,
         seqdata2=seqdata2,
         group=group,
@@ -78,7 +80,7 @@ def compute_likelihood_ratio_test(
     )
 
 
-def compare_groups_overall(
+def get_group_differences(
     seqdata: Union[pd.DataFrame, SequenceData, List[pd.DataFrame], List[SequenceData]],
     seqdata2: Optional[Union[pd.DataFrame, SequenceData, List[pd.DataFrame], List[SequenceData]]] = None,
     group: Optional[Union[np.ndarray, pd.Series]] = None,
@@ -182,7 +184,7 @@ def compare_groups_overall(
         if len(lev_g) == 1:
             raise ValueError("[!] There is only one group among valid cases!")
         if len(lev_g) > 2:
-            raise ValueError("[!] Currently seqcompare supports only 2 groups!")
+            raise ValueError("[!] Currently group_comparison supports only 2 groups!")
         seqdata_filtered = seqdata_df.iloc[inotna, :]
         seq1, seq2 = [], []
         if set_var is None:
@@ -202,10 +204,12 @@ def compare_groups_overall(
         n1, n2 = len(seq1[i]), len(seq2[i])
         if n1 >= n2:
             n[i, :] = [n1, n2]
-            seq_a.append(seq1[i]); seq_b.append(seq2[i])
+            seq_a.append(seq1[i])
+            seq_b.append(seq2[i])
         else:
             n[i, :] = [n2, n1]
-            seq_a.append(seq2[i]); seq_b.append(seq1[i])
+            seq_a.append(seq2[i])
+            seq_b.append(seq1[i])
     n_n = n.min(axis=1)
 
     if s > 0:
@@ -219,7 +223,7 @@ def compare_groups_overall(
         r_n2[pd.isna(r_n2)] = 0
 
     nc = 4 if (is_LRT and is_BIC) else 2
-    Results = np.full((G, nc), np.nan)
+    results = np.full((G, nc), np.nan)
     multsple = False
 
     for i in range(G):
@@ -243,7 +247,7 @@ def compare_groups_overall(
                 warnings.simplefilter("ignore")
                 diss = get_distance_matrix(seqdata=combined_seqs, method=method, weighted=weighted, **kwargs)
             diss = diss.values if isinstance(diss, pd.DataFrame) else np.asarray(diss)
-            Results[i, :] = _seqxcomp(r1, r2, diss, weights, is_LRT, is_BIC, squared, weighted, weight_by, LRTpow)
+            results[i, :] = _seqxcomp(r1, r2, diss, weights, is_LRT, is_BIC, squared, weighted, weight_by, LRTpow)
         else:
             np.random.seed(seed)
             mni = n.max(axis=1)[i]
@@ -279,8 +283,6 @@ def compare_groups_overall(
                     r1 = r_s1[j, :]
                     r2 = r_s2[j, :] + len(seq_a[i])
                     diss = diss_full
-                    # TraMineR seqCompare uses original group weights here,
-                    # while r1/r2 are sampled indices over those groups.
                     weights_a = np.ones(len(seq_a[i]))
                     weights_b = np.ones(len(seq_b[i]))
                     if isinstance(seqdata_original, SequenceData) and hasattr(seqdata_original, "weights") and weighted and group is not None:
@@ -294,10 +296,11 @@ def compare_groups_overall(
                 else:
                     indices_a = np.asarray(r_s1[j, :]).flatten().tolist()
                     indices_b = np.asarray(r_s2[j, :]).flatten().tolist()
-                    seqA_df = seq_a[i].iloc[indices_a, :]
-                    seqB_df = seq_b[i].iloc[indices_b, :]
-                    seqAB_df = pd.concat([seqA_df, seqB_df], ignore_index=True)
-                    wA = np.ones(len(seqA_df)); wB = np.ones(len(seqB_df))
+                    seq_a_df = seq_a[i].iloc[indices_a, :]
+                    seq_b_df = seq_b[i].iloc[indices_b, :]
+                    seq_ab_df = pd.concat([seq_a_df, seq_b_df], ignore_index=True)
+                    w_a = np.ones(len(seq_a_df))
+                    w_b = np.ones(len(seq_b_df))
                     if isinstance(seqdata_original, SequenceData) and hasattr(seqdata_original, "weights") and weighted and group is not None:
                         mask_a = gvar == lev_g[0]
                         mask_b = gvar == lev_g[1]
@@ -305,43 +308,43 @@ def compare_groups_overall(
                         mask_b_indices = np.where(mask_b)[0]
                         sampled_indices_a = mask_a_indices[np.asarray(r_s1[j, :]).flatten()]
                         sampled_indices_b = mask_b_indices[np.asarray(r_s2[j, :]).flatten()]
-                        wA = seqdata_original.weights[inotna][sampled_indices_a]
-                        wB = seqdata_original.weights[inotna][sampled_indices_b]
-                    weights = np.concatenate([wA, wB])
-                    temp_states = seqdata_original.states if isinstance(seqdata_original, SequenceData) else sorted(seqAB_df.stack().dropna().unique().tolist())
-                    seqAB = SequenceData(seqAB_df, time=list(seqAB_df.columns), states=temp_states, weights=weights)
+                        w_a = seqdata_original.weights[inotna][sampled_indices_a]
+                        w_b = seqdata_original.weights[inotna][sampled_indices_b]
+                    weights = np.concatenate([w_a, w_b])
+                    temp_states = seqdata_original.states if isinstance(seqdata_original, SequenceData) else sorted(seq_ab_df.stack().dropna().unique().tolist())
+                    seq_ab = SequenceData(seq_ab_df, time=list(seq_ab_df.columns), states=temp_states, weights=weights)
                     r1 = np.arange(len(r_s1[j, :]))
                     r2 = np.arange(len(r_s2[j, :])) + len(r_s1[j, :])
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")
-                        diss = get_distance_matrix(seqdata=seqAB, method=method, weighted=weighted, **kwargs)
+                        diss = get_distance_matrix(seqdata=seq_ab, method=method, weighted=weighted, **kwargs)
                     diss = diss.values if isinstance(diss, pd.DataFrame) else np.asarray(diss)
                 t[j, :] = _seqxcomp(r1, r2, diss, weights, is_LRT, is_BIC, squared, weighted, weight_by, LRTpow)
-            Results[i, :] = t.mean(axis=0)
+            results[i, :] = t.mean(axis=0)
 
     colnames = []
     if is_LRT:
         colnames.extend(["LRT", "p-value"])
     if is_BIC:
         if BFopt is None and multsple:
-            BF2 = np.exp(Results[:, nc - 1] / 2)
-            Results = np.column_stack([Results, BF2])
+            bf2 = np.exp(results[:, nc - 1] / 2)
+            results = np.column_stack([results, bf2])
             colnames.extend(["Delta BIC", "Bayes Factor (Avg)", "Bayes Factor (From Avg BIC)"])
         elif BFopt == 1 and multsple:
             colnames.extend(["Delta BIC", "Bayes Factor (Avg)"])
         elif BFopt == 2 and multsple:
-            BF2 = np.exp(Results[:, nc - 1] / 2)
-            Results[:, nc] = BF2
+            bf2 = np.exp(results[:, nc - 1] / 2)
+            results[:, nc] = bf2
             colnames.extend(["Delta BIC", "Bayes Factor (From Avg BIC)"])
         else:
             colnames.extend(["Delta BIC", "Bayes Factor"])
 
-    Results = pd.DataFrame(Results, columns=colnames)
+    results = pd.DataFrame(results, columns=colnames)
     if set_var is not None:
-        Results.index = lev_set
+        results.index = lev_set
     ptime_end = time.time()
     print(f"elapsed time: {ptime_end - ptime_begin:.3f} seconds")
-    return Results.values
+    return results.values
 
 
 def _seqxcomp(
@@ -360,31 +363,34 @@ def _seqxcomp(
     n0 = n1 + n2
     weighted = weighted and weights is not None
     if weighted:
-        w1 = weights[r1]; w2 = weights[r2]
+        w1 = weights[r1]
+        w2 = weights[r2]
         if weight_by == "by.group":
             w1 = n1 / w1.sum() * w1
             w2 = n2 / w2.sum() * w2
         w = np.concatenate([w1, w2])
     else:
-        w = np.ones(n0); w1 = np.ones(n1); w2 = np.ones(n2)
+        w = np.ones(n0)
+        w1 = np.ones(n1)
+        w2 = np.ones(n2)
 
     diss_array = diss.values if isinstance(diss, pd.DataFrame) else np.asarray(diss)
     r_combined = np.concatenate([r1, r2])
-    dist_S = _disscenter(diss_array[np.ix_(r_combined, r_combined)], weights=w, squared=squared)
-    dist_S1 = _disscenter(diss_array[np.ix_(r1, r1)], weights=w1, squared=squared)
-    dist_S2 = _disscenter(diss_array[np.ix_(r2, r2)], weights=w2, squared=squared)
-    SS = (w * (dist_S ** LRTpow)).sum()
-    SS1 = (w1 * (dist_S1 ** LRTpow)).sum()
-    SS2 = (w2 * (dist_S2 ** LRTpow)).sum()
-    LRT = n0 * (np.log(SS / n0) - np.log((SS1 + SS2) / n0))
+    dist_s = _disscenter(diss_array[np.ix_(r_combined, r_combined)], weights=w, squared=squared)
+    dist_s1 = _disscenter(diss_array[np.ix_(r1, r1)], weights=w1, squared=squared)
+    dist_s2 = _disscenter(diss_array[np.ix_(r2, r2)], weights=w2, squared=squared)
+    ss = (w * (dist_s ** LRTpow)).sum()
+    ss1 = (w1 * (dist_s1 ** LRTpow)).sum()
+    ss2 = (w2 * (dist_s2 ** LRTpow)).sum()
+    lrt = n0 * (np.log(ss / n0) - np.log((ss1 + ss2) / n0))
     res = []
     if is_LRT:
         from scipy.stats import chi2
-        res.extend([LRT, chi2.sf(LRT, df=1)])
+        res.extend([lrt, chi2.sf(lrt, df=1)])
     if is_BIC:
-        BIC = LRT - np.log(n0)
-        BF = np.exp(BIC / 2)
-        res.extend([BIC, BF])
+        bic = lrt - np.log(n0)
+        bf = np.exp(bic / 2)
+        res.extend([bic, bf])
     return np.array(res)
 
 
@@ -408,3 +414,4 @@ def _disscenter(
         dist_center[i] = (weights * diss[i, :]).sum() / total_weight
     weighted_mean = (weights * dist_center).sum() / weights.sum()
     return dist_center - weighted_mean / 2
+

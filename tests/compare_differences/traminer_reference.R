@@ -100,7 +100,7 @@ write.csv(stat_df_4, "tests/compare_differences/ref_seqdiff_stat_squared.csv", r
 cat("Saved: ref_seqdiff_stat_squared.csv\n")
 
 # ============================================================================
-# Test 2: seqCompare (compare_groups_overall)
+# Test 2: seqCompare (get_group_differences)
 # ============================================================================
 cat("\nTest 2: seqCompare with method='LCS', s=100, stat='all'\n")
 set.seed(36963)  # Default seed from TraMineRextras
@@ -161,7 +161,7 @@ write.csv(compare_result_7, "tests/compare_differences/ref_seqCompare_unweighted
 cat("Saved: ref_seqCompare_unweighted.csv\n")
 
 # ============================================================================
-# Test 3: seqLRT (compute_likelihood_ratio_test)
+# Test 3: seqLRT (get_lrt_test)
 # ============================================================================
 cat("\nTest 3: seqLRT with method='LCS', s=100\n")
 set.seed(36963)
@@ -172,7 +172,7 @@ write.csv(lrt_result, "tests/compare_differences/ref_seqLRT_LCS.csv", row.names 
 cat("Saved: ref_seqLRT_LCS.csv\n")
 
 # ============================================================================
-# Test 4: seqBIC (compute_bayesian_information_criterion_test)
+# Test 4: seqBIC (get_bic_test)
 # ============================================================================
 cat("\nTest 4: seqBIC with method='LCS', s=100\n")
 set.seed(36963)

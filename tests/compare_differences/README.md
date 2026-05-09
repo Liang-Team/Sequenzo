@@ -53,15 +53,15 @@ This directory contains **three complementary test files** with different purpos
   - Different `cmprange` values: (0,1), (-2,2)
   - Different distance methods: LCS, OM
   - `squared` parameter: True/False
-- `compare_groups_overall()` vs TraMineRextras's `seqCompare()`:
+- `get_group_differences()` vs TraMineRextras's `seqCompare()`:
   - LRT statistics and p-values
   - BIC statistics and Bayes Factors
   - Different `stat` values: "all", "LRT", "BIC"
   - Different distance methods: LCS, OM
   - Different sample sizes: s=0, s=50, s=100
   - `weighted` parameter: True/False
-- `compute_likelihood_ratio_test()` vs TraMineRextras's `seqLRT()`
-- `compute_bayesian_information_criterion_test()` vs TraMineRextras's `seqBIC()`
+- `get_lrt_test()` vs TraMineRextras's `seqLRT()`
+- `get_bic_test()` vs TraMineRextras's `seqBIC()`
 
 **Prerequisites:**
 Before running these tests, generate TraMineR reference files:

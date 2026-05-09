@@ -158,7 +158,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "plot_group_differences_by_position": ("sequenzo.discrepancy_analysis", "plot_group_differences_by_position"),
     "get_group_differences_report_by_position": ("sequenzo.discrepancy_analysis", "get_group_differences_report_by_position"),
     # group_comparison
-    "get_group_differences_overall": ("sequenzo.group_comparison", "get_group_differences_overall"),
+    "get_group_differences": ("sequenzo.group_comparison", "get_group_differences"),
     "get_lrt_test": ("sequenzo.group_comparison", "get_lrt_test"),
     "get_bic_test": ("sequenzo.group_comparison", "get_bic_test"),
     # inequality_decomposition
@@ -410,7 +410,7 @@ __all__ = [
     "get_group_differences_by_position",
     "plot_group_differences_by_position",
     "get_group_differences_report_by_position",
-    "get_group_differences_overall",
+    "get_group_differences",
     "get_lrt_test",
     "get_bic_test",
     "get_oaxaca_blinder_decomposition",

@@ -50,7 +50,7 @@ from sequenzo.discrepancy_analysis import (
     get_group_differences_report_by_position,
 )
 from sequenzo.group_comparison import (
-    get_group_differences_overall,
+    get_group_differences,
     get_lrt_test,
     get_bic_test,
 )
@@ -58,9 +58,6 @@ from sequenzo.group_comparison import (
 compare_groups_across_positions = get_group_differences_by_position
 plot_group_differences_across_positions = plot_group_differences_by_position
 print_group_differences_across_positions = get_group_differences_report_by_position
-compare_groups_overall = get_group_differences_overall
-compute_likelihood_ratio_test = get_lrt_test
-compute_bayesian_information_criterion_test = get_bic_test
 
 
 # Test dataset setup - using dyadic_children (lsog)
@@ -273,12 +270,12 @@ def test_compare_groups_across_positions_numeric_group(lsog_seqdata, lsog_group_
 
 
 # ============================================================================
-# Test compare_groups_overall
+# Test get_group_differences
 # ============================================================================
 
-def test_compare_groups_overall_basic(lsog_seqdata, lsog_group):
-    """Test basic functionality of compare_groups_overall."""
-    result = compare_groups_overall(
+def test_get_group_differences_basic(lsog_seqdata, lsog_group):
+    """Test basic functionality of get_group_differences."""
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -294,12 +291,12 @@ def test_compare_groups_overall_basic(lsog_seqdata, lsog_group):
     assert result.shape[0] == 1  # One comparison
     assert result.shape[1] >= 4  # At least LRT, p-value, Delta BIC, Bayes Factor
     
-    print("[✓] compare_groups_overall returns correct structure")
+    print("[✓] get_group_differences returns correct structure")
 
 
-def test_compare_groups_overall_stat_LRT(lsog_seqdata, lsog_group):
+def test_get_group_differences_stat_LRT(lsog_seqdata, lsog_group):
     """Test with stat='LRT' only."""
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -320,9 +317,9 @@ def test_compare_groups_overall_stat_LRT(lsog_seqdata, lsog_group):
     print("[✓] stat='LRT' works correctly")
 
 
-def test_compare_groups_overall_stat_BIC(lsog_seqdata, lsog_group):
+def test_get_group_differences_stat_BIC(lsog_seqdata, lsog_group):
     """Test with stat='BIC' only."""
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -344,10 +341,10 @@ def test_compare_groups_overall_stat_BIC(lsog_seqdata, lsog_group):
     print("[✓] stat='BIC' works correctly")
 
 
-def test_compare_groups_overall_different_s(lsog_seqdata, lsog_group):
+def test_get_group_differences_different_s(lsog_seqdata, lsog_group):
     """Test with different sample sizes."""
     for s in [0, 50, 100]:
-        result = compare_groups_overall(
+        result = get_group_differences(
             lsog_seqdata,
             group=lsog_group,
             s=s,
@@ -364,7 +361,7 @@ def test_compare_groups_overall_different_s(lsog_seqdata, lsog_group):
     print("[✓] Different sample sizes work correctly")
 
 
-def test_compare_groups_overall_different_methods(lsog_seqdata, lsog_group):
+def test_get_group_differences_different_methods(lsog_seqdata, lsog_group):
     """Test with different distance methods."""
     methods_config = [
         {'method': 'LCS'},
@@ -374,7 +371,7 @@ def test_compare_groups_overall_different_methods(lsog_seqdata, lsog_group):
     
     for config in methods_config:
         method = config.pop('method')
-        result = compare_groups_overall(
+        result = get_group_differences(
             lsog_seqdata,
             group=lsog_group,
             s=50,  # Smaller sample for faster testing
@@ -392,9 +389,9 @@ def test_compare_groups_overall_different_methods(lsog_seqdata, lsog_group):
     print("[✓] Different distance methods work correctly")
 
 
-def test_compare_groups_overall_unweighted(lsog_seqdata, lsog_group):
+def test_get_group_differences_unweighted(lsog_seqdata, lsog_group):
     """Test with weighted=False."""
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -411,12 +408,12 @@ def test_compare_groups_overall_unweighted(lsog_seqdata, lsog_group):
 
 
 # ============================================================================
-# Test compute_likelihood_ratio_test
+# Test get_lrt_test
 # ============================================================================
 
-def test_compute_likelihood_ratio_test_basic(lsog_seqdata, lsog_group):
-    """Test basic functionality of compute_likelihood_ratio_test."""
-    result = compute_likelihood_ratio_test(
+def test_get_lrt_test_basic(lsog_seqdata, lsog_group):
+    """Test basic functionality of get_lrt_test."""
+    result = get_lrt_test(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -434,16 +431,16 @@ def test_compute_likelihood_ratio_test_basic(lsog_seqdata, lsog_group):
     p_value = result[0, 1]
     assert 0 <= p_value <= 1, f"p-value should be between 0 and 1, got {p_value}"
     
-    print("[✓] compute_likelihood_ratio_test works correctly")
+    print("[✓] get_lrt_test works correctly")
 
 
 # ============================================================================
-# Test compute_bayesian_information_criterion_test
+# Test get_bic_test
 # ============================================================================
 
-def test_compute_bayesian_information_criterion_test_basic(lsog_seqdata, lsog_group):
-    """Test basic functionality of compute_bayesian_information_criterion_test."""
-    result = compute_bayesian_information_criterion_test(
+def test_get_bic_test_basic(lsog_seqdata, lsog_group):
+    """Test basic functionality of get_bic_test."""
+    result = get_bic_test(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -462,7 +459,7 @@ def test_compute_bayesian_information_criterion_test_basic(lsog_seqdata, lsog_gr
         bayes_factor = result[0, 1]
         assert bayes_factor > 0, f"Bayes Factor should be > 0, got {bayes_factor}"
     
-    print("[✓] compute_bayesian_information_criterion_test works correctly")
+    print("[✓] get_bic_test works correctly")
 
 
 # ============================================================================

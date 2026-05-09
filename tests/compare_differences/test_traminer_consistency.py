@@ -17,9 +17,9 @@ produces identical (within floating-point tolerance) results to TraMineR.
 
 **What is tested:**
 - `compare_groups_across_positions()` vs TraMineR's `seqdiff()`: Statistics and discrepancy values
-- `compare_groups_overall()` vs TraMineRextras's `seqCompare()`: LRT and BIC statistics
-- `compute_likelihood_ratio_test()` vs TraMineRextras's `seqLRT()`: LRT statistics
-- `compute_bayesian_information_criterion_test()` vs TraMineRextras's `seqBIC()`: BIC statistics
+- `get_group_differences()` vs TraMineRextras's `seqCompare()`: LRT and BIC statistics
+- `get_lrt_test()` vs TraMineRextras's `seqLRT()`: LRT statistics
+- `get_bic_test()` vs TraMineRextras's `seqBIC()`: BIC statistics
 
 **Prerequisites:**
 Before running these tests, generate TraMineR reference files:
@@ -45,15 +45,12 @@ from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
 from sequenzo.discrepancy_analysis import get_group_differences_by_position
 from sequenzo.group_comparison import (
-    get_group_differences_overall,
+    get_group_differences,
     get_lrt_test,
     get_bic_test,
 )
 
 compare_groups_across_positions = get_group_differences_by_position
-compare_groups_overall = get_group_differences_overall
-compute_likelihood_ratio_test = get_lrt_test
-compute_bayesian_information_criterion_test = get_bic_test
 
 
 # Tolerance for numerical comparisons
@@ -239,18 +236,18 @@ def test_seqdiff_squared_consistency(lsog_seqdata, lsog_group):
 
 
 # ============================================================================
-# Test compare_groups_overall vs TraMineRextras seqCompare
+# Test get_group_differences vs TraMineRextras seqCompare
 # ============================================================================
 
 def test_seqCompare_LCS_all_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (stat='all')."""
+    """Compare get_group_differences with TraMineRextras seqCompare (stat='all')."""
     ref = _load_reference_file("ref_seqCompare_LCS_all.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
     # Run Sequenzo function
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -276,13 +273,13 @@ def test_seqCompare_LCS_all_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_LCS_LRT_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (stat='LRT')."""
+    """Compare get_group_differences with TraMineRextras seqCompare (stat='LRT')."""
     ref = _load_reference_file("ref_seqCompare_LCS_LRT.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -306,13 +303,13 @@ def test_seqCompare_LCS_LRT_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_LCS_BIC_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (stat='BIC')."""
+    """Compare get_group_differences with TraMineRextras seqCompare (stat='BIC')."""
     ref = _load_reference_file("ref_seqCompare_LCS_BIC.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -336,13 +333,13 @@ def test_seqCompare_LCS_BIC_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_OM_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (method='OM')."""
+    """Compare get_group_differences with TraMineRextras seqCompare (method='OM')."""
     ref = _load_reference_file("ref_seqCompare_OM_all.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -366,13 +363,13 @@ def test_seqCompare_OM_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_s0_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (s=0, no sampling)."""
+    """Compare get_group_differences with TraMineRextras seqCompare (s=0, no sampling)."""
     ref = _load_reference_file("ref_seqCompare_s0.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=0,
@@ -395,13 +392,13 @@ def test_seqCompare_s0_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_s50_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (s=50)."""
+    """Compare get_group_differences with TraMineRextras seqCompare (s=50)."""
     ref = _load_reference_file("ref_seqCompare_s50.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=50,
@@ -424,13 +421,13 @@ def test_seqCompare_s50_consistency(lsog_seqdata, lsog_group):
 
 
 def test_seqCompare_unweighted_consistency(lsog_seqdata, lsog_group):
-    """Compare compare_groups_overall with TraMineRextras seqCompare (weighted=FALSE)."""
+    """Compare get_group_differences with TraMineRextras seqCompare (weighted=FALSE)."""
     ref = _load_reference_file("ref_seqCompare_unweighted.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compare_groups_overall(
+    result = get_group_differences(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -453,17 +450,17 @@ def test_seqCompare_unweighted_consistency(lsog_seqdata, lsog_group):
 
 
 # ============================================================================
-# Test compute_likelihood_ratio_test vs TraMineRextras seqLRT
+# Test get_lrt_test vs TraMineRextras seqLRT
 # ============================================================================
 
 def test_seqLRT_consistency(lsog_seqdata, lsog_group):
-    """Compare compute_likelihood_ratio_test with TraMineRextras seqLRT."""
+    """Compare get_lrt_test with TraMineRextras seqLRT."""
     ref = _load_reference_file("ref_seqLRT_LCS.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compute_likelihood_ratio_test(
+    result = get_lrt_test(
         lsog_seqdata,
         group=lsog_group,
         s=100,
@@ -486,17 +483,17 @@ def test_seqLRT_consistency(lsog_seqdata, lsog_group):
 
 
 # ============================================================================
-# Test compute_bayesian_information_criterion_test vs TraMineRextras seqBIC
+# Test get_bic_test vs TraMineRextras seqBIC
 # ============================================================================
 
 def test_seqBIC_consistency(lsog_seqdata, lsog_group):
-    """Compare compute_bayesian_information_criterion_test with TraMineRextras seqBIC."""
+    """Compare get_bic_test with TraMineRextras seqBIC."""
     ref = _load_reference_file("ref_seqBIC_LCS.csv")
     
     if ref is None:
         pytest.skip("Reference file not found. Run traminer_reference.R first.")
     
-    result = compute_bayesian_information_criterion_test(
+    result = get_bic_test(
         lsog_seqdata,
         group=lsog_group,
         s=100,
