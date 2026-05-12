@@ -23,7 +23,10 @@ from sequenzo.big_data.clara.utils.get_weighted_diss import get_weighted_diss
 from scipy.cluster.hierarchy import cut_tree
 from sequenzo.clustering.fuzzy.wfcmdd_fuzzy_clustering import wfcmdd
 from sequenzo.clustering.k_medoids import KMedoids
-from sequenzo.clustering.sequences_to_variables.helske_regression_variables import fanny_membership
+from sequenzo.clustering.sequences_to_variables.helske_regression_variables import (
+    fanny_membership,
+    medoid_indices_from_kmedoids_result,
+)
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
@@ -200,7 +203,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                     weights=ac2["aggWeights"],
                     verbose=False,
                 )
-                medoids = mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int)[np.unique(clustering)] - 1].to_numpy().flatten()
+                medoid_rows = medoid_indices_from_kmedoids_result(clustering)
+                medoids = mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int)[medoid_rows] - 1].to_numpy().flatten()
 
             refseq = [list(range(0, len(agseqdata))), medoids.tolist()]
             with open(os.devnull, "w") as fnull:

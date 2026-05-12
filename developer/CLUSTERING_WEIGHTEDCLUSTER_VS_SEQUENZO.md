@@ -45,7 +45,7 @@
 | **权重** | 支持 `weights`（hclust 的 members） | 支持 `weights`（`get_weighted_diss` + linkage；与 R `hclust(..., members=weights)` 一致） |
 | **多方法一次比较** | ✅ 一次得到多方法、多 k 的质量表 | ✅ compare_cluster_methods | 见 二.1 |
 
-**结论**：层次聚类、单方法多 k 质量与多方法一次比较 **均已对标**（`diana` / `beta.flexible` 经 R `cluster` 建树，**无权重**时可用；带权时与 R 一样排除）。
+**结论**：层次聚类、单方法多 k 质量与多方法一次比较 **均已对标**（`diana` / `beta.flexible` 在 Python 内实现；**无权重**时可用；带权时与 R 一样排除）。
 
 ---
 
@@ -78,7 +78,7 @@
 | 项目 | WeightedCluster | Sequenzo |
 |------|----------------|----------|
 | **加权 PAM** | `wcKMedoids(diss, k, weights, initialclust, method="PAMonce", cluster.only=…)` | `KMedoids(diss, k, weights, initialclust, method='PAMonce', cluster_only=…)` |
-| **多 k 一次** | `wcKMedRange(diss, kvals, weights)` 直接得到多 k 的划分 + 质量表 | `k_medoids_range(diss, kvals, weights)`；设 `random_state` 时经 R `wcKMedRange` 与 R 逐点一致 |
+| **多 k 一次** | `wcKMedRange(diss, kvals, weights)` 直接得到多 k 的划分 + 质量表 | `k_medoids_range(diss, kvals, weights)`；纯 Python 实现，`random_state` 控制 NumPy 初值 |
 | **Medoid 索引** | 内部 `disscenter(diss, group=clustering, medoids.index=…)` | `disscentertrim(diss, group=..., medoids_index=...)`（C++） |
 
 **结论**：单次 PAM 与多 k 一键 PAM **均已对标**。
@@ -179,5 +179,6 @@
 
 **使用注意（与 R 对齐）**  
 - `aggregate_cases`：`agg_index`、`disagg_index` 为 **1-based**；`agg_weights`、`disagg_weights` 与 R 一致。  
-- `k_medoids_range`：指定 `random_state` 且无自定义 `initialclust` 时调用 R `wcKMedRange`；划分质量在**同一划分**上与 R C++ 一致。  
-- `compare_cluster_methods`：`diana` / `beta.flexible` 经 R `cluster`；**带权**时与 R 一样不可用。
+- `KMedoids` 返回 **1-based medoid 行号**（同 `wcKMedoids`）；`medoid_indices_from_kmedoids_result` / `cluster_labels_from_kmedoids_result` 提供 0-based medoid 行号与 0..K-1 簇标签。  
+- `k_medoids_range`：纯 Python 编排；`random_state` 控制 NumPy 初值，随机划分未必与 R 逐点相同，划分质量在**同一划分**上与 R C++ 一致。  
+- `compare_cluster_methods`：`diana` / `beta.flexible` 为纯 Python 实现；`methods="all"` 且带权时自动排除二者；显式指定且带权会报错，与 R 一致。

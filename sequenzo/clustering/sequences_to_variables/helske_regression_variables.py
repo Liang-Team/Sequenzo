@@ -121,43 +121,50 @@ def medoid_indices_from_kmedoids_result(memb_matrix: np.ndarray) -> np.ndarray:
     """
     Get sorted medoid indices from KMedoids/PAM return value.
 
-    sequenzo KMedoids returns for each row the *medoid index* of its cluster (not cluster id).
-    So unique values are the K medoid indices.
+    ``KMedoids`` returns, for each row, the **1-based medoid row index** of its
+    cluster (WeightedCluster convention). This helper returns **0-based** row
+    indices suitable for indexing ``diss`` or sequence tables.
 
     Parameters
     ----------
     memb_matrix : np.ndarray of int
-        Return value of KMedoids(...).runclusterloop(); length n, values are medoid indices.
+        Return value of :func:`KMedoids`.
 
     Returns
     -------
     np.ndarray of shape (K,)
-        Sorted medoid indices (0-based).
+        Sorted 0-based medoid row indices.
     """
     memb_matrix = np.asarray(memb_matrix, dtype=int).ravel()
+    if memb_matrix.size == 0:
+        return np.array([], dtype=int)
     medoids = np.unique(memb_matrix)
+    if medoids.min() >= 1:
+        medoids = medoids - 1
     return np.sort(medoids)
 
 
 def cluster_labels_from_kmedoids_result(memb_matrix: np.ndarray) -> np.ndarray:
     """
-    Convert KMedoids return (medoid index per row) to 0-based cluster labels 0 .. K-1.
-
-    Useful for hard_classification_variables and for consistent ordering with medoid_indices.
+    Convert KMedoids membership to 0-based cluster labels 0 .. K-1.
 
     Parameters
     ----------
     memb_matrix : np.ndarray of int
-        Return value of KMedoids(...); each entry is the medoid index of that row's cluster.
+        Return value of :func:`KMedoids` (1-based medoid row indices per row).
 
     Returns
     -------
     np.ndarray of shape (n,)
         Cluster labels 0, 1, ..., K-1 (order by medoid index).
     """
-    medoids = medoid_indices_from_kmedoids_result(memb_matrix)
-    # label[i] = j iff memb_matrix[i] == medoids[j]
-    return np.searchsorted(medoids, np.asarray(memb_matrix, dtype=int).ravel())
+    memb_matrix = np.asarray(memb_matrix, dtype=int).ravel()
+    if memb_matrix.size == 0:
+        return memb_matrix
+    if memb_matrix.min() >= 1:
+        memb_matrix = memb_matrix - 1
+    medoids = np.sort(np.unique(memb_matrix))
+    return np.searchsorted(medoids, memb_matrix)
 
 
 # -----------------------------------------------------------------------------

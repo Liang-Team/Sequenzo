@@ -10,11 +10,7 @@ from typing import Any, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 
-from sequenzo.big_data.clara.utils.get_weighted_diss import get_weighted_diss
-from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage
-
 from .k_medoids import KMedoids
-from .utils.weightedcluster_compat import RSampleIntStream, r_k_medoids_range
 from .validation.bootstrap_cluster_range import boot_cluster_range
 from .validation.partition_quality import ClusterRangeResult, cluster_range_from_partitions
 
@@ -36,7 +32,9 @@ def k_medoids_range(
     Run weighted PAM for several values of ``k`` and evaluate each partition.
 
     When ``n_boot == 1`` the function mirrors ``wcKMedRange`` with ``R = 1``.
-    Larger values bootstrap partition quality on the supplied clustering table.
+    ``random_state`` controls NumPy medoid initialisation when ``initialclust`` is
+    not supplied. Larger values bootstrap partition quality on the supplied
+    clustering table.
     """
     diss = np.asarray(diss, dtype=np.float64, order="C")
     if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
@@ -46,22 +44,12 @@ def k_medoids_range(
     if not kvals:
         raise ValueError("kvals must contain at least one cluster count.")
 
-    if random_state is not None and initialclust is None and n_boot <= 1:
-        clustering, stats = r_k_medoids_range(
-            diss,
-            kvals,
-            weights,
-            method=method,
-            seed=random_state,
-        )
-        return ClusterRangeResult(clustering=clustering, kvals=np.asarray(kvals), stats=stats)
-
+    rng = np.random.default_rng(random_state)
     partitions = []
-    sample_stream = (
-        RSampleIntStream(random_state, diss.shape[0], kvals) if random_state is not None else None
-    )
     for k in kvals:
-        initial = sample_stream.sample(k) if sample_stream is not None else None
+        initial = None
+        if initialclust is None and random_state is not None:
+            initial = rng.choice(diss.shape[0], k, replace=False)
         labels = KMedoids(
             diss=diss,
             k=k,

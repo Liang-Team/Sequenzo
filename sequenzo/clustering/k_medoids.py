@@ -13,7 +13,6 @@ import sequenzo.clustering.clustering_c_code
 clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
 
 from sequenzo.clustering.utils.disscenter import disscentertrim
-from sequenzo.clustering.utils.weightedcluster_compat import RSampleIntStream
 
 
 def KMedoids(
@@ -27,7 +26,14 @@ def KMedoids(
     verbose=True,
     random_state=None,
 ):
+    """
+    Weighted PAM / K-medoids on a distance matrix.
 
+    Returns a length-``n`` vector of **1-based medoid row indices** (same convention
+    as WeightedCluster ``wcKMedoids``). For 0-based medoid indices or 0..K-1
+    cluster ids, use :func:`~sequenzo.clustering.medoid_indices_from_kmedoids_result`
+    or :func:`~sequenzo.clustering.cluster_labels_from_kmedoids_result`.
+    """
     # Lazily import the c_code module to avoid circular dependencies during installation
     # from .__init__ import _import_c_code
     # c_code = _import_c_code()
@@ -60,7 +66,8 @@ def KMedoids(
 
     if initialclust is None:
         if random_state is not None:
-            initialclust = RSampleIntStream(random_state, nelements, [k]).sample(k)
+            rng = np.random.default_rng(random_state)
+            initialclust = rng.choice(nelements, k, replace=False)
         else:
             initialclust = np.random.choice(nelements, k, replace=False)
     else:
@@ -84,8 +91,13 @@ def KMedoids(
 
     if isinstance(initialclust, list):
         initialclust = np.asarray(initialclust)
+    if len(initialclust) == k and initialclust.min() >= 1 and initialclust.max() <= nelements:
+        initialclust = initialclust - 1
     if np.any((initialclust >= nelements) | (initialclust < 0)):
-        raise ValueError(f"[!] Starting medoids should be in 1:{nelements}")
+        raise ValueError(
+            f"[!] Starting medoids should be 0-based indices in 0:{nelements - 1} "
+            f"(R-style 1:{nelements} is also accepted)."
+        )
 
     if npass < 0:
         raise ValueError("[!] 'npass' should be greater than 0")

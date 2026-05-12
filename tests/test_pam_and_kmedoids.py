@@ -24,4 +24,4 @@ def test_pam_kmedoids_and_pamonce_smoke():
             verbose=False,
         )
 
-        np.testing.assert_array_equal(labels, np.array([0, 0, 2, 2]))
+        np.testing.assert_array_equal(labels, np.array([1, 1, 3, 3]))

@@ -92,16 +92,14 @@ def test_representativeness_as_dataframe():
 # -----------------------------------------------------------------------------
 
 def test_medoid_indices_from_kmedoids_result():
-    # KMedoids returns medoid index per row (not cluster id)
-    memb = np.array([2, 2, 5, 5, 5, 2])
+    memb = np.array([3, 3, 6, 6, 6, 3])
     medoids = medoid_indices_from_kmedoids_result(memb)
     np.testing.assert_array_equal(medoids, [2, 5])
 
 
 def test_cluster_labels_from_kmedoids_result():
-    memb = np.array([2, 2, 5, 5, 2])
+    memb = np.array([3, 3, 6, 6, 3])
     labels = cluster_labels_from_kmedoids_result(memb)
-    # Medoids sorted = [2, 5]; so 2->0, 5->1
     np.testing.assert_array_equal(labels, [0, 0, 1, 1, 0])
 
 
