@@ -28,7 +28,7 @@ def sequence_tree(
     max_depth: int = 5,
     R: int = 1000,
     pval: float = 0.01,
-    weight_permutation: str = "replicate",
+    weight_permutation: Optional[str] = None,
     squared: bool = False,
     first_split: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -86,12 +86,12 @@ def sequence_tree(
         Default: 0.01
         
     weight_permutation : str, optional
-        Method for handling weights in permutation tests.
-        Default: "replicate"
+        Method for handling weights in permutation tests. Default: None (resolved to
+        "none" without weights, otherwise "replicate").
         
     squared : bool, optional
-        If True, square the distance matrix before analysis.
-        Default: False
+        If True, use exponent v=2 on dissimilarities before analysis. Default False
+        uses nonsquared dissimilarities (v=1).
         
     first_split : str, optional
         Name of variable to force as the first split.

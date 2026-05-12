@@ -239,7 +239,7 @@ class EventSequenceData(EventSequenceList):
                              event_labels_order: Optional[List[str]] = None):
         """Create event sequences from a ``SequenceData`` object.
 
-        TraMineR parameter mapping: ``event_representation`` -> ``tevent``,
+        TraMineR parameter mapping: ``event_representation`` -> ``tevent``-like conversion rule,
         ``event_labels_order`` -> ``alphabet``, ``weighted`` -> ``weighted``.
         """
         return _create_event_sequences(
@@ -614,6 +614,10 @@ def find_frequent_subsequences(event_sequences: EventSequenceList,
     ``min_support_ratio`` -> ``pmin.support``,
     ``search_constraint`` -> ``constraint``.
     
+    Support depends on the counting rule in ``search_constraint``. When timestamps
+    are available, ``search_constraint`` can also restrict matches by time span or
+    time gap between events.
+    
     Args:
         event_sequences: EventSequenceList object
         target_subsequences: Optional list of specific subsequences to search for (as strings)
@@ -704,7 +708,8 @@ def count_subsequence_occurrences(subsequence_results: SubsequenceList,
     
     TraMineR equivalent: seqeapplysub()
     TraMineR parameter mapping: ``subsequence_results`` -> ``fsub``,
-    ``counting_method`` -> ``method``, ``search_constraint`` -> ``constraint``.
+    ``counting_method`` -> ``countMethod`` in ``seqeconstraint()``,
+    ``search_constraint`` -> ``constraint``.
     
     Args:
         subsequence_results: SubsequenceList object (result from find_frequent_subsequences)
@@ -780,6 +785,7 @@ def count_subsequence_occurrences(subsequence_results: SubsequenceList,
 def compare_groups(subsequence_results: SubsequenceList,
                    group_labels: Union[np.ndarray, pd.Series, List],
                    test_method: str = "chisq",
+                   p_adjust_method: Optional[str] = None,
                    pvalue_threshold: Optional[float] = None,
                    weighted: bool = True) -> SubsequenceList:
     """
@@ -787,13 +793,18 @@ def compare_groups(subsequence_results: SubsequenceList,
     
     TraMineR equivalent: seqecmpgroup()
     TraMineR parameter mapping: ``subsequence_results`` -> ``fsub``,
-    ``group_labels`` -> ``group``, ``test_method`` -> ``method``,
-    ``pvalue_threshold`` -> ``pvalue.limit``.
+    ``group_labels`` -> ``group``, ``pvalue_threshold`` -> ``pvalue.limit``.
+    
+    For each subsequence, this function builds a presence/absence indicator for
+    each sequence, cross-tabulates it with ``group_labels``, and computes a
+    chi-square association statistic.
     
     Args:
         subsequence_results: SubsequenceList object (result from find_frequent_subsequences)
         group_labels: Group membership for each sequence (array-like)
-        test_method: Test method ("chisq" for chi-square test, "bonferroni" for Bonferroni correction)
+        test_method: Association test to use. Currently only ``"chisq"`` is supported.
+        p_adjust_method: Optional multiple-testing correction for p-values, such as
+            ``"bonferroni"``.
         pvalue_threshold: Maximum p-value threshold (default: 2.0 for display)
         weighted: If True, use sequence weights
     
@@ -822,10 +833,12 @@ def compare_groups(subsequence_results: SubsequenceList,
         total_weight = float(len(subsequence_results.eseq))
     else:
         total_weight = subsequence_results.eseq.get_total_weight()
-    
+
     try:
-        if test_method == "chisq" or test_method == "bonferroni":
-            bonferroni = (test_method == "bonferroni")
+        if test_method == "chisq":
+            bonferroni = p_adjust_method == "bonferroni"
+            if p_adjust_method is not None and not bonferroni:
+                raise ValueError(f"Unknown p_adjust_method: {p_adjust_method}")
             results = _chi_square_tests(subsequence_results, group_labels, bonferroni, weighted)
         else:
             raise ValueError(f"Unknown test_method: {test_method}")
@@ -911,15 +924,17 @@ def compute_event_transition_matrix(
     use_weights: Optional[bool] = None,
 ) -> pd.DataFrame:
     """
-    Compute the event transition matrix for an EventSequenceList.
+    Summarize adjacent event-order movements for an EventSequenceList.
 
     TraMineR equivalent: seqetm()
     TraMineR parameter mapping: ``event_sequences`` -> ``eseq``,
     ``weighted`` -> ``weighted``.
 
-    This function counts how often each ordered pair of events (i -> j)
-    occurs across all sequences and optionally normalizes the counts
-    into transition probabilities.
+    This helper counts how often each ordered pair of adjacent events (i -> j)
+    occurs across all sequences and optionally normalizes the counts into
+    row-wise probabilities. It should not be confused with TraMineR's formal
+    notion of a transition, where a transition may contain several simultaneous
+    events.
 
     Parameters
     ----------

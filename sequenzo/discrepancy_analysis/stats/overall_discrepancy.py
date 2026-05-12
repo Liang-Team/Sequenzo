@@ -12,11 +12,12 @@ def overall_discrepancy(
     squared: bool = False
 ) -> float:
     """
-    Compute the pseudo-variance (discrepancy) of a distance matrix.
+    Compute the overall discrepancy of a distance matrix.
     
-    This function computes a measure of overall variability in the distance matrix,
-    which is used as the basis for tree-structured analysis. The pseudo-variance
-    represents the total "spread" of sequences in the distance space.
+    This function summarizes between-individual variability of trajectories from
+    pairwise dissimilarities. It plays the role of a generalized variance or
+    inertia, but it is called discrepancy because the input distances need not be
+    Euclidean.
     
     **Corresponds to TraMineR function: `dissvar()`**
     
@@ -32,9 +33,9 @@ def overall_discrepancy(
         Default: None (equal weights)
         
     squared : bool, optional
-        If True, square the distance matrix before computing variance.
-        This is useful when working with squared distances.
-        Default: False
+        If True, use exponent v=2 on dissimilarities before computing discrepancy.
+        Default False uses nonsquared dissimilarities (v=1), as recommended by
+        Studer et al. (2011) for non-Euclidean sequence distances.
         
     Returns
     -------

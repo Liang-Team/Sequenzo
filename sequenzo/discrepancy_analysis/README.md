@@ -1,8 +1,8 @@
 # Discrepancy Analysis
 
 This package implements discrepancy analysis for sequence distances and
-covariates: pseudo-variance, pseudo-ANOVA, permutation tests, multifactor
-models, regression trees, and position-wise comparisons. It mirrors the
+covariates: overall discrepancy, pseudo-ANOVA, permutation tests, multifactor
+models, regression trees, and window-wise comparisons. It mirrors the
 TraMineR `diss*` family and related workflows described in Studer et al.
 (2011).
 
@@ -45,6 +45,16 @@ maintainers. They are not a second public API surface.
 
 Do not use `marginal_factor_association` when you need TraMineR-style
 `dissmfacw` (multifactor, Type II partial effects).
+
+## Weighted permutation defaults
+
+When `weights` is omitted, association and tree functions resolve
+`weight_permutation` to `"none"`. When weights are supplied and the caller does
+not override the mode, the default is `"replicate"`, matching TraMineR
+`dissassoc()`, `disstree()`, and `seqtree()`. For survey or calibration
+weights, pass `weight_permutation="diss"` explicitly, as recommended by Studer
+et al. (2011). The `compare_groups_across_positions()` scan follows TraMineR
+`seqdiff` and uses `"diss"` for weighted local association summaries.
 
 ## Layout
 

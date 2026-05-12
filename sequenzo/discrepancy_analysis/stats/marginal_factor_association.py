@@ -6,12 +6,13 @@ from typing import Optional
 
 from .single_factor_association import single_factor_association
 
+
 def marginal_factor_association(
     distance_matrix: np.ndarray,
     factors: pd.DataFrame,
     weights: Optional[np.ndarray] = None,
     R: int = 0,
-    weight_permutation: str = "none",
+    weight_permutation: Optional[str] = None,
     squared: bool = False
 ) -> pd.DataFrame:
     """
@@ -34,9 +35,9 @@ def marginal_factor_association(
     R : int, default 0
         Number of permutations for each factor-specific association test.
         When R=0, permutation p-values are skipped (faster).
-    weight_permutation : {"none", "replicate", "diss", "group"}, default "none"
-        Weight handling strategy for permutation tests. Passed directly
-        to `single_factor_association`.
+    weight_permutation : {"none", "replicate", "diss", "group"}, optional
+        Weight handling strategy for permutation tests. Default: None (resolved to
+        "none" without weights, otherwise "replicate").
     squared : bool, default False
         Whether to square distances before analysis, passed to
         `single_factor_association`.

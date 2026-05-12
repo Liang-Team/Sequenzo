@@ -253,7 +253,7 @@ def plot_event_parallel_coordinates(
     tick labels, and the plot grows with the longest event name and font size
     (no separate figure legend).
 
-    TraMineR parameter mapping: ``event_sequences`` -> ``seqdata``,
+    TraMineR parameter mapping: ``event_sequences`` -> ``seqelist``,
     ``group_labels`` -> ``group``, ``color_palette`` -> ``cpal``,
     ``event_labels_order`` -> ``alphabet``, ``title`` -> ``main``,
     ``x_label`` -> ``xlab``, ``y_label`` -> ``ylab``.
@@ -803,10 +803,14 @@ def plot_event_dynamics(
     """
     Plot event dynamics as survival or hazard-style curves.
 
+    TraMineRextras equivalent: ``seqedplot()``.
     TraMineR parameter mapping: ``event_sequences`` -> ``seqe``,
     ``group_labels`` -> ``group``, ``num_bins`` -> ``breaks``,
     ``time_range`` -> ``ages``, ``curve_type`` -> ``type``,
     ``excluded_events`` -> ``ignore``, ``show_legend`` -> ``with.legend``.
+
+    The hazard-style view summarizes event occurrence by time bins and is
+    descriptive rather than a full event-history hazard model.
     """
     if not isinstance(event_sequences, EventSequenceList):
         raise TypeError("event_sequences must be an EventSequenceList.")

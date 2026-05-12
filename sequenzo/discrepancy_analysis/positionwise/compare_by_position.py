@@ -26,6 +26,19 @@ def compare_groups_across_positions(
     weighted: bool = True,
     squared: bool = False
 ) -> dict:
+    """Scan window-wise local discrepancy between groups along the time axis.
+
+    For each anchor position, the function extracts a moving sub-sequence window,
+    rebuilds a local distance matrix, and summarizes group discrepancy. This is
+    not a cell-by-cell state composition comparison unless the window length is
+    effectively one time point.
+
+    When ``weighted=True``, local association summaries use
+    ``weight_permutation="diss"``, matching TraMineR ``seqdiff``. Set
+    ``squared=True`` only for sensitivity checks or when the dissimilarity is
+    naturally Euclidean (exponent v=2); the default follows Studer et al. (2011)
+    with nonsquared dissimilarities (v=1).
+    """
     if seqdist_args is None:
         seqdist_args = {"method": "LCS", "norm": "auto"}
     else:

@@ -10,12 +10,15 @@ from ..internal.weighted_inertia import (
     unweighted_residuals_z,
 )
 from ..internal.single_factor_permutation import association_permutation_test
+from ..internal.weight_permutation import resolve_weight_permutation
+
+
 def single_factor_association(
     distance_matrix: np.ndarray,
     group: np.ndarray,
     weights: Optional[np.ndarray] = None,
     R: int = 1000,
-    weight_permutation: str = "replicate",
+    weight_permutation: Optional[str] = None,
     squared: bool = False
 ) -> dict:
     """
@@ -52,15 +55,19 @@ def single_factor_association(
         
     weight_permutation : str, optional
         Method for handling weights in permutation tests. Options:
-        - "replicate": Replicate cases according to weights (weights must be integers)
-        - "diss": Attach weights to the distance matrix
+        - "replicate": Replicate cases according to weights (weights must be integers;
+          default when weights are supplied and ``weight_permutation`` is omitted)
+        - "diss": Permute labels while weights enter the statistic (recommended for
+          survey or calibration weights)
         - "group": Permute at group level
-        - "none": Unweighted permutation test
-        Default: "replicate"
+        - "none": Unweighted permutation test (used automatically when weights is None)
+        Default: None (resolved to "none" without weights, otherwise "replicate")
         
     squared : bool, optional
-        If True, square the distance matrix before analysis.
-        Default: False
+        If True, use exponent v=2 on dissimilarities before analysis (generalized
+        sum of squares). Default False follows Studer et al. (2011) and uses
+        nonsquared dissimilarities (v=1), which is usually preferable for OM, LCS,
+        and other non-Euclidean sequence distances.
         
     Returns
     -------
@@ -143,7 +150,6 @@ def single_factor_association(
     unweighted = weights is None
     if unweighted:
         weights = np.ones(n, dtype=np.float64)
-        weight_permutation = "none"
     else:
         weights = np.asarray(weights, dtype=np.float64)
         if len(weights) != n:
@@ -153,6 +159,11 @@ def single_factor_association(
             )
         # Filter weights for valid cases
         weights = weights[valid_mask] if not np.all(valid_mask) else weights
+
+    weight_permutation = resolve_weight_permutation(
+        None if unweighted else weights,
+        weight_permutation,
+    )
     
     # Convert group to integer codes
     group_factor = pd.Categorical(group)

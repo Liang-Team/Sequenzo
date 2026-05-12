@@ -1,4 +1,8 @@
 """
+@Author  : Yuqi Liang 梁彧祺
+@File    : special_linkage.py
+@Time    : 12/05/2026 09:57
+@Desc    : 
 Special hierarchical linkage methods used by ``compare_cluster_methods``.
 
 Implements ``diana`` and ``beta.flexible`` (R ``cluster`` / WeightedCluster

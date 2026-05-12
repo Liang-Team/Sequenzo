@@ -17,6 +17,7 @@ from ..stats.overall_discrepancy import overall_discrepancy
 from ..stats.single_factor_association import single_factor_association
 from ..internal.weighted_inertia import weighted_inertia_sum
 from ..internal.permutation_engine import test_tree_split_significance
+from ..internal.weight_permutation import resolve_weight_permutation
 
 # Global counter for node IDs
 _node_counter = 1
@@ -44,7 +45,7 @@ def distance_tree(
     max_depth: int = 5,
     R: int = 1000,
     pval: float = 0.01,
-    weight_permutation: str = "replicate",
+    weight_permutation: Optional[str] = None,
     squared: bool = False,
     first_split: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -89,14 +90,15 @@ def distance_tree(
     weight_permutation : str, optional
         Method for handling weights in permutation tests. Options:
         - "replicate": Replicate cases according to weights
-        - "diss": Attach weights to distance matrix
+        - "diss": Permute labels while weights enter the statistic
         - "group": Permute at group level
-        - "none": Unweighted permutation test
-        Default: "replicate"
+        - "none": Unweighted permutation test (used automatically when weights is None)
+        Default: None (resolved to "none" without weights, otherwise "replicate")
         
     squared : bool, optional
-        If True, square the distance matrix before analysis.
-        Default: False
+        If True, use exponent v=2 on dissimilarities before analysis. Default False
+        uses nonsquared dissimilarities (v=1), as recommended by Studer et al. (2011)
+        for non-Euclidean sequence distances.
         
     first_split : str, optional
         Name of variable to force as the first split.
@@ -158,9 +160,9 @@ def distance_tree(
         distance_matrix = distance_matrix ** 2
     
     # Handle weights
+    raw_weights = weights
     if weights is None:
         weights = np.ones(n, dtype=np.float64)
-        weight_permutation = "none"
     else:
         weights = np.asarray(weights, dtype=np.float64)
         if len(weights) != n:
@@ -168,6 +170,8 @@ def distance_tree(
                 f"[!] Length of 'weights' ({len(weights)}) must match "
                 f"distance matrix size ({n})"
             )
+
+    weight_permutation = resolve_weight_permutation(raw_weights, weight_permutation)
     
     # Convert min_size to absolute number if proportion
     total_weight = np.sum(weights)
