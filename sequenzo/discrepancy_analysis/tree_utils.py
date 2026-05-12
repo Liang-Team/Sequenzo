@@ -785,7 +785,7 @@ def dissmergegroups(
             gng = pd.Categorical(gng).codes.astype(int) + 1
             qual = _asw(gng)
             loss = quality_ref - qual
-            if loss < diff:
+            if best_pair is None or loss < diff:
                 diff = loss
                 best_pair = (i, j)
                 best_qual = qual

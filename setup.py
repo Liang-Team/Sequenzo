@@ -819,11 +819,16 @@ class InstallCommand(install):
             print(f"Post-installation setup failed: {e}")
             print("You can manually run: python -m sequenzo.openmp_setup")
 
-# Run the actual setup process
-setup(
-    ext_modules=configure_cpp_extension() + configure_cython_extensions(),
-    cmdclass={
-        "build_ext": BuildExt,
-        "install": InstallCommand,
-    },
-)
+def run_setup():
+    """Run setuptools setup when setup.py is executed as a script."""
+    setup(
+        ext_modules=configure_cpp_extension() + configure_cython_extensions(),
+        cmdclass={
+            "build_ext": BuildExt,
+            "install": InstallCommand,
+        },
+    )
+
+
+if __name__ == "__main__":
+    run_setup()

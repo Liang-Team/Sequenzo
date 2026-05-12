@@ -264,3 +264,9 @@ def test_tree_split_significance(
     
     # Return p-value for first test statistic
     return float(result['pval'][0])
+
+
+# This is a public analysis helper, not a pytest test. It is re-exported as
+# `test_tree_split`, so mark the function object explicitly to prevent pytest
+# from collecting it when users or tests run `from sequenzo import *`.
+test_tree_split_significance.__test__ = False

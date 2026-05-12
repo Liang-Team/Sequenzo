@@ -516,9 +516,84 @@ def plot_event_parallel_coordinates(
     return _finalize_figure(fig, save_as=save_as, dpi=dpi, show=show)
 
 
+def plot_event_sequences(
+    event_sequences: EventSequenceList,
+    type: str = "index",
+    top_n: Optional[int] = None,
+    group=None,
+    color_palette=None,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 8),
+    fontsize: int = 11,
+    save_as: Optional[str] = None,
+    dpi: int = 200,
+    show: bool = False,
+    **kwargs,
+):
+    """
+    Compatibility wrapper for event-sequence index and parallel plots.
+    """
+    if not isinstance(event_sequences, EventSequenceList):
+        raise TypeError("event_sequences must be an EventSequenceList.")
+
+    plot_type = str(type).lower()
+    if plot_type == "parallel":
+        return plot_event_parallel_coordinates(
+            event_sequences,
+            group_labels=group,
+            color_palette=color_palette,
+            title=title if title is not None else "auto",
+            figsize=figsize,
+            fontsize=fontsize,
+            save_as=save_as,
+            dpi=dpi,
+            show=show,
+            **kwargs,
+        )
+    if plot_type != "index":
+        raise ValueError("type must be either 'index' or 'parallel'.")
+
+    n_sequences = len(event_sequences)
+    n_plot = n_sequences if top_n is None else min(max(int(top_n), 0), n_sequences)
+    if n_plot == 0:
+        raise ValueError("No event sequences to plot.")
+
+    dictionary = list(event_sequences.dictionary)
+    event_colors = _get_event_colors(dictionary, cpal=color_palette, seqelist=event_sequences)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for row, seq_idx in enumerate(range(n_plot)):
+        seq = event_sequences[seq_idx]
+        events = np.asarray(seq.events, dtype=int)
+        if len(events) == 0:
+            continue
+        timestamps = np.asarray(seq.timestamps, dtype=float)
+        if len(timestamps) != len(events):
+            timestamps = np.arange(1, len(events) + 1, dtype=float)
+        y = np.full(len(events), row, dtype=float)
+        colors = [
+            event_colors.get(_event_code_to_name(int(code), dictionary), "#888888")
+            for code in events
+        ]
+        if len(timestamps) > 1:
+            ax.plot(timestamps, y, color="0.82", linewidth=0.8, zorder=0)
+        ax.scatter(timestamps, y, c=colors, s=22, edgecolors="white", linewidths=0.25, zorder=2)
+
+    ax.set_ylim(-0.5, n_plot - 0.5)
+    ax.invert_yaxis()
+    ax.set_yticks(np.arange(n_plot))
+    ax.set_yticklabels([str(event_sequences[i].id) for i in range(n_plot)], fontsize=fontsize - 2)
+    _apply_axis_style(ax, xlabel="time", ylabel="sequence", fontsize=fontsize)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize + 1, color="black")
+    fig.tight_layout()
+    return _finalize_figure(fig, save_as=save_as, dpi=dpi, show=show)
+
+
 def plot_subsequence_frequencies(
     subsequence_results: SubsequenceList,
     frequency_values: Optional[Sequence[float]] = None,
+    top_n: Optional[int] = None,
     text_scale: float = 1.0,
     color: str = "steelblue",
     figsize: Tuple[float, float] = (10, 6),
@@ -553,6 +628,12 @@ def plot_subsequence_frequencies(
         default_xlab = "frequency"
 
     labels = [sub.to_string() for sub in subsequence_results.subsequences]
+    if top_n is not None:
+        n_keep = min(max(int(top_n), 0), len(labels))
+        if n_keep == 0:
+            raise ValueError("top_n leaves no subsequences to plot.")
+        labels = labels[:n_keep]
+        values = values[:n_keep]
     order = np.arange(len(labels))
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -860,6 +941,7 @@ def _compute_hazard_curve(
 
 
 __all__ = [
+    "plot_event_sequences",
     "plot_event_parallel_coordinates",
     "plot_subsequence_frequencies",
     "plot_subsequence_group_contrasts",

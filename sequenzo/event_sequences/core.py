@@ -559,6 +559,45 @@ def _create_event_sequences(data: Optional[pd.DataFrame] = None,
     return eseq_list
 
 
+def create_event_sequences(
+    data: Optional[pd.DataFrame] = None,
+    id: Optional[Union[np.ndarray, pd.Series, List]] = None,
+    timestamp: Optional[Union[np.ndarray, pd.Series, List]] = None,
+    event: Optional[Union[np.ndarray, pd.Series, List]] = None,
+    end_event: Optional[str] = None,
+    event_representation: Union[str, np.ndarray] = "transition",
+    tevent: Optional[Union[str, np.ndarray]] = None,
+    use_labels: bool = True,
+    weighted: bool = True,
+    event_labels_order: Optional[List[str]] = None,
+    alphabet: Optional[List[str]] = None,
+    seqdata=None,
+) -> EventSequenceData:
+    """
+    Public TraMineR-friendly wrapper for creating event sequences.
+
+    ``tevent`` and ``alphabet`` are accepted as compatibility aliases for
+    TraMineR-style workflows and older Sequenzo tests.
+    """
+    if tevent is not None:
+        event_representation = tevent
+    if alphabet is not None:
+        event_labels_order = list(alphabet)
+
+    return _create_event_sequences(
+        data=data,
+        id=id,
+        timestamp=timestamp,
+        event=event,
+        end_event=end_event,
+        event_representation=event_representation,
+        use_labels=use_labels,
+        weighted=weighted,
+        event_labels_order=event_labels_order,
+        seqdata=seqdata,
+    )
+
+
 def find_frequent_subsequences(event_sequences: EventSequenceList,
                                target_subsequences: Optional[List[str]] = None,
                                min_support: Optional[float] = None,
@@ -869,6 +908,7 @@ def compute_event_transition_matrix(
     event_sequences: EventSequenceList,
     weighted: bool = True,
     normalize: bool = True,
+    use_weights: Optional[bool] = None,
 ) -> pd.DataFrame:
     """
     Compute the event transition matrix for an EventSequenceList.
@@ -902,6 +942,9 @@ def compute_event_transition_matrix(
             - the weighted count of transitions i -> j       (normalize=False), or
             - the transition probability P(i -> j)           (normalize=True).
     """
+    if use_weights is not None:
+        weighted = use_weights
+
     n_events = len(event_sequences.dictionary)
     if n_events == 0:
         return pd.DataFrame()

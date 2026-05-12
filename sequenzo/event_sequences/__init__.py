@@ -25,10 +25,12 @@ from .core import (
     compute_event_transition_matrix,
     convert_event_sequences_to_tse,
     count_subsequence_occurrences,
+    create_event_sequences,
     find_frequent_subsequences,
 )
 from .visualization import (
     plot_event_dynamics,
+    plot_event_sequences,
     plot_event_parallel_coordinates,
     plot_subsequence_frequencies,
     plot_subsequence_group_contrasts,
@@ -67,6 +69,7 @@ def get_event_sequence_weights(obj: EventSequenceList):
 
 
 __all__ = [
+    "create_event_sequences",
     "find_frequent_subsequences",
     "count_subsequence_occurrences",
     "compare_groups",
@@ -78,6 +81,7 @@ __all__ = [
     "EventSequenceList",
     "EventSequenceConstraint",
     "SubsequenceList",
+    "plot_event_sequences",
     "plot_event_parallel_coordinates",
     "plot_subsequence_frequencies",
     "plot_subsequence_group_contrasts",

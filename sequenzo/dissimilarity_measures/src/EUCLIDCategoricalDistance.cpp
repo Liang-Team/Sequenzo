@@ -38,8 +38,6 @@ public:
         len_ = static_cast<int>(seq_shape[1]);
         seq_ptr_ = sequences_.data();
 
-        dist_matrix_ = py::array_t<double>({nseq_, nseq_});
-
         rseq1_ = refseqS.at(0);
         rseq2_ = refseqS.at(1);
         if (rseq1_ >= 0 && rseq2_ >= 0) {
@@ -68,6 +66,7 @@ public:
     }
 
     py::array_t<double> compute_all_distances() {
+        dist_matrix_ = py::array_t<double>({nseq_, nseq_});
         auto buffer = dist_matrix_.mutable_unchecked<2>();
 
         #pragma omp parallel for schedule(dynamic, 16)
@@ -86,6 +85,25 @@ public:
         }
 
         return dist_matrix_;
+    }
+
+    py::array_t<double> compute_original_condensed_distances(py::array_t<int> seqdata_didxs) const {
+        const int original_nseq = static_cast<int>(seqdata_didxs.shape(0));
+        const long long condensed_len = static_cast<long long>(original_nseq) * (original_nseq - 1) / 2;
+        auto condensed = py::array_t<double>(condensed_len);
+        const int* idxs = seqdata_didxs.data();
+        double* out = condensed.mutable_data();
+
+        #pragma omp parallel for schedule(dynamic, 16)
+        for (int i = 0; i < original_nseq; ++i) {
+            const int ui = idxs[i];
+            const long long row_start = static_cast<long long>(i) * (2 * original_nseq - i - 1) / 2;
+            for (int j = i + 1; j < original_nseq; ++j) {
+                out[row_start + (j - i - 1)] = compute_distance(ui, idxs[j]);
+            }
+        }
+
+        return condensed;
     }
 
     py::array_t<double> compute_refseq_distances() {

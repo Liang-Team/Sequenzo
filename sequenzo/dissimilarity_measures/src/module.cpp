@@ -68,6 +68,7 @@ PYBIND11_MODULE(c_code, m) {
     py::class_<EUCLIDCategoricalDistance>(m, "EUCLIDCategoricalDistance")
             .def(py::init<py::array_t<int>, bool, py::array_t<int>>())
             .def("compute_all_distances", &EUCLIDCategoricalDistance::compute_all_distances)
+            .def("compute_original_condensed_distances", &EUCLIDCategoricalDistance::compute_original_condensed_distances)
             .def("compute_refseq_distances", &EUCLIDCategoricalDistance::compute_refseq_distances);
 
     py::class_<OMspellDistance>(m, "OMspellDistance")

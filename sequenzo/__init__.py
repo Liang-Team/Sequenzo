@@ -14,7 +14,19 @@ from .datasets import load_dataset, list_datasets
 
 # Lazy-load everything else on first access
 import importlib
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from pathlib import Path as _Path
+import tomllib as _tomllib
 from typing import Any
+
+try:
+    _pyproject = _Path(__file__).resolve().parents[1] / "pyproject.toml"
+    __version__ = _tomllib.loads(_pyproject.read_text(encoding="utf-8"))["project"]["version"]
+except Exception:
+    try:
+        __version__ = _pkg_version("sequenzo")
+    except PackageNotFoundError:
+        __version__ = "0+unknown"
 
 # Mapping: attribute_name -> (module_path, attribute_name)
 # Uses full module path for reliable import_module
@@ -285,6 +297,7 @@ def __getattr__(name: str) -> Any:
 
 # Define `__all__` to specify the public API when using `from sequenzo import *`
 __all__ = [
+    "__version__",
     "load_dataset",
     "list_datasets",
     "helpers",

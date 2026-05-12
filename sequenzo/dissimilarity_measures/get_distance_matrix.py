@@ -117,17 +117,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     gc.collect()                           # garbage collection
 
     if opts is not None:
-        seqdata = opts.get('seqdata')
-        method = opts.get('method')
-        refseq = opts.get('refseq')
-        norm = opts.get('norm') or "none"
-        indel = opts.get('indel') or "auto"
-        sm = opts.get('sm')
-        full_matrix = opts.get('full_matrix') or True
-        tpow = opts.get('tpow') or 1.0
-        expcost = opts.get('expcost') or 0.5
-        weighted = opts.get('weighted') or True
-        matrix_display = opts.get('matrix_display') or "full"
+        seqdata = opts.get('seqdata', seqdata)
+        method = opts.get('method', method)
+        refseq = opts.get('refseq', refseq)
+        norm = opts.get('norm', norm)
+        indel = opts.get('indel', indel)
+        sm = opts.get('sm', sm)
+        full_matrix = opts.get('full_matrix', full_matrix)
+        tpow = opts.get('tpow', tpow)
+        expcost = opts.get('expcost', expcost)
+        weighted = opts.get('weighted', weighted)
+        matrix_display = opts.get('matrix_display', matrix_display)
 
     euclid_backend = kwargs.get("euclid_backend", None)
     if opts is not None:
@@ -435,11 +435,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 bool(norm_chi2euclid),
                 refseq_id,
             )
-            unique_dist = euclid.compute_all_distances()
-            matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
 
-            result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
-            dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
+            if full_matrix == False:
+                dist_matrix = np.asarray(
+                    euclid.compute_original_condensed_distances(seqdata_didxs),
+                    dtype=np.float64,
+                )
+            else:
+                unique_dist = euclid.compute_all_distances()
+                matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
+                result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
+                dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
 
             print("[>] Computed Successfully.")
             return dist_matrix
@@ -508,6 +514,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 return result
 
         if refseq_type_b == "none":
+            if full_matrix == False:
+                print("[>] Computed Successfully.")
+                return squareform(np.asarray(result, dtype=np.float64), checks=False)
             dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
         elif refseq_type_b == "sets":
             dist_matrix = pd.DataFrame(
@@ -1025,12 +1034,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     norm_num = norms[1:].index(norm_for_computation)
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
+
+    def _lcs_as_om_sm():
+        lcs_sm = np.full((nstates + 1, nstates + 1), 2.0, dtype=np.float64)
+        np.fill_diagonal(lcs_sm, 0.0)
+        return lcs_sm
     
     # Ensure arrays are writable for C++ code (fixes issue on Windows Intel)
     # Some numpy operations (np.unique, np.hstack, np.vstack) may return read-only arrays
     if not dseqs_num.flags.writeable:
         dseqs_num = np.array(dseqs_num, copy=True)
-    if sm is not None and not sm.flags.writeable:
+    if isinstance(sm, np.ndarray) and not sm.flags.writeable:
         sm = np.array(sm, copy=True)
 
     if _cpp_lengths is not None:
@@ -1176,11 +1190,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = DHD.compute_refseq_distances()
 
         elif method == "LCS":
-            LCS = c_code.LCSdistance(dseqs_num,
-                                     lengths,
-                                     norm_num,
-                                     refseq_id)
-            dist_matrix = LCS.compute_refseq_distances()
+            om = c_code.OMdistance(dseqs_num,
+                                    _lcs_as_om_sm(),
+                                    1.0,
+                                    norm_num,
+                                    lengths,
+                                    refseq_id,
+                                    np.array([], dtype=np.float64))
+            dist_matrix = om.compute_refseq_distances()
 
         elif method == "SVRspell":
             SVRspell = c_code.SVRspellDistance(dseqs_num,
@@ -1249,6 +1266,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     else:
         refseq_id = np.array([-1, -1])
+        _dist2condensed = None
 
         if method == "OM":
             indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
@@ -1341,11 +1359,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = DHD.compute_all_distances()
 
         elif method == "LCS":
-            LCS = c_code.LCSdistance(dseqs_num,
-                                     lengths,
-                                     norm_num,
-                                     refseq_id)
-            dist_matrix = LCS.compute_all_distances()
+            om = c_code.OMdistance(dseqs_num,
+                                    _lcs_as_om_sm(),
+                                    1.0,
+                                    norm_num,
+                                    lengths,
+                                    refseq_id,
+                                    np.array([], dtype=np.float64))
+            dist_matrix = om.compute_all_distances()
 
         elif method == "SVRspell":
             SVRspell = c_code.SVRspellDistance(dseqs_num,
@@ -1408,12 +1429,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if method in ["NMS", "NMSMST", "SVRspell"]:
             dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
 
-        _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+        if _dist2condensed is None:
+            _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
 
-        if full_matrix == False and refseq is None:
-            _dist2condensed = _matrix.padding_condensed()
-        else:
-            _dist2matrix = _matrix.padding_matrix()
+            if full_matrix == False and refseq is None:
+                _dist2condensed = _matrix.padding_condensed()
+            else:
+                _dist2matrix = _matrix.padding_matrix()
 
     if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)

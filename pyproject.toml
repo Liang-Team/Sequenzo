@@ -97,3 +97,12 @@ include = ["sequenzo*"]
 
 [tool.pybind11]
 include = ["pybind11"]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "archive_test",
+]
