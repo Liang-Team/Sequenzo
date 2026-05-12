@@ -29,7 +29,6 @@ unit_test/
 
 # 通常忽略所有 .c 和 .so 文件（先写忽略规则）
 *.c
-*.cpp
 *.so
 *.dylib
 *.o

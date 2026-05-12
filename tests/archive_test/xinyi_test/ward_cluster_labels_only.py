@@ -570,7 +570,7 @@ if __name__ == "__main__":
     benchmark_fast_paths(
         sizes=[10000, 15000, 20000, 25000, 30000],
         # sizes=[30000],
-        seq_len=500,
+        seq_len=30,
         num_clusters=5,
         ward_variant="ward_d2",
         seed=42,
