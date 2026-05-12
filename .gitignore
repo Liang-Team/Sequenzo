@@ -54,3 +54,10 @@ Tutorials/with_event_history_analysis/result.csv
 .RData
 .Rhistory
 tests/archive_test/yapeng_test/generated_datasets/
+
+# Local TraMineR / WeightedCluster reference C++ sources
+developer/**/src/*.cpp
+developer/**/src/*.h
+developer/**/src/*.hpp
+developer/**/src/*.cc
+developer/**/src/*.cxx
