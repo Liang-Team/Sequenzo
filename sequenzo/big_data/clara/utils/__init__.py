@@ -7,7 +7,7 @@
 from .aggregatecases import *
 from .davies_bouldin import *
 from .wfcmdd import *
-from sequenzo.clustering.KMedoids import KMedoids
+from sequenzo.clustering.k_medoids import KMedoids
 
 
 def _import_c_code():

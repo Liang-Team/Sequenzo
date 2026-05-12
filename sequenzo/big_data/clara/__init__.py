@@ -4,7 +4,7 @@
 @Time    : 2025/2/28 00:38
 @Desc    : 
 """
-from .clara import clara
+from .clara import clara, seqclara_range
 from .visualization import plot_scores_from_dataframe
 
 
@@ -22,5 +22,6 @@ def _import_c_code():
 
 __all__ = [
     'clara',
+    'seqclara_range',
     'plot_scores_from_dataframe'
 ]

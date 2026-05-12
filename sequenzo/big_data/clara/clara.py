@@ -1,5 +1,5 @@
 """
-@Author  : 李欣怡
+@Author  : 李欣怡 Xinyi Li
 @File    : clara.py
 @Time    : 2024/12/27 12:04
 @Desc    : 
@@ -19,8 +19,11 @@ from itertools import product
 
 from sequenzo.big_data.clara.utils.aggregatecases import *
 from sequenzo.big_data.clara.utils.davies_bouldin import *
-from sequenzo.clustering.KMedoids import *
-from sequenzo.big_data.clara.utils.get_weighted_diss import *
+from sequenzo.big_data.clara.utils.get_weighted_diss import get_weighted_diss
+from scipy.cluster.hierarchy import cut_tree
+from sequenzo.clustering.fuzzy.wfcmdd_fuzzy_clustering import wfcmdd
+from sequenzo.clustering.k_medoids import KMedoids
+from sequenzo.clustering.sequences_to_variables.helske_regression_variables import fanny_membership
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
@@ -62,8 +65,18 @@ def jaccardCoef(tab):
     return n11 / (n01 + n10 - n11)
 
 
+def _membership_from_labels(labels: np.ndarray) -> np.ndarray:
+    """Convert a hard partition to a binary membership matrix."""
+    labels = np.asarray(labels).reshape(-1)
+    unique_labels = np.unique(labels)
+    membership = np.zeros((labels.size, unique_labels.size), dtype=float)
+    for cluster_idx, cluster_id in enumerate(unique_labels):
+        membership[labels == cluster_id, cluster_idx] = 1.0
+    return membership
+
+
 def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_args=None,
-          criteria=["distance"], stability=False, max_dist=None):
+          criteria=["distance"], stability=False, max_dist=None, m=1.5, dnoise=None):
 
     # ==================
     # Parameter checking
@@ -83,11 +96,12 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     if max(kvals) > sample_size:
         raise ValueError("[!] More clusters than the size of the sample requested.")
 
-    allmethods = ["crisp"]
-    if method.lower() not in [m.lower() for m in allmethods]:
+    allmethods = ["crisp", "fuzzy", "representativeness", "noise"]
+    method = method.lower()
+    if method not in allmethods:
         raise ValueError(f"[!] Unknown method {method}. Please specify one of the following: {', '.join(allmethods)}")
 
-    if method.lower() == "representativeness" and max_dist is None:
+    if method == "representativeness" and max_dist is None:
         raise ValueError("[!] You need to set max.dist when using representativeness method.")
 
     allcriteria = ["distance", "db", "xb", "pbm", "ams"]
@@ -110,7 +124,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     print(f"  - Aggregating {number_seq} sequences...")
 
     ac = DataFrameAggregator().aggregate(seqdata.seqdata)
-    agseqdata = seqdata.seqdata.iloc[ac['aggIndex'], :]
+    agseqdata = seqdata.seqdata.iloc[np.asarray(ac["aggIndex"], dtype=int) - 1, :]
     # agseqdata.attrs['weights'] = None
     ac['probs'] = ac['aggWeights'] / number_seq
     print(f"  - OK ({len(ac['aggWeights'])} unique cases).")
@@ -127,7 +141,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         # Re-aggregate!
         ac2 = DataFrameAggregator().aggregate(mysample)
-        data_subset = agseqdata.iloc[mysample.iloc[ac2['aggIndex'], 0], :]
+        data_subset = agseqdata.iloc[mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int) - 1, 0], :]
 
         with open(os.devnull, 'w') as fnull:
             with redirect_stdout(fnull):
@@ -148,69 +162,128 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         allclust = []
 
         for k in kvals:
-            # Weighted PAM clustering on subsample
-            # TODO : hc 已经是选好的中心点了，为什么初始化 clusterid 的时候要用 -1 呢？
-            #  因为没有必要啊，直接用原来的不好吗？尤其在没有进入 if 分支的情况下，这样处理也能避免 -1 的数据访问越界。所以为什么要初始化为-1呢？
-            clustering = KMedoids(diss=diss, k=k, cluster_only=True, initialclust=hc, weights=ac2['aggWeights'], verbose=False)
-            medoids = mysample.iloc[ac2['aggIndex'][np.unique(clustering)], :]
-            medoids = medoids.to_numpy().flatten()
+            if method in ("fuzzy", "noise"):
+                seed_labels = cut_tree(hc, n_clusters=k).ravel()
+                seed_membership = _membership_from_labels(seed_labels)
+                algo = "FCMdd" if method == "fuzzy" else "NCdd"
+                clustering_c = wfcmdd(
+                    diss,
+                    memb=seed_membership,
+                    weights=ac2["aggWeights"],
+                    method=algo,
+                    m=m,
+                    dnoise=dnoise,
+                )
+                fanny_membership_matrix, _ = fanny_membership(
+                    diss,
+                    k=k,
+                    m=m,
+                    weights=ac2["aggWeights"],
+                )
+                clustering_f = wfcmdd(
+                    diss,
+                    memb=fanny_membership_matrix,
+                    weights=ac2["aggWeights"],
+                    method=algo,
+                    m=m,
+                    dnoise=dnoise,
+                )
+                clustering = clustering_c if clustering_c.functional < clustering_f.functional else clustering_f
+                if method == "noise":
+                    dnoise = clustering.dnoise
+                medoids = mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int)[clustering.mobile_centers] - 1].to_numpy().flatten()
+            else:
+                clustering = KMedoids(
+                    diss=diss,
+                    k=k,
+                    initialclust=hc,
+                    weights=ac2["aggWeights"],
+                    verbose=False,
+                )
+                medoids = mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int)[np.unique(clustering)] - 1].to_numpy().flatten()
 
-            del clustering
-
-            # =====================================================
-            # Compute Distances Between All Sequence to the Medoids
-            # =====================================================
             refseq = [list(range(0, len(agseqdata))), medoids.tolist()]
-            with open(os.devnull, 'w') as fnull:
+            with open(os.devnull, "w") as fnull:
                 with redirect_stdout(fnull):
                     states = np.arange(1, len(seqdata.states) + 1).tolist()
-                    agseqdata = SequenceData(agseqdata,
-                                             time=seqdata.time,
-                                             states=states)
-                    dist_args['seqdata'] = agseqdata
-                    dist_args['refseq'] = refseq
+                    agseqdata_wrapped = SequenceData(
+                        agseqdata,
+                        time=seqdata.time,
+                        states=states,
+                    )
+                    dist_args["seqdata"] = agseqdata_wrapped
+                    dist_args["refseq"] = refseq
                     diss2 = get_distance_matrix(opts=dist_args)
-                    del dist_args['refseq']
-                    agseqdata = agseqdata.seqdata   # Restore scene
+                    del dist_args["refseq"]
 
-            # Compute two minimal distances are used for silhouette width
-            # and other criterions
             diss2 = diss2.to_numpy()
             alphabeta = np.array([np.sort(row)[:2] for row in diss2])
             sil = (alphabeta[:, 1] - alphabeta[:, 0]) / np.maximum(alphabeta[:, 1], alphabeta[:, 0])
 
-            # Allocate to clusters
-            memb = np.argmin(diss2, axis=1)     # Each data point is assigned to its nearest cluster
-
-            mean_diss = np.sum(alphabeta[:, 0] * ac['probs'])
-
-            warnings.filterwarnings('ignore', category=RuntimeWarning)  # The ÷0 case is ignored
-            db = davies_bouldin_internal(diss=diss2, clustering=memb, medoids=medoids, weights=ac['aggWeights'])['db']
-            warnings.resetwarnings()
-            pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
-            ams = np.sum(sil * ac['probs'])
+            if method == "fuzzy":
+                mexp = -1.0 / (m - 1.0)
+                memb = np.power(diss2, mexp)
+                zero_dist = diss2 == 0.0
+                all_med = np.sum(zero_dist, axis=1) > 0
+                memb[all_med, :] = 0.0
+                memb[zero_dist] = 1.0
+                memb = memb / memb.sum(axis=1, keepdims=True)
+                mean_diss = np.sum(np.sum(np.power(memb, m) * diss2, axis=1) * ac["probs"])
+                db = fuzzy_davies_bouldin_internal(diss2, memb, medoids, weights=ac["aggWeights"])["db"]
+                highest_memb = np.sort(memb, axis=1)[:, -2:]
+                crispness = np.power(highest_memb[:, 1] - highest_memb[:, 0], 1.0)
+                pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
+                ams = np.sum(crispness * sil * ac["probs"]) / np.sum(crispness * ac["probs"])
+            elif method == "noise":
+                diss3 = np.column_stack([diss2, np.full(diss2.shape[0], dnoise)])
+                mexp = -1.0 / (m - 1.0)
+                memb = np.power(diss3, mexp)
+                zero_dist = diss3 == 0.0
+                all_med = np.sum(zero_dist, axis=1) > 0
+                memb[all_med, :] = 0.0
+                memb[zero_dist] = 1.0
+                memb = memb / memb.sum(axis=1, keepdims=True)
+                mean_diss = np.sum(np.sum(np.power(memb, m) * diss3, axis=1) * ac["probs"])
+                db = fuzzy_davies_bouldin_internal(
+                    diss2,
+                    memb[:, :-1],
+                    medoids,
+                    weights=ac["aggWeights"],
+                )["db"]
+                highest_memb = np.sort(memb[:, :-1], axis=1)[:, -2:]
+                crispness = np.power(highest_memb[:, 1] - highest_memb[:, 0], 1.0)
+                pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
+                ams = np.sum(crispness * sil * ac["probs"]) / np.sum(crispness * ac["probs"])
+            else:
+                memb = np.argmin(diss2, axis=1)
+                mean_diss = np.sum(alphabeta[:, 0] * ac["probs"])
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                db = davies_bouldin_internal(
+                    diss=diss2,
+                    clustering=memb,
+                    medoids=medoids,
+                    weights=ac["aggWeights"],
+                )["db"]
+                warnings.resetwarnings()
+                pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
+                ams = np.sum(sil * ac["probs"])
 
             distmed = diss2[medoids, :]
-            distmed_flat = distmed[np.triu_indices_from(distmed, k=1)]  # Take the upper triangular part
+            distmed_flat = distmed[np.triu_indices_from(distmed, k=1)]
             minsep = np.min(distmed_flat)
-
             xb = mean_diss / minsep
 
-            del alphabeta
-            del sil
-            del diss2
-            del distmed
-            del minsep
-
-            allclust.append({
-                'mean_diss': mean_diss,
-                'db': db,
-                'pbm': pbm,
-                'ams': ams,
-                'xb': xb,
-                'clustering': memb,
-                'medoids': medoids
-            })
+            allclust.append(
+                {
+                    "mean_diss": mean_diss,
+                    "db": db,
+                    "pbm": pbm,
+                    "ams": ams,
+                    "xb": xb,
+                    "clustering": memb,
+                    "medoids": medoids,
+                }
+            )
 
         del diss
         gc.collect()
@@ -305,15 +378,18 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         _clustering = clustering_all_diss[best]
 
-        disagclust = np.full(seqdata.seqdata.shape[0], -1)
-        for i, index in enumerate(ac["disaggIndex"]):
-            disagclust[i] = _clustering[index] + 1      # 1-based index for clusters
+        if method in ("fuzzy", "noise"):
+            disagclust = _clustering[np.asarray(ac["disaggIndex"], dtype=int) - 1, :]
+        else:
+            disagclust = np.full(seqdata.seqdata.shape[0], -1, dtype=float)
+            for row_idx, agg_idx in enumerate(np.asarray(ac["disaggIndex"], dtype=int) - 1):
+                disagclust[row_idx] = _clustering[agg_idx] + 1
 
         evol_diss = np.maximum.accumulate(objective) if _criteria in ["ams", "pbm"] else np.minimum.accumulate(objective)
 
         # Store the best solution and evaluations of the others
         bestcluster = {
-            "medoids": ac["aggIndex"][med_all_diss[best]],
+            "medoids": np.asarray(ac["aggIndex"], dtype=int)[med_all_diss[best]] - 1,
             "clustering": disagclust,
             "evol_diss": evol_diss,
             "iter_objective": objective,
@@ -332,6 +408,20 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             "R": R,
             "k": k
         }
+
+        if method == "representativeness":
+            refseq = [list(range(len(agseqdata))), bestcluster["medoids"].tolist()]
+            with open(os.devnull, "w") as fnull:
+                with redirect_stdout(fnull):
+                    states = np.arange(1, len(seqdata.states) + 1).tolist()
+                    agseqdata_wrapped = SequenceData(agseqdata, time=seqdata.time, states=states)
+                    dist_args["seqdata"] = agseqdata_wrapped
+                    dist_args["refseq"] = refseq
+                    diss2 = get_distance_matrix(opts=dist_args)
+                    del dist_args["refseq"]
+            bestcluster["representativeness"] = 1.0 - diss2.to_numpy() / max_dist
+            disagclust = bestcluster["representativeness"][np.asarray(ac["disaggIndex"], dtype=int) - 1, :]
+            bestcluster["clustering"] = disagclust
 
         # Store computed cluster quality
         kresult = {
@@ -403,6 +493,27 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     print("  - Done.")
 
     return ret
+
+
+def seqclara_range(
+    seqdata,
+    R=100,
+    sample_size=None,
+    kvals=None,
+    seqdist_args=None,
+    method="crisp",
+    **kwargs,
+):
+    """WeightedCluster-compatible alias for :func:`clara`."""
+    return clara(
+        seqdata,
+        R=R,
+        sample_size=sample_size,
+        kvals=kvals,
+        dist_args=seqdist_args,
+        method=method,
+        **kwargs,
+    )
 
 
 if __name__ == '__main__':

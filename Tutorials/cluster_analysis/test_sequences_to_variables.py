@@ -26,7 +26,7 @@ if _repo_root not in sys.path:
 
 from sequenzo import load_dataset, SequenceData, get_distance_matrix, KMedoids
 
-from sequenzo.clustering.seqs2vars_utils import max_distance, cluster_labels_to_dummies
+from sequenzo.clustering.sequences_to_variables.helpers import max_distance, cluster_labels_to_dummies
 from sequenzo.clustering.sequences_to_variables import (
     representativeness_matrix,
     medoid_indices_from_kmedoids_result,

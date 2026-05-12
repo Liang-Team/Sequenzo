@@ -7,6 +7,7 @@
 # utils/__init__.py
 
 from .disscenter import disscentertrim
+from .aggregate_cases import AggregateCasesResult, aggregate_cases
 
 
 def _import_c_code():
@@ -23,5 +24,6 @@ def _import_c_code():
 
 __all__ = [
     "disscentertrim",
-    # Add other functions as needed
+    "AggregateCasesResult",
+    "aggregate_cases",
 ]

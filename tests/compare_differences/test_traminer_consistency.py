@@ -43,14 +43,12 @@ import numpy as np
 import os
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
-from sequenzo.discrepancy_analysis import get_group_differences_by_position
+from sequenzo.discrepancy_analysis import compare_groups_across_positions
 from sequenzo.group_comparison import (
     get_group_differences,
     get_lrt_test,
     get_bic_test,
 )
-
-compare_groups_across_positions = get_group_differences_by_position
 
 
 # Tolerance for numerical comparisons

@@ -45,19 +45,15 @@ import numpy as np
 from sequenzo import SequenceData
 from sequenzo.datasets import load_dataset
 from sequenzo.discrepancy_analysis import (
-    get_group_differences_by_position,
-    plot_group_differences_by_position,
-    get_group_differences_report_by_position,
+    compare_groups_across_positions,
+    plot_group_differences_across_positions,
+    print_group_differences_across_positions,
 )
 from sequenzo.group_comparison import (
     get_group_differences,
     get_lrt_test,
     get_bic_test,
 )
-
-compare_groups_across_positions = get_group_differences_by_position
-plot_group_differences_across_positions = plot_group_differences_by_position
-print_group_differences_across_positions = get_group_differences_report_by_position
 
 
 # Test dataset setup - using dyadic_children (lsog)

@@ -4,9 +4,11 @@
 @Time    : 27/02/2025 09:58
 @Desc    : 
 """
+from .compare_cluster_methods import ClusterRangeFamilyResult, compare_cluster_methods
 from .hierarchical_clustering import Cluster, ClusterResults, ClusterQuality
-from .KMedoids import KMedoids
-from .seqs2vars_utils import max_distance, cluster_labels_to_dummies
+from .k_medoids import KMedoids
+from .k_medoids_range import k_medoids_range
+from .utils.aggregate_cases import AggregateCasesResult, aggregate_cases
 from .sequences_to_variables import (
     representativeness_matrix,
     medoid_indices_from_kmedoids_result,
@@ -15,6 +17,26 @@ from .sequences_to_variables import (
     fanny_membership,
     soft_classification_variables,
     pseudoclass_regression,
+    max_distance,
+    cluster_labels_to_dummies,
+)
+from .fuzzy import (
+    wfcmdd,
+    crispness,
+    WfcmddResult,
+    fuzzy_sequence_plot,
+    fuzzy_sequence_plot_single,
+)
+from .validation import (
+    cluster_range_from_partitions,
+    compute_partition_quality,
+    ClusterRangeResult,
+    boot_cluster_range,
+    cluster_association,
+    BootClusterRangeResult,
+    observation_silhouette,
+    rarcat,
+    RarcatResult,
 )
 
 
@@ -35,7 +57,12 @@ __all__ = [
     "Cluster",
     "ClusterResults",
     "ClusterQuality",
+    "ClusterRangeFamilyResult",
+    "compare_cluster_methods",
     "KMedoids",
+    "k_medoids_range",
+    "AggregateCasesResult",
+    "aggregate_cases",
     "max_distance",
     "cluster_labels_to_dummies",
     "representativeness_matrix",
@@ -45,4 +72,18 @@ __all__ = [
     "fanny_membership",
     "soft_classification_variables",
     "pseudoclass_regression",
+    "wfcmdd",
+    "crispness",
+    "WfcmddResult",
+    "fuzzy_sequence_plot",
+    "fuzzy_sequence_plot_single",
+    "cluster_range_from_partitions",
+    "compute_partition_quality",
+    "ClusterRangeResult",
+    "boot_cluster_range",
+    "cluster_association",
+    "BootClusterRangeResult",
+    "observation_silhouette",
+    "rarcat",
+    "RarcatResult",
 ]

@@ -1,46 +1,55 @@
 """
-@Desc: Discrepancy analysis API for sequence group decomposition and trees.
+Discrepancy analysis for sequence distances and covariates.
+
+Import from this package root only. Subpackages under stats/, trees/,
+positionwise/, and internal/ are for maintainers.
 """
 
-from .core import (
-    get_discrepancy,
-    get_group_distance_association,
-    get_multifactor_discrepancy_anova,
-    get_discrepancy_indicators,
-    dissmfacw,
-    dissmergegroups,
+from .stats import (
+    overall_discrepancy,
+    single_factor_association,
+    marginal_factor_association,
+    merge_cluster_groups,
+    distance_multifactor_anova,
+    multifactor_association,
+    individual_indicators,
 )
-from .permutation import permutation_test as get_permutation_test
-from .dissassoc_permutation import dissassoc_permutation_test as get_discrepancy_permutation_test
-from .tree import (
-    build_distance_tree,
-    build_sequence_tree,
+from .internal import permutation_test, association_permutation_test
+from .trees import (
+    distance_tree,
+    sequence_tree,
     test_tree_split,
+    get_leaf_membership,
+    get_classification_rules,
+    assign_to_leaves,
+    plot_tree,
+    print_tree,
+    export_tree_to_dot,
+    DissTreeNode,
+    DissTreeSplit,
 )
 from .positionwise import (
-    get_group_differences_by_position,
-    plot_group_differences_by_position,
-    get_group_differences_report_by_position,
+    compare_groups_across_positions,
+    plot_group_differences_across_positions,
+    print_group_differences_across_positions,
 )
-from .tree_helpers import get_leaf_membership, get_classification_rules, assign_to_leaves
-from .tree_visualization import plot_tree, print_tree, export_tree_to_dot
-from .tree_node import DissTreeNode, DissTreeSplit
 
 __all__ = [
-    "get_discrepancy",
-    "get_group_distance_association",
-    "get_multifactor_discrepancy_anova",
-    "get_discrepancy_indicators",
-    "get_permutation_test",
-    "get_discrepancy_permutation_test",
-    "build_distance_tree",
-    "build_sequence_tree",
+    "overall_discrepancy",
+    "single_factor_association",
+    "marginal_factor_association",
+    "multifactor_association",
+    "distance_multifactor_anova",
+    "individual_indicators",
+    "merge_cluster_groups",
+    "permutation_test",
+    "association_permutation_test",
+    "distance_tree",
+    "sequence_tree",
     "test_tree_split",
-    "get_group_differences_by_position",
-    "plot_group_differences_by_position",
-    "get_group_differences_report_by_position",
-    "dissmfacw",
-    "dissmergegroups",
+    "compare_groups_across_positions",
+    "plot_group_differences_across_positions",
+    "print_group_differences_across_positions",
     "get_leaf_membership",
     "get_classification_rules",
     "assign_to_leaves",
