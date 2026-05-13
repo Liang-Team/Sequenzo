@@ -43,6 +43,10 @@ Positive `total_gap` means `group0` has a higher mean outcome than `group1`.
 decomposition (`normalize_categorical=True`). With continuous covariates only,
 it stays empty; use `by_column` or `by_term` instead.
 
+When `normalize_categorical=True` and `categorical_terms` is omitted, Sequenzo
+auto-detects terms with more than one column as categorical and emits a
+warning. Pass `categorical_terms` explicitly for non-dummy multi-column terms.
+
 Scalar `explained` and `unexplained_returns` keep the raw twofold totals so the
 decomposition identity holds. Detailed tables may sum differently when
 mixed-reference normalization is used.
@@ -53,7 +57,7 @@ original group sizes. All confidence intervals respect `confidence_level`.
 ## Quick start (SA–KOB with sequence clusters)
 
 For life-course typologies from sequence analysis (Rowold, Struffolino, and
-Fasang, 2024), use the SA–KOB wrapper. It builds cluster dummies with internal
+Fasang, 2025), use the SA–KOB wrapper. It builds cluster dummies with internal
 category ids `0 .. k-1`, implements a practical majority-rule version of
 Rowold, Struffolino, and Fasang’s cluster-specific reference-coefficient
 strategy (option III), and returns all `k` clusters in `by_cluster`, including
@@ -92,10 +96,14 @@ scalar components in mixed-reference settings.
 
 Parameter notes:
 
-- `cluster_coefficient_reference` must be `"majority"`, `"group0"`, or
-  `"group1"`. It assigns cluster-level coefficient owners (option III).
-- `fallback_reference` must be `"group0"`, `"group1"`, or `"pooled"`. It is the
-  generic KOB fallback for neutral clusters and non-cluster controls.
+- `cluster_coefficient_reference` must be `"majority"`, `"group0"`, `"group1"`,
+  or `"pooled"` (Rowold et al. options III, I, and II).
+- `fallback_reference` must be `"group0"`, `"group1"`, or `"pooled"`. It applies
+  to non-cluster controls and coefficients coded with owner `-1`.
+- `cluster_coefficient_reference="pooled"` automatically sets
+  `fallback_reference="pooled"`.
+- `neutral_cluster_owner` is `0` or `1` by default for neutral clusters (option III);
+  set to `None` to route neutral clusters through `fallback_reference`.
 - `cluster_owner_overrides` may be keyed by original cluster labels or internal
   category ids; original labels take precedence when both could apply.
 
@@ -126,8 +134,7 @@ You usually do not need to pass `categories=` explicitly.
 ## Related modules
 
 - `sequenzo.group_comparison` — overall two-group tests (LRT, BIC)
-- `sequenzo.clustering.sequences_to_variables` — cluster dummies and
-  representativeness variables (Helske et al., 2024)
+- `sequenzo.clustering` — sequence typologies and cluster-quality diagnostics
 
 ## Reference
 

@@ -351,7 +351,16 @@ def _resolve_categorical_terms(
         return set(int(t) for t in categorical_terms)
 
     unique_terms, counts = np.unique(term_ids, return_counts=True)
-    return set(int(t) for t, count in zip(unique_terms, counts) if count > 1)
+    auto_terms = set(int(t) for t, count in zip(unique_terms, counts) if count > 1)
+    if auto_terms:
+        warnings.warn(
+            "[oaxaca_blinder_decomposition] categorical_terms not specified; "
+            "treating terms with more than one column as categorical. "
+            "Pass categorical_terms explicitly when using non-dummy multi-column terms.",
+            UserWarning,
+            stacklevel=3,
+        )
+    return auto_terms
 
 
 def _compute_reference_coefficients(

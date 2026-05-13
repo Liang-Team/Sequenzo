@@ -28,7 +28,100 @@ from .kob import (
 from .results import SAKOBBootstrapResult, SAKOBDecompositionResult
 
 _CLUSTER_TERM_ID = 0
-ClusterCoefficientReference = Literal["majority", "group0", "group1"]
+_ClusterCoefficientReference = Literal["majority", "group0", "group1", "pooled"]
+ClusterCoefficientReference = _ClusterCoefficientReference
+
+
+def _resolve_neutral_cluster_owner(neutral_cluster_owner: Optional[int]) -> int:
+    """Return owner code for neutral clusters; ``None`` means use ``fallback_reference`` (-1)."""
+    if neutral_cluster_owner is None:
+        return -1
+    if neutral_cluster_owner not in (0, 1):
+        raise ValueError(
+            "[sa_kob] neutral_cluster_owner must be 0, 1, or None (use fallback_reference)."
+        )
+    return int(neutral_cluster_owner)
+
+
+def _validate_coefficient_owner(owner: int, *, context: str) -> int:
+    if owner not in (-1, 0, 1):
+        raise ValueError(f"{context} coefficient owner must be -1, 0, or 1.")
+    return int(owner)
+
+
+def _finalize_sa_kob_fallback_reference(
+    cluster_coefficient_reference: ClusterCoefficientReference,
+    fallback_reference: Literal["group0", "group1", "pooled"],
+    *,
+    context: str,
+) -> Literal["group0", "group1", "pooled"]:
+    """Option II: pooled cluster references always use pooled fallback coefficients."""
+    if cluster_coefficient_reference != "pooled":
+        return fallback_reference
+    if fallback_reference != "pooled":
+        warnings.warn(
+            f"{context} cluster_coefficient_reference='pooled' overrides "
+            "fallback_reference to 'pooled' (Rowold et al., option II).",
+            UserWarning,
+            stacklevel=3,
+        )
+    return "pooled"
+
+
+def _build_sa_kob_owner_assignment(
+    cluster_covariates: ClusterCovariates,
+    cluster_coefficient_reference: ClusterCoefficientReference,
+    group: np.ndarray,
+    cluster_labels: np.ndarray,
+    *,
+    group0_value: Any,
+    group1_value: Any,
+    majority_gap_threshold: float,
+    neutral_cluster_owner: Optional[int],
+    cluster_owner_overrides: Optional[Mapping[Any, int]],
+) -> tuple[pd.DataFrame, np.ndarray]:
+    if cluster_coefficient_reference == "majority":
+        return detect_cluster_coefficient_owners(
+            group,
+            cluster_labels,
+            k=cluster_covariates.k,
+            category_id_to_label=cluster_covariates.category_id_to_label,
+            group0_value=group0_value,
+            group1_value=group1_value,
+            majority_gap_threshold=majority_gap_threshold,
+            neutral_cluster_owner=neutral_cluster_owner,
+            owner_overrides=cluster_owner_overrides,
+        )
+
+    if cluster_coefficient_reference == "group0":
+        owners_by_category = np.zeros(cluster_covariates.k, dtype=int)
+        classification = "fixed_group0"
+    elif cluster_coefficient_reference == "group1":
+        owners_by_category = np.ones(cluster_covariates.k, dtype=int)
+        classification = "fixed_group1"
+    elif cluster_coefficient_reference == "pooled":
+        owners_by_category = np.full(cluster_covariates.k, -1, dtype=int)
+        classification = "pooled_reference"
+    else:
+        raise RuntimeError(
+            "[_build_sa_kob_owner_assignment] Unhandled cluster_coefficient_reference value."
+        )
+
+    owner_table = pd.DataFrame(
+        {
+            "category_id": np.arange(cluster_covariates.k, dtype=int),
+            "cluster": [
+                cluster_covariates.category_id_to_label[i] for i in range(cluster_covariates.k)
+            ],
+            "coefficient_owner": owners_by_category,
+            "classification": classification,
+            "is_reference_category": [
+                i == cluster_covariates.reference_category_id
+                for i in range(cluster_covariates.k)
+            ],
+        }
+    )
+    return owner_table, owners_by_category
 
 
 @dataclass(frozen=True)
@@ -210,18 +303,22 @@ def detect_cluster_coefficient_owners(
     group0_value: Any = None,
     group1_value: Any = None,
     majority_gap_threshold: float = 50.0,
-    neutral_cluster_owner: int = 0,
+    neutral_cluster_owner: Optional[int] = 0,
     owner_overrides: Optional[Mapping[Any, int]] = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """
     Detect cluster-specific reference owners (Rowold, Struffolino, and Fasang,
-    2024, option III) for all ``k`` clusters, including the omitted baseline.
+    2025, option III) for all ``k`` clusters, including the omitted baseline.
+
+    Neutral clusters receive ``neutral_cluster_owner`` when it is ``0`` or ``1``.
+    When ``neutral_cluster_owner`` is ``None``, neutral clusters are coded ``-1``
+    so ``fallback_reference`` applies in the KOB engine.
 
     ``owner_overrides`` may be keyed by original cluster labels or internal
     category ids; original labels take precedence when both could apply.
+    Override values may be ``-1``, ``0``, or ``1``.
     """
-    if neutral_cluster_owner not in (0, 1):
-        raise ValueError("[detect_cluster_coefficient_owners] neutral_cluster_owner must be 0 or 1.")
+    resolved_neutral_owner = _resolve_neutral_cluster_owner(neutral_cluster_owner)
 
     _, _, mask0, mask1 = _resolve_binary_group_masks(
         group,
@@ -246,19 +343,17 @@ def detect_cluster_coefficient_owners(
                 override_key = category_id
 
         if override_key is not None:
-            owner = int(owner_overrides[override_key])
+            owner = _validate_coefficient_owner(
+                int(owner_overrides[override_key]),
+                context="[detect_cluster_coefficient_owners] owner_overrides",
+            )
             classification = "override"
         elif gap_percent > majority_gap_threshold:
             owner = 0 if share0 > share1 else 1
             classification = "group_specific"
         else:
-            owner = int(neutral_cluster_owner)
+            owner = resolved_neutral_owner
             classification = "neutral"
-
-        if owner not in (0, 1):
-            raise ValueError(
-                "[detect_cluster_coefficient_owners] owner_overrides must map to 0 or 1."
-            )
 
         owners_by_category[category_id] = owner
         rows.append(
@@ -546,7 +641,10 @@ def _run_sa_kob_core(
                 "reference_category_id": cluster_covariates.reference_category_id,
                 "cluster_coefficient_reference_note": (
                     "cluster_coefficient_reference assigns cluster-level coefficient owners. "
-                    "fallback_reference applies to neutral clusters and non-cluster covariates."
+                    "neutral_cluster_owner=None codes neutral clusters as -1 so "
+                    "fallback_reference applies; otherwise neutral clusters use "
+                    "neutral_cluster_owner (0 or 1). fallback_reference applies to "
+                    "non-cluster controls and any coefficient owner coded -1."
                 ),
                 "common_support_table": common_support_table,
                 "common_support_messages": common_support_messages,
@@ -581,7 +679,7 @@ def get_sa_kob_decomposition(
     reference_cluster: Optional[int] = None,
     cluster_coefficient_reference: ClusterCoefficientReference = "majority",
     majority_gap_threshold: float = 50.0,
-    neutral_cluster_owner: int = 0,
+    neutral_cluster_owner: Optional[int] = 0,
     cluster_owner_overrides: Optional[Mapping[Any, int]] = None,
     group0_value: Any = None,
     group1_value: Any = None,
@@ -598,11 +696,14 @@ def get_sa_kob_decomposition(
 ) -> SAKOBDecompositionResult:
     """
     SA-KOB decomposition with life-course cluster typology (Rowold, Struffolino,
-    and Fasang, 2024).
+    and Fasang, 2025).
 
-    ``cluster_coefficient_reference`` controls cluster-level coefficient owners
-    (option III). ``fallback_reference`` is the generic KOB fallback for neutral
-    clusters and non-cluster covariates.
+    ``cluster_coefficient_reference`` selects Rowold et al. reference options I–III.
+    ``fallback_reference`` applies to non-cluster controls and coefficients coded
+    with owner ``-1``. Neutral clusters use ``neutral_cluster_owner`` when it is
+    ``0`` or ``1``; set it to ``None`` to route neutral clusters through
+    ``fallback_reference``. ``cluster_coefficient_reference='pooled'`` always sets
+    ``fallback_reference`` to ``pooled``.
 
     ``cluster_owner_overrides`` may be keyed by original cluster labels or
     internal category ids; original labels take precedence when both could apply.
@@ -626,15 +727,24 @@ def get_sa_kob_decomposition(
         )
         fallback_reference = reference
 
-    if cluster_coefficient_reference not in ("majority", "group0", "group1"):
+    if cluster_coefficient_reference not in ("majority", "group0", "group1", "pooled"):
         raise ValueError(
             "[get_sa_kob_decomposition] cluster_coefficient_reference must be "
-            "'majority', 'group0', or 'group1'."
+            "'majority', 'group0', 'group1', or 'pooled'."
         )
     if fallback_reference not in ("group0", "group1", "pooled"):
         raise ValueError(
             "[get_sa_kob_decomposition] fallback_reference must be 'group0', 'group1', or 'pooled'."
         )
+    if neutral_cluster_owner is not None and neutral_cluster_owner not in (0, 1):
+        raise ValueError(
+            "[get_sa_kob_decomposition] neutral_cluster_owner must be 0, 1, or None."
+        )
+    fallback_reference = _finalize_sa_kob_fallback_reference(
+        cluster_coefficient_reference,
+        fallback_reference,
+        context="[get_sa_kob_decomposition]",
+    )
     if not normalize_categorical:
         raise ValueError(
             "[get_sa_kob_decomposition] normalize_categorical must be True for SA-KOB, "
@@ -662,48 +772,17 @@ def get_sa_kob_decomposition(
         name_prefix=cluster_name_prefix,
     )
 
-    if cluster_coefficient_reference == "majority":
-        owner_table, owners_by_category = detect_cluster_coefficient_owners(
-            group,
-            cluster_labels,
-            k=cluster_covariates.k,
-            category_id_to_label=cluster_covariates.category_id_to_label,
-            group0_value=group0_value,
-            group1_value=group1_value,
-            majority_gap_threshold=majority_gap_threshold,
-            neutral_cluster_owner=neutral_cluster_owner,
-            owner_overrides=cluster_owner_overrides,
-        )
-    elif cluster_coefficient_reference == "group0":
-        owners_by_category = np.zeros(cluster_covariates.k, dtype=int)
-        owner_table = pd.DataFrame(
-            {
-                "category_id": np.arange(cluster_covariates.k, dtype=int),
-                "cluster": [cluster_covariates.category_id_to_label[i] for i in range(cluster_covariates.k)],
-                "coefficient_owner": owners_by_category,
-                "classification": "fixed_group0",
-                "is_reference_category": [
-                    i == cluster_covariates.reference_category_id for i in range(cluster_covariates.k)
-                ],
-            }
-        )
-    elif cluster_coefficient_reference == "group1":
-        owners_by_category = np.ones(cluster_covariates.k, dtype=int)
-        owner_table = pd.DataFrame(
-            {
-                "category_id": np.arange(cluster_covariates.k, dtype=int),
-                "cluster": [cluster_covariates.category_id_to_label[i] for i in range(cluster_covariates.k)],
-                "coefficient_owner": owners_by_category,
-                "classification": "fixed_group1",
-                "is_reference_category": [
-                    i == cluster_covariates.reference_category_id for i in range(cluster_covariates.k)
-                ],
-            }
-        )
-    else:
-        raise RuntimeError(
-            "[get_sa_kob_decomposition] Unhandled cluster_coefficient_reference value."
-        )
+    owner_table, owners_by_category = _build_sa_kob_owner_assignment(
+        cluster_covariates,
+        cluster_coefficient_reference,
+        group,
+        cluster_labels,
+        group0_value=group0_value,
+        group1_value=group1_value,
+        majority_gap_threshold=majority_gap_threshold,
+        neutral_cluster_owner=neutral_cluster_owner,
+        cluster_owner_overrides=cluster_owner_overrides,
+    )
 
     return _run_sa_kob_core(
         y,
@@ -738,7 +817,7 @@ def get_sa_kob_decomposition_bootstrap(
     reference_cluster: Optional[int] = None,
     cluster_coefficient_reference: ClusterCoefficientReference = "majority",
     majority_gap_threshold: float = 50.0,
-    neutral_cluster_owner: int = 0,
+    neutral_cluster_owner: Optional[int] = 0,
     cluster_owner_overrides: Optional[Mapping[Any, int]] = None,
     group0_value: Any = None,
     group1_value: Any = None,
@@ -782,6 +861,11 @@ def get_sa_kob_decomposition_bootstrap(
         raise ValueError(
             "[get_sa_kob_decomposition_bootstrap] normalize_categorical must be True for SA-KOB."
         )
+    fallback_reference = _finalize_sa_kob_fallback_reference(
+        cluster_coefficient_reference,
+        fallback_reference,
+        context="[get_sa_kob_decomposition_bootstrap]",
+    )
 
     point = get_sa_kob_decomposition(
         y=y,
@@ -856,16 +940,16 @@ def get_sa_kob_decomposition_bootstrap(
             name_prefix=cluster_name_prefix,
         )
         if recompute_owners_each_draw:
-            owner_table, owners_by_category = detect_cluster_coefficient_owners(
+            owner_table, owners_by_category = _build_sa_kob_owner_assignment(
+                draw_cov,
+                cluster_coefficient_reference,
                 g_arr[idx],
                 draw_labels,
-                k=draw_cov.k,
-                category_id_to_label=draw_cov.category_id_to_label,
                 group0_value=group0_value,
                 group1_value=group1_value,
                 majority_gap_threshold=majority_gap_threshold,
                 neutral_cluster_owner=neutral_cluster_owner,
-                owner_overrides=cluster_owner_overrides,
+                cluster_owner_overrides=cluster_owner_overrides,
             )
         else:
             owners_by_category = np.array(

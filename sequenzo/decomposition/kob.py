@@ -48,7 +48,7 @@ def get_kob_decomposition(
     For SA-KOB with cluster dummies, set ``normalize_categorical=True`` and pass the
     cluster typology term in ``categorical_terms``. Use ``owner_by_category_by_term``
     to assign cluster-specific reference coefficients (Rowold, Struffolino, and Fasang
-    2024, option III).
+    2025, option III).
     """
     return oaxaca_blinder_decomposition(
         y=y,
