@@ -61,3 +61,6 @@ developer/**/src/*.h
 developer/**/src/*.hpp
 developer/**/src/*.cc
 developer/**/src/*.cxx
+
+# Local reference copies (not part of Sequenzo)
+developer/seqHMM-main/

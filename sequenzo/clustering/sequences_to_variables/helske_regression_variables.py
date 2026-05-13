@@ -1,6 +1,6 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : sequences_to_variables.py
+@File    : helske_regression_variables.py
 @Time    : 01/03/2026 00:07
 @Desc    :
 
@@ -17,7 +17,7 @@ Sociological Methodology, 54(1), 27-51.
 
 Example (representativeness + hard dummies):
     from sequenzo import get_distance_matrix, KMedoids, representativeness_matrix
-    from sequenzo.clustering import (
+    from sequenzo.clustering.sequences_to_variables import (
         medoid_indices_from_kmedoids_result,
         cluster_labels_from_kmedoids_result,
         hard_classification_variables,
@@ -27,15 +27,43 @@ Example (representativeness + hard dummies):
     kmed_result = KMedoids(diss, k=5, method="PAMonce", verbose=False)
     medoids = medoid_indices_from_kmedoids_result(kmed_result)
     R = representativeness_matrix(diss, medoids, d_max=None, as_dataframe=True, ids=seqdata.ids)
-    cluster_labels = cluster_labels_from_kmedoids_result(kmed_result)  # 0-based cluster id
+    cluster_labels = cluster_labels_from_kmedoids_result(kmed_result)
     dummies = hard_classification_variables(cluster_labels, k=5, reference=0, as_dataframe=True, ids=seqdata.ids)
-    # Use R or dummies as covariates in OLS/logistic regression.
 """
 import numpy as np
 import pandas as pd
 from typing import Optional, Union, List, Tuple
 
-from .helpers import max_distance, cluster_labels_to_dummies
+from .helpers import (
+    cluster_labels_from_kmedoids_result,
+    cluster_labels_to_dummies,
+    dummy_column_names,
+    max_distance,
+    medoid_indices_from_kmedoids_result,
+    validate_diss_matrix,
+    validate_membership_matrix,
+)
+from .fanny import (
+    FannyResult,
+    fanny,
+    fanny_membership,
+    medoid_membership_approximation,
+    representative_indices_from_membership,
+)
+
+__all__ = [
+    "representativeness_matrix",
+    "medoid_indices_from_kmedoids_result",
+    "cluster_labels_from_kmedoids_result",
+    "hard_classification_variables",
+    "fanny",
+    "FannyResult",
+    "fanny_membership",
+    "medoid_membership_approximation",
+    "representative_indices_from_membership",
+    "soft_classification_variables",
+    "pseudoclass_regression",
+]
 
 
 # -----------------------------------------------------------------------------
@@ -48,6 +76,7 @@ def representativeness_matrix(
     d_max: Optional[float] = None,
     ids: Optional[Union[List, np.ndarray, pd.Index]] = None,
     as_dataframe: bool = False,
+    representative_names: Optional[List[str]] = None,
 ) -> Union[np.ndarray, pd.DataFrame]:
     """
     Representativeness of each sequence to each representative (medoid).
@@ -64,107 +93,64 @@ def representativeness_matrix(
     d_max : float, optional
         Maximum distance between two sequences. If None, computed as max_distance(diss).
     ids : array-like, optional
-        Sequence IDs for DataFrame index when as_dataframe=True.
+        Sequence IDs for DataFrame index when as_dataframe=True. When ``diss`` is a
+        DataFrame and ``ids`` is None, the DataFrame index is used.
     as_dataframe : bool, default False
-        If True, return a DataFrame with columns R_1, R_2, ... R_K (and index=ids if provided).
+        If True, return a DataFrame with columns R_1, R_2, ... R_K (or ``representative_names``).
+    representative_names : list of str, optional
+        Column names for representativeness variables (length K).
 
     Returns
     -------
     np.ndarray of shape (n, K) or pd.DataFrame
         Representativeness values in [0, 1]; 1 = same as medoid, 0 = farthest.
     """
+    if isinstance(diss, pd.DataFrame) and ids is None:
+        ids = diss.index
     diss = np.asarray(diss, dtype=float)
+    if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
+        raise ValueError("diss must be a square matrix")
+    validate_diss_matrix(diss)
     medoid_indices = np.asarray(medoid_indices, dtype=int).ravel()
     n = diss.shape[0]
     k = len(medoid_indices)
-    if diss.shape[0] != n or diss.shape[1] != n:
-        raise ValueError("diss must be a square matrix")
     if np.any(medoid_indices < 0) or np.any(medoid_indices >= n):
         raise ValueError("medoid_indices must be in [0, n-1]")
+    if representative_names is not None and len(representative_names) != k:
+        raise ValueError("representative_names must have length K")
 
     if d_max is None:
         d_max = max_distance(diss)
     if d_max <= 0:
-        # All same distance: set R to 1 for same medoid, 0 otherwise (or all 1)
-        R = np.zeros((n, k))
-        for j, med in enumerate(medoid_indices):
-            R[med, j] = 1.0
+        R = np.ones((n, k))
         if as_dataframe:
-            return _to_rep_dataframe(R, ids, k)
+            return _to_rep_dataframe(R, ids, k, representative_names)
         return R
 
-    # R_i^k = 1 - diss[i, med_k] / d_max
     R = np.zeros((n, k))
     for j, med in enumerate(medoid_indices):
         R[:, j] = 1.0 - diss[:, med] / d_max
-    # Clamp to [0, 1] in case of numerical noise
     R = np.clip(R, 0.0, 1.0)
 
     if as_dataframe:
-        return _to_rep_dataframe(R, ids, k)
+        return _to_rep_dataframe(R, ids, k, representative_names)
     return R
 
 
-def _to_rep_dataframe(R: np.ndarray, ids, k: int) -> pd.DataFrame:
-    cols = [f"R_{j+1}" for j in range(k)]
+def _to_rep_dataframe(
+    R: np.ndarray,
+    ids,
+    k: int,
+    representative_names: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    if representative_names is not None:
+        cols = list(representative_names)
+    else:
+        cols = [f"R_{j + 1}" for j in range(k)]
     df = pd.DataFrame(R, columns=cols)
     if ids is not None:
         df.index = pd.Index(ids)
     return df
-
-
-# -----------------------------------------------------------------------------
-# Helpers: medoid indices and cluster labels from KMedoids result
-# -----------------------------------------------------------------------------
-
-def medoid_indices_from_kmedoids_result(memb_matrix: np.ndarray) -> np.ndarray:
-    """
-    Get sorted medoid indices from KMedoids/PAM return value.
-
-    ``KMedoids`` returns, for each row, the **1-based medoid row index** of its
-    cluster (WeightedCluster convention). This helper returns **0-based** row
-    indices suitable for indexing ``diss`` or sequence tables.
-
-    Parameters
-    ----------
-    memb_matrix : np.ndarray of int
-        Return value of :func:`KMedoids`.
-
-    Returns
-    -------
-    np.ndarray of shape (K,)
-        Sorted 0-based medoid row indices.
-    """
-    memb_matrix = np.asarray(memb_matrix, dtype=int).ravel()
-    if memb_matrix.size == 0:
-        return np.array([], dtype=int)
-    medoids = np.unique(memb_matrix)
-    if medoids.min() >= 1:
-        medoids = medoids - 1
-    return np.sort(medoids)
-
-
-def cluster_labels_from_kmedoids_result(memb_matrix: np.ndarray) -> np.ndarray:
-    """
-    Convert KMedoids membership to 0-based cluster labels 0 .. K-1.
-
-    Parameters
-    ----------
-    memb_matrix : np.ndarray of int
-        Return value of :func:`KMedoids` (1-based medoid row indices per row).
-
-    Returns
-    -------
-    np.ndarray of shape (n,)
-        Cluster labels 0, 1, ..., K-1 (order by medoid index).
-    """
-    memb_matrix = np.asarray(memb_matrix, dtype=int).ravel()
-    if memb_matrix.size == 0:
-        return memb_matrix
-    if memb_matrix.min() >= 1:
-        memb_matrix = memb_matrix - 1
-    medoids = np.sort(np.unique(memb_matrix))
-    return np.searchsorted(medoids, memb_matrix)
 
 
 # -----------------------------------------------------------------------------
@@ -181,9 +167,6 @@ def hard_classification_variables(
     """
     Turn cluster membership into dummy variables for regression (Helske et al. 2024 Table 1).
 
-    "One cluster is typically chosen as a reference, and the respective (dummy or probability)
-    variable is omitted from the model."
-
     Parameters
     ----------
     labels : array-like of int
@@ -195,7 +178,7 @@ def hard_classification_variables(
     ids : array-like, optional
         Row identifiers for DataFrame index when as_dataframe=True.
     as_dataframe : bool, default False
-        If True, return DataFrame with columns C_1, C_2, ... (K-1 columns).
+        If True, return DataFrame with columns named from sorted unique labels.
 
     Returns
     -------
@@ -204,11 +187,7 @@ def hard_classification_variables(
     """
     dummies = cluster_labels_to_dummies(labels, k=k, reference=reference)
     if as_dataframe:
-        uniq = np.unique(labels)
-        k_val = k if k is not None else len(uniq)
-        ref_idx = min(reference, k_val - 1)
-        col_indices = [i for i in range(k_val) if i != ref_idx]
-        cols = [f"C_{uniq[c]+1}" for c in col_indices]
+        cols = dummy_column_names(labels, k=k, reference=reference, prefix="C")
         df = pd.DataFrame(dummies, columns=cols)
         if ids is not None:
             df.index = pd.Index(ids)
@@ -217,82 +196,20 @@ def hard_classification_variables(
 
 
 # -----------------------------------------------------------------------------
-# Phase 3: Soft classification (FANNY-style membership)
+# Phase 3: Soft classification (FANNY membership)
 # -----------------------------------------------------------------------------
-
-def fanny_membership(
-    diss: np.ndarray,
-    k: int,
-    m: float = 1.4,
-    max_iter: int = 100,
-    tol: float = 1e-6,
-    weights: Optional[np.ndarray] = None,
-    random_state: Optional[int] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Fuzzy (FANNY-style) membership from distance matrix.
-
-    Helske et al. (2024): "we fixed the membership exponent to 1.4".
-    Uses PAM to get medoids, then computes membership u_ik from distances to medoids:
-    u_ik proportional to (1/d_ik)^(1/(m-1)), normalized so each row sums to 1.
-
-    Parameters
-    ----------
-    diss : np.ndarray
-        n x n distance matrix.
-    k : int
-        Number of clusters.
-    m : float, default 1.4
-        Fuzziness exponent (>1). Higher = fuzzier.
-    max_iter : int
-        Maximum iterations for medoid updates (optional refinement).
-    tol : float
-        Convergence tolerance.
-    weights : np.ndarray, optional
-        Observation weights (length n).
-    random_state : int, optional
-        For reproducible PAM initialisation.
-
-    Returns
-    -------
-    U : np.ndarray of shape (n, K)
-        Membership matrix; each row sums to 1.
-    medoid_indices : np.ndarray of shape (K,)
-        Medoid indices (0-based).
-    """
-    from ..k_medoids import KMedoids
-    n = diss.shape[0]
-    if weights is None:
-        weights = np.ones(n, dtype=float)
-    if random_state is not None:
-        np.random.seed(random_state)
-    # Get medoids via PAM
-    labels_pam = KMedoids(diss, k=k, weights=weights, method="PAMonce", verbose=False)
-    medoid_indices = medoid_indices_from_kmedoids_result(labels_pam)
-    # Distances from each point to each medoid: (n, K)
-    d = diss[:, medoid_indices]
-    # Avoid zero distance (point is medoid)
-    eps = np.finfo(float).eps * (1 + np.max(d))
-    d = np.maximum(d, eps)
-    # u_ik \propto (1/d_ik)^(1/(m-1)); then normalize rows
-    inv_exp = 1.0 / (m - 1.0)
-    u = np.power(1.0 / d, inv_exp)
-    row_sum = u.sum(axis=1, keepdims=True)
-    u = u / np.maximum(row_sum, 1e-15)
-    return u, medoid_indices
-
 
 def soft_classification_variables(
     U: np.ndarray,
     reference: int = 0,
     ids: Optional[Union[List, np.ndarray, pd.Index]] = None,
     as_dataframe: bool = False,
+    cluster_names: Optional[List[str]] = None,
 ) -> Union[np.ndarray, pd.DataFrame]:
     """
     Use membership matrix as K-1 continuous predictors (reference omitted).
 
     Helske et al. (2024) Table 1: Soft classification = "Membership degree", Continuous.
-    "One cluster is typically chosen as a reference ... omitted from the model."
 
     Parameters
     ----------
@@ -303,19 +220,27 @@ def soft_classification_variables(
     ids : array-like, optional
         Row IDs for DataFrame.
     as_dataframe : bool, default False
-        If True, return DataFrame with columns P_1, P_2, ... (K-1 columns).
+        If True, return DataFrame with columns P_1, P_2, ... (or ``cluster_names``).
+    cluster_names : list of str, optional
+        Names for clusters (length K); reference name is omitted.
 
     Returns
     -------
     np.ndarray of shape (n, K-1) or pd.DataFrame
     """
-    U = np.asarray(U, dtype=float)
+    U = validate_membership_matrix(U)
     n, k = U.shape
-    ref_idx = min(reference, k - 1)
-    cols_keep = [j for j in range(k) if j != ref_idx]
+    if reference < 0 or reference >= k:
+        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
+    cols_keep = [j for j in range(k) if j != reference]
     X = U[:, cols_keep].copy()
     if as_dataframe:
-        col_names = [f"P_{j+1}" for j in cols_keep]
+        if cluster_names is not None:
+            if len(cluster_names) != k:
+                raise ValueError("cluster_names must have length K")
+            col_names = [f"P_{cluster_names[j]}" for j in cols_keep]
+        else:
+            col_names = [f"P_{j + 1}" for j in cols_keep]
         df = pd.DataFrame(X, columns=col_names)
         if ids is not None:
             df.index = pd.Index(ids)
@@ -334,85 +259,111 @@ def pseudoclass_regression(
     M: int = 20,
     reference: int = 0,
     random_state: Optional[int] = None,
+    model_type: str = "ols",
+    add_intercept: bool = True,
 ) -> dict:
     """
     Pseudoclass regression: draw M categorical memberships from U, fit each, combine with Rubin's rules.
 
-    Helske et al. (2024): "individuals are randomly assigned to clusters multiple times
-    on the basis of their membership probabilities ... combine the results across the models
-    similarly to the multiple imputation technique (Rubin 2004)."
+    Helske et al. (2024): individuals are randomly assigned to clusters on the basis of
+    membership probabilities; results are combined with Rubin (2004) multiple-imputation rules.
 
     Parameters
     ----------
     y : np.ndarray of shape (n,)
-        Outcome variable.
+        Outcome variable (continuous for OLS, binary for logit).
     U : np.ndarray of shape (n, K)
         Membership matrix (rows sum to 1).
     X_fixed : np.ndarray of shape (n, p), optional
-        Other covariates (include intercept column if desired). If None, only dummies are used.
+        Other covariates (intercept added separately when ``add_intercept=True``).
     M : int, default 20
         Number of pseudoclass replications.
     reference : int
         Reference category for dummies (0-based).
     random_state : int, optional
         For reproducible draws.
+    model_type : {"ols", "logit"}, default "ols"
+        Regression model type.
+    add_intercept : bool, default True
+        If True, prepend an intercept column to the design matrix.
 
     Returns
     -------
     dict with keys
-        beta_combined : np.ndarray
-            Combined coefficient estimates (p + K-1 from dummies).
-        se_combined : np.ndarray
-            Combined standard errors.
-        beta_list : list of np.ndarray
-            Per-replication coefficient estimates (for diagnostics).
+        beta_combined, se_combined, cov_combined, beta_list, m_eff, failed
     """
     try:
         import statsmodels.api as sm
-    except ImportError:
-        raise ImportError("pseudoclass_regression requires statsmodels for OLS")
+    except ImportError as exc:
+        raise ImportError("pseudoclass_regression requires statsmodels") from exc
+
+    model_type = model_type.lower()
+    if model_type not in {"ols", "logit"}:
+        raise ValueError("model_type must be 'ols' or 'logit'")
+    if M < 1:
+        raise ValueError("M must be at least 1")
+
+    U = validate_membership_matrix(U)
+    y = np.asarray(y, dtype=float).ravel()
+    n, K = U.shape
+    if y.shape[0] != n:
+        raise ValueError("y must have the same number of rows as U")
 
     rng = np.random.default_rng(random_state)
-    n, K = U.shape
+    if reference < 0 or reference >= K:
+        raise ValueError(f"reference must be between 0 and {K - 1}; got {reference}")
+
     X_fixed = np.asarray(X_fixed, dtype=float) if X_fixed is not None else np.empty((n, 0))
     if X_fixed.size > 0 and X_fixed.shape[0] != n:
         raise ValueError("X_fixed must have same number of rows as U")
-    p_fixed = X_fixed.shape[1] if X_fixed.size > 0 else 0
+
     beta_list = []
-    var_list = []  # variance (s.e.^2) per replication
+    cov_list = []
 
     for _ in range(M):
-        # Draw cluster for each individual from U
-        labels_m = np.array([
-            rng.choice(K, p=U[i, :]) for i in range(n)
-        ])
+        labels_m = np.array([rng.choice(K, p=U[i, :]) for i in range(n)])
         dummies_m = cluster_labels_to_dummies(labels_m, k=K, reference=reference)
-        if p_fixed > 0:
-            X_m = np.hstack([X_fixed, dummies_m])
-        else:
-            X_m = dummies_m
+        parts = []
+        if X_fixed.size > 0:
+            parts.append(X_fixed)
+        parts.append(dummies_m)
+        X_m = np.hstack(parts) if parts else dummies_m
+        if add_intercept:
+            X_m = sm.add_constant(X_m, has_constant="add")
         if np.linalg.matrix_rank(X_m) < X_m.shape[1]:
             continue
-        model = sm.OLS(y, X_m).fit()
+        try:
+            if model_type == "ols":
+                model = sm.OLS(y, X_m).fit()
+            else:
+                model = sm.Logit(y, X_m).fit(disp=False)
+        except Exception:
+            continue
         beta_list.append(model.params)
-        var_list.append(model.bse ** 2)
+        cov_list.append(np.asarray(model.cov_params()))
 
-    if len(beta_list) == 0:
+    m_eff = len(beta_list)
+    failed = M - m_eff
+    if m_eff == 0:
         raise RuntimeError("All M replications had rank-deficient design matrix")
+
     beta_stack = np.array(beta_list)
-    var_stack = np.array(var_list)
-    # Ensure same parameter length (in case some runs dropped)
-    n_par = beta_stack.shape[1]
-    # Within-imputation variance (average)
-    W = np.mean(var_stack, axis=0)
-    # Between-imputation variance
-    B = np.var(beta_stack, axis=0, ddof=1)
-    # Rubin: T = W + (1 + 1/M)*B
-    T = W + (1.0 + 1.0 / M) * B
-    se_combined = np.sqrt(T)
+    cov_stack = np.array(cov_list)
+
     beta_combined = np.mean(beta_stack, axis=0)
+    W = np.mean(cov_stack, axis=0)
+    if m_eff == 1:
+        B = np.zeros_like(W)
+    else:
+        B = np.cov(beta_stack, rowvar=False, ddof=1)
+    T = W + (1.0 + 1.0 / m_eff) * B
+    se_combined = np.sqrt(np.diag(T))
+
     return {
         "beta_combined": beta_combined,
         "se_combined": se_combined,
+        "cov_combined": T,
         "beta_list": beta_list,
+        "m_eff": m_eff,
+        "failed": failed,
     }

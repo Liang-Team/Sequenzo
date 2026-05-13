@@ -1,12 +1,37 @@
 """
 @Author  : Yuqi Liang 梁彧祺
-@File    : seqs2vars_utils.py
+@File    : helpers.py
 @Time    : 01/03/2026 23:10
 @Desc    :
 Utilities for "sequences to variables" (Helske et al. 2024).
-Used by sequences_to_variables and related helpers.
 """
 import numpy as np
+
+
+def validate_diss_matrix(diss):
+    """Check square distance/dissimilarity matrix conventions."""
+    diss = np.asarray(diss, dtype=float)
+    if np.any(np.isnan(diss)):
+        raise ValueError("NA values in the dissimilarity matrix are not allowed")
+    if np.any(diss < 0):
+        raise ValueError("diss must contain nonnegative dissimilarities")
+    if not np.allclose(diss, diss.T):
+        raise ValueError("diss must be symmetric")
+    if not np.allclose(np.diag(diss), 0.0):
+        raise ValueError("diss must have zeros on the diagonal")
+    return diss
+
+
+def validate_membership_matrix(U, name="U"):
+    """Check row-stochastic fuzzy membership matrix."""
+    U = np.asarray(U, dtype=float)
+    if U.ndim != 2:
+        raise ValueError(f"{name} must be a 2D membership matrix")
+    if np.any(U < 0):
+        raise ValueError(f"{name} must contain nonnegative membership probabilities")
+    if not np.allclose(U.sum(axis=1), 1.0):
+        raise ValueError(f"Rows of {name} must sum to 1")
+    return U
 
 
 def max_distance(diss):
@@ -32,8 +57,9 @@ def max_distance(diss):
         diss = squareform(diss)
     if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
         raise ValueError("diss must be a square matrix or condensed distance vector")
-    # Upper triangle (excluding diagonal) to avoid double count; diagonal is 0
     n = diss.shape[0]
+    if n < 2:
+        return 0.0
     triu = np.triu_indices(n, k=1)
     d_max = np.max(diss[triu])
     return float(d_max)
@@ -74,12 +100,76 @@ def cluster_labels_to_dummies(labels, k=None, reference=0):
     label_to_idx = {u: i for i, u in enumerate(uniq)}
     idx = np.array([label_to_idx[l] for l in labels])
 
-    # Reference in 0-based index
-    ref_idx = min(reference, k - 1)
-    # Columns: all except ref_idx
+    if reference < 0 or reference >= k:
+        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
+    ref_idx = reference
     col_indices = [i for i in range(k) if i != ref_idx]
     n = len(labels)
     out = np.zeros((n, k - 1), dtype=float)
     for j, c in enumerate(col_indices):
         out[:, j] = (idx == c).astype(float)
     return out
+
+
+def dummy_column_names(labels, k=None, reference=0, prefix="C"):
+    """Column names for omitted-reference dummy encoding."""
+    labels = np.asarray(labels, dtype=int).ravel()
+    categories = np.sort(np.unique(labels))
+    if k is None:
+        k = len(categories)
+    if len(categories) != k:
+        raise ValueError(f"Number of unique labels ({len(categories)}) does not match k={k}")
+    if reference < 0 or reference >= k:
+        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
+    col_indices = [i for i in range(k) if i != reference]
+    return [f"{prefix}_{categories[c]}" for c in col_indices]
+
+
+def medoid_indices_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> np.ndarray:
+    """
+    Sorted medoid row indices from a :func:`KMedoids` return vector.
+
+    ``KMedoids`` assigns each observation the **1-based row index** of its
+    cluster medoid (WeightedCluster convention).
+
+    Parameters
+    ----------
+    assigned_medoid_indices : np.ndarray of int
+        Return value of :func:`KMedoids` (medoid row index per observation).
+
+    Returns
+    -------
+    np.ndarray of shape (K,)
+        Sorted 0-based medoid row indices.
+    """
+    assigned_medoid_indices = np.asarray(assigned_medoid_indices, dtype=int).ravel()
+    if assigned_medoid_indices.size == 0:
+        return np.array([], dtype=int)
+    medoids = np.unique(assigned_medoid_indices)
+    if medoids.min() >= 1:
+        medoids = medoids - 1
+    return np.sort(medoids)
+
+
+def cluster_labels_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> np.ndarray:
+    """
+    0-based cluster labels from a :func:`KMedoids` return vector.
+
+    Parameters
+    ----------
+    assigned_medoid_indices : np.ndarray of int
+        Return value of :func:`KMedoids` (1-based medoid row indices per row).
+
+    Returns
+    -------
+    np.ndarray of shape (n,)
+        Cluster labels ``0 .. K-1`` (ordered by medoid index).
+    """
+    assigned_medoid_indices = np.asarray(assigned_medoid_indices, dtype=int).ravel()
+    if assigned_medoid_indices.size == 0:
+        return assigned_medoid_indices
+    memb = assigned_medoid_indices.copy()
+    if memb.min() >= 1:
+        memb = memb - 1
+    medoids = np.sort(np.unique(memb))
+    return np.searchsorted(medoids, memb)

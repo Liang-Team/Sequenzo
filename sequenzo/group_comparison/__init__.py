@@ -11,7 +11,7 @@ from .group_differences import (
     get_lrt_test,
     get_bic_test,
 )
-from sequenzo.inequality_decomposition import (
+from sequenzo.decomposition import (
     KOBDecompositionResult,
     get_kob_decomposition,
 )

@@ -12,8 +12,8 @@ Use `sequenzo.discrepancy_analysis` for discrepancy, permutation, and tree-based
 distance analysis (`disstree`, `seqtree`) including position-wise/local-window
 discrepancy (`seqdiff`-style).
 
-Use `sequenzo.inequality_decomposition` for Kitagawa-Oaxaca-Blinder (`KOB`)
-decomposition.
+Use `sequenzo.decomposition` for Kitagawa-Oaxaca-Blinder (`KOB`)
+decomposition and SA–KOB.
 
 ## Why This Exists
 
