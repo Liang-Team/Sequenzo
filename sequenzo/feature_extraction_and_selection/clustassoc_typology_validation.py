@@ -16,7 +16,7 @@ import pandas as pd
 from sequenzo.discrepancy_analysis.stats.multifactor_association import distance_multifactor_anova
 
 
-def _one_hot(x: np.ndarray, *, drop_first: bool = False) -> np.ndarray:
+def _one_hot(x: np.ndarray, *, drop_first: bool = True) -> np.ndarray:
     s = pd.Series(np.asarray(x))
     return pd.get_dummies(s, drop_first=drop_first).to_numpy(dtype=float)
 
@@ -40,6 +40,11 @@ def _compute_pseudo_r2_for_terms(
         R=0,
     )
     return res["summary"]
+
+
+def _design_with_intercept(X: np.ndarray) -> np.ndarray:
+    n = X.shape[0]
+    return np.hstack([np.ones((n, 1), dtype=float), np.asarray(X, dtype=float)])
 
 
 def clustassoc_like_typology_validation(
@@ -68,13 +73,15 @@ def clustassoc_like_typology_validation(
             raise ValueError("sample_weights must be a 1D array with length n.")
 
     if covariate_is_categorical:
-        X_cov = _one_hot(y, drop_first=False)
-        design_null = X_cov
-        term_ids_null = [0] * X_cov.shape[1]
+        X_cov = _one_hot(y, drop_first=True)
+        design_null = _design_with_intercept(X_cov)
+        term_ids_null = [0] + [1] * X_cov.shape[1]
     else:
-        design_null = y.reshape(-1, 1).astype(float)
-        term_ids_null = [0]
+        design_null = _design_with_intercept(y.reshape(-1, 1))
+        term_ids_null = [0, 1]
 
+    # term_id 0 is the intercept column; distance_multifactor_anova excludes it
+    # from term_labels (one label per non-intercept factor).
     summary_null = _compute_pseudo_r2_for_terms(
         diss=D,
         design=design_null,
@@ -82,7 +89,7 @@ def clustassoc_like_typology_validation(
         term_labels=["Covariate"],
         weights=w,
     )
-    pseudo_r2_null = float(
+    pseudo_r2_original = float(
         summary_null.loc[summary_null["Variable"] == "Covariate", "PseudoR2"].iloc[0]
     )
 
@@ -92,15 +99,15 @@ def clustassoc_like_typology_validation(
         if lab.shape[0] != n:
             raise ValueError(f"Length mismatch for clustering_labels_by_k[{k}].")
 
-        X_clust = _one_hot(lab, drop_first=False)
+        X_clust = _one_hot(lab, drop_first=True)
         if covariate_is_categorical:
-            X_cov = _one_hot(y, drop_first=False)
-            design_full = np.hstack([X_clust, X_cov])
-            term_ids_full = [0] * X_clust.shape[1] + [1] * X_cov.shape[1]
+            X_cov = _one_hot(y, drop_first=True)
+            design_full = _design_with_intercept(np.hstack([X_clust, X_cov]))
+            term_ids_full = [0] + [1] * X_clust.shape[1] + [2] * X_cov.shape[1]
         else:
             X_cov = y.reshape(-1, 1).astype(float)
-            design_full = np.hstack([X_clust, X_cov])
-            term_ids_full = [0] * X_clust.shape[1] + [1]
+            design_full = _design_with_intercept(np.hstack([X_clust, X_cov]))
+            term_ids_full = [0] + [1] * X_clust.shape[1] + [2]
 
         if verbose:
             print(f"[clustassoc-like] evaluating k={k}")
@@ -115,18 +122,17 @@ def clustassoc_like_typology_validation(
         remaining = float(
             summary_full.loc[summary_full["Variable"] == "Covariate", "PseudoR2"].iloc[0]
         )
-        unaccounted = remaining / pseudo_r2_null if pseudo_r2_null > 0 else np.nan
+        unaccounted = remaining / pseudo_r2_original if pseudo_r2_original > 0 else np.nan
         accounted = 1.0 - unaccounted if np.isfinite(unaccounted) else np.nan
 
         rows.append(
             {
                 "k": int(k),
-                "pseudoR2_null": pseudo_r2_null,
-                "pseudoR2_remaining": remaining,
-                "unaccounted_share": unaccounted,
-                "accounted_share": accounted,
+                "pseudoR2_original": pseudo_r2_original,
+                "pseudoR2_remaining_after_clustering": remaining,
+                "association_unaccounted_share": unaccounted,
+                "association_accounted_share": accounted,
             }
         )
 
     return pd.DataFrame(rows)
-

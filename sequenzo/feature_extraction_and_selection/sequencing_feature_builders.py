@@ -3,7 +3,11 @@
 @File    : sequencing_feature_builders.py
 @Time    : 20/03/2026 08:48
 @Desc    :
-    Build sequencing features from frequent subsequences of spell-start events.
+    Build sequencing features from frequent subsequences of spell-level events.
+
+    Sequencing is mined on the **distinct successive spell-state sequence**
+    (DSS-style), not on the raw repeated state panel. For example,
+    ``A A A B B C`` becomes spell events ``A, B, C`` at spell starts.
 """
 
 from __future__ import annotations
@@ -66,8 +70,20 @@ def build_sequencing_features(
     top_mined_subsequences: Optional[int] = None,
     event_label_mode: str = "state",
     use_start_time: bool = True,
-    weighted: bool = True,
+    weighted: bool = False,
 ) -> Tuple[np.ndarray, List[str]]:
+    """
+    Mine frequent spell-state subsequences and build presence/count features.
+
+    Parameters
+    ----------
+    event_label_mode
+        ``state``: one event per spell at start (or end if ``use_start_time=False``).
+        ``begin_end``: prefix events with ``B_`` / ``E_``.
+    weighted
+        If ``True``, uses weighted support in mining. Requires weights on
+        ``EventSequenceData``; otherwise leave ``False`` (default).
+    """
     tse = spells_to_event_tse(
         spells_per_individual,
         id_values=id_values,
@@ -109,4 +125,3 @@ def build_sequencing_features(
         name = _sanitize_event_string(getattr(sub, "to_string", lambda: str(sub))())
         feature_names.append(f"SEQ_{name}")
     return counts, feature_names
-

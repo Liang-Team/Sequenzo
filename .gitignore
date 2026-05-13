@@ -50,17 +50,17 @@ sequenzo/rust_fast_cluster/target/
 Tutorials/with_event_history_analysis/eha_persper_data.csv
 Tutorials/with_event_history_analysis/result.csv
 
+# Local third-party / R reference trees (not shipped in git; keep on your machine only)
+developer/Boruta-master/
+developer/boruta_py-master/
+developer/TraMineR-master/
+developer/TraMineRextras-master/
+developer/WeightedCluster-master/
+developer/seqHMM-main/
+developer/Py_FS-main/
+developer/eBoruta-master/
+
 # ignore RData and Rhistory
 .RData
 .Rhistory
 tests/archive_test/yapeng_test/generated_datasets/
-
-# Local TraMineR / WeightedCluster reference C++ sources
-developer/**/src/*.cpp
-developer/**/src/*.h
-developer/**/src/*.hpp
-developer/**/src/*.cc
-developer/**/src/*.cxx
-
-# Local reference copies (not part of Sequenzo)
-developer/seqHMM-main/

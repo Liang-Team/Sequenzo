@@ -4,30 +4,20 @@
 @Time    : 19/03/2026 17:05
 @Desc    :
     Build duration and timing feature matrices from spell trajectories.
+
+    Timing features code spell **entry** (START) and **exit** (END) events:
+    START is transition into a state; END is leaving a state (see
+    ``end_time_mode`` in spell extraction).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
-import pandas as pd
 
 from .monthly_state_to_spells import SpellWithTimes
 from .time_binning_utils import in_bin
-
-
-@dataclass(frozen=True)
-class FeatureMatrix:
-    X: np.ndarray
-    feature_names: List[str]
-
-    def to_dataframe(self, *, ids: Optional[Sequence[Any]] = None) -> pd.DataFrame:
-        df = pd.DataFrame(self.X, columns=self.feature_names)
-        if ids is not None:
-            df.index = pd.Index(ids, name="id")
-        return df
 
 
 def _build_state_groups_from_states(states: Iterable[Any]) -> Dict[str, List[Any]]:
@@ -39,8 +29,13 @@ def build_duration_features(
     *,
     state_groups: Optional[Dict[str, List[Any]]] = None,
     states: Optional[Iterable[Any]] = None,
-    as_dataframe: bool = False,
 ) -> Tuple[np.ndarray, List[str]]:
+    """
+    Total time spent in each state group (summed over spells).
+
+    Durations are in **sequence-position steps** on ``seqdata.time`` (same unit
+    as the time grid), not necessarily calendar months.
+    """
     if state_groups is None:
         if states is None:
             raise ValueError("Either state_groups or states must be provided.")
@@ -56,7 +51,7 @@ def build_duration_features(
             total = 0.0
             for sp in spells_i:
                 if sp.state in group_to_states[g]:
-                    total += float(sp.duration_months)
+                    total += float(sp.duration_steps)
             X[i, k] = total
 
     feature_names = [f"DUR_{g}" for g in group_names]
@@ -74,6 +69,14 @@ def build_timing_features(
     count_method: str = "any",
     bin_include_left: bool = True,
 ) -> Tuple[np.ndarray, List[str]]:
+    """
+    Binary (or count) timing features for spell entry and exit events.
+
+    - ``START_<group>_BIN*``: spell **entry** into a state (transition timing).
+    - ``END_<group>_BIN*``: spell **exit** from a state (when ``include_end``).
+
+    Bin boundaries use the same unit as ``seqdata.time`` (see ``timing_bin_width``).
+    """
     if state_groups is None:
         if states is None:
             raise ValueError("Either state_groups or states must be provided.")
@@ -112,4 +115,3 @@ def build_timing_features(
 
     feature_names = [f"{which}_{g}_BIN{b_idx+1}" for (g, b_idx, which) in feature_specs]
     return X, feature_names
-

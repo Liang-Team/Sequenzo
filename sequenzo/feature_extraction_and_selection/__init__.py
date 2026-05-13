@@ -37,6 +37,10 @@ _LAZY: dict[str, tuple[str, str]] = {
         "sequenzo.feature_extraction_and_selection.interpretation",
         "interpret_selected_features",
     ),
+    "cluster_correlated_features": (
+        "sequenzo.feature_extraction_and_selection.interpretation",
+        "cluster_correlated_features",
+    ),
 }
 
 

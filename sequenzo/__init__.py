@@ -24,7 +24,7 @@ from typing import Any
 
 try:
     _pyproject = _Path(__file__).resolve().parents[1] / "pyproject.toml"
-    __version__ = _tomllib.loads(_pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    __version__ = tomllib.loads(_pyproject.read_text(encoding="utf-8"))["project"]["version"]
 except Exception:
     try:
         __version__ = _pkg_version("sequenzo")
@@ -264,6 +264,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "extract_sequence_features": ("sequenzo.feature_extraction_and_selection", "extract_sequence_features"),
     "select_relevant_features": ("sequenzo.feature_extraction_and_selection", "select_relevant_features"),
     "interpret_selected_features": ("sequenzo.feature_extraction_and_selection", "interpret_selected_features"),
+    "cluster_correlated_features": ("sequenzo.feature_extraction_and_selection", "cluster_correlated_features"),
 }
 
 # Modules that need OpenMP setup before import (clustering, etc.)
@@ -510,6 +511,7 @@ __all__ = [
     "extract_sequence_features",
     "select_relevant_features",
     "interpret_selected_features",
+    "cluster_correlated_features",
 ]
 
 # Version check (async, non-blocking)
