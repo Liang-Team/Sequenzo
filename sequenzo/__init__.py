@@ -16,7 +16,10 @@ from .datasets import load_dataset, list_datasets
 import importlib
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path as _Path
-import tomllib as _tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from typing import Any
 
 try:

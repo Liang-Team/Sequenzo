@@ -7,6 +7,7 @@
 
 import numpy as np
 from scipy.cluster.hierarchy import cut_tree
+from scipy.spatial.distance import squareform
 
 import importlib
 import sequenzo.clustering.clustering_c_code
@@ -28,6 +29,10 @@ def KMedoids(
 ):
     """
     Weighted PAM / K-medoids on a distance matrix.
+
+    ``diss`` may be a square ``(n, n)`` matrix or a 1D condensed vector of length
+    ``n * (n - 1) // 2`` in the same order as :func:`scipy.spatial.distance.pdist`
+    / :func:`scipy.spatial.distance.squareform`.
 
     Returns a length-``n`` vector of **1-based medoid row indices** (same convention
     as WeightedCluster ``wcKMedoids``). For 0-based medoid indices or 0..K-1
@@ -54,9 +59,20 @@ def KMedoids(
         method_name = method_names[method - 1]
         print(f"[>] Starting KMedoids clustering (method: {method_name}, k={k})...")
 
+    diss = np.asarray(diss)
+    if diss.ndim == 1:
+        diss = squareform(diss, checks=True)
+    elif diss.ndim != 2:
+        raise ValueError(
+            "[!] 'diss' must be a square distance matrix or a 1-D condensed distance vector "
+            "(see scipy.spatial.distance.squareform)."
+        )
+
     nelements = diss.shape[0]
     if nelements != diss.shape[1]:
-        raise ValueError(f"[!] Dissipation matrix has {nelements} elements.")
+        raise ValueError(
+            "[!] 'diss' must be square (n × n); use a 1-D condensed vector of length n(n−1)/2 for condensed form."
+        )
 
     if weights is None:
         weights = np.ones(diss.shape[1], dtype=float)
@@ -65,11 +81,26 @@ def KMedoids(
         raise ValueError(f"[!] 'weights' should be a vector of length {nelements}.")
 
     if initialclust is None:
-        if random_state is not None:
-            rng = np.random.default_rng(random_state)
-            initialclust = rng.choice(nelements, k, replace=False)
+        # Pass a placeholder array to C++.
+        # • npass > 0: C++ calls buildInitialCentroids() (PAM BUILD) on pass 0,
+        #              then getrandommedoids() for passes 1..npass-1.  The
+        #              placeholder is overwritten immediately, so no Python-layer
+        #              randomness is introduced for npass=1 (deterministic, matching
+        #              R's wcKMedoids default).  For npass > 1 each restart after
+        #              the first uses C++'s own thread-local RNG, giving the same
+        #              non-deterministic behaviour as R's wcKMedoids with npass > 1.
+        # • npass == 0: The caller should have supplied initialclust.  Fall back
+        #               to random choice to avoid crashing (with a warning).
+        if npass > 0:
+            initialclust = np.arange(k, dtype=np.int32)
         else:
-            initialclust = np.random.choice(nelements, k, replace=False)
+            if random_state is not None:
+                rng = np.random.default_rng(random_state)
+                initialclust = rng.choice(nelements, k, replace=False).astype(np.int32)
+            else:
+                initialclust = np.random.choice(nelements, k, replace=False).astype(np.int32)
+            if verbose:
+                print("[!] npass=0 without initialclust: using random initial medoids.")
     else:
         if _validate_linkage_matrix(initialclust):
             initialclust = cut_tree(initialclust, n_clusters=k).flatten() + 1

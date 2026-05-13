@@ -14,12 +14,8 @@ namespace py = pybind11;
 
 class PAM {
 public:
-    // Constructor: Initializes the PAM algorithm with required parameters.
     PAM(int nelements, py::array_t<double> diss,
         py::array_t<int> centroids, int npass, py::array_t<double> weights) {
-        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
-        // py::print("[>] Starting Partitioning Around Medoids (PAM)...");
-
         try {
             this->nelements = nelements;
             this->centroids = centroids;
@@ -27,15 +23,14 @@ public:
             this->weights = weights;
             this->diss = diss;
             this->maxdist = 0.0;
-            this->nclusters = static_cast<int>(centroids.size()); // Number of clusters
-            this->tclusterid.resize(nelements); // Initialize cluster id vector
-            this->computeMaxDist(); // Compute the maximum distance for use later
+            this->nclusters = static_cast<int>(centroids.size());
+            this->tclusterid.resize(nelements);
+            this->computeMaxDist();
 
-            // Initialize dysma and dysmb with maxdist
             dysma.resize(nelements, maxdist);
             dysmb.resize(nelements, maxdist);
         } catch (const exception &e) {
-            py::print("Error: ", e.what()); // Error handling
+            py::print("Error: ", e.what());
         }
     }
 
@@ -43,31 +38,30 @@ public:
     void computeMaxDist() {
         auto ptr_diss = diss.unchecked<2>();
 
-        // The manual array collects the thread maxima
         int nthreads = 1;
-        #ifdef _OPENMP
+#ifdef _OPENMP
         #pragma omp parallel
         {
             #pragma omp single
             nthreads = omp_get_num_threads();
         }
-        #endif
+#endif
 
         std::vector<double> thread_max(nthreads, 0.0);
 
-        #ifdef _OPENMP
+#ifdef _OPENMP
         #pragma omp parallel
         {
             int tid = omp_get_thread_num();
-        #else
+#else
         {
             int tid = 0;
-        #endif
+#endif
             double local = 0.0;
 
-            #ifdef _OPENMP
+#ifdef _OPENMP
             #pragma omp for schedule(static)
-            #endif
+#endif
             for (int i = 0; i < nelements; ++i) {
                 for (int j = i + 1; j < nelements; ++j) {
                     double val = ptr_diss(i, j);
@@ -78,7 +72,6 @@ public:
             thread_max[tid] = local;
         }
 
-        // Final reduction (serial, fast)
         double max_val = 0.0;
         for (double val : thread_max) {
             if (val > max_val) max_val = val;
@@ -87,15 +80,91 @@ public:
         maxdist = 1.1 * max_val + 1.0;
     }
 
+    // -----------------------------------------------------------------------
+    // PAM BUILD: deterministic greedy initialisation (mirrors WeightedCluster).
+    // Parallelised with OpenMP over the candidate-medoid loop (outer i-loop).
+    // Tie-breaking: last (highest-indexed) element wins, matching the
+    // sequential `ammax <= beter` condition — preserved by the critical-section
+    // merge rule "equal score → higher index wins".
+    // -----------------------------------------------------------------------
+    void buildInitialCentroids() {
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_weights   = weights.unchecked<1>();
+        auto ptr_centroids = centroids.mutable_unchecked<1>();
 
-    // Runs the PAM clustering loop, repeatedly updating centroids and assigning elements to clusters.
+        // Reuse maxdist already computed in the constructor — avoids O(n²) recomputation.
+        double build_maxdist = maxdist;
+
+        vector<int>    is_medoid(nelements, 0);
+        vector<double> build_dysma(nelements, build_maxdist);
+
+        for (int kk = 0; kk < nclusters; ++kk) {
+            double ammax = 0.0;
+            int    nmax  = -1;
+
+            // Parallel search for the best candidate (max weighted gain).
+            // Each thread keeps a local best; the critical-section merge
+            // preserves "last tied index wins" by preferring higher nmax.
+#ifdef _OPENMP
+            #pragma omp parallel
+            {
+                double local_ammax = 0.0;
+                int    local_nmax  = -1;
+
+                #pragma omp for schedule(static) nowait
+                for (int i = 0; i < nelements; ++i) {
+                    if (is_medoid[i]) continue;
+                    double beter = 0.0;
+                    for (int j = 0; j < nelements; ++j) {
+                        beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                    }
+                    // <= matches WeightedCluster (last tied element wins within thread range)
+                    if (local_ammax <= beter) { local_ammax = beter; local_nmax = i; }
+                }
+
+                #pragma omp critical
+                {
+                    if (local_nmax != -1 &&
+                        (local_ammax > ammax ||
+                         (local_ammax == ammax && local_nmax > nmax))) {
+                        ammax = local_ammax;
+                        nmax  = local_nmax;
+                    }
+                }
+            }
+#else
+            for (int i = 0; i < nelements; ++i) {
+                if (is_medoid[i]) continue;
+                double beter = 0.0;
+                for (int j = 0; j < nelements; ++j) {
+                    beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                }
+                if (ammax <= beter) { ammax = beter; nmax = i; }
+            }
+#endif
+
+            is_medoid[nmax] = 1;
+            ptr_centroids[kk] = nmax;
+
+            for (int j = 0; j < nelements; ++j)
+                if (ptr_diss(nmax, j) < build_dysma[j])
+                    build_dysma[j] = ptr_diss(nmax, j);
+        }
+    }
+
+    // Runs the PAM SWAP loop until no improving swap exists (dzsky >= 0).
     py::array_t<int> runclusterloop() {
-        auto ptr_weights = weights.unchecked<1>(); // Access to the weights
-        auto ptr_diss = diss.unchecked<2>(); // Access to the distance matrix
-        auto ptr_centroids = centroids.mutable_unchecked<1>(); // Access to the centroids
+        auto ptr_weights   = weights.unchecked<1>();
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_centroids = centroids.mutable_unchecked<1>();
+
+        // When npass > 0 always use PAM BUILD for initialisation (deterministic),
+        // matching R's wcKMedoids default behaviour.
+        if (npass > 0) {
+            buildInitialCentroids();
+        }
 
         double dzsky;
-        int ipass = 0;
         int hbest = -1;
         int nbest = -1;
         int k;
@@ -103,13 +172,13 @@ public:
         int nclusters = static_cast<int>(centroids.size());
 
         do {
-            // Parallel loop to update dysma and dysmb based on current centroids
+            // Update dysma (nearest medoid distance) and dysmb (2nd nearest)
+            // for every point, and record cluster assignment.
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < nelements; i++) {
                 dysmb[i] = maxdist;
                 dysma[i] = maxdist;
 
-                // Update dysma and dysmb values based on the distance to centroids
                 for (int k = 0; k < nclusters; k++) {
                     int icluster = ptr_centroids(k);
                     double dist = ptr_diss(i, icluster);
@@ -117,45 +186,38 @@ public:
                     if (dysma[i] > dist) {
                         dysmb[i] = dysma[i];
                         dysma[i] = dist;
-                        tclusterid[i] = k; // Assign element to the current cluster
+                        tclusterid[i] = k;
                     } else if (dysmb[i] > dist) {
                         dysmb[i] = dist;
                     }
                 }
             }
 
-            // If total hasn't been calculated yet, calculate it
             if (total < 0) {
                 total = 0;
-
-                // Parallel loop to calculate the total weighted distance
                 #pragma omp parallel for reduction(+:total) schedule(static)
                 for (int i = 0; i < nelements; i++) {
                     total += ptr_weights[i] * dysma[i];
                 }
             }
 
-            dzsky = 1; // Initialize dzsky to 1 for the change cost comparison
+            dzsky = 1;
 
-            // Parallel loop to compute the cost of switching elements' medoids
-            #pragma omp parallel for schedule(dynamic)
+            // Precompute medoid lookup to avoid O(k) scan per element.
+            vector<bool> is_medoid_flag(nelements, false);
+            for (int kk = 0; kk < nclusters; kk++) is_medoid_flag[ptr_centroids[kk]] = true;
+
+            // Find the best non-medoid h to swap with one of the current medoids.
+            // schedule(static): only k elements are skipped out of n, so load is ~uniform.
+            #pragma omp parallel for schedule(static)
             for (int h = 0; h < nelements; h++) {
-                bool is_current_medoid = false;
-                for (int k = 0; k < nclusters; k++) {
-                    if (h == ptr_centroids[k]) {
-                        is_current_medoid = true;
-                        break;
-                    }
-                }
-
-                if (is_current_medoid) // Skip if the element is already a medoid
+                if (is_medoid_flag[h])
                     continue;
 
                 double local_dzsky = dzsky;
                 int local_hbest = -1;
                 int local_nbest = -1;
 
-                // Evaluate the change cost for switching each element with a new medoid
                 for (int k = 0; k < nclusters; k++) {
                     int i = ptr_centroids[k];
                     double dz = 0.0;
@@ -163,13 +225,12 @@ public:
                     for (int j = 0; j < nelements; j++) {
                         if (ptr_diss(i, j) == dysma[j]) {
                             double small = (dysmb[j] > ptr_diss(h, j)) ? ptr_diss(h, j) : dysmb[j];
-                            dz += ptr_weights[j] * (-dysma[j] + small); // Update change cost
+                            dz += ptr_weights[j] * (-dysma[j] + small);
                         } else if (ptr_diss(h, j) < dysma[j]) {
                             dz += ptr_weights[j] * (-dysma[j] + ptr_diss(h, j));
                         }
                     }
 
-                    // Keep track of the best change
                     if (dz < local_dzsky) {
                         local_dzsky = dz;
                         local_hbest = h;
@@ -177,7 +238,6 @@ public:
                     }
                 }
 
-                // Critical section to update dzsky with the best change
                 #pragma omp critical
                 {
                     if (local_dzsky < dzsky) {
@@ -188,30 +248,23 @@ public:
                 }
             }
 
-            // If there was an improvement in the total cost, update the centroids
             if (dzsky < 0) {
                 for (k = 0; k < nclusters; k++) {
                     if (ptr_centroids[k] == nbest) {
-                        ptr_centroids[k] = hbest; // Swap the medoids
+                        ptr_centroids[k] = hbest;
                     }
                 }
-
-                total += dzsky; // Update the total cost
+                total += dzsky;
             }
 
-            ipass++; // Increment pass count
-            if (ipass >= npass) {
-                break; // Break if max passes reached
-            }
-        } while (dzsky < 0); // Repeat until no improvement
+        } while (dzsky < 0);
 
-        return getResultArray(); // Return the final cluster assignments
+        return getResultArray();
     }
 
-    // Returns an array of cluster assignments for each element
     py::array_t<int> getResultArray() const {
         py::array_t<int> result(nelements);
-        auto results = result.mutable_unchecked<1>();
+        auto results  = result.mutable_unchecked<1>();
         auto centroid = centroids.unchecked<1>();
 
         #pragma omp parallel for schedule(static)
@@ -224,14 +277,14 @@ public:
 
 
 protected:
-    int nelements;               // Number of elements to cluster
-    py::array_t<double> diss;    // Distance matrix
-    py::array_t<int> centroids;  // Initial centroids
-    int npass;                   // Number of passes for the algorithm
-    py::array_t<double> weights; // Element weights
-    vector<int> tclusterid;      // Cluster IDs for each element
-    vector<double> dysmb;        // Temporary variable for distances
-    int nclusters;               // Number of clusters
-    double maxdist;              // Maximum distance value
-    vector<double> dysma;        // Temporary variable for distances
+    int nelements;
+    py::array_t<double> diss;
+    py::array_t<int>    centroids;
+    int npass;
+    py::array_t<double> weights;
+    vector<int>    tclusterid;
+    vector<double> dysmb;
+    int nclusters;
+    double maxdist;
+    vector<double> dysma;
 };

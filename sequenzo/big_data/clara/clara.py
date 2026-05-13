@@ -10,6 +10,7 @@ import os
 from contextlib import redirect_stdout
 import warnings
 
+import pandas as pd
 from joblib import Parallel, delayed
 
 # from Tutorials.test import result

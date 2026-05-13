@@ -94,7 +94,8 @@ def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weight
 
     if retmedoids:
         if len(lgrp) == 1:
-            return medoids[[1]]
+            # Single group: return the scalar medoid index (mirrors R's medoids[[1]])
+            return medoids[0]
 
         return medoids
 

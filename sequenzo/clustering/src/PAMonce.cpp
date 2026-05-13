@@ -8,16 +8,15 @@
 #include <cfloat>
 #include <cmath>
 #include <limits>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace py = pybind11;
 
 class PAMonce {
 public:
     PAMonce(int nelement, py::array_t<double> diss, py::array_t<int> centroids, int npass, py::array_t<double> weights){
-        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
-        // py::print("[>] Starting Partitioning Around Medoids with a Once-Only Swap Pass (PAMonce)...");
-        // std::cout << std::flush;
-
         try {
             this->nelement = nelement;
             this->diss = diss;
@@ -40,22 +39,77 @@ public:
         }
     }
 
-    // 小工具：把 vector 打成一行文本
-//    static void debug_print_vec(const char* name,
-//                                const std::vector<int>& v,
-//                                std::size_t maxn = 50) {
-//        std::ostringstream oss;
-//        oss << name << " (n=" << v.size() << ") [";
-//        std::size_t n = std::min<std::size_t>(v.size(), maxn);
-//        for (std::size_t i = 0; i < n; ++i) {
-//            if (i) oss << ", ";
-//            oss << v[i];
-//        }
-//        if (v.size() > n) oss << ", ...";
-//        oss << "]\n";
-//        // 用 cerr 更容易立刻看到，并避免与 Python 输出缓冲混在一起
-//        std::cerr << oss.str() << std::flush;
-//    }
+    // -----------------------------------------------------------------------
+    // PAM BUILD: deterministic greedy initialisation (mirrors WeightedCluster).
+    // Parallelised with OpenMP over the candidate-medoid loop (outer i-loop).
+    // Tie-breaking: last (highest-indexed) element wins, matching the
+    // sequential `ammax <= beter` condition — preserved by the critical-section
+    // merge rule "equal score → higher index wins".
+    // -----------------------------------------------------------------------
+    void buildInitialCentroids() {
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_weights   = weights.unchecked<1>();
+        auto ptr_centroids = centroids.mutable_data();
+
+        // Reuse maxdist already computed in the constructor — avoids O(n²) recomputation.
+        double build_maxdist = maxdist;
+
+        std::vector<int>    is_medoid(nelement, 0);
+        std::vector<double> build_dysma(nelement, build_maxdist);
+
+        for (int kk = 0; kk < nclusters; ++kk) {
+            double ammax = 0.0;
+            int    nmax  = -1;
+
+            // Parallel search for the best candidate (max weighted gain).
+            // Each thread keeps a local best; the critical-section merge
+            // preserves "last tied index wins" by preferring higher nmax.
+#ifdef _OPENMP
+            #pragma omp parallel
+            {
+                double local_ammax = 0.0;
+                int    local_nmax  = -1;
+
+                #pragma omp for schedule(static) nowait
+                for (int i = 0; i < nelement; ++i) {
+                    if (is_medoid[i]) continue;
+                    double beter = 0.0;
+                    for (int j = 0; j < nelement; ++j) {
+                        beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                    }
+                    // <= matches WeightedCluster (last tied element wins within thread range)
+                    if (local_ammax <= beter) { local_ammax = beter; local_nmax = i; }
+                }
+
+                #pragma omp critical
+                {
+                    if (local_nmax != -1 &&
+                        (local_ammax > ammax ||
+                         (local_ammax == ammax && local_nmax > nmax))) {
+                        ammax = local_ammax;
+                        nmax  = local_nmax;
+                    }
+                }
+            }
+#else
+            for (int i = 0; i < nelement; ++i) {
+                if (is_medoid[i]) continue;
+                double beter = 0.0;
+                for (int j = 0; j < nelement; ++j) {
+                    beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                }
+                if (ammax <= beter) { ammax = beter; nmax = i; }
+            }
+#endif
+
+            is_medoid[nmax] = 1;
+            ptr_centroids[kk] = nmax;
+
+            for (int j = 0; j < nelement; ++j)
+                if (ptr_diss(nmax, j) < build_dysma[j])
+                    build_dysma[j] = ptr_diss(nmax, j);
+        }
+    }
 
     double find_max_value(py::array_t<double> diss) {
         auto buf_info = diss.shape();
@@ -66,25 +120,26 @@ public:
 
         double max_val = std::numeric_limits<double>::lowest();
 
-        #pragma omp parallel
+#ifdef _OPENMP
+        #pragma omp parallel reduction(max:max_val)
         {
-            double thread_max = std::numeric_limits<double>::lowest();
-            #pragma omp for nowait
+            #pragma omp for schedule(static) nowait
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
                     double val = ptr(i, j);
-                    if (!std::isfinite(val)) {
-                        continue;
-                    }
-                    thread_max = std::max(thread_max, val);
+                    if (std::isfinite(val) && val > max_val)
+                        max_val = val;
                 }
             }
-
-            #pragma omp critical
-            {
-                max_val = std::max(max_val, thread_max);
-            }
         }
+#else
+        for (int i = 0; i < rows; ++i)
+            for (int j = 0; j < cols; ++j) {
+                double val = ptr(i, j);
+                if (std::isfinite(val) && val > max_val)
+                    max_val = val;
+            }
+#endif
 
         if (!std::isfinite(max_val) || max_val <= 0.0) {
             max_val = 1.0;
@@ -94,8 +149,8 @@ public:
     }
 
     py::array_t<int> runclusterloop() {
-        auto ptr_diss = diss.unchecked<2>();
-        auto ptr_weights = weights.unchecked<1>();
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_weights   = weights.unchecked<1>();
         auto ptr_centroids = centroids.mutable_data();
         auto ptr_clusterid = clusterid.mutable_data();
 
@@ -103,39 +158,45 @@ public:
             ptr_clusterid[i] = -1;
         }
 
+        // When npass > 0 always use PAM BUILD for initialisation (deterministic),
+        // matching R's wcKMedoids(method="PAMonce").
+        if (npass > 0) {
+            buildInitialCentroids();
+        }
+
         double dzsky = 1;
         int hbest = -1, nbest = -1;
         double total = -1;
 
         do {
-            // 为每个点寻找距离它最近和次近的中心点
-        for (int i = 0; i < nelement; i++) {
-            dysma[i] = maxdist;
-            dysmb[i] = maxdist;
-            for (int k = 0; k < nclusters; k++) {
-                int i_cluster = ptr_centroids[k];
-                double dist = ptr_diss(i, i_cluster);
-                if (!std::isfinite(dist)) {
-                    dist = maxdist;
-                }
-
-                if (dysma[i] >= dist) {
-                    // 原码是‘>’，现改为‘>=’。
-                    // 因为如果当前点 i 与所有 medoids 的距离都是 maxdist，那么将无法进入这个分支
-                    dysmb[i] = dysma[i];
-                    dysma[i] = dist;
-
-                    tclusterid[i] = k;  // tclusterid 是中间变量，如果没有进入这个分支，那么将采用初始值-1
-                } else if (dysmb[i] > dist) {
-                    dysmb[i] = dist;
-                }
-            }
-
-            if (tclusterid[i] < 0) {
-                tclusterid[i] = 0;
+            // Find nearest and second-nearest medoid for every point.
+            // Each element i is independent → fully parallelisable.
+#ifdef _OPENMP
+            #pragma omp parallel for schedule(static)
+#endif
+            for (int i = 0; i < nelement; i++) {
                 dysma[i] = maxdist;
+                dysmb[i] = maxdist;
+                int best_k = 0;
+                for (int k = 0; k < nclusters; k++) {
+                    int i_cluster = ptr_centroids[k];
+                    double dist = ptr_diss(i, i_cluster);
+                    if (!std::isfinite(dist)) {
+                        dist = maxdist;
+                    }
+
+                    // Use strict > to match R PAM/PAMonce: first encountered medoid
+                    // wins for equal-distance ties.
+                    if (dysma[i] > dist) {
+                        dysmb[i] = dysma[i];
+                        dysma[i] = dist;
+                        best_k = k;
+                    } else if (dysmb[i] > dist) {
+                        dysmb[i] = dist;
+                    }
+                }
+                tclusterid[i] = best_k;
             }
-        }
 
             if (total < 0) {
                 total = 0;
@@ -149,12 +210,12 @@ public:
             hbest = -1;
             nbest = -1;
 
-            // 遍历每个聚类中心 i，寻找替换中心 h 的可能性
+            // For each current medoid i, find the best replacement h.
             for (int k = 0; k < nclusters; k++) {
                 int i = ptr_centroids[k];
                 double removeCost = 0;
 
-                // 计算移除该 medoid 的成本
+                // Cost of removing this medoid.
                 #pragma omp parallel for reduction(+:removeCost) schedule(static)
                 for (int j = 0; j < nelement; j++) {
                     if (tclusterid[j] == k) {
@@ -165,39 +226,36 @@ public:
                     }
                 }
 
-                // 查找最优的新 medoid h
+                // Find the best new medoid h to replace i.
                 #pragma omp parallel
                 {
                     double local_dzsky = 1;
                     int local_hbest = -1, local_nbest = -1;
 
-                    #pragma omp for schedule(static)
+                    #pragma omp for schedule(static) nowait
                     for (int h = 0; h < nelement; h++) {
                         double dist_hi = ptr_diss(h, i);
                         if (!std::isfinite(dist_hi) || dist_hi <= 0) {
                             continue;
                         }
-                        if (dist_hi > 0) {
-                            double addGain = removeCost;
-                            for (int j = 0; j < nelement; j++) {
-                                double dist_hj = ptr_diss(h, j);
-                                if (!std::isfinite(dist_hj)) {
-                                    continue;
-                                }
-                                if (dist_hj < fvect[j]) {
-                                    addGain += ptr_weights(j) * (dist_hj - fvect[j]);
-                                }
+                        double addGain = removeCost;
+                        for (int j = 0; j < nelement; j++) {
+                            double dist_hj = ptr_diss(h, j);
+                            if (!std::isfinite(dist_hj)) {
+                                continue;
                             }
+                            if (dist_hj < fvect[j]) {
+                                addGain += ptr_weights(j) * (dist_hj - fvect[j]);
+                            }
+                        }
 
-                            if (local_dzsky > addGain) {
-                                local_dzsky = addGain;
-                                local_hbest = h;
-                                local_nbest = i;
-                            }
+                        if (local_dzsky > addGain) {
+                            local_dzsky = addGain;
+                            local_hbest = h;
+                            local_nbest = i;
                         }
                     }
 
-                    // 合并线程局部结果
                     #pragma omp critical
                     {
                         if (dzsky > local_dzsky) {
@@ -209,7 +267,6 @@ public:
                 }
             }
 
-            // 更新 medoids
             if (dzsky < WEIGHTED_CLUST_TOL) {
                 for (int k = 0; k < nclusters; k++) {
                     if (ptr_centroids[k] == nbest) {
@@ -220,27 +277,10 @@ public:
             }
         } while (dzsky < WEIGHTED_CLUST_TOL);
 
-        // ---- 安全打印（无 pybind11，线程/进程均可）----
-//        {
-//            // 复制指针区的数据，形成可打印的 vector
-//            std::vector<int> centroids_vec(ptr_centroids, ptr_centroids + nclusters);
-//
-//            // 注意：如果你用了 OpenMP，可选地只让一个线程打印，避免多线程交叉输出
-//            // #pragma omp single
-//            debug_print_vec("tclusterid", tclusterid);
-//            debug_print_vec("ptr_centroids", centroids_vec);
-//        }
-
-        // 更新最终聚类分配
         #pragma omp parallel for schedule(static)
         for (int j = 0; j < nelement; j++) {
             ptr_clusterid[j] = ptr_centroids[tclusterid[j]];
         }
-
-//        {
-//            std::vector<int> centroids_vec(ptr_clusterid, ptr_clusterid + nelement);
-//            debug_print_vec("ptr_clusterid", centroids_vec);
-//        }
 
         return clusterid;
     }
@@ -249,12 +289,12 @@ public:
 private:
     int nelement;
     py::array_t<double> diss;
-    py::array_t<int> centroids;
+    py::array_t<int>    centroids;
     int npass;
     py::array_t<double> weights;
 
-    py::array_t<int> clusterid;
-    std::vector<int> tclusterid;
+    py::array_t<int>     clusterid;
+    std::vector<int>     tclusterid;
 
     double maxdist;
     std::vector<double> dysma;

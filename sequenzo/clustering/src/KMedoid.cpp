@@ -1,263 +1,340 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <vector>
-#include <iostream>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <algorithm>
+#include <numeric>
 #include <random>
+#include <vector>
 #include <cfloat>
 #include <climits>
 #include <cmath>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 using namespace std;
 namespace py = pybind11;
 
 class KMedoid {
 protected:
-    int nelements;        // Number of elements (data points)
-    int nclusters;        // Number of clusters (medoids)
-    int npass;            // Maximum number of iterations
+    int nelements;
+    int nclusters;
+    int npass;
 
-    vector<int> tclusterid;        // Temporary cluster assignment for each element
-    vector<int> saved;             // Saved cluster assignments to check for convergence
-    vector<int> clusterMembership; // Cluster membership indices (flattened 2D: nclusters x nelements)
-    vector<int> clusterSize;       // Size of each cluster
+    vector<int>    tclusterid;        // current cluster assignment (0-based cluster index)
+    vector<int>    saved;             // checkpoint assignments for convergence detection
+    vector<int>    clusterMembership; // flattened [nclusters x nelements] membership list
+    vector<int>    clusterSize;       // current size of each cluster
 
-    py::array_t<double> diss;      // Distance matrix (2D numpy array)
-    py::array_t<int> centroids;    // Medoid indices (1D numpy array)
-    py::array_t<double> weights;   // Weights of elements (1D numpy array)
+    py::array_t<double> diss;
+    py::array_t<int>    centroids;
+    py::array_t<double> weights;
 
 public:
-    // Constructor initializes members and allocates necessary storage
     KMedoid(int nelements, py::array_t<double> diss,
             py::array_t<int> centroids, int npass,
             py::array_t<double> weights)
         : nelements(nelements),
-          diss(diss),
-          centroids(centroids),
+          nclusters(static_cast<int>(centroids.size())),
           npass(npass),
-          weights(weights),
-          nclusters(static_cast<int>(centroids.size())) {
-        // 注释掉信息性打印，避免在并行环境（如 CLARA）中降低性能
-        // py::print("[>] Starting KMedoids...");
-
+          diss(diss), centroids(centroids), weights(weights)
+    {
         tclusterid.resize(nelements);
         saved.resize(nelements);
         clusterMembership.resize(nelements * nclusters);
-        clusterSize.resize(nclusters);
-        fill(clusterSize.begin(), clusterSize.end(), 0);
+        clusterSize.resize(nclusters, 0);
     }
 
-    // Initialize medoids using a k-means++ style seeding method for better starting points
-    void init_medoids() {
-        auto ptr_diss = diss.unchecked<2>();
+    // -----------------------------------------------------------------------
+    // PAM BUILD initialisation (deterministic greedy selection).
+    // Mirrors WeightedCluster's buildInitialCentroids(); same parallel pattern
+    // as sequenzo/clustering/src/PAM.cpp::buildInitialCentroids().
+    // -----------------------------------------------------------------------
+    void buildInitialCentroids() {
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_weights   = weights.unchecked<1>();
         auto ptr_centroids = centroids.mutable_unchecked<1>();
-        auto ptr_weights = weights.unchecked<1>();
 
-        vector<int> selected;                             // Indices of selected medoids
-        vector<double> min_dists(nelements, DBL_MAX);     // Minimum distance to selected medoids
-
-        mt19937 rng(random_device{}()); // 3. Random number generator initialization (non-deterministic seed)
-        uniform_int_distribution<> dist(0, nelements - 1);
-
-        // Randomly choose the first medoid
-        int first = dist(rng);
-        selected.push_back(first);
-        ptr_centroids[0] = first;
-
-        for (int k = 1; k < nclusters; ++k) {
-            int last = selected.back();
-
-            // Update min_dists using only the last selected medoid
-            for (int i = 0; i < nelements; ++i) {
-                double d = ptr_diss(i, last);
-                if (d < min_dists[i]) min_dists[i] = d;
+        double build_maxdist = 0.0;
+#ifdef _OPENMP
+        #pragma omp parallel for reduction(max:build_maxdist) schedule(static)
+#endif
+        for (int i = 0; i < nelements; ++i)
+            for (int j = i + 1; j < nelements; ++j) {
+                double v = ptr_diss(i, j);
+                if (v > build_maxdist) build_maxdist = v;
             }
+        build_maxdist = 1.1 * build_maxdist + 1.0;
 
-            // Compute weighted total distance
-            double total_weight = 0.0;
-            for (int i = 0; i < nelements; ++i) {
-                total_weight += min_dists[i] * ptr_weights[i];
-            }
+        vector<int>    is_medoid(nelements, 0);
+        vector<double> build_dysma(nelements, build_maxdist);
 
-            // Handle degenerate case
-            if (total_weight <= 1e-10) {
-                int fallback = dist(rng);
-                selected.push_back(fallback);
-                ptr_centroids[k] = fallback;
-                continue;
-            }
+        for (int kk = 0; kk < nclusters; ++kk) {
+            double ammax = 0.0;
+            int    nmax  = -1;
 
-            // Select next medoid using weighted probability
-            uniform_real_distribution<double> rdist(0, total_weight);
-            double r = rdist(rng), accumulator = 0.0;
-            int next = -1;
+#ifdef _OPENMP
+            #pragma omp parallel
+            {
+                double local_ammax = 0.0;
+                int    local_nmax  = -1;
 
-            for (int i = 0; i < nelements; ++i) {
-                accumulator += min_dists[i] * ptr_weights[i];
-                if (accumulator >= r) {
-                    next = i;
-                    break;
+                #pragma omp for schedule(static) nowait
+                for (int i = 0; i < nelements; ++i) {
+                    if (is_medoid[i]) continue;
+                    double beter = 0.0;
+                    for (int j = 0; j < nelements; ++j) {
+                        beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                    }
+                    if (local_ammax <= beter) { local_ammax = beter; local_nmax = i; }
+                }
+
+                #pragma omp critical
+                {
+                    if (local_nmax != -1 &&
+                        (local_ammax > ammax ||
+                         (local_ammax == ammax && local_nmax > nmax))) {
+                        ammax = local_ammax;
+                        nmax  = local_nmax;
+                    }
                 }
             }
+#else
+            for (int i = 0; i < nelements; ++i) {
+                if (is_medoid[i]) continue;
+                double beter = 0.0;
+                for (int j = 0; j < nelements; ++j) {
+                    beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                }
+                if (ammax <= beter) { ammax = beter; nmax = i; }
+            }
+#endif
 
-            if (next == -1) next = dist(rng);  // fallback again just in case
-            selected.push_back(next);
-            ptr_centroids[k] = next;
+            is_medoid[nmax] = 1;
+            ptr_centroids[kk] = nmax;
+
+            for (int j = 0; j < nelements; ++j)
+                if (ptr_diss(nmax, j) < build_dysma[j])
+                    build_dysma[j] = ptr_diss(nmax, j);
         }
     }
 
-
-    // Update medoids by selecting the element minimizing the sum of weighted distances to all other elements in the cluster
-    void getclustermedoids() {
-        auto ptr_weights = weights.unchecked<1>();
-        auto ptr_diss = diss.unchecked<2>();
+    // -----------------------------------------------------------------------
+    // Random medoid selection for restart passes (ipass > 0).
+    // Fisher-Yates partial shuffle; re-draws if any pair has distance == 0.
+    // -----------------------------------------------------------------------
+    void getrandommedoids() {
+        auto ptr_diss      = diss.unchecked<2>();
         auto ptr_centroids = centroids.mutable_unchecked<1>();
 
+        static thread_local mt19937 rng(random_device{}());
+
+        vector<int> indices(nelements);
+        iota(indices.begin(), indices.end(), 0);
+
+        while (true) {
+            for (int i = 0; i < nclusters; ++i) {
+                uniform_int_distribution<int> d(i, nelements - 1);
+                int j = d(rng);
+                swap(indices[i], indices[j]);
+            }
+
+            bool valid = true;
+            for (int a = 0; a < nclusters && valid; ++a)
+                for (int b = a + 1; b < nclusters && valid; ++b)
+                    if (ptr_diss(indices[a], indices[b]) <= 0.0)
+                        valid = false;
+
+            if (valid) {
+                for (int i = 0; i < nclusters; ++i)
+                    ptr_centroids[i] = indices[i];
+                return;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Update medoids: for each cluster pick the member that minimises total
+    // weighted distance to all other cluster members.
+    // Outer k loop is parallelised with OpenMP (clusters are independent).
+    // -----------------------------------------------------------------------
+    void getclustermedoids() {
+        auto ptr_weights   = weights.unchecked<1>();
+        auto ptr_diss      = diss.unchecked<2>();
+        auto ptr_centroids = centroids.mutable_unchecked<1>();
+
+#ifdef _OPENMP
         #pragma omp parallel for schedule(dynamic)
+#endif
         for (int k = 0; k < nclusters; ++k) {
-            int size = clusterSize[k];
-            double best = DBL_MAX;
-            int bestID = 0;
+            int    size   = clusterSize[k];
+            double best   = DBL_MAX;
+            int    bestID = clusterMembership[k * nelements];
 
-            // Iterate over all members of cluster k to find the best medoid
             for (int i = 0; i < size; ++i) {
-                int ii = clusterMembership[k * nelements + i];
-                double current = 0;
+                int    ii      = clusterMembership[k * nelements + i];
+                double current = 0.0;
 
-                // Sum weighted distances from candidate medoid ii to all other members
                 for (int j = 0; j < size; ++j) {
                     if (i == j) continue;
                     int jj = clusterMembership[k * nelements + j];
                     current += ptr_weights[jj] * ptr_diss(ii, jj);
-                    if (current >= best) break;  // Early stop if worse than current best
+                    if (current >= best) break;   // early-stop heuristic
                 }
 
                 if (current < best) {
-                    best = current;
+                    best   = current;
                     bestID = ii;
                 }
             }
-
-            ptr_centroids[k] = bestID;  // Assign best medoid for cluster k
+            ptr_centroids[k] = bestID;
         }
     }
 
-    // Main loop to run the clustering process until convergence or max iterations
-    py::array_t<int> runclusterloop() {
-        auto ptr_weights = weights.unchecked<1>();
-        auto ptr_diss = diss.unchecked<2>();
+    // -----------------------------------------------------------------------
+    // One inner convergence pass (assign → update medoids → repeat until
+    // convergence or no cost improvement).
+    //
+    // Assignment uses a two-phase approach to admit OpenMP:
+    //   Phase 1 (parallel):   compute closest medoid + distance for every i.
+    //   Phase 2 (sequential): fill clusterMembership in order 0..n-1.
+    // -----------------------------------------------------------------------
+    double runInnerPass() {
+        auto ptr_weights   = weights.unchecked<1>();
+        auto ptr_diss      = diss.unchecked<2>();
         auto ptr_centroids = centroids.mutable_unchecked<1>();
 
-        double total = DBL_MAX;
-        int counter = 0;
-        int period = 10;  // Frequency to save cluster assignments for convergence checking
+        vector<int> local_assign(nelements);
 
-        while (counter <= npass) {
-            PyErr_CheckSignals();  // Allow Python interruption
+        double total   = DBL_MAX;
+        int    counter = 0;
+        int    period  = 10;
+
+        while (true) {
+            PyErr_CheckSignals();
 
             double prev = total;
-            total = 0;
+            total = 0.0;
 
             if (counter > 0) getclustermedoids();
 
-            // Periodically save cluster assignment to check for convergence
             if (counter % period == 0) {
-                for (int i = 0; i < nelements; ++i)
-                    saved[i] = tclusterid[i];
+                for (int i = 0; i < nelements; ++i) saved[i] = tclusterid[i];
+                if (period < INT_MAX / 2) period *= 2;
+            }
+            ++counter;
 
-                if (period < INT_MAX / 2) period *= 2;  // Exponentially increase period
+            // --- Phase 1: parallel closest-medoid computation + total reduction ---
+#ifdef _OPENMP
+            #pragma omp parallel for schedule(static) reduction(+:total)
+#endif
+            for (int i = 0; i < nelements; ++i) {
+                double dist_min = DBL_MAX;
+                int    assign   = 0;
+                for (int k = 0; k < nclusters; ++k) {
+                    double td = ptr_diss(i, ptr_centroids[k]);
+                    if (td < dist_min) { dist_min = td; assign = k; }
+                }
+                local_assign[i] = assign;
+                total += ptr_weights[i] * dist_min;
             }
 
-            counter++;
-
-            vector<vector<int>> localMembers(nclusters);
-
-            // Parallel assignment of elements to closest medoid
-            #pragma omp parallel
-            {
-                vector<vector<int>> threadLocal(nclusters);
-
-                #pragma omp for reduction(+:total) schedule(static)
-                for (int i = 0; i < nelements; ++i) {
-                    double dist = DBL_MAX;
-                    int assign = 0;
-
-                    // Find nearest medoid
-                    for (int k = 0; k < nclusters; ++k) {
-                        int j = ptr_centroids[k];
-                        double tdistance = ptr_diss(i, j);
-
-                        if (tdistance < dist) {
-                            dist = tdistance;
-                            assign = k;
-                        }
-                    }
-
-                    tclusterid[i] = assign;
-                    threadLocal[assign].push_back(i);
-                    total += ptr_weights[i] * dist;
-                }
-
-                // Merge thread local cluster memberships into shared vector safely
-                #pragma omp critical
-                {
-                    for (int k = 0; k < nclusters; ++k) {
-                        localMembers[k].insert(
-                            localMembers[k].end(),
-                            threadLocal[k].begin(),
-                            threadLocal[k].end()
-                        );
-                    }
-                }
+            // --- Phase 2: sequential membership fill (deterministic order) --
+            for (int k = 0; k < nclusters; ++k) clusterSize[k] = 0;
+            for (int i = 0; i < nelements; ++i) {
+                int a = local_assign[i];
+                tclusterid[i] = a;
+                clusterMembership[a * nelements + clusterSize[a]] = i;
+                ++clusterSize[a];
             }
 
-            // Update cluster membership and sizes
+            // If any cluster is empty, reinitialise from scratch and restart.
+            bool empty = false;
             for (int k = 0; k < nclusters; ++k) {
-                clusterSize[k] = static_cast<int>(localMembers[k].size());
-
-                // If a cluster is empty, reinitialize medoids and restart
                 if (clusterSize[k] == 0) {
-                    init_medoids();
+                    buildInitialCentroids();
                     counter = 0;
+                    period  = 10;
+                    empty   = true;
                     break;
                 }
-
-                for (int i = 0; i < clusterSize[k]; ++i) {
-                    clusterMembership[k * nelements + i] = localMembers[k][i];
-                }
             }
+            if (empty) continue;
 
-            // Convergence check based on total cost change
-            if (abs(total - prev) < 1e-6) break;
+            if (total >= prev) break;
 
-            // Check if cluster assignments are unchanged from last saved
             bool same = true;
             for (int i = 0; i < nelements; ++i) {
-                if (saved[i] != tclusterid[i]) {
-                    same = false;
-                    break;
-                }
+                if (saved[i] != tclusterid[i]) { same = false; break; }
             }
-
             if (same) break;
         }
+
+        return total;
+    }
+
+    // -----------------------------------------------------------------------
+    // Outer restart loop:
+    //   ipass == 0             : PAM BUILD (deterministic, matches WeightedCluster)
+    //   ipass == 1 .. npass-1  : random medoids
+    //   npass == 0             : use caller-supplied centroids, run once
+    //
+    // The best solution (lowest total weighted distance) is kept.
+    // -----------------------------------------------------------------------
+    py::array_t<int> runclusterloop() {
+        vector<int> best_tclusterid(nelements, -1);
+        vector<int> best_centroids_vec(nclusters, 0);
+        double      best_total = DBL_MAX;
+        bool        best_found = false;
+
+        int niter = (npass > 0) ? npass : 1;
+
+        for (int ipass = 0; ipass < niter; ++ipass) {
+            if (npass > 0) {
+                if (ipass == 0)
+                    buildInitialCentroids();
+                else
+                    getrandommedoids();
+            }
+            // npass == 0: use caller-supplied centroids unchanged.
+
+            double total = runInnerPass();
+
+            bool is_new_best = false;
+            if (!best_found) {
+                is_new_best = true;
+            } else {
+                bool differs = false;
+                for (int i = 0; i < nelements; ++i)
+                    if (best_tclusterid[i] != tclusterid[i]) { differs = true; break; }
+                if (differs && total < best_total) is_new_best = true;
+            }
+
+            if (is_new_best) {
+                best_total = total;
+                best_found = true;
+                for (int i = 0; i < nelements; ++i)
+                    best_tclusterid[i] = tclusterid[i];
+                auto ptr_c = centroids.unchecked<1>();
+                for (int k = 0; k < nclusters; ++k)
+                    best_centroids_vec[k] = ptr_c[k];
+            }
+        }
+
+        for (int i = 0; i < nelements; ++i)
+            tclusterid[i] = best_tclusterid[i];
+        auto ptr_c = centroids.mutable_unchecked<1>();
+        for (int k = 0; k < nclusters; ++k)
+            ptr_c[k] = best_centroids_vec[k];
 
         return getResultArray();
     }
 
-    // Construct and return the final array of medoid assignments for each element
     py::array_t<int> getResultArray() const {
         py::array_t<int> result(nelements);
-        auto results = result.mutable_unchecked<1>();
+        auto results  = result.mutable_unchecked<1>();
         auto centroid = centroids.unchecked<1>();
-
-        #pragma omp parallel for schedule(static)
-        for (int i = 0; i < nelements; ++i) {
+        for (int i = 0; i < nelements; ++i)
             results(i) = centroid(tclusterid[i]);
-        }
-
         return result;
     }
 };
