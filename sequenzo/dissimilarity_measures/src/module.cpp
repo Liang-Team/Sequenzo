@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <string>
 #include "OMdistance.cpp"
 #include "OMlocDistance.cpp"
 #include "OMspellDistance.cpp"
@@ -22,9 +23,138 @@
 #include "preprocess.cpp"
 #include "normalization_ElzingaStuder.cpp"
 
+#ifdef _OPENMP
+#include <omp.h>
+#if defined(__unix__) || defined(__APPLE__)
+#include <dlfcn.h>
+#endif
+#endif
+
 namespace py = pybind11;
 
+static std::string openmp_version_string() {
+#ifdef _OPENMP
+    switch (_OPENMP) {
+        case 199810: return "OpenMP 1.0";
+        case 200203: return "OpenMP 2.0";
+        case 200505: return "OpenMP 2.5";
+        case 200805: return "OpenMP 3.0";
+        case 201107: return "OpenMP 3.1";
+        case 201307: return "OpenMP 4.0";
+        case 201511: return "OpenMP 4.5";
+        case 201811: return "OpenMP 5.0";
+        case 202011: return "OpenMP 5.1";
+        case 202111: return "OpenMP 5.2";
+        default: return "OpenMP unknown";
+    }
+#else
+    return "OpenMP not compiled";
+#endif
+}
+
+static std::string compiler_string() {
+#if defined(__clang__)
+    return std::string("clang ") + __clang_version__;
+#elif defined(__GNUC__)
+    return std::string("gcc ") + __VERSION__;
+#elif defined(_MSC_VER)
+    return std::string("MSVC ") + std::to_string(_MSC_VER);
+#else
+    return "unknown compiler";
+#endif
+}
+
+static py::object openmp_runtime_path() {
+#ifdef _OPENMP
+#if defined(__unix__) || defined(__APPLE__)
+    Dl_info dl_info;
+    if (dladdr(reinterpret_cast<const void*>(omp_get_max_threads), &dl_info) != 0 &&
+        dl_info.dli_fname != nullptr) {
+        return py::str(dl_info.dli_fname);
+    }
+#endif
+#endif
+    return py::none();
+}
+
+static py::object openmp_runtime_library() {
+    py::object path_obj = openmp_runtime_path();
+    if (path_obj.is_none()) {
+        return py::none();
+    }
+
+    std::string path = path_obj.cast<std::string>();
+    const std::size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        return py::str(path);
+    }
+    return py::str(path.substr(pos + 1));
+}
+
+static py::dict collect_openmp_runtime_info(int requested_threads = 0) {
+    py::dict info;
+#ifdef _OPENMP
+    const int previous_max_threads = omp_get_max_threads();
+    if (requested_threads > 0) {
+        omp_set_num_threads(requested_threads);
+    }
+
+    int actual_threads = 1;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        actual_threads = omp_get_num_threads();
+    }
+
+    info["_OPENMP"] = true;
+    info["openmp_version"] = _OPENMP;
+    info["openmp_version_string"] = openmp_version_string();
+    info["max_threads"] = omp_get_max_threads();
+    info["actual_threads"] = actual_threads;
+    info["num_threads_outside_parallel"] = omp_get_num_threads();
+    info["thread_limit"] = omp_get_thread_limit();
+    info["num_procs"] = omp_get_num_procs();
+    info["dynamic"] = static_cast<bool>(omp_get_dynamic());
+    if (requested_threads > 0) {
+        info["requested_threads"] = requested_threads;
+    } else {
+        info["requested_threads"] = py::none();
+    }
+    info["compiler"] = compiler_string();
+    info["openmp_runtime_path"] = openmp_runtime_path();
+    info["openmp_runtime_library"] = openmp_runtime_library();
+
+    if (requested_threads > 0) {
+        omp_set_num_threads(previous_max_threads);
+    }
+#else
+    info["_OPENMP"] = false;
+    info["openmp_version"] = py::none();
+    info["openmp_version_string"] = openmp_version_string();
+    info["max_threads"] = 1;
+    info["actual_threads"] = 1;
+    info["num_threads_outside_parallel"] = 1;
+    info["thread_limit"] = 1;
+    info["num_procs"] = 1;
+    info["dynamic"] = false;
+    if (requested_threads > 0) {
+        info["requested_threads"] = requested_threads;
+    } else {
+        info["requested_threads"] = py::none();
+    }
+    info["compiler"] = compiler_string();
+    info["openmp_runtime_path"] = py::none();
+    info["openmp_runtime_library"] = py::none();
+#endif
+    return info;
+}
+
 PYBIND11_MODULE(c_code, m) {
+    m.def("_openmp_runtime_info",
+          &collect_openmp_runtime_info,
+          "Internal helper reporting OpenMP metadata from the loaded C++ extension.",
+          py::arg("requested_threads") = 0);
+
     py::class_<dist2matrix>(m, "dist2matrix")
             .def(py::init<int, py::array_t<int>, py::array_t<double>>())
             .def("padding_matrix", &dist2matrix::padding_matrix)

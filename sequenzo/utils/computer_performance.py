@@ -10,6 +10,7 @@ system packages.
 from __future__ import annotations
 
 import ctypes
+import importlib
 import os
 import platform
 import subprocess
@@ -57,6 +58,7 @@ def get_computer_performance(print_summary: bool = False) -> dict:
     recommended_for = _recommended_for(tier)
     recommended_hardware = _recommended_hardware()
     suggested_threads = _suggested_threads(cpu_cores)
+    openmp = _get_openmp_runtime_info(suggested_threads)
     advice = _build_advice(
         cpu_cores=cpu_cores,
         total_memory_gb=total_memory_gb,
@@ -84,13 +86,114 @@ def get_computer_performance(print_summary: bool = False) -> dict:
         "recommended_for": recommended_for,
         "recommended_hardware": recommended_hardware,
         "suggested_threads": suggested_threads,
+        "openmp": openmp,
         "distance_matrix_memory_gb": _distance_matrix_memory_examples(),
         "advice": advice,
         "summary": summary,
     }
     if print_summary:
         print(summary)
+        print(_format_openmp_summary(openmp))
     return result
+
+
+def _get_openmp_runtime_info(suggested_threads: int) -> dict:
+    try:
+        probe = _import_openmp_probe()
+        raw_info = probe()
+    except Exception as exc:
+        return _openmp_unavailable(str(exc), suggested_threads)
+
+    compiled = bool(raw_info.get("_OPENMP"))
+    if not compiled:
+        return {
+            "can_use_openmp": False,
+            "openmp_active": False,
+            "max_threads": 1,
+            "actual_threads": 1,
+            "suggested_threads": suggested_threads,
+            "version": None,
+            "version_macro": None,
+            "runtime_library": None,
+            "runtime_path": None,
+            "compiler": raw_info.get("compiler"),
+            "summary": "OpenMP is not compiled into the loaded Sequenzo C++ extension.",
+        }
+
+    actual_threads = int(raw_info.get("actual_threads") or 1)
+    max_threads = int(raw_info.get("max_threads") or actual_threads)
+    version = raw_info.get("openmp_version_string")
+    openmp_active = actual_threads > 1
+    return {
+        "can_use_openmp": True,
+        "openmp_active": openmp_active,
+        "max_threads": max_threads,
+        "actual_threads": actual_threads,
+        "suggested_threads": suggested_threads,
+        "version": version,
+        "version_macro": raw_info.get("openmp_version"),
+        "runtime_library": raw_info.get("openmp_runtime_library"),
+        "runtime_path": raw_info.get("openmp_runtime_path"),
+        "compiler": raw_info.get("compiler"),
+        "summary": _build_openmp_runtime_summary(openmp_active, actual_threads, max_threads, version),
+    }
+
+
+def _import_openmp_probe():
+    module = importlib.import_module("sequenzo.dissimilarity_measures.c_code")
+    return module._openmp_runtime_info
+
+
+def _openmp_unavailable(reason: str, suggested_threads: int) -> dict:
+    return {
+        "can_use_openmp": False,
+        "openmp_active": False,
+        "max_threads": 1,
+        "actual_threads": 1,
+        "suggested_threads": suggested_threads,
+        "version": None,
+        "version_macro": None,
+        "runtime_library": None,
+        "runtime_path": None,
+        "compiler": None,
+        "reason": reason,
+        "summary": "OpenMP runtime information is unavailable.",
+    }
+
+
+def _build_openmp_runtime_summary(
+    openmp_active: bool,
+    actual_threads: int,
+    max_threads: int,
+    version: Optional[str],
+) -> str:
+    version_text = f" ({version})" if version else ""
+    active_text = "active" if openmp_active else "available but currently single-threaded"
+    return (
+        f"OpenMP is {active_text}{version_text}; "
+        f"the loaded extension used {actual_threads} actual thread(s) "
+        f"with max_threads={max_threads} during introspection."
+    )
+
+
+def _format_openmp_summary(openmp: dict) -> str:
+    can_use = "yes" if openmp.get("can_use_openmp") else "no"
+    active = "yes" if openmp.get("openmp_active") else "no"
+    lines = [
+        f"OpenMP available: {can_use}",
+        f"OpenMP active: {active}",
+        f"Max OpenMP threads: {openmp.get('max_threads')}",
+        f"Actual OpenMP threads: {openmp.get('actual_threads')}",
+    ]
+    if openmp.get("suggested_threads"):
+        lines.append(f"Suggested OpenMP threads: {openmp['suggested_threads']}")
+    if openmp.get("version"):
+        lines.append(f"OpenMP version: {openmp['version']}")
+    if openmp.get("runtime_library"):
+        lines.append(f"OpenMP runtime: {openmp['runtime_library']}")
+    if openmp.get("runtime_path"):
+        lines.append(f"OpenMP runtime path: {openmp['runtime_path']}")
+    return "\n".join(lines)
 
 
 def _get_memory_bytes() -> Tuple[Optional[int], Optional[int]]:
