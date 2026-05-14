@@ -15,3 +15,4 @@ cffi>=1.15.0  # Required for C extensions and FFI functionality
 hmmlearn>=0.2.0  # Required for seqhmm module
 statsmodels>=0.14.6  # Required for feature_extraction_and_selection
 boruta>=0.3  # Required for feature_extraction_and_selection (BorutaPy)
+tomli>=1.1.0  # tomllib stdlib backport for Python 3.10 (added in 3.11)

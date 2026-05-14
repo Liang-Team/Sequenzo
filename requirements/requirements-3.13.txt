@@ -1,0 +1,17 @@
+numpy>=2.1.0          # Python 3.13: first NumPy with official 3.13 support
+pandas>=2.2.2         # Python 3.13: pandas 2.2.x with 3.13 wheels
+scipy>=1.14.0         # Python 3.13: first SciPy with 3.13 wheels
+matplotlib>=3.9.2     # Python 3.13: cp313 wheels available from 3.9.2
+seaborn>=0.13.2       # Latest stable seaborn (pure-Python, works on 3.13+)
+scikit-learn>=1.5.1   # Python 3.13: scikit-learn 1.5.x with 3.13 wheels
+joblib>=1.4.2         # Compatible with Python 3.13
+pillow>=11.0.0        # Python 3.13: Pillow 11.x with cp313 wheels
+pybind11>=3.0.0       # pybind11 3.x for Python 3.13/3.14 (2.12+ also covers 3.13)
+cython>=3.0.11        # Cython 3.0.x supports Python 3.13
+docutils>=0.17
+missingno>=0.5.2,<0.6.0
+tqdm>=4.62.3,<5.0.0
+cffi>=1.17.0          # cffi 1.17+ has Python 3.13 binary wheels
+hmmlearn>=0.3.3       # Compatible with Python 3.13
+statsmodels>=0.14.6   # Compatible with Python 3.13
+boruta>=0.3           # Required for feature_extraction_and_selection (BorutaPy)

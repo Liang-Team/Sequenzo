@@ -1,0 +1,17 @@
+numpy>=2.2.0          # Python 3.14: NumPy 2.2+ has experimental 3.14 support
+pandas>=2.3.0         # Compatible with Python 3.14
+scipy>=1.15.0         # Compatible with Python 3.14
+matplotlib>=3.9.4     # cp314 wheels available from 3.9.x series
+seaborn>=0.13.2       # Pure-Python, compatible with 3.14
+scikit-learn>=1.6.0   # Compatible with Python 3.14
+joblib>=1.5.2         # Compatible with Python 3.14
+pillow>=11.0.0        # Compatible with Python 3.14
+pybind11>=3.0.0       # pybind11 3.x required for Python 3.14 C-API support
+cython>=3.1.0         # Cython 3.1+ required for Python 3.14 code generation
+docutils>=0.17
+missingno>=0.5.2,<0.6.0
+tqdm>=4.62.3,<5.0.0
+cffi>=2.0.0           # cffi 2.0 rewrite has Python 3.14 binary wheels
+hmmlearn>=0.3.3       # Compatible with Python 3.14
+statsmodels>=0.14.6   # Compatible with Python 3.14
+boruta>=0.3           # Required for feature_extraction_and_selection (BorutaPy)

@@ -439,8 +439,7 @@ def get_dissimilarity_measures_include_dirs():
         list: Paths to include directories in dissimilarity measures.
     """
     return [
-        pybind11.get_include(),
-        pybind11.get_include(user=True),
+        pybind11.get_include(),  # user=True removed in pybind11 3.0; single call is sufficient
         numpy.get_include(),
         'sequenzo/dissimilarity_measures/src/',
         str(BASE_DIR / 'sequenzo' / 'dissimilarity_measures' / 'src' / 'xsimd' / 'include'),
@@ -453,8 +452,7 @@ def get_clustering_include_dirs():
         list: Paths to include directories in clustering measures.
     """
     return [
-        pybind11.get_include(),
-        pybind11.get_include(user=True),
+        pybind11.get_include(),  # user=True removed in pybind11 3.0; single call is sufficient
         numpy.get_include(),
         'sequenzo/clustering/src/',
         'sequenzo/clustering/sequenzo_fastcluster/src/',
@@ -466,8 +464,7 @@ def get_core_distance_operations_include_dirs():
     Collect include directories for core distance operations C++ extension.
     """
     return [
-        pybind11.get_include(),
-        pybind11.get_include(user=True),
+        pybind11.get_include(),  # user=True removed in pybind11 3.0; single call is sufficient
         numpy.get_include(),
         'sequenzo/utils/core_distance_operations/src/',
     ]

@@ -19,7 +19,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      max-parallel: 6
+      # max-parallel: 6
       matrix:
         include:
           # Linux 配置
@@ -35,6 +35,12 @@ jobs:
           - os: ubuntu-latest
             python-version: '3.12'
             python-version-nodot: '312'
+          - os: ubuntu-latest
+            python-version: '3.13'
+            python-version-nodot: '313'
+          - os: ubuntu-latest
+            python-version: '3.14'
+            python-version-nodot: '314'
 
           # Windows 配置
           - os: windows-latest
@@ -49,6 +55,12 @@ jobs:
           - os: windows-latest
             python-version: '3.12'
             python-version-nodot: '312'
+          - os: windows-latest
+            python-version: '3.13'
+            python-version-nodot: '313'
+          - os: windows-latest
+            python-version: '3.14'
+            python-version-nodot: '314'
 
           # macOS x86_64
           - os: macos-15-intel  # 使用 Intel Mac 运行器
@@ -71,6 +83,16 @@ jobs:
             python-version-nodot: '312'
             macos-arch: 'x86_64'
             macos-group: intel
+          - os: macos-15-intel
+            python-version: '3.13'
+            python-version-nodot: '313'
+            macos-arch: 'x86_64'
+            macos-group: intel
+          - os: macos-15-intel
+            python-version: '3.14'
+            python-version-nodot: '314'
+            macos-arch: 'x86_64'
+            macos-group: intel
 
           # macOS arm64
           - os: macos-latest  # 使用 Apple Silicon Mac 运行器
@@ -91,6 +113,16 @@ jobs:
           - os: macos-latest
             python-version: '3.12'
             python-version-nodot: '312'
+            macos-arch: 'arm64'
+            macos-group: apple-silicon
+          - os: macos-latest
+            python-version: '3.13'
+            python-version-nodot: '313'
+            macos-arch: 'arm64'
+            macos-group: apple-silicon
+          - os: macos-latest
+            python-version: '3.14'
+            python-version-nodot: '314'
             macos-arch: 'arm64'
             macos-group: apple-silicon
 
@@ -407,10 +439,11 @@ jobs:
         run: |
           python -m pip install --upgrade --retries 10 --timeout 120 pip setuptools wheel
            
-          # 为 Python 3.12 特别处理 NumPy 兼容性
-          if [ "${{ matrix.python-version }}" == "3.12" ]; then
-            echo "Installing NumPy 2.0 compatible dependencies for Python 3.12"
-            pip install --retries 10 --timeout 120 "numpy>=2.0.0" "pybind11>=2.12.0"
+          # Python 3.12+ requires NumPy 2.x and pybind11 3.x
+          PY="${{ matrix.python-version }}"
+          if [[ "$PY" == "3.12" || "$PY" == "3.13" || "$PY" == "3.14" ]]; then
+            echo "Installing NumPy 2.x and pybind11 3.x for Python $PY"
+            pip install --retries 10 --timeout 120 "numpy>=2.0.0" "pybind11>=3.0.0"
           fi
         shell: bash
 
@@ -1064,6 +1097,8 @@ jobs:
           # cibuildwheel is driven by Python 3.11, but wheel install/import
           # checks must run on the target interpreter for this matrix entry.
           python-version: ${{ matrix.python-version }}
+          # allow-prereleases ensures 3.14 (beta) can be installed when it hasn't been officially released yet
+          allow-prereleases: true
 
       - name: Verify OpenMP Support
         run: |

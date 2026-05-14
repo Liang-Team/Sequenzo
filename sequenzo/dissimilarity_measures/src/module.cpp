@@ -112,7 +112,12 @@ static py::dict collect_openmp_runtime_info(int requested_threads = 0) {
     info["max_threads"] = omp_get_max_threads();
     info["actual_threads"] = actual_threads;
     info["num_threads_outside_parallel"] = omp_get_num_threads();
+    // omp_get_thread_limit() is OpenMP 3.0+; MSVC omp.h only declares OpenMP 2.0 symbols
+#if defined(_MSC_VER) || _OPENMP < 200805
+    info["thread_limit"] = omp_get_max_threads();
+#else
     info["thread_limit"] = omp_get_thread_limit();
+#endif
     info["num_procs"] = omp_get_num_procs();
     info["dynamic"] = static_cast<bool>(omp_get_dynamic());
     if (requested_threads > 0) {

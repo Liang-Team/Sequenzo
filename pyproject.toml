@@ -2,8 +2,8 @@
 requires = [
     "setuptools>=64",
     "wheel>=0.40.0",
-    "pybind11>=2.10.0",
-    "cython>=0.29.21",
+    "pybind11>=3.0.0",   # 3.0+ required for Python 3.14 C-API; backward compatible with 3.9–3.13
+    "cython>=3.0.11",    # 3.0.x covers 3.9–3.13; pip resolves to 3.2.x (3.14 support) at runtime
     # Use NumPy 2.x for building to ensure ABI compatibility with runtime
     # NumPy 2.x is backward compatible with code written for NumPy 1.x
     "numpy>=1.21.0"
@@ -21,7 +21,7 @@ authors = [
     { name = "Jan Heinrich Ernst Meyerhoff-Liang", email = "jan.meyerhoff1@gmail.com" }
 ]
 license = { file = "LICENSE" }
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.15"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -30,6 +30,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 version = "0.1.38"
 dependencies = [
@@ -40,8 +42,8 @@ dependencies = [
     "matplotlib>=3.4.3",
     "seaborn>=0.11.2",
     "Pillow>=8.3.2",
-    "pybind11>=2.6.0",
-    "cython>=0.29.21",
+    "pybind11>=3.0.0",   # 3.0+ required for Python 3.14; backward compatible with 3.9–3.13
+    "cython>=3.0.11",    # 3.0.x for 3.9–3.13; pip auto-upgrades to 3.1+ (3.14 support) for 3.14 users
     # Avoid SciPy builds from source on manylinux2014 (OpenBLAS missing)
     "scipy>=1.6.3,<1.17",
     "scikit-learn>=0.24.2",
@@ -49,11 +51,12 @@ dependencies = [
     "docutils>=0.17",
     "tqdm>=4.62.3,<5.0.0",
     "missingno>=0.5.2,<0.6.0",
-    "cffi>=1.15.0",  # Required for C extensions and FFI functionality
+    "cffi>=1.17.0",  # 1.17+ has Python 3.13 wheels; cffi 2.0 (auto-selected for 3.14) is backward compatible
     "hmmlearn>=0.2.0",  # Required for seqhmm module
     "boruta>=0.3",  # Required for feature_extraction_and_selection (BorutaPy)
     "statsmodels>=0.13.5,<0.14.0; python_version < '3.10'",  # Python 3.9: 0.14.x needs scipy>=1.8/pandas>=1.4 which conflicts
     "statsmodels>=0.14.6; python_version >= '3.10'",          # Align with requirements-3.10+ / avoid older 0.14.x edge cases
+    "tomli>=1.1.0; python_version < '3.11'",                  # tomllib stdlib backport for Python 3.9/3.10
 ]
 
 [project.optional-dependencies]
