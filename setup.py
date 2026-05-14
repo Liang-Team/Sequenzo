@@ -369,9 +369,11 @@ def get_compile_args_for_file(filename):
         base_cppflags = ['/std:c++17'] + base_cflags
         
         # Windows OpenMP support
+        # /openmp:llvm is required for OpenMP 3.1+ features such as
+        # reduction(max:...) used in KMedoid.cpp and PAMonce.cpp.
         if has_openmp_support():
-            openmp_flag = ['/openmp:experimental']
-            print("[SETUP] Windows OpenMP flags: /openmp")
+            openmp_flag = ['/openmp:llvm']
+            print("[SETUP] Windows OpenMP flags: /openmp:llvm")
         else:
             openmp_flag = []
     else:
@@ -562,10 +564,11 @@ def configure_cpp_extension():
         #   distance_prep_tu.cpp         — compiled WITHOUT -ffast-math (IEEE NaN handling)
         #   fastcluster_linkage_tu.cpp   — compiled WITH  -ffast-math (linkage performance)
         clustering_compile_args = get_compile_args_for_file("dummy.cpp")
-        if '-ffast-math' not in clustering_compile_args:
-            clustering_compile_args.append('-ffast-math')
-        if '-O3' not in clustering_compile_args:
-            clustering_compile_args.append('-O3')
+        if sys.platform != 'win32':
+            if '-ffast-math' not in clustering_compile_args:
+                clustering_compile_args.append('-ffast-math')
+            if '-O3' not in clustering_compile_args:
+                clustering_compile_args.append('-O3')
         clustering_ext_module = Pybind11Extension(
             'sequenzo.clustering.clustering_c_code',
             sources=[
@@ -617,10 +620,10 @@ def configure_cpp_extension():
         # Fastcluster requires precise floating-point operations for NaN/Infinity checks
         # Do not use -ffast-math for fastcluster as it breaks NaN detection and FENV_ACCESS
         fastcluster_compile_args = get_compile_args_for_file("dummy.cpp")
-        # Remove -ffast-math if present
+        # Remove -ffast-math if present (breaks NaN/Infinity detection in fastcluster)
         fastcluster_compile_args = [arg for arg in fastcluster_compile_args if arg != '-ffast-math']
-        # Ensure we have optimization but without fast-math
-        if '-O3' not in fastcluster_compile_args:
+        # Ensure we have optimization but without fast-math (GCC/Clang only; MSVC uses /O2)
+        if sys.platform != 'win32' and '-O3' not in fastcluster_compile_args:
             fastcluster_compile_args.append('-O3')
 
         fastcluster_ext_module = Extension(

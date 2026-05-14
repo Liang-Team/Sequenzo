@@ -54,8 +54,7 @@ dependencies = [
     "cffi>=1.17.0",  # 1.17+ has Python 3.13 wheels; cffi 2.0 (auto-selected for 3.14) is backward compatible
     "hmmlearn>=0.2.0",  # Required for seqhmm module
     "boruta>=0.3",  # Required for feature_extraction_and_selection (BorutaPy)
-    "statsmodels>=0.13.5,<0.14.0; python_version < '3.10'",  # Python 3.9: 0.14.x needs scipy>=1.8/pandas>=1.4 which conflicts
-    "statsmodels>=0.14.6; python_version >= '3.10'",          # Align with requirements-3.10+ / avoid older 0.14.x edge cases
+    "statsmodels>=0.14.4",          # Align with requirements-3.10+ / avoid older 0.14.x edge cases
     "tomli>=1.1.0; python_version < '3.11'",                  # tomllib stdlib backport for Python 3.9/3.10
 ]
 
