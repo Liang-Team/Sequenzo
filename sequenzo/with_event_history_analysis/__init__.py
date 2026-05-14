@@ -6,7 +6,7 @@
 
 Boundary note:
 - Event-sequence construction/mining/visualization is now in `sequenzo.event_sequences`.
-- This module is reserved for event-history methods (e.g., SAMM, seqsha).
+- This module is reserved for event-history methods (e.g., SAMM, get_sequence_history_data).
 """
 
 from .sequence_analysis_multi_state_model import (
@@ -21,7 +21,7 @@ from .sequence_analysis_multi_state_model import (
 )
 
 from .sequence_history_analysis import (
-    seqsha,
+    get_sequence_history_data,
     person_level_to_person_period
 )
 
@@ -33,7 +33,7 @@ __all__ = [
     'seqsammseq',
     'set_typology',
     'seqsammeha',
-    'seqsha',
+    'get_sequence_history_data',
     'person_level_to_person_period',
     # Keep old names for backward compatibility
     'seqsamm',

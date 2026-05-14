@@ -18,7 +18,7 @@ This split avoids confusion between:
 - `sequence_analysis_multi_state_model`
 - `seqsammseq`
 - `seqsammeha`
-- `seqsha`
+- `get_sequence_history_data`
 - `person_level_to_person_period`
 
 ### This module does NOT include

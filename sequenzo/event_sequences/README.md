@@ -24,7 +24,7 @@ Use `sequenzo.event_sequences` for:
 
 Use `sequenzo.with_event_history_analysis` for:
 - SAMM and sequence-history modeling workflows
-- Event-history analysis utilities (`seqsha`, person-period tools)
+- Event-history analysis utilities (`get_sequence_history_data`, person-period tools)
 
 If your task is "patterns of events", use `event_sequences`.
 If your task is "history/modeling of transitions", use `with_event_history_analysis`.

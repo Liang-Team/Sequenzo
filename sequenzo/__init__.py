@@ -218,6 +218,8 @@ _LAZY: dict[str, tuple[str, str]] = {
     "set_typology": ("sequenzo.with_event_history_analysis", "set_typology"),
     "seqsammeha": ("sequenzo.with_event_history_analysis", "seqsammeha"),
     "seqsamm": ("sequenzo.with_event_history_analysis", "seqsamm"),
+    "get_sequence_history_data": ("sequenzo.with_event_history_analysis", "get_sequence_history_data"),
+    "person_level_to_person_period": ("sequenzo.with_event_history_analysis", "person_level_to_person_period"),
     # seqhmm
     "HMM": ("sequenzo.seqhmm", "HMM"),
     "build_hmm": ("sequenzo.seqhmm", "build_hmm"),
@@ -479,6 +481,8 @@ __all__ = [
     "set_typology",
     "seqsammeha",
     "seqsamm",
+    "get_sequence_history_data",
+    "person_level_to_person_period",
     "HMM",
     "build_hmm",
     "fit_model",

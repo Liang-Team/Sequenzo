@@ -46,13 +46,31 @@ def person_level_to_person_period(data, id_col="id", period_col="time", event_co
     # Check for missing values in critical columns
     if data[[id_col, period_col, event_col]].isna().any().any():
         raise ValueError("Cannot handle missing data in the time or event variables")
-    
+
+    period_values = data[period_col].values
+    if pd.api.types.is_bool_dtype(data[period_col]):
+        raise ValueError("'time' must contain integer durations, not boolean values.")
+    try:
+        period_values_int = period_values.astype(int)
+    except (TypeError, ValueError):
+        raise ValueError("'time' must contain integer durations.") from None
+    if not np.all(np.equal(period_values, period_values_int)):
+        raise ValueError("'time' must contain integer durations.")
+    period_values = period_values_int
+    if (period_values < 1).any():
+        raise ValueError("'time' must be at least 1 for every sequence.")
+
+    event_values = data[event_col].values
+    unique_events = set(pd.unique(event_values))
+    if not unique_events.issubset({0, 1, False, True}):
+        raise ValueError("'event' must be boolean or 0/1.")
+
     # Create an index that repeats each row based on the time value
     # For example, if time=3, that row will be repeated 3 times
-    index = np.repeat(np.arange(len(data)), data[period_col].values)
+    index = np.repeat(np.arange(len(data)), period_values)
     
     # Find the cumulative sum to identify which rows should have the event
-    idmax = np.cumsum(data[period_col].values) - 1
+    idmax = np.cumsum(period_values) - 1
     
     # Expand the data by repeating rows
     dat = data.iloc[index].copy()
@@ -65,8 +83,7 @@ def person_level_to_person_period(data, id_col="id", period_col="time", event_co
     dat[event_col] = False
     
     # Set events to True only at the final period for each person
-    # Convert to bool to avoid dtype incompatibility warning
-    dat.loc[idmax, event_col] = data[event_col].values.astype(bool)
+    dat.loc[idmax, event_col] = event_values.astype(bool)
     
     return dat
 
@@ -96,9 +113,9 @@ def _extract_sequence_dataframe(seqdata):
         return pd.DataFrame(seqdata)
 
 
-def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=None):
+def get_sequence_history_data(seqdata, time, event, include_present=False, align_end=False, covar=None):
     """
-    Sequence History Analysis: Create person-period format with sequence history.
+    Build person-period data with sequence history for Sequence History Analysis (SHA).
     
     This function converts sequence data into a person-period format where each
     row represents a time point for a person, with columns showing their sequence
@@ -150,7 +167,7 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
     >>> seqdata = pd.DataFrame([[1, 2, 3, 4], [1, 1, 2, 2]])
     >>> time = np.array([3, 2])
     >>> event = np.array([True, False])
-    >>> result = seqsha(seqdata, time, event)
+    >>> result = get_sequence_history_data(seqdata, time, event)
     
     Example 2: Usage with SequenceData object (recommended)
     >>> from sequenzo import SequenceData, load_dataset
@@ -161,24 +178,39 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
     >>> # All persons observed for 264 months
     >>> time = np.full(len(df), 264)
     >>> event = df['highschool'].values
-    >>> result = seqsha(seq_data, time, event)
+    >>> result = get_sequence_history_data(seq_data, time, event)
     
     Example 3: With covariates
     >>> covar = df[['sex', 'yeduc', 'east']]
-    >>> result = seqsha(seq_data, time, event, covar=covar)
+    >>> result = get_sequence_history_data(seq_data, time, event, covar=covar)
     
     Example 4: Right-aligned sequences
-    >>> result = seqsha(seq_data, time, event, align_end=True)
+    >>> result = get_sequence_history_data(seq_data, time, event, align_end=True)
     
     Notes
     -----
+    This function implements the first step of Sequence History Analysis (SHA):
+    reconstructing person-period data with past trajectories at each time point.
+    Subsequent steps (sequence typology and discrete-time event-history modeling)
+    are not performed here.
+
     - The time parameter represents observation duration, not calendar time
-    - When include_present=False (default), only past states are included
+    - When include_present=False (default), the current state is excluded from history
+    - When align_end=False, only the first ``ma`` sequence columns are returned
+      (``ma`` is the maximum observation duration across persons)
     - Use align_end=True when analyzing sequences leading up to an event
     - Missing values in the original sequence are converted to "NA_orig"
+    - Sequence states are treated as categorical labels and converted to strings
+    - Left-aligned ``include_present`` follows SHA semantics and differs from
+      TraMineRextras::seqsha, where the parameter meaning is inverted
     """
     # Extract sequence DataFrame from input (handles SequenceData, DataFrame, or array)
     seq_df = _extract_sequence_dataframe(seqdata)
+
+    if seq_df.shape[0] == 0:
+        raise ValueError("'seqdata' must contain at least one sequence.")
+    if seq_df.shape[1] == 0:
+        raise ValueError("'seqdata' must contain at least one time column.")
     
     # Convert time and event to numpy arrays for consistency
     time_array = np.asarray(time)
@@ -206,8 +238,11 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
     persper = person_level_to_person_period(basetime, "id", "time", "event")
     
     # Convert sequence data to matrix and handle missing values
-    sdata = seq_df.values.astype(str)
-    sdata[pd.isna(seq_df.values)] = "NA_orig"
+    seq_values = seq_df.to_numpy(dtype=object)
+    missing_mask = pd.isna(seq_values)
+    seq_values = seq_values.copy()
+    seq_values[missing_mask] = "NA_orig"
+    sdata = seq_values.astype(str)
     
     # Get the time periods for each row in person-period data
     age = persper['time'].values
@@ -217,8 +252,11 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
     if ma > seq_df.shape[1]:
         raise ValueError("Maximum time of event occurrence is higher than the longest sequence!")
     
+    n_cols = seq_df.shape[1]
+    history_cols = n_cols if align_end else ma
+
     # Create empty matrix to store past sequence states
-    past = np.full((len(persper), seq_df.shape[1]), np.nan, dtype=object)
+    past = np.full((len(persper), history_cols), np.nan, dtype=object)
     
     if align_end:
         # Right-align the sequences (align from the end)
@@ -232,37 +270,37 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
             
             if include_present:
                 # Include current time point: fill from (ncol-aa) to end
-                past[cond, (seq_df.shape[1] - aa):seq_df.shape[1]] = sdata[ids_a, 0:aa]
+                past[cond, (n_cols - aa):n_cols] = sdata[ids_a, 0:aa]
             else:
                 # Exclude current time point: fill from (ncol-aa+1) to end
-                past[cond, (seq_df.shape[1] - aa + 1):seq_df.shape[1]] = sdata[ids_a, 0:(aa - 1)]
+                past[cond, (n_cols - aa + 1):n_cols] = sdata[ids_a, 0:(aa - 1)]
         
         # Create column names counting backwards
-        col_names = [f"Tm{i}" for i in range(seq_df.shape[1], 0, -1)]
+        col_names = [f"Tm{i}" for i in range(n_cols, 0, -1)]
     else:
         # Left-align the sequences (align from the start)
         for aa in range(1, ma + 1):
             if include_present:
-                # Include present: use time > aa
-                cond = age > aa
-            else:
-                # Exclude present: use time >= aa
                 cond = age >= aa
-            
-            # Get the person IDs for these rows
-            ids_a = persper.loc[cond, 'id'].values - 1  # Subtract 1 for 0-based indexing
-            
-            # Fill in the sequence state at position aa-1 (0-based)
+            else:
+                cond = age > aa
+
+            ids_a = persper.loc[cond, 'id'].values - 1
             past[cond, aa - 1] = sdata[ids_a, aa - 1]
-        
-        # Use original column names or create default ones
+
         if seq_df.columns is not None and len(seq_df.columns) > 0:
             col_names = [str(col) for col in seq_df.columns[:ma]]
-            # Pad with additional column names if needed
-            col_names += [f"col_{i}" for i in range(ma, seq_df.shape[1])]
         else:
-            col_names = [f"col_{i}" for i in range(seq_df.shape[1])]
-    
+            col_names = [f"col_{i}" for i in range(ma)]
+
+    base_cols = {"id", "time", "event"}
+    overlap = base_cols.intersection(col_names)
+    if overlap:
+        raise ValueError(
+            f"Sequence history columns duplicate base columns: {sorted(overlap)}. "
+            "Please rename sequence time columns before calling this function."
+        )
+
     # Convert past matrix to DataFrame
     past_df = pd.DataFrame(past, columns=col_names)
     
@@ -271,13 +309,27 @@ def seqsha(seqdata, time, event, include_present=False, align_end=False, covar=N
     
     # Add covariates if provided
     if covar is not None:
-        # Merge covariates based on the ID (subtract 1 for 0-based indexing)
         if isinstance(covar, pd.DataFrame):
+            if len(covar) != n_sequences:
+                raise ValueError(
+                    f"Number of rows in 'covar' ({len(covar)}) must match "
+                    f"number of sequences ({n_sequences})."
+                )
             covar_subset = covar.iloc[alldata['id'].values - 1].reset_index(drop=True)
+            overlap = set(covar_subset.columns).intersection(alldata.columns)
+            if overlap:
+                raise ValueError(
+                    f"Covariate columns duplicate existing columns: {sorted(overlap)}"
+                )
             alldata = pd.concat([alldata, covar_subset], axis=1)
         else:
-            covar_array = np.array(covar)
+            covar_array = np.asarray(covar)
+            if covar_array.shape[0] != n_sequences:
+                raise ValueError(
+                    f"Number of rows in 'covar' ({covar_array.shape[0]}) must match "
+                    f"number of sequences ({n_sequences})."
+                )
             covar_subset = covar_array[alldata['id'].values - 1]
             alldata = pd.concat([alldata, pd.DataFrame(covar_subset)], axis=1)
-    
+
     return alldata
