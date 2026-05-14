@@ -457,6 +457,7 @@ def get_clustering_include_dirs():
         pybind11.get_include(),  # user=True removed in pybind11 3.0; single call is sufficient
         numpy.get_include(),
         'sequenzo/clustering/src/',
+        'sequenzo/clustering/fuzzy_clustering/src/',
         'sequenzo/clustering/sequenzo_fastcluster/src/',
     ]
 
@@ -575,6 +576,7 @@ def configure_cpp_extension():
                 'sequenzo/clustering/src/module.cpp',
                 'sequenzo/clustering/src/distance_prep_tu.cpp',
                 'sequenzo/clustering/src/fastcluster_linkage_tu.cpp',
+                'sequenzo/clustering/fuzzy_clustering/src/fanny.cpp',
             ],
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=clustering_compile_args,

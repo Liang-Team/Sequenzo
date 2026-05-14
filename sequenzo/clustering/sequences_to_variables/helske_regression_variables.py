@@ -48,7 +48,7 @@ from .fanny import (
     fanny,
     fanny_membership,
     medoid_membership_approximation,
-    representative_indices_from_membership,
+    highest_membership_indices_from_membership,
 )
 
 __all__ = [
@@ -60,7 +60,7 @@ __all__ = [
     "FannyResult",
     "fanny_membership",
     "medoid_membership_approximation",
-    "representative_indices_from_membership",
+    "highest_membership_indices_from_membership",
     "soft_classification_variables",
     "pseudoclass_regression",
 ]
@@ -291,6 +291,12 @@ def pseudoclass_regression(
     -------
     dict with keys
         beta_combined, se_combined, cov_combined, beta_list, m_eff, failed
+
+    Notes
+    -----
+    Failed replications are skipped and counted in ``failed``. A replication may
+    fail because of a rank-deficient design matrix, logit non-convergence,
+    perfect separation, or other model-fitting errors.
     """
     try:
         import statsmodels.api as sm
@@ -306,6 +312,8 @@ def pseudoclass_regression(
     U = validate_membership_matrix(U)
     y = np.asarray(y, dtype=float).ravel()
     n, K = U.shape
+    if K < 2:
+        raise ValueError("pseudoclass_regression requires at least two clusters")
     if y.shape[0] != n:
         raise ValueError("y must have the same number of rows as U")
 
@@ -313,26 +321,36 @@ def pseudoclass_regression(
     if reference < 0 or reference >= K:
         raise ValueError(f"reference must be between 0 and {K - 1}; got {reference}")
 
-    X_fixed = np.asarray(X_fixed, dtype=float) if X_fixed is not None else np.empty((n, 0))
-    if X_fixed.size > 0 and X_fixed.shape[0] != n:
-        raise ValueError("X_fixed must have same number of rows as U")
+    if X_fixed is None:
+        X_fixed = np.empty((n, 0))
+    else:
+        X_fixed = np.asarray(X_fixed, dtype=float)
+        if X_fixed.ndim == 1:
+            X_fixed = X_fixed.reshape(-1, 1)
+        if X_fixed.ndim != 2:
+            raise ValueError("X_fixed must be a 1D or 2D array")
+        if X_fixed.shape[0] != n:
+            raise ValueError("X_fixed must have same number of rows as U")
 
+    cols_keep = [j for j in range(K) if j != reference]
     beta_list = []
     cov_list = []
 
     for _ in range(M):
-        labels_m = np.array([rng.choice(K, p=U[i, :]) for i in range(n)])
-        dummies_m = cluster_labels_to_dummies(labels_m, k=K, reference=reference)
-        parts = []
-        if X_fixed.size > 0:
-            parts.append(X_fixed)
-        parts.append(dummies_m)
-        X_m = np.hstack(parts) if parts else dummies_m
-        if add_intercept:
-            X_m = sm.add_constant(X_m, has_constant="add")
-        if np.linalg.matrix_rank(X_m) < X_m.shape[1]:
-            continue
         try:
+            labels_m = np.array([rng.choice(K, p=U[i, :]) for i in range(n)])
+            dummies_m = np.column_stack([
+                (labels_m == c).astype(float) for c in cols_keep
+            ])
+            parts = []
+            if X_fixed.size > 0:
+                parts.append(X_fixed)
+            parts.append(dummies_m)
+            X_m = np.hstack(parts)
+            if add_intercept:
+                X_m = sm.add_constant(X_m, has_constant="add")
+            if np.linalg.matrix_rank(X_m) < X_m.shape[1]:
+                continue
             if model_type == "ols":
                 model = sm.OLS(y, X_m).fit()
             else:
@@ -345,7 +363,10 @@ def pseudoclass_regression(
     m_eff = len(beta_list)
     failed = M - m_eff
     if m_eff == 0:
-        raise RuntimeError("All M replications had rank-deficient design matrix")
+        raise RuntimeError(
+            "All M pseudoclass replications failed due to rank-deficient "
+            "design matrices or model-fitting errors"
+        )
 
     beta_stack = np.array(beta_list)
     cov_stack = np.array(cov_list)

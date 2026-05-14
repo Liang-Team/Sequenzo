@@ -22,7 +22,8 @@ from sequenzo.big_data.clara.utils.aggregatecases import *
 from sequenzo.big_data.clara.utils.davies_bouldin import *
 from sequenzo.big_data.clara.utils.get_weighted_diss import get_weighted_diss
 from scipy.cluster.hierarchy import cut_tree
-from sequenzo.clustering.fuzzy.wfcmdd_fuzzy_clustering import wfcmdd
+
+from sequenzo.clustering.fuzzy_clustering import wfcmdd
 from sequenzo.clustering.k_medoids import KMedoids
 from sequenzo.clustering.sequences_to_variables.helske_regression_variables import (
     fanny_membership,

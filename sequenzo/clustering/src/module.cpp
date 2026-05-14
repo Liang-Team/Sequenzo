@@ -10,7 +10,9 @@
 #include "fastcluster_linkage.h"
 #include "cluster_core.cpp"
 #include "cluster_quality_pipeline.cpp"
+#include "fanny.h"
 
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -975,4 +977,72 @@ PYBIND11_MODULE(clustering_c_code, m) {
 
     };
     register_cluster_results_api();
+
+    // =========================================================================
+    // FANNY fuzzy clustering (R cluster::fanny, diss=TRUE path)
+    // =========================================================================
+    m.def("fanny_from_diss",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> diss_matrix,
+           int k,
+           double memb_exp,
+           int max_iter,
+           double tol,
+           py::object ini_membership,
+           bool reorder_columns) -> py::dict {
+            auto buf = diss_matrix.request();
+            if (buf.ndim != 2 || buf.shape[0] != buf.shape[1]) {
+                throw std::runtime_error("diss must be a square matrix");
+            }
+            const int n = static_cast<int>(buf.shape[0]);
+            const double* diss_ptr = static_cast<double*>(buf.ptr);
+
+            const double* ini_ptr = nullptr;
+            py::array_t<double, py::array::c_style | py::array::forcecast> ini_arr;
+            if (!ini_membership.is_none()) {
+                ini_arr = py::array_t<double, py::array::c_style | py::array::forcecast>(ini_membership);
+                auto ini_buf = ini_arr.request();
+                if (ini_buf.ndim != 2 || ini_buf.shape[0] != n || ini_buf.shape[1] != k) {
+                    throw std::runtime_error("ini_membership must have shape (n, k)");
+                }
+                ini_ptr = static_cast<double*>(ini_buf.ptr);
+            }
+
+            FannyCoreResult res = fanny_from_diss(
+                diss_ptr, n, k, memb_exp, max_iter, tol, ini_ptr, reorder_columns
+            );
+
+            auto membership = py::array_t<double>({n, k});
+            std::memcpy(
+                membership.mutable_data(),
+                res.membership.data(),
+                static_cast<size_t>(n) * static_cast<size_t>(k) * sizeof(double)
+            );
+
+            auto clustering = py::array_t<int>(n);
+            std::memcpy(
+                clustering.mutable_data(),
+                res.clustering.data(),
+                static_cast<size_t>(n) * sizeof(int)
+            );
+
+            py::dict out;
+            out["membership"] = membership;
+            out["clustering"] = clustering;
+            out["objective"] = res.objective;
+            out["partition_coefficient"] = res.partition_coefficient;
+            out["normalized_coefficient"] = res.normalized_coefficient;
+            out["iterations"] = res.iterations;
+            out["k_crisp"] = res.k_crisp;
+            out["converged"] = res.converged;
+            out["memb_exp"] = memb_exp;
+            return out;
+        },
+        py::arg("diss"),
+        py::arg("k"),
+        py::arg("memb_exp") = 2.0,
+        py::arg("max_iter") = 500,
+        py::arg("tol") = 1e-15,
+        py::arg("ini_membership") = py::none(),
+        py::arg("reorder_columns") = true,
+        "Fuzzy Analysis Clustering on a distance matrix (R cluster::fanny).");
 }

@@ -59,6 +59,7 @@ developer/WeightedCluster-master/
 developer/seqHMM-main/
 developer/Py_FS-main/
 developer/eBoruta-master/
+developer/cluster-master/
 
 # ignore RData and Rhistory
 .RData

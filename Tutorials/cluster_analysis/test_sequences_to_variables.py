@@ -131,7 +131,7 @@ def test_phase2(diss_small, kmed, k):
 
 def test_phase3(diss_small, k):
     """Phase 3: fanny_membership and soft_classification_variables."""
-    U, medoids = fanny_membership(diss_small, k=k, m=1.4, random_state=42)
+    U, medoids = fanny_membership(diss_small, k=k, m=1.4)
     n_use = diss_small.shape[0]
     assert U.shape == (n_use, k)
     np.testing.assert_allclose(U.sum(axis=1), 1.0, rtol=1e-5)

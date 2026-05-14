@@ -1,16 +1,41 @@
 """
+@Author  : Yuqi Liang 梁彧祺
+@File    : fanny.py
+@Time    : 02/03/2026 09:52
+@Desc    :
 Fuzzy Analysis Clustering (FANNY), port of R package ``cluster::fanny``.
 
 Reference: Kaufman & Rousseeuw (1990), chapter 4; R ``cluster`` src/fanny.c.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
 
 from .helpers import validate_diss_matrix
+
+
+def _import_fanny_cpp():
+    try:
+        from sequenzo.clustering import clustering_c_code as cpp
+        if hasattr(cpp, "fanny_from_diss"):
+            return cpp
+    except ImportError:
+        pass
+    return None
+
+
+_cpp = None
+
+
+def _get_fanny_cpp():
+    global _cpp
+    if _cpp is None:
+        _cpp = _import_fanny_cpp()
+    return _cpp
 
 
 def _square_to_condensed(diss: np.ndarray) -> np.ndarray:
@@ -96,7 +121,11 @@ def _caddy(
 
 @dataclass
 class FannyResult:
-    """Result of :func:`fanny`."""
+    """Result of :func:`fanny`.
+
+    ``iterations`` is the iteration count when converged, or ``-1`` if not converged
+    (R ``cluster::fanny`` convention).
+    """
 
     membership: np.ndarray
     clustering: np.ndarray
@@ -126,7 +155,9 @@ def fanny(
     diss : np.ndarray
         Square ``(n, n)`` distance matrix.
     k : int
-        Number of clusters. Must satisfy ``1 <= k <= n // 2 - 1`` (R convention).
+        Number of clusters. Must satisfy ``1 <= k <= n // 2 - 1`` (R ``cluster::fanny``
+        convention, not a general fuzzy-clustering bound). For small ``n`` this is tight;
+        e.g. ``n = 4`` allows at most ``k = 1``.
     memb_exp : float, default 2.0
         Fuzziness exponent ``m`` (must be > 1). Helske et al. (2024) use 1.4.
     max_iter : int, default 500
@@ -156,21 +187,45 @@ def fanny(
         raise ValueError("max_iter must be non-negative")
     _validate_diss_matrix(diss)
 
-    if k == 1:
-        return FannyResult(
-            membership=np.ones((n, 1), dtype=float),
-            clustering=np.zeros(n, dtype=int),
-            memb_exp=float(memb_exp),
-            objective=0.0,
-            converged=True,
-            iterations=0,
-            k_crisp=1,
-            partition_coefficient=1.0,
-            normalized_coefficient=1.0,
-        )
-
     if k > n // 2 - 1:
         raise ValueError(f"k must be at most n//2 - 1; got k={k}, n={n}")
+
+    cpp = _get_fanny_cpp()
+    if cpp is not None:
+        ini_arg = None if ini_mem_p is None else np.asarray(ini_mem_p, dtype=float, order="C")
+        raw = cpp.fanny_from_diss(
+            np.asarray(diss, dtype=np.float64, order="C"),
+            int(k),
+            float(memb_exp),
+            int(max_iter),
+            float(tol),
+            ini_arg,
+            bool(reorder_columns),
+        )
+        iterations = int(raw["iterations"])
+        converged = bool(raw["converged"])
+        if not converged:
+            warnings.warn(
+                f"FANNY algorithm has not converged in max_iter={max_iter} iterations",
+                stacklevel=2,
+            )
+        r = float(memb_exp)
+        pc = float(raw["partition_coefficient"])
+        if r == 2.0:
+            npc = (k * pc - 1.0) / (k - 1.0)
+        else:
+            npc = float(raw["normalized_coefficient"])
+        return FannyResult(
+            membership=np.asarray(raw["membership"], dtype=float),
+            clustering=np.asarray(raw["clustering"], dtype=int),
+            memb_exp=r,
+            objective=float(raw["objective"]),
+            converged=converged,
+            iterations=iterations,
+            k_crisp=int(raw["k_crisp"]),
+            partition_coefficient=pc,
+            normalized_coefficient=npc,
+        )
 
     dss = _square_to_condensed(diss)
     r = float(memb_exp)
@@ -222,7 +277,6 @@ def fanny(
     crt = cryt
 
     pt = np.zeros(k, dtype=float)
-    eps = np.finfo(float).eps
     converged = False
     it = 0
     while it < max_iter:
@@ -231,8 +285,6 @@ def fanny(
             dt = 0.0
             for j in range(k):
                 denom = dp[m, j] - ef[j] / (2.0 * esp[j])
-                if denom <= 0.0 or not np.isfinite(denom):
-                    denom = eps
                 pt[j] = (esp[j] / denom) ** reen
                 dt += pt[j]
             xx = 0.0
@@ -264,6 +316,12 @@ def fanny(
             break
         crt = cryt
 
+    if not converged:
+        warnings.warn(
+            f"FANNY algorithm has not converged in max_iter={max_iter} iterations",
+            stacklevel=2,
+        )
+
     inv_r = 1.0 / r
     p **= inv_r
 
@@ -288,14 +346,14 @@ def fanny(
         memb_exp=r,
         objective=cryt,
         converged=converged,
-        iterations=it if converged else -it,
+        iterations=it if converged else -1,
         k_crisp=k_crisp,
         partition_coefficient=pc,
         normalized_coefficient=npc,
     )
 
 
-def representative_indices_from_membership(membership: np.ndarray) -> np.ndarray:
+def highest_membership_indices_from_membership(membership: np.ndarray) -> np.ndarray:
     """
     Row index with highest membership in each cluster column.
 
@@ -314,7 +372,6 @@ def fanny_membership(
     max_iter: int = 500,
     tol: float = 1e-15,
     ini_mem_p: Optional[np.ndarray] = None,
-    random_state: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     FANNY membership matrix (Helske et al. 2024 soft / pseudoclass step).
@@ -332,20 +389,17 @@ def fanny_membership(
     max_iter, tol
         Passed to :func:`fanny`.
     ini_mem_p : np.ndarray, optional
-        Initial membership matrix ``(n, k)``.
-    random_state : int, optional
-        Ignored; kept for API compatibility. Use ``ini_mem_p`` for custom starts.
+        Initial membership matrix ``(n, k)``. FANNY initialization is deterministic
+        when this is ``None`` (same as R ``cluster::fanny``).
 
     Returns
     -------
     U : np.ndarray, shape (n, k)
         Row-stochastic membership matrix.
-    representative_indices : np.ndarray, shape (k,)
+    highest_membership_indices : np.ndarray, shape (k,)
         Row index of the observation with highest membership in each cluster
         column. Not PAM medoids — do not pass to :func:`representativeness_matrix`.
     """
-    if random_state is not None:
-        pass  # FANNY init is deterministic unless ini_mem_p is supplied
     result = fanny(
         diss,
         k=k,
@@ -355,8 +409,8 @@ def fanny_membership(
         ini_mem_p=ini_mem_p,
         reorder_columns=True,
     )
-    representative_indices = representative_indices_from_membership(result.membership)
-    return result.membership, representative_indices
+    highest_membership_indices = highest_membership_indices_from_membership(result.membership)
+    return result.membership, highest_membership_indices
 
 
 def medoid_membership_approximation(
@@ -364,7 +418,6 @@ def medoid_membership_approximation(
     k: int,
     m: float = 1.4,
     weights: Optional[np.ndarray] = None,
-    random_state: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Distance-to-PAM-medoid membership approximation (not exact FANNY).
@@ -382,8 +435,6 @@ def medoid_membership_approximation(
     n = diss.shape[0]
     if weights is None:
         weights = np.ones(n, dtype=float)
-    if random_state is not None:
-        np.random.seed(random_state)
     labels_pam = KMedoids(diss, k=k, weights=weights, method="PAMonce", verbose=False)
     medoid_indices = medoid_indices_from_kmedoids_result(labels_pam)
     d = diss[:, medoid_indices]
@@ -392,4 +443,7 @@ def medoid_membership_approximation(
     inv_exp = 1.0 / (m - 1.0)
     u = np.power(1.0 / d, inv_exp)
     u /= np.maximum(u.sum(axis=1, keepdims=True), 1e-15)
+    for j, med in enumerate(medoid_indices):
+        u[med, :] = 0.0
+        u[med, j] = 1.0
     return u, medoid_indices

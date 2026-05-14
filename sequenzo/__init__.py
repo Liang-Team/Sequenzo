@@ -72,7 +72,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "cluster_labels_from_kmedoids_result": ("sequenzo.clustering", "cluster_labels_from_kmedoids_result"),
     "hard_classification_variables": ("sequenzo.clustering", "hard_classification_variables"),
     "fanny_membership": ("sequenzo.clustering", "fanny_membership"),
-    "representative_indices_from_membership": ("sequenzo.clustering", "representative_indices_from_membership"),
+    "highest_membership_indices_from_membership": ("sequenzo.clustering", "highest_membership_indices_from_membership"),
     "soft_classification_variables": ("sequenzo.clustering", "soft_classification_variables"),
     "pseudoclass_regression": ("sequenzo.clustering", "pseudoclass_regression"),
     # multidomain
@@ -346,7 +346,7 @@ __all__ = [
     "cluster_labels_from_kmedoids_result",
     "hard_classification_variables",
     "fanny_membership",
-    "representative_indices_from_membership",
+    "highest_membership_indices_from_membership",
     "soft_classification_variables",
     "pseudoclass_regression",
     "create_idcd_sequence_from_csvs",

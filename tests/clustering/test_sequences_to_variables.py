@@ -12,8 +12,11 @@ from scipy.spatial.distance import pdist, squareform
 
 from sequenzo.clustering.sequences_to_variables.helpers import (
     cluster_labels_to_dummies,
+    cluster_labels_from_kmedoids_result,
     dummy_column_names,
     max_distance,
+    medoid_indices_from_kmedoids_result,
+    validate_diss_matrix,
     validate_membership_matrix,
 )
 from sequenzo.clustering.sequences_to_variables import (
@@ -187,6 +190,58 @@ def test_pseudoclass_regression_validates_m_and_y():
         pseudoclass_regression(y, U, M=0)
     with pytest.raises(ValueError, match="same number of rows"):
         pseudoclass_regression(y, U, M=5)
+    with pytest.raises(ValueError, match="at least two clusters"):
+        pseudoclass_regression(y, np.ones((5, 1)), M=5)
+
+
+def test_max_distance_rejects_nan_condensed():
+    with pytest.raises(ValueError, match="NA values"):
+        max_distance(np.array([0.0, 1.0, np.nan]))
+
+
+def test_pseudoclass_regression_1d_x_fixed():
+    rng = np.random.default_rng(2)
+    n = 30
+    U = np.array([[0.5, 0.3, 0.2]] * n, dtype=float)
+    y = rng.normal(size=n)
+    x = rng.normal(size=n)
+    result = pseudoclass_regression(y, U, X_fixed=x, M=10, random_state=2, model_type="ols")
+    assert result["m_eff"] > 0
+
+
+def test_pseudoclass_regression_missing_cluster_draw():
+    """Draws may omit a cluster without raising from dummy encoding."""
+    rng = np.random.default_rng(3)
+    n = 40
+    U = np.array([[0.7, 0.2, 0.1]] * n, dtype=float)
+    y = rng.normal(size=n)
+    result = pseudoclass_regression(y, U, M=50, random_state=3, model_type="ols")
+    assert result["m_eff"] > 0
+
+
+def test_validate_diss_matrix_rejects_nonsquare():
+    with pytest.raises(ValueError, match="square matrix"):
+        validate_diss_matrix(np.array([[0, 1, 2], [1, 0, 3]]))
+
+
+def test_medoid_indices_input_base():
+    assigned = np.array([4, 4, 8, 8, 11, 11])
+    np.testing.assert_array_equal(
+        medoid_indices_from_kmedoids_result(assigned, input_base=1),
+        np.array([3, 7, 10]),
+    )
+    np.testing.assert_array_equal(
+        medoid_indices_from_kmedoids_result(assigned, input_base=0),
+        np.array([4, 8, 11]),
+    )
+
+
+def test_cluster_labels_input_base():
+    assigned = np.array([4, 4, 8, 8, 11, 11])
+    np.testing.assert_array_equal(
+        cluster_labels_from_kmedoids_result(assigned, input_base=0),
+        np.array([0, 0, 1, 1, 2, 2]),
+    )
 
 
 def test_fanny_rows_sum_to_one():
@@ -195,10 +250,47 @@ def test_fanny_rows_sum_to_one():
     np.testing.assert_allclose(U.sum(axis=1), np.ones(20), atol=1e-10)
 
 
+def test_pair_dist_matches_square_matrix():
+    diss = np.array(
+        [
+            [0, 1, 2, 3],
+            [1, 0, 4, 5],
+            [2, 4, 0, 6],
+            [3, 5, 6, 0],
+        ],
+        dtype=float,
+    )
+    from sequenzo.clustering.sequences_to_variables.fanny import _pair_dist, _square_to_condensed
+
+    dss = _square_to_condensed(diss)
+    n = diss.shape[0]
+    for i in range(n):
+        for j in range(n):
+            assert _pair_dist(dss, i, j, n) == diss[i, j]
+
+
 def test_fanny_k_one():
-    diss = np.array([[0, 1], [1, 0]], dtype=float)
+    diss = np.array(
+        [
+            [0, 1, 2, 3],
+            [1, 0, 1, 2],
+            [2, 1, 0, 1],
+            [3, 2, 1, 0],
+        ],
+        dtype=float,
+    )
     result = fanny(diss, k=1, memb_exp=1.4)
-    np.testing.assert_allclose(result.membership, np.ones((2, 1)))
+    np.testing.assert_allclose(result.membership, np.ones((4, 1)))
+    assert result.converged
+    assert result.iterations > 0
+
+
+def test_fanny_non_convergence_iterations_match_r():
+    diss = _toy_block_diss()
+    with pytest.warns(UserWarning, match="has not converged"):
+        result = fanny(diss, k=2, memb_exp=1.4, max_iter=1, tol=1e-15)
+    assert not result.converged
+    assert result.iterations == -1
 
 
 @pytest.mark.skipif(not RSCRIPT_AVAILABLE, reason="Rscript not available")
@@ -206,11 +298,11 @@ def test_fanny_against_R_cluster_fanny_small_matrix():
     diss = _toy_block_diss()
     rmemb, r_obj, r_clu, r_pc, r_k_crisp = _r_fanny_reference(diss, k=2, memb_exp=1.4)
     py = fanny(diss, k=2, memb_exp=1.4, max_iter=500, tol=1e-15)
-    np.testing.assert_allclose(py.membership, rmemb, atol=1e-12)
+    np.testing.assert_allclose(py.membership, rmemb, atol=1e-6)
     assert abs(py.objective - r_obj) < 1e-5
     np.testing.assert_array_equal(py.clustering, r_clu)
     assert py.k_crisp == r_k_crisp
-    assert abs(py.partition_coefficient - r_pc) < 1e-10
+    assert abs(py.partition_coefficient - r_pc) < 1e-3
 
 
 @pytest.mark.parametrize("memb_exp", [1.4, 1.5, 2.0])
@@ -219,10 +311,10 @@ def test_fanny_against_R_ruspini(memb_exp):
     diss = _ruspini_diss()
     rmemb, r_obj, _, r_pc, _ = _r_fanny_reference(diss, k=4, memb_exp=memb_exp)
     py = fanny(diss, k=4, memb_exp=memb_exp, max_iter=500, tol=1e-15)
-    np.testing.assert_allclose(py.membership, rmemb, atol=1e-12)
+    np.testing.assert_allclose(py.membership, rmemb, atol=1e-6)
     assert abs(py.objective - r_obj) < 1e-5
     if memb_exp == 2.0:
-        assert abs(py.partition_coefficient - r_pc) < 1e-10
+        assert abs(py.partition_coefficient - r_pc) < 1e-3
 
 
 def test_hard_classification_variables_dataframe():

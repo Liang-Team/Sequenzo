@@ -11,6 +11,8 @@ import numpy as np
 def validate_diss_matrix(diss):
     """Check square distance/dissimilarity matrix conventions."""
     diss = np.asarray(diss, dtype=float)
+    if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
+        raise ValueError("diss must be a square matrix")
     if np.any(np.isnan(diss)):
         raise ValueError("NA values in the dissimilarity matrix are not allowed")
     if np.any(diss < 0):
@@ -53,8 +55,14 @@ def max_distance(diss):
     """
     diss = np.asarray(diss, dtype=float)
     if diss.ndim == 1:
+        if np.any(np.isnan(diss)):
+            raise ValueError("diss must not contain NA values")
+        if np.any(diss < 0):
+            raise ValueError("diss must contain nonnegative dissimilarities")
         from scipy.spatial.distance import squareform
         diss = squareform(diss)
+    else:
+        diss = validate_diss_matrix(diss)
     if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
         raise ValueError("diss must be a square matrix or condensed distance vector")
     n = diss.shape[0]
@@ -86,8 +94,9 @@ def cluster_labels_to_dummies(labels, k=None, reference=0):
     Returns
     -------
     np.ndarray
-        Shape (n, K-1). Column j is 1 when the observation belongs to the (j+1)-th non-reference
-        category (in sorted order), 0 otherwise.
+        Shape (n, K-1). Column j is 1 when the observation belongs to the j-th
+        retained category after sorting unique labels and dropping the reference
+        category, 0 otherwise.
     """
     labels = np.asarray(labels, dtype=int).ravel()
     uniq = np.unique(labels)
@@ -125,7 +134,10 @@ def dummy_column_names(labels, k=None, reference=0, prefix="C"):
     return [f"{prefix}_{categories[c]}" for c in col_indices]
 
 
-def medoid_indices_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> np.ndarray:
+def medoid_indices_from_kmedoids_result(
+    assigned_medoid_indices: np.ndarray,
+    input_base: int = 1,
+) -> np.ndarray:
     """
     Sorted medoid row indices from a :func:`KMedoids` return vector.
 
@@ -136,6 +148,9 @@ def medoid_indices_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> 
     ----------
     assigned_medoid_indices : np.ndarray of int
         Return value of :func:`KMedoids` (medoid row index per observation).
+    input_base : {0, 1}, default 1
+        Indexing base of ``assigned_medoid_indices``. Use ``1`` for raw
+        :func:`KMedoids` output; use ``0`` if indices are already 0-based.
 
     Returns
     -------
@@ -146,19 +161,29 @@ def medoid_indices_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> 
     if assigned_medoid_indices.size == 0:
         return np.array([], dtype=int)
     medoids = np.unique(assigned_medoid_indices)
-    if medoids.min() >= 1:
+    if input_base == 1:
         medoids = medoids - 1
+    elif input_base != 0:
+        raise ValueError("input_base must be 0 or 1")
+    if np.any(medoids < 0):
+        raise ValueError("Converted medoid indices contain negative values")
     return np.sort(medoids)
 
 
-def cluster_labels_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> np.ndarray:
+def cluster_labels_from_kmedoids_result(
+    assigned_medoid_indices: np.ndarray,
+    input_base: int = 1,
+) -> np.ndarray:
     """
     0-based cluster labels from a :func:`KMedoids` return vector.
 
     Parameters
     ----------
     assigned_medoid_indices : np.ndarray of int
-        Return value of :func:`KMedoids` (1-based medoid row indices per row).
+        Return value of :func:`KMedoids` (medoid row indices per row).
+    input_base : {0, 1}, default 1
+        Indexing base of ``assigned_medoid_indices``. Use ``1`` for raw
+        :func:`KMedoids` output; use ``0`` if indices are already 0-based.
 
     Returns
     -------
@@ -169,7 +194,11 @@ def cluster_labels_from_kmedoids_result(assigned_medoid_indices: np.ndarray) -> 
     if assigned_medoid_indices.size == 0:
         return assigned_medoid_indices
     memb = assigned_medoid_indices.copy()
-    if memb.min() >= 1:
+    if input_base == 1:
         memb = memb - 1
+    elif input_base != 0:
+        raise ValueError("input_base must be 0 or 1")
+    if np.any(memb < 0):
+        raise ValueError("Converted medoid indices contain negative values")
     medoids = np.sort(np.unique(memb))
     return np.searchsorted(medoids, memb)

@@ -13,9 +13,15 @@ sequenzo/clustering/
   sequences_to_variables/
     helske_regression_variables.py # Helske (2024) sequence -> regression covariates
     helpers.py                     # shared small helpers
-  fuzzy/
+  fuzzy_clustering/
+    src/
+      fanny.cpp                    # R cluster::fanny (C++ port)
+      fanny.h
     wfcmdd_fuzzy_clustering.py     # distance-based fuzzy C-medoids
     fuzzy_sequence_plots.py        # membership-weighted seq index plots
+    fuzzy_helpers.py               # FANNY / wfcmdd entry points
+    fuzzy_regression.py            # Dirichlet / beta regression on membership
+  property_based_clustering/       # Studer (2018) seqpropclust workflow
   validation/
     partition_quality.py           # fixed partitions + CQI table
     dissmfacw_factors.py           # multi-factor discrepancy association core
@@ -41,9 +47,9 @@ sequenzo/clustering/
 | WeightedCluster `clustassoc` | `validation.cluster_covariate_association` | `cluster_association` | Clustering vs covariate |
 | WeightedCluster `rarcat` | `validation.rarcat_typology_regression` | `rarcat` | Robust typology AME |
 | `cluster::fanny` (membership) | `sequences_to_variables.helske_regression_variables` | `fanny_membership` | Distance-based soft membership |
-| WeightedCluster `wfcmdd` | `fuzzy.wfcmdd_fuzzy_clustering` | `wfcmdd` | FCMdd / NCdd / PCMdd |
-| WeightedCluster `fuzzyseqplot` | `fuzzy.fuzzy_sequence_plots` | `fuzzy_sequence_plot` | Membership-weighted index plot |
-| WeightedCluster `crispness` | `fuzzy.wfcmdd_fuzzy_clustering` | `crispness` | Partition sharpness |
+| WeightedCluster `wfcmdd` | `fuzzy_clustering.wfcmdd_fuzzy_clustering` | `wfcmdd` | FCMdd / NCdd / PCMdd |
+| WeightedCluster `fuzzyseqplot` | `fuzzy_clustering.fuzzy_sequence_plots` | `fuzzy_sequence_plot` | Membership-weighted index plot |
+| WeightedCluster `crispness` | `fuzzy_clustering.wfcmdd_fuzzy_clustering` | `crispness` | Partition sharpness |
 | Helske representativeness | `sequences_to_variables.helske_regression_variables` | `representativeness_matrix` | Not a TraMineR export |
 | Helske hard / soft / pseudoclass | `sequences_to_variables.helske_regression_variables` | `hard_classification_variables`, `soft_classification_variables`, `pseudoclass_regression` | Regression-ready typology covariates |
 
