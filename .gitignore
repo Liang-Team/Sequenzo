@@ -65,3 +65,11 @@ developer/cluster-master/
 .RData
 .Rhistory
 tests/archive_test/yapeng_test/generated_datasets/
+
+# Local seqHMM/R runtime artifacts generated during parity work
+sequenzo_hmm_kit/RECORDS/refs/Rlib/
+sequenzo_hmm_kit/RECORDS/refs/*.tgz
+sequenzo_hmm_kit/RECORDS/refs/*.tar.gz
+*.rds
+*.rdb
+*.rdx

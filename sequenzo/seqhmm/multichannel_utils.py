@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺；Yapeng Wei 卫亚鹏
 @File    : multichannel_utils.py
 @Time    : 2025-11-05 11:26
 @Desc    : Utility functions for multichannel HMM support
@@ -40,8 +40,12 @@ def prepare_multichannel_data(
         if len(observations) == 0:
             raise ValueError("observations list cannot be empty")
         
-        # Validate all channels have same number of sequences
+        # Validate all channels have same number of sequences and same
+        # subject order. Multichannel likelihoods multiply emissions row-wise,
+        # so accepting shuffled IDs would silently combine different subjects.
         n_sequences = len(observations[0].sequences)
+        reference_ids = np.asarray(observations[0].ids)
+        reference_time = np.asarray(observations[0].time)
         for i, obs in enumerate(observations):
             if not isinstance(obs, SequenceData):
                 raise ValueError(f"observations[{i}] must be a SequenceData object")
@@ -49,6 +53,16 @@ def prepare_multichannel_data(
                 raise ValueError(
                     f"All channels must have the same number of sequences. "
                     f"Channel 0 has {n_sequences}, channel {i} has {len(obs.sequences)}"
+                )
+            if not np.array_equal(np.asarray(obs.ids), reference_ids):
+                raise ValueError(
+                    "All channels must have the same sequence IDs in the same order. "
+                    f"Channel 0 and channel {i} differ."
+                )
+            if not np.array_equal(np.asarray(obs.time), reference_time):
+                raise ValueError(
+                    "All channels must have the same time points in the same order. "
+                    f"Channel 0 and channel {i} differ."
                 )
         
         # Get channel names and alphabets

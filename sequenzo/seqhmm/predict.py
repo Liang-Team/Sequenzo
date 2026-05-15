@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺；Yapeng Wei 卫亚鹏
 @File    : predict.py
 @Time    : 2025-11-13 17:05
 @Desc    : Prediction and inference functions for HMM models
@@ -11,15 +11,16 @@ functions in R.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, List
+from typing import Optional, List, Union
 from sequenzo.define_sequence_data import SequenceData
 from .hmm import HMM
+from .multichannel_utils import multichannel_to_hmmlearn_format, prepare_multichannel_data
 from .utils import sequence_data_to_hmmlearn_format
 
 
 def predict(
     model: HMM,
-    newdata: Optional[SequenceData] = None
+    newdata: Optional[Union[SequenceData, List[SequenceData]]] = None
 ) -> np.ndarray:
     """
     Predict the most likely hidden state sequence using Viterbi algorithm.
@@ -54,7 +55,7 @@ def predict(
         >>> predicted_states = predict(hmm)
         >>> print(f"Predicted {len(predicted_states)} hidden states")
     """
-    if model.log_likelihood is None:
+    if model.log_likelihood is None and not model.has_complete_parameters:
         raise ValueError("Model must be fitted before prediction. Use fit_model() first.")
     
     return model.predict(newdata)
@@ -62,7 +63,7 @@ def predict(
 
 def posterior_probs(
     model: HMM,
-    newdata: Optional[SequenceData] = None
+    newdata: Optional[Union[SequenceData, List[SequenceData]]] = None
 ) -> pd.DataFrame:
     """
     Compute posterior probabilities of hidden states.
@@ -102,17 +103,23 @@ def posterior_probs(
         >>> # Find most probable state at each time point
         >>> most_probable = posteriors.groupby(['id', 'time'])['probability'].idxmax()
     """
-    if model.log_likelihood is None:
+    if model.log_likelihood is None and not model.has_complete_parameters:
         raise ValueError("Model must be fitted before computing posterior probabilities. Use fit_model() first.")
     
     # Get sequences to use
-    sequences = newdata if newdata is not None else model.observations
+    sequences = newdata if newdata is not None else (
+        model.channels if model.n_channels > 1 else model.observations
+    )
     
     # Get posterior probabilities from model
     proba = model.predict_proba(sequences)
     
     # Get sequence information
-    X, lengths = sequence_data_to_hmmlearn_format(sequences)
+    if model.n_channels > 1:
+        channels, _, _ = prepare_multichannel_data(sequences)
+        _, lengths = multichannel_to_hmmlearn_format(channels)
+    else:
+        _, lengths = sequence_data_to_hmmlearn_format(sequences)
     
     # Create DataFrame with results
     rows = []

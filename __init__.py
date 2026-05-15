@@ -8,54 +8,39 @@
 
 __version__ = "0.1.39"
 
-# Lazy import: public submodules
-from sequenzo import (datasets, data_preprocessing, visualization, clustering,
-                      dissimilarity_measures, big_data, define_sequence_data,
-                      multidomain, prefix_tree, suffix_tree, sequence_characteristics_indicators)
+import importlib
+
+
+_SUBMODULES = {
+    "datasets",
+    "data_preprocessing",
+    "visualization",
+    "clustering",
+    "dissimilarity_measures",
+    "big_data",
+    "define_sequence_data",
+    "multidomain",
+    "prefix_tree",
+    "suffix_tree",
+    "sequence_characteristics_indicators",
+}
 
 
 def __getattr__(name):
     try:
-        if name == "datasets":
-            from sequenzo import datasets
-            return datasets
-        elif name == "data_preprocessing":
-            from sequenzo import data_preprocessing
-        elif name == "visualization":
-            from sequenzo import visualization
-            return visualization
-        elif name == "clustering":
-            from sequenzo import clustering
-            return clustering
-        elif name == "dissimilarity_measures":
-            from sequenzo import dissimilarity_measures
-            return dissimilarity_measures
+        if name in _SUBMODULES:
+            return importlib.import_module(f"sequenzo.{name}")
         elif name == "SequenceData":
             from sequenzo.define_sequence_data import SequenceData
             return SequenceData
-        elif name == "big_data":
-            from sequenzo.big_data import big_data
-            return big_data
-        elif name == "multidomain":
-            from sequenzo import multidomain
-            return multidomain
-        elif name == "prefix_tree":
-            from sequenzo import prefix_tree
-            return prefix_tree
-        elif name == "suffix_tree":
-            from sequenzo import suffix_tree
-            return suffix_tree
-        elif name == "sequence_characteristics_indicators":
-            from sequenzo import sequence_characteristics_indicators
-            return sequence_characteristics_indicators
     except ImportError as e:
         raise AttributeError(f"Could not import {name}: {e}")
 
     raise AttributeError(f"module 'sequenzo' has no attribute '{name}'")
 
 
-# Explicit re-export for IDE autocomplete
-SequenceData = define_sequence_data.SequenceData
+# Explicit lightweight re-export for IDE autocomplete.
+from sequenzo.define_sequence_data import SequenceData
 
 __all__ = [
     'datasets',

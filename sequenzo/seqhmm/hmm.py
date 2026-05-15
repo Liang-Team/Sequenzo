@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺；Yapeng Wei 卫亚鹏
 @File    : hmm.py
 @Time    : 2025-11-13 16:20
 @Desc    : Base HMM class for Sequenzo
@@ -10,7 +10,7 @@ and adapts it for use with Sequenzo's SequenceData format.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Tuple, Union
 from hmmlearn.hmm import CategoricalHMM
 from sequenzo.define_sequence_data import SequenceData
 from .utils import (
@@ -18,7 +18,10 @@ from .utils import (
     int_to_state_mapping,
     state_to_int_mapping
 )
-from .multichannel_utils import prepare_multichannel_data
+from .multichannel_utils import multichannel_to_hmmlearn_format, prepare_multichannel_data
+
+
+_FLOAT_TINY = np.finfo(float).tiny
 
 
 class HMM:
@@ -159,6 +162,300 @@ class HMM:
         self.log_likelihood = None
         self.n_iter = None
         self.converged = None
+
+    @property
+    def has_complete_parameters(self) -> bool:
+        """Return True when the model has enough parameters for inference."""
+        if self.initial_probs is None or self.transition_probs is None or self.emission_probs is None:
+            return False
+        if self.n_channels == 1:
+            return isinstance(self.emission_probs, np.ndarray)
+        return isinstance(self.emission_probs, list) and len(self.emission_probs) == self.n_channels
+
+    def _check_inference_ready(self) -> None:
+        if not self.has_complete_parameters:
+            raise ValueError(
+                "Model parameters are incomplete. Fit the model or provide "
+                "initial_probs, transition_probs, and emission_probs."
+            )
+
+    def _multichannel_channels(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> List[SequenceData]:
+        if sequences is None:
+            return self.channels
+
+        channels, _, _ = prepare_multichannel_data(sequences)
+        if len(channels) != self.n_channels:
+            raise ValueError(
+                f"Expected {self.n_channels} channels, got {len(channels)}"
+            )
+        return channels
+
+    def _multichannel_arrays(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> Tuple[List[np.ndarray], np.ndarray]:
+        channels = self._multichannel_channels(sequences)
+        X_list, lengths = multichannel_to_hmmlearn_format(channels)
+        observations = [X[:, 0].astype(int, copy=False) for X in X_list]
+        return observations, lengths
+
+    def _multichannel_emission_matrix(
+        self,
+        obs_list: List[np.ndarray]
+    ) -> np.ndarray:
+        emissions = np.ones((len(obs_list[0]), self.n_states), dtype=float)
+
+        for ch_idx, obs in enumerate(obs_list):
+            emission_probs = np.asarray(self.emission_probs[ch_idx], dtype=float)
+            if np.any(obs < 0) or np.any(obs >= emission_probs.shape[1]):
+                raise ValueError(
+                    f"Channel {ch_idx} contains observations outside the fitted alphabet."
+                )
+            emissions *= emission_probs[:, obs].T
+
+        return emissions
+
+    @staticmethod
+    def _normalize_probabilities(values: np.ndarray) -> Tuple[np.ndarray, float]:
+        total = float(np.sum(values))
+        if not np.isfinite(total) or total <= 0.0:
+            return np.ones_like(values, dtype=float) / len(values), _FLOAT_TINY
+        return values / total, total
+
+    def _multichannel_sequence_log_likelihood(self, obs_list: List[np.ndarray]) -> float:
+        initial = np.asarray(self.initial_probs, dtype=float)
+        transition = np.asarray(self.transition_probs, dtype=float)
+        emission = self._multichannel_emission_matrix(obs_list)
+
+        alpha, scale = self._normalize_probabilities(initial * emission[0])
+        log_likelihood = float(np.log(max(scale, _FLOAT_TINY)))
+
+        for t in range(1, emission.shape[0]):
+            alpha_t = (alpha @ transition) * emission[t]
+            alpha, scale = self._normalize_probabilities(alpha_t)
+            log_likelihood += float(np.log(max(scale, _FLOAT_TINY)))
+
+        return log_likelihood
+
+    def _multichannel_forward_backward(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> Tuple[np.ndarray, float]:
+        self._check_inference_ready()
+
+        observations, lengths = self._multichannel_arrays(sequences)
+        initial = np.asarray(self.initial_probs, dtype=float)
+        transition = np.asarray(self.transition_probs, dtype=float)
+
+        posteriors = []
+        log_likelihood = 0.0
+        start = 0
+
+        for seq_length in lengths:
+            end = start + int(seq_length)
+            obs_list = [obs[start:end] for obs in observations]
+            emission = self._multichannel_emission_matrix(obs_list)
+
+            alpha = np.empty((seq_length, self.n_states), dtype=float)
+            scales = np.empty(seq_length, dtype=float)
+            alpha[0], scales[0] = self._normalize_probabilities(initial * emission[0])
+
+            for t in range(1, seq_length):
+                alpha_t = (alpha[t - 1] @ transition) * emission[t]
+                alpha[t], scales[t] = self._normalize_probabilities(alpha_t)
+
+            beta = np.ones((seq_length, self.n_states), dtype=float)
+            for t in range(seq_length - 2, -1, -1):
+                beta[t] = transition @ (emission[t + 1] * beta[t + 1])
+                beta[t] /= max(scales[t + 1], _FLOAT_TINY)
+
+            gamma = alpha * beta
+            gamma_sums = gamma.sum(axis=1, keepdims=True)
+            gamma_sums[gamma_sums <= 0.0] = 1.0
+            posteriors.append(gamma / gamma_sums)
+            log_likelihood += float(np.sum(np.log(np.maximum(scales, _FLOAT_TINY))))
+            start = end
+
+        return np.vstack(posteriors), log_likelihood
+
+    def _multichannel_viterbi(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> np.ndarray:
+        self._check_inference_ready()
+
+        observations, lengths = self._multichannel_arrays(sequences)
+        log_initial = np.log(np.maximum(np.asarray(self.initial_probs, dtype=float), _FLOAT_TINY))
+        log_transition = np.log(np.maximum(np.asarray(self.transition_probs, dtype=float), _FLOAT_TINY))
+
+        paths = []
+        start = 0
+
+        for seq_length in lengths:
+            end = start + int(seq_length)
+            obs_list = [obs[start:end] for obs in observations]
+            emission = self._multichannel_emission_matrix(obs_list)
+            log_emission = np.log(np.maximum(emission, _FLOAT_TINY))
+
+            delta = np.empty((seq_length, self.n_states), dtype=float)
+            psi = np.zeros((seq_length, self.n_states), dtype=int)
+            delta[0] = log_initial + log_emission[0]
+
+            for t in range(1, seq_length):
+                scores = delta[t - 1][:, None] + log_transition
+                psi[t] = np.argmax(scores, axis=0)
+                delta[t] = scores[psi[t], np.arange(self.n_states)] + log_emission[t]
+
+            path = np.empty(seq_length, dtype=int)
+            path[-1] = int(np.argmax(delta[-1]))
+            for t in range(seq_length - 2, -1, -1):
+                path[t] = psi[t + 1, path[t + 1]]
+
+            paths.append(path)
+            start = end
+
+        return np.concatenate(paths)
+
+    @staticmethod
+    def _sequence_keys_from_lengths(
+        observations: List[np.ndarray],
+        lengths: np.ndarray
+    ) -> Dict[Tuple[Tuple[int, ...], ...], int]:
+        counts = {}
+        start = 0
+        for seq_length in lengths:
+            end = start + int(seq_length)
+            key = tuple(tuple(obs[start:end].tolist()) for obs in observations)
+            counts[key] = counts.get(key, 0) + 1
+            start = end
+        return counts
+
+    def _single_channel_score_compressed(self, sequences: SequenceData) -> float:
+        dense = self._dense_single_channel_matrix(sequences)
+        if dense is not None:
+            unique_rows, counts = np.unique(dense, axis=0, return_counts=True)
+
+            log_likelihood = 0.0
+            seq_length = dense.shape[1]
+            seq_length_array = np.array([seq_length], dtype=np.int32)
+            for row, count in zip(unique_rows, counts):
+                sequence = row.reshape(-1, 1)
+                log_likelihood += int(count) * float(
+                    self._hmm_model.score(sequence, seq_length_array)
+                )
+            return log_likelihood
+
+        X, lengths = sequence_data_to_hmmlearn_format(sequences)
+
+        if np.all(lengths == lengths[0]):
+            seq_length = int(lengths[0])
+            matrix = X[:, 0].reshape(len(lengths), seq_length)
+            unique_rows, counts = np.unique(matrix, axis=0, return_counts=True)
+
+            log_likelihood = 0.0
+            for row, count in zip(unique_rows, counts):
+                sequence = row.astype(np.int32, copy=False).reshape(-1, 1)
+                log_likelihood += int(count) * float(
+                    self._hmm_model.score(
+                        sequence,
+                        np.array([seq_length], dtype=np.int32),
+                    )
+                )
+            return log_likelihood
+
+        counts = self._sequence_keys_from_lengths([X[:, 0].astype(int, copy=False)], lengths)
+
+        log_likelihood = 0.0
+        for key, count in counts.items():
+            sequence = np.asarray(key[0], dtype=np.int32).reshape(-1, 1)
+            seq_length = np.array([sequence.shape[0]], dtype=np.int32)
+            log_likelihood += count * float(self._hmm_model.score(sequence, seq_length))
+
+        return log_likelihood
+
+    def _multichannel_score_compressed(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> float:
+        self._check_inference_ready()
+        channels = self._multichannel_channels(sequences)
+        dense_channels = self._dense_multichannel_matrices(channels)
+        if dense_channels is not None:
+            n_sequences, seq_length = dense_channels[0].shape
+            combined = np.hstack(dense_channels)
+            unique_rows, counts = np.unique(combined, axis=0, return_counts=True)
+
+            log_likelihood = 0.0
+            for row, count in zip(unique_rows, counts):
+                obs_list = [
+                    row[ch * seq_length:(ch + 1) * seq_length].astype(int, copy=False)
+                    for ch in range(self.n_channels)
+                ]
+                log_likelihood += int(count) * self._multichannel_sequence_log_likelihood(obs_list)
+            return float(log_likelihood)
+
+        observations, lengths = self._multichannel_arrays(sequences)
+
+        if np.all(lengths == lengths[0]):
+            seq_length = int(lengths[0])
+            n_sequences = len(lengths)
+            matrices = [
+                obs.reshape(n_sequences, seq_length) for obs in observations
+            ]
+            combined = np.hstack(matrices)
+            unique_rows, counts = np.unique(combined, axis=0, return_counts=True)
+
+            log_likelihood = 0.0
+            for row, count in zip(unique_rows, counts):
+                obs_list = [
+                    row[ch * seq_length:(ch + 1) * seq_length].astype(int, copy=False)
+                    for ch in range(self.n_channels)
+                ]
+                log_likelihood += int(count) * self._multichannel_sequence_log_likelihood(obs_list)
+            return float(log_likelihood)
+
+        counts = self._sequence_keys_from_lengths(observations, lengths)
+
+        log_likelihood = 0.0
+        for key, count in counts.items():
+            obs_list = [np.asarray(channel, dtype=int) for channel in key]
+            log_likelihood += count * self._multichannel_sequence_log_likelihood(obs_list)
+
+        return float(log_likelihood)
+
+    def _dense_single_channel_matrix(
+        self,
+        sequences: SequenceData
+    ) -> Optional[np.ndarray]:
+        numeric = sequences.to_numeric()
+        if numeric.ndim != 2:
+            return None
+        if not np.all((numeric >= 1) & (numeric <= self.n_symbols)):
+            return None
+        return np.ascontiguousarray(numeric.astype(np.int32, copy=False) - 1)
+
+    def _dense_multichannel_matrices(
+        self,
+        channels: List[SequenceData]
+    ) -> Optional[List[np.ndarray]]:
+        matrices = []
+        shape = None
+        for ch_idx, channel in enumerate(channels):
+            numeric = channel.to_numeric()
+            if numeric.ndim != 2:
+                return None
+            n_symbols = self.n_symbols[ch_idx]
+            if not np.all((numeric >= 1) & (numeric <= n_symbols)):
+                return None
+            if shape is None:
+                shape = numeric.shape
+            elif numeric.shape != shape:
+                return None
+            matrices.append(np.ascontiguousarray(numeric.astype(np.int32, copy=False) - 1))
+        return matrices
     
     def fit(
         self,
@@ -232,7 +529,10 @@ class HMM:
         
         return self
     
-    def predict(self, sequences: Optional[SequenceData] = None) -> np.ndarray:
+    def predict(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> np.ndarray:
         """
         Predict the most likely hidden state sequence using Viterbi algorithm.
         
@@ -242,6 +542,9 @@ class HMM:
         Returns:
             numpy array: Predicted hidden states for each sequence
         """
+        if self.n_channels > 1:
+            return self._multichannel_viterbi(sequences)
+
         if sequences is None:
             sequences = self.observations
         
@@ -250,7 +553,10 @@ class HMM:
         
         return states
     
-    def predict_proba(self, sequences: Optional[SequenceData] = None) -> np.ndarray:
+    def predict_proba(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None
+    ) -> np.ndarray:
         """
         Compute posterior probabilities of hidden states.
         
@@ -260,6 +566,10 @@ class HMM:
         Returns:
             numpy array: Posterior probabilities for each time point
         """
+        if self.n_channels > 1:
+            posteriors, _ = self._multichannel_forward_backward(sequences)
+            return posteriors
+
         if sequences is None:
             sequences = self.observations
         
@@ -268,7 +578,11 @@ class HMM:
         
         return posteriors
     
-    def score(self, sequences: Optional[SequenceData] = None) -> float:
+    def score(
+        self,
+        sequences: Optional[Union[SequenceData, List[SequenceData]]] = None,
+        compress: bool = False
+    ) -> float:
         """
         Compute the log-likelihood of sequences under the model.
         
@@ -278,8 +592,17 @@ class HMM:
         Returns:
             float: Log-likelihood
         """
+        if self.n_channels > 1:
+            if compress:
+                return self._multichannel_score_compressed(sequences)
+            _, log_likelihood = self._multichannel_forward_backward(sequences)
+            return log_likelihood
+
         if sequences is None:
             sequences = self.observations
+
+        if compress:
+            return self._single_channel_score_compressed(sequences)
         
         X, lengths = sequence_data_to_hmmlearn_format(sequences)
         return self._hmm_model.score(X, lengths)
