@@ -1,7 +1,6 @@
 ﻿#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
-#include <iostream>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -12,43 +11,30 @@ namespace py = pybind11;
 
 class weightedinertia {
 public:
-    weightedinertia(py::array_t<double> distmatrix, py::array_t<int> individuals, py::array_t<double> weights) {
-        std::cout << std::flush;  // 刷新 C++ 输出
-
-        try {
-            this->distmatrix = distmatrix;
-            this->individuals = individuals;
-            this->weights = weights;
-
-            ilen = individuals.size();
-
-            result = py::array_t<double>(ilen);
-        } catch (const std::exception& e) {
-            py::print("Error in constructor: ", e.what());
-            throw;
-        }
+    weightedinertia(py::array_t<double> distmatrix, py::array_t<int> individuals, py::array_t<double> weights)
+        : distmatrix(distmatrix), individuals(individuals), weights(weights),
+          ilen(static_cast<int>(individuals.size()))
+    {
     }
 
     py::array_t<double> tmrWeightedInertiaContrib() {
-        auto ptr_dist = distmatrix.unchecked<2>();
-        auto ptr_indiv = individuals.unchecked<1>();
-        auto ptr_weights = weights.unchecked<1>();
+        const double* dist_ptr  = distmatrix.data();
+        const int*    indiv_ptr = individuals.data();
+        const double* wt_ptr    = weights.data();
+        const int n = static_cast<int>(distmatrix.shape(0));
 
         py::array_t<double> result_local(ilen);
-        auto ptr_result = result_local.mutable_unchecked<1>();
+        double* res_ptr = result_local.mutable_data();
 
         for (int i = 0; i < ilen; i++) {
-            ptr_result(i) = 0.0;
+            res_ptr[i] = 0.0;
         }
 
         double totweights = 0.0;
-
-        #pragma omp parallel for reduction(+:totweights)
         for (int i = 0; i < ilen; i++) {
-            totweights += ptr_weights(ptr_indiv(i));
+            totweights += wt_ptr[indiv_ptr[i]];
         }
 
-        // 每个线程使用局部 result 副本，最后归约合并
         int nthreads = 1;
         #ifdef _OPENMP
         #pragma omp parallel
@@ -71,30 +57,31 @@ public:
 
             #pragma omp for schedule(static)
             for (int i = 0; i < ilen; ++i) {
-                int pos_i = ptr_indiv(i);
-                double i_weight = ptr_weights(pos_i);
+                int pos_i = indiv_ptr[i];
+                const double* row_i = dist_ptr + static_cast<size_t>(pos_i) * n;
+                double i_weight = wt_ptr[pos_i];
 
                 for (int j = i + 1; j < ilen; ++j) {
-                    int pos_j = ptr_indiv(j);
-                    double diss = ptr_dist(pos_i, pos_j);
+                    int pos_j = indiv_ptr[j];
+                    double diss = row_i[pos_j];
 
-                    local[i] += diss * ptr_weights(pos_j);
+                    local[i] += diss * wt_ptr[pos_j];
                     local[j] += diss * i_weight;
                 }
             }
         }
 
-        // 合并各线程的 result_private 到主 result
         for (int t = 0; t < nthreads; ++t) {
             for (int i = 0; i < ilen; ++i) {
-                ptr_result(i) += result_private[t][i];
+                res_ptr[i] += result_private[t][i];
             }
         }
 
         if (totweights > 0) {
-            #pragma omp parallel for
+            const double inv_totweights = 1.0 / totweights;
+            #pragma omp parallel for schedule(static)
             for (int i = 0; i < ilen; ++i) {
-                ptr_result(i) /= totweights;
+                res_ptr[i] *= inv_totweights;
             }
         }
 
@@ -102,10 +89,8 @@ public:
     }
 
 private:
-    py::array_t<double> distmatrix;  // 距离矩阵
-    py::array_t<int> individuals;    // 某组数据点的集合
-    py::array_t<double> weights;     // 权重数组
-
+    py::array_t<double> distmatrix;
+    py::array_t<int> individuals;
+    py::array_t<double> weights;
     int ilen;
-    py::array_t<double> result;
 };

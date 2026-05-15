@@ -86,12 +86,12 @@ Perfect for research, policy, and business, enabling seamless analysis of catego
 
 Sequenzo provides pre-built Python wheels for maximum compatibility — no need to compile from source.
 
-| Platform         | Architecture                   | Python Versions       | Status            |
-|------------------|--------------------------------|-----------------------|-------------------|
-| **macOS**        | Intel && Apple Silicon (64-bit) | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Windows**      | `AMD64`(64-bit)     | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (glibc)**| `x86_64` (standard Linux)      | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
-| **Linux (musl)** | `x86_64` (Alpine Linux)        | 3.9, 3.10, 3.11, 3.12 | ✅ Pre-built wheel |
+| Platform         |Python Versions                   | 
+|------------------|-----------------------------------|
+| **macOS**        | 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 |
+| **Windows**      | 3.9, 3.10, 3.11, 3.12, 3.13       |
+| **Linux (glibc)**| 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 |
+| **Linux (musl)** | 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 |
 
 
 What do these terms mean?
@@ -109,7 +109,6 @@ All of these wheels are pre-built and available on PyPI — so `pip install sequ
 - Memory limitations (≤ 4GB) unsuitable for scientific computing workloads
 - Increasing incompatibility with packages such as `numpy`, `scipy`, and `pybind11`
 - Frequent build failures and maintenance overhead in CI/CD pipelines
-
 
 ## Installation
 

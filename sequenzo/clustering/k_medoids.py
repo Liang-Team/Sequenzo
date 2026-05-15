@@ -60,37 +60,35 @@ def KMedoids(
         print(f"[>] Starting KMedoids clustering (method: {method_name}, k={k})...")
 
     diss = np.asarray(diss)
+    diss_condensed = None
     if diss.ndim == 1:
-        diss = squareform(diss, checks=True)
-    elif diss.ndim != 2:
+        diss_condensed = diss
+        cond_len = len(diss)
+        nelements = int((1 + np.sqrt(1 + 8 * cond_len)) / 2)
+        if nelements * (nelements - 1) // 2 != cond_len:
+            raise ValueError(
+                "[!] 'diss' 1-D length does not correspond to a valid condensed distance vector."
+            )
+    elif diss.ndim == 2:
+        nelements = diss.shape[0]
+        if nelements != diss.shape[1]:
+            raise ValueError(
+                "[!] 'diss' must be square (n × n); use a 1-D condensed vector of length n(n−1)/2 for condensed form."
+            )
+    else:
         raise ValueError(
             "[!] 'diss' must be a square distance matrix or a 1-D condensed distance vector "
             "(see scipy.spatial.distance.squareform)."
         )
 
-    nelements = diss.shape[0]
-    if nelements != diss.shape[1]:
-        raise ValueError(
-            "[!] 'diss' must be square (n × n); use a 1-D condensed vector of length n(n−1)/2 for condensed form."
-        )
-
     if weights is None:
-        weights = np.ones(diss.shape[1], dtype=float)
+        weights = np.ones(nelements, dtype=float)
 
     if len(weights) != nelements:
         raise ValueError(f"[!] 'weights' should be a vector of length {nelements}.")
 
+    needs_full_matrix = False
     if initialclust is None:
-        # Pass a placeholder array to C++.
-        # • npass > 0: C++ calls buildInitialCentroids() (PAM BUILD) on pass 0,
-        #              then getrandommedoids() for passes 1..npass-1.  The
-        #              placeholder is overwritten immediately, so no Python-layer
-        #              randomness is introduced for npass=1 (deterministic, matching
-        #              R's wcKMedoids default).  For npass > 1 each restart after
-        #              the first uses C++'s own thread-local RNG, giving the same
-        #              non-deterministic behaviour as R's wcKMedoids with npass > 1.
-        # • npass == 0: The caller should have supplied initialclust.  Fall back
-        #               to random choice to avoid crashing (with a warning).
         if npass > 0:
             initialclust = np.arange(k, dtype=np.int32)
         else:
@@ -102,9 +100,12 @@ def KMedoids(
             if verbose:
                 print("[!] npass=0 without initialclust: using random initial medoids.")
     else:
+        needs_full_matrix = True
         if _validate_linkage_matrix(initialclust):
             initialclust = cut_tree(initialclust, n_clusters=k).flatten() + 1
         if len(initialclust) == nelements:
+            if diss_condensed is not None:
+                diss = squareform(diss_condensed, checks=False)
             initialclust = disscentertrim(
                 diss=diss,
                 group=initialclust,
@@ -136,24 +137,24 @@ def KMedoids(
     if k < 2 or k > nelements:
         raise ValueError(f" [!] 'k' should be in [2, {nelements}]")
 
+    if diss_condensed is not None and not needs_full_matrix:
+        diss_cpp = np.ascontiguousarray(diss_condensed, dtype=np.float64)
+    else:
+        if diss.ndim == 1:
+            diss = squareform(diss, checks=False)
+        diss_cpp = np.ascontiguousarray(diss, dtype=np.float64)
+    weights_cpp = np.ascontiguousarray(weights, dtype=np.float64)
+    init_cpp = np.ascontiguousarray(initialclust, dtype=np.int32)
+
     if method == 1:   # KMedoid
-        memb = clustering_c_code.KMedoid(nelements,
-                                         diss.astype(np.float64),
-                                         initialclust.astype(np.int32),
-                                         npass,
-                                         weights.astype(np.float64))
+        memb = clustering_c_code.KMedoid(nelements, diss_cpp, init_cpp,
+                                         npass, weights_cpp)
     elif method == 2:  # PAM
-        memb = clustering_c_code.PAM(nelements,
-                                     diss.astype(np.float64),
-                                     initialclust.astype(np.int32),
-                                     npass,
-                                     weights.astype(np.float64))
+        memb = clustering_c_code.PAM(nelements, diss_cpp, init_cpp,
+                                     npass, weights_cpp)
     else:   # PAMonce
-        memb = clustering_c_code.PAMonce(nelements,
-                                         diss.astype(np.float64),
-                                         initialclust.astype(np.int32),
-                                         npass,
-                                         weights.astype(np.float64))
+        memb = clustering_c_code.PAMonce(nelements, diss_cpp, init_cpp,
+                                         npass, weights_cpp)
 
     memb_matrix = memb.runclusterloop() + 1
 

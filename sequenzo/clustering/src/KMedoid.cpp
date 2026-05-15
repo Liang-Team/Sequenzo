@@ -20,14 +20,30 @@ protected:
     int nclusters;
     int npass;
 
-    vector<int>    tclusterid;        // current cluster assignment (0-based cluster index)
-    vector<int>    saved;             // checkpoint assignments for convergence detection
-    vector<int>    clusterMembership; // flattened [nclusters x nelements] membership list
-    vector<int>    clusterSize;       // current size of each cluster
+    vector<int>    tclusterid;
+    vector<int>    saved;
+    vector<int>    clusterMembership;
+    vector<int>    clusterSize;
 
     py::array_t<double> diss;
     py::array_t<int>    centroids;
     py::array_t<double> weights;
+
+    const double* diss_ptr;
+    const double* cond_ptr;
+    const double* wt_ptr;
+    bool use_condensed;
+
+    inline double get_dist(int i, int j) const {
+        if (!use_condensed)
+            return diss_ptr[static_cast<size_t>(i) * nelements + j];
+        if (i == j) return 0.0;
+        // scipy condensed format: row-major upper triangle
+        // index for pair (a, b) with a < b: a*(2n-a-1)/2 + (b-a-1)
+        int a = i, b = j;
+        if (a > b) { int t = a; a = b; b = t; }
+        return cond_ptr[static_cast<size_t>(a) * (2 * nelements - a - 1) / 2 + (b - a - 1)];
+    }
 
 public:
     KMedoid(int nelements, py::array_t<double> diss,
@@ -42,31 +58,37 @@ public:
         saved.resize(nelements);
         clusterMembership.resize(nelements * nclusters);
         clusterSize.resize(nclusters, 0);
+
+        wt_ptr = weights.data();
+
+        if (diss.ndim() == 1) {
+            use_condensed = true;
+            cond_ptr = diss.data();
+            diss_ptr = nullptr;
+        } else {
+            use_condensed = false;
+            diss_ptr = diss.data();
+            cond_ptr = nullptr;
+        }
     }
 
-    // -----------------------------------------------------------------------
-    // PAM BUILD initialisation (deterministic greedy selection).
-    // Mirrors WeightedCluster's buildInitialCentroids(); same parallel pattern
-    // as sequenzo/clustering/src/PAM.cpp::buildInitialCentroids().
-    // -----------------------------------------------------------------------
     void buildInitialCentroids() {
-        auto ptr_diss      = diss.unchecked<2>();
-        auto ptr_weights   = weights.unchecked<1>();
-        auto ptr_centroids = centroids.mutable_unchecked<1>();
+        int* cent_ptr = centroids.mutable_data();
+        const int n = nelements;
 
         double build_maxdist = 0.0;
 #ifdef _OPENMP
         #pragma omp parallel for reduction(max:build_maxdist) schedule(static)
 #endif
-        for (int i = 0; i < nelements; ++i)
-            for (int j = i + 1; j < nelements; ++j) {
-                double v = ptr_diss(i, j);
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j) {
+                double v = get_dist(i, j);
                 if (v > build_maxdist) build_maxdist = v;
             }
         build_maxdist = 1.1 * build_maxdist + 1.0;
 
-        vector<int>    is_medoid(nelements, 0);
-        vector<double> build_dysma(nelements, build_maxdist);
+        vector<int>    is_medoid(n, 0);
+        vector<double> build_dysma(n, build_maxdist);
 
         for (int kk = 0; kk < nclusters; ++kk) {
             double ammax = 0.0;
@@ -79,11 +101,12 @@ public:
                 int    local_nmax  = -1;
 
                 #pragma omp for schedule(static) nowait
-                for (int i = 0; i < nelements; ++i) {
+                for (int i = 0; i < n; ++i) {
                     if (is_medoid[i]) continue;
                     double beter = 0.0;
-                    for (int j = 0; j < nelements; ++j) {
-                        beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                    for (int j = 0; j < n; ++j) {
+                        double diff = build_dysma[j] - get_dist(i, j);
+                        beter += wt_ptr[j] * fmax(0.0, diff);
                     }
                     if (local_ammax <= beter) { local_ammax = beter; local_nmax = i; }
                 }
@@ -99,41 +122,40 @@ public:
                 }
             }
 #else
-            for (int i = 0; i < nelements; ++i) {
+            for (int i = 0; i < n; ++i) {
                 if (is_medoid[i]) continue;
                 double beter = 0.0;
-                for (int j = 0; j < nelements; ++j) {
-                    beter += ptr_weights[j] * fmax(0.0, build_dysma[j] - ptr_diss(i, j));
+                for (int j = 0; j < n; ++j) {
+                    double diff = build_dysma[j] - get_dist(i, j);
+                    beter += wt_ptr[j] * fmax(0.0, diff);
                 }
                 if (ammax <= beter) { ammax = beter; nmax = i; }
             }
 #endif
 
             is_medoid[nmax] = 1;
-            ptr_centroids[kk] = nmax;
+            cent_ptr[kk] = nmax;
 
-            for (int j = 0; j < nelements; ++j)
-                if (ptr_diss(nmax, j) < build_dysma[j])
-                    build_dysma[j] = ptr_diss(nmax, j);
+            for (int j = 0; j < n; ++j) {
+                double d = get_dist(nmax, j);
+                if (d < build_dysma[j])
+                    build_dysma[j] = d;
+            }
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Random medoid selection for restart passes (ipass > 0).
-    // Fisher-Yates partial shuffle; re-draws if any pair has distance == 0.
-    // -----------------------------------------------------------------------
     void getrandommedoids() {
-        auto ptr_diss      = diss.unchecked<2>();
-        auto ptr_centroids = centroids.mutable_unchecked<1>();
+        int* cent_ptr = centroids.mutable_data();
+        const int n = nelements;
 
         static thread_local mt19937 rng(random_device{}());
 
-        vector<int> indices(nelements);
+        vector<int> indices(n);
         iota(indices.begin(), indices.end(), 0);
 
         while (true) {
             for (int i = 0; i < nclusters; ++i) {
-                uniform_int_distribution<int> d(i, nelements - 1);
+                uniform_int_distribution<int> d(i, n - 1);
                 int j = d(rng);
                 swap(indices[i], indices[j]);
             }
@@ -141,26 +163,20 @@ public:
             bool valid = true;
             for (int a = 0; a < nclusters && valid; ++a)
                 for (int b = a + 1; b < nclusters && valid; ++b)
-                    if (ptr_diss(indices[a], indices[b]) <= 0.0)
+                    if (get_dist(indices[a], indices[b]) <= 0.0)
                         valid = false;
 
             if (valid) {
                 for (int i = 0; i < nclusters; ++i)
-                    ptr_centroids[i] = indices[i];
+                    cent_ptr[i] = indices[i];
                 return;
             }
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Update medoids: for each cluster pick the member that minimises total
-    // weighted distance to all other cluster members.
-    // Outer k loop is parallelised with OpenMP (clusters are independent).
-    // -----------------------------------------------------------------------
     void getclustermedoids() {
-        auto ptr_weights   = weights.unchecked<1>();
-        auto ptr_diss      = diss.unchecked<2>();
-        auto ptr_centroids = centroids.mutable_unchecked<1>();
+        int* cent_ptr = centroids.mutable_data();
+        const int n = nelements;
 
 #ifdef _OPENMP
         #pragma omp parallel for schedule(dynamic)
@@ -168,17 +184,18 @@ public:
         for (int k = 0; k < nclusters; ++k) {
             int    size   = clusterSize[k];
             double best   = DBL_MAX;
-            int    bestID = clusterMembership[k * nelements];
+            int    bestID = clusterMembership[k * n];
+            const int* members = &clusterMembership[k * n];
 
             for (int i = 0; i < size; ++i) {
-                int    ii      = clusterMembership[k * nelements + i];
+                int    ii     = members[i];
                 double current = 0.0;
 
                 for (int j = 0; j < size; ++j) {
                     if (i == j) continue;
-                    int jj = clusterMembership[k * nelements + j];
-                    current += ptr_weights[jj] * ptr_diss(ii, jj);
-                    if (current >= best) break;   // early-stop heuristic
+                    int jj = members[j];
+                    current += wt_ptr[jj] * get_dist(ii, jj);
+                    if (current >= best) break;
                 }
 
                 if (current < best) {
@@ -186,24 +203,14 @@ public:
                     bestID = ii;
                 }
             }
-            ptr_centroids[k] = bestID;
+            cent_ptr[k] = bestID;
         }
     }
 
-    // -----------------------------------------------------------------------
-    // One inner convergence pass (assign → update medoids → repeat until
-    // convergence or no cost improvement).
-    //
-    // Assignment uses a two-phase approach to admit OpenMP:
-    //   Phase 1 (parallel):   compute closest medoid + distance for every i.
-    //   Phase 2 (sequential): fill clusterMembership in order 0..n-1.
-    // -----------------------------------------------------------------------
     double runInnerPass() {
-        auto ptr_weights   = weights.unchecked<1>();
-        auto ptr_diss      = diss.unchecked<2>();
-        auto ptr_centroids = centroids.mutable_unchecked<1>();
+        const int n = nelements;
 
-        vector<int> local_assign(nelements);
+        vector<int> local_assign(n);
 
         double total   = DBL_MAX;
         int    counter = 0;
@@ -217,37 +224,36 @@ public:
 
             if (counter > 0) getclustermedoids();
 
+            const int* cent_ptr = centroids.data();
+
             if (counter % period == 0) {
-                for (int i = 0; i < nelements; ++i) saved[i] = tclusterid[i];
+                for (int i = 0; i < n; ++i) saved[i] = tclusterid[i];
                 if (period < INT_MAX / 2) period *= 2;
             }
             ++counter;
 
-            // --- Phase 1: parallel closest-medoid computation + total reduction ---
 #ifdef _OPENMP
             #pragma omp parallel for schedule(static) reduction(+:total)
 #endif
-            for (int i = 0; i < nelements; ++i) {
+            for (int i = 0; i < n; ++i) {
                 double dist_min = DBL_MAX;
                 int    assign   = 0;
                 for (int k = 0; k < nclusters; ++k) {
-                    double td = ptr_diss(i, ptr_centroids[k]);
+                    double td = get_dist(i, cent_ptr[k]);
                     if (td < dist_min) { dist_min = td; assign = k; }
                 }
                 local_assign[i] = assign;
-                total += ptr_weights[i] * dist_min;
+                total += wt_ptr[i] * dist_min;
             }
 
-            // --- Phase 2: sequential membership fill (deterministic order) --
             for (int k = 0; k < nclusters; ++k) clusterSize[k] = 0;
-            for (int i = 0; i < nelements; ++i) {
+            for (int i = 0; i < n; ++i) {
                 int a = local_assign[i];
                 tclusterid[i] = a;
-                clusterMembership[a * nelements + clusterSize[a]] = i;
+                clusterMembership[a * n + clusterSize[a]] = i;
                 ++clusterSize[a];
             }
 
-            // If any cluster is empty, reinitialise from scratch and restart.
             bool empty = false;
             for (int k = 0; k < nclusters; ++k) {
                 if (clusterSize[k] == 0) {
@@ -263,7 +269,7 @@ public:
             if (total >= prev) break;
 
             bool same = true;
-            for (int i = 0; i < nelements; ++i) {
+            for (int i = 0; i < n; ++i) {
                 if (saved[i] != tclusterid[i]) { same = false; break; }
             }
             if (same) break;
@@ -272,14 +278,6 @@ public:
         return total;
     }
 
-    // -----------------------------------------------------------------------
-    // Outer restart loop:
-    //   ipass == 0             : PAM BUILD (deterministic, matches WeightedCluster)
-    //   ipass == 1 .. npass-1  : random medoids
-    //   npass == 0             : use caller-supplied centroids, run once
-    //
-    // The best solution (lowest total weighted distance) is kept.
-    // -----------------------------------------------------------------------
     py::array_t<int> runclusterloop() {
         vector<int> best_tclusterid(nelements, -1);
         vector<int> best_centroids_vec(nclusters, 0);
@@ -295,7 +293,6 @@ public:
                 else
                     getrandommedoids();
             }
-            // npass == 0: use caller-supplied centroids unchanged.
 
             double total = runInnerPass();
 
@@ -312,29 +309,29 @@ public:
             if (is_new_best) {
                 best_total = total;
                 best_found = true;
+                const int* cent = centroids.data();
                 for (int i = 0; i < nelements; ++i)
                     best_tclusterid[i] = tclusterid[i];
-                auto ptr_c = centroids.unchecked<1>();
                 for (int k = 0; k < nclusters; ++k)
-                    best_centroids_vec[k] = ptr_c[k];
+                    best_centroids_vec[k] = cent[k];
             }
         }
 
         for (int i = 0; i < nelements; ++i)
             tclusterid[i] = best_tclusterid[i];
-        auto ptr_c = centroids.mutable_unchecked<1>();
+        int* cent = centroids.mutable_data();
         for (int k = 0; k < nclusters; ++k)
-            ptr_c[k] = best_centroids_vec[k];
+            cent[k] = best_centroids_vec[k];
 
         return getResultArray();
     }
 
     py::array_t<int> getResultArray() const {
         py::array_t<int> result(nelements);
-        auto results  = result.mutable_unchecked<1>();
-        auto centroid = centroids.unchecked<1>();
+        int* res_ptr = result.mutable_data();
+        const int* cent = centroids.data();
         for (int i = 0; i < nelements; ++i)
-            results(i) = centroid(tclusterid[i]);
+            res_ptr[i] = cent[tclusterid[i]];
         return result;
     }
 };
