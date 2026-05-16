@@ -45,6 +45,8 @@ sequenzo/clustering/
 | TraMineR `dissmfacw` | `validation.dissmfacw_factors` | `dissmfacw_table` | Internal table for association |
 | WeightedCluster `bootclustrange` | `validation.bootstrap_cluster_range` | `boot_cluster_range` | Bootstrap CQI summaries |
 | WeightedCluster `clustassoc` | `validation.cluster_covariate_association` | `cluster_association` | Clustering vs covariate |
+| WeightedCluster `plot.clustassoc` | `validation.cluster_covariate_association` | `plot_cluster_association` | Plot clustassoc diagnostics |
+| WeightedCluster `as.clustrange(hclust, ...)` | `compare_cluster_methods` | `hierarchical_cluster_range` | Ward (etc.) partitions + CQI |
 | WeightedCluster `rarcat` | `validation.rarcat_typology_regression` | `rarcat` | Robust typology AME |
 | `cluster::fanny` (membership) | `sequences_to_variables.helske_regression_variables` | `fanny_membership` | Distance-based soft membership |
 | WeightedCluster `wfcmdd` | `fuzzy_clustering.wfcmdd_fuzzy_clustering` | `wfcmdd` | FCMdd / NCdd / PCMdd |

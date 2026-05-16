@@ -9,7 +9,7 @@ WeightedCluster counterparts: ``as.clustrange``, ``bootclustrange``,
 ``clustassoc``, and ``rarcat``.
 """
 from .bootstrap_cluster_range import BootClusterRangeResult, boot_cluster_range
-from .cluster_covariate_association import cluster_association
+from .cluster_covariate_association import cluster_association, plot_cluster_association
 from .dissmfacw_factors import dissmfacw_table
 from .observation_silhouette import observation_silhouette
 from .partition_quality import (
@@ -30,6 +30,7 @@ __all__ = [
     "BootClusterRangeResult",
     "boot_cluster_range",
     "cluster_association",
+    "plot_cluster_association",
     "RarcatResult",
     "rarcat",
 ]

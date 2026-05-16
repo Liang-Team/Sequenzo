@@ -4,7 +4,11 @@
 @Time    : 27/02/2025 09:58
 @Desc    : 
 """
-from .compare_cluster_methods import ClusterRangeFamilyResult, compare_cluster_methods
+from .compare_cluster_methods import (
+    ClusterRangeFamilyResult,
+    compare_cluster_methods,
+    hierarchical_cluster_range,
+)
 from .hierarchical_clustering import Cluster, ClusterResults, ClusterQuality
 from .k_medoids import KMedoids
 from .k_medoids_range import k_medoids_range
@@ -59,6 +63,7 @@ from .validation import (
     ClusterRangeResult,
     boot_cluster_range,
     cluster_association,
+    plot_cluster_association,
     BootClusterRangeResult,
     observation_silhouette,
     rarcat,
@@ -85,6 +90,7 @@ __all__ = [
     "ClusterQuality",
     "ClusterRangeFamilyResult",
     "compare_cluster_methods",
+    "hierarchical_cluster_range",
     "KMedoids",
     "k_medoids_range",
     "AggregateCasesResult",
@@ -132,6 +138,7 @@ __all__ = [
     "ClusterRangeResult",
     "boot_cluster_range",
     "cluster_association",
+    "plot_cluster_association",
     "BootClusterRangeResult",
     "observation_silhouette",
     "rarcat",

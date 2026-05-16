@@ -2,19 +2,29 @@
 @Author  : Yuqi Liang 梁彧祺
 @File    : cluster_covariate_association.py
 @Time    : 07/05/2025 17:51
-@Desc    : 
+@Desc    :
 Clustering versus covariate association (WeightedCluster ``clustassoc``).
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from .dissmfacw_factors import dissmfacw_table
+from sequenzo.discrepancy_analysis.stats.multifactor_association import multifactor_association
+
 from .partition_quality import ClusterRangeResult
+
+ClustassocStat = Literal["Unaccounted", "Remaining", "BIC"]
+
+_STAT_YLABELS = {
+    "Unaccounted": "Unreproduced proportion of the association",
+    "Remaining": "Unexplained association",
+    "BIC": "BIC",
+}
 
 
 def _model_bic(covar: np.ndarray, cluster_labels: np.ndarray, weights: Optional[np.ndarray]) -> float:
@@ -50,28 +60,42 @@ def cluster_association(
 ) -> pd.DataFrame:
     """
     Relate clustering solutions to a covariate (WeightedCluster ``clustassoc``).
+
+    Returns a table with columns ``Unaccounted``, ``Remaining``, ``BIC``, and
+    ``numcluster``, plus a baseline row ``No Clustering``.
     """
     diss = np.asarray(diss, dtype=np.float64)
     covar = np.asarray(covar).reshape(-1)
     if diss.shape[0] != covar.shape[0]:
         raise ValueError("diss and covar must refer to the same observations.")
 
-    covar_frame = pd.DataFrame({"covar": covar})
-    null_table = dissmfacw_table(diss, covar_frame, weights=weights)
+    null_mm = multifactor_association(
+        diss, pd.DataFrame({"covar": covar}), weights=weights
+    )
     null_bic = _model_bic(covar, np.zeros_like(covar), weights)
+    null_covar = float(null_mm.loc["covar", "PseudoR2"])
 
     rows = []
     for idx, column in enumerate(clustrange.clustering.columns):
         cluster_labels = clustrange.clustering.iloc[:, idx].to_numpy()
-        factors = pd.DataFrame({"cluster": cluster_labels, "covar": covar})
-        mm = dissmfacw_table(diss, factors, weights=weights)
-        remaining = float(mm.loc[mm["Variable"] == "covar", "PseudoR2"].iloc[0])
-        total = float(mm.loc[mm["Variable"] == "Total", "PseudoR2"].iloc[0])
-        null_covar = float(null_table.loc[null_table["Variable"] == "covar", "PseudoR2"].iloc[0])
+        mm = multifactor_association(
+            diss,
+            pd.DataFrame(
+                {
+                    "cluster": pd.Categorical(cluster_labels),
+                    "covar": covar,
+                }
+            ),
+            weights=weights,
+        )
+        cluster_r2 = float(mm.loc["cluster", "PseudoR2"])
+        covar_r2 = float(mm.loc["covar", "PseudoR2"])
+        total_r2 = float(mm.loc["Total", "PseudoR2"])
+        denom = total_r2 - cluster_r2
         rows.append(
             {
-                "Unaccounted": remaining / (total - null_covar) if total != null_covar else np.nan,
-                "Remaining": remaining,
+                "Unaccounted": covar_r2 / denom if denom else np.nan,
+                "Remaining": covar_r2,
                 "BIC": _model_bic(covar, cluster_labels, weights),
                 "numcluster": int(clustrange.kvals[idx]),
             }
@@ -81,10 +105,72 @@ def cluster_association(
     baseline = pd.DataFrame(
         {
             "Unaccounted": [1.0],
-            "Remaining": [float(null_table.loc[null_table["Variable"] == "covar", "PseudoR2"].iloc[0])],
+            "Remaining": [null_covar],
             "BIC": [null_bic],
             "numcluster": [1],
         },
         index=["No Clustering"],
     )
-    return pd.concat([baseline, result])
+    out = pd.concat([baseline, result])
+    out.attrs["clustassoc_class"] = True
+    return out
+
+
+def plot_cluster_association(
+    clustassoc_table: pd.DataFrame,
+    *,
+    stat: Union[ClustassocStat, str] = "Unaccounted",
+    plot_type: str = "b",
+    title: Optional[str] = None,
+    xlabel: str = "Number of clusters",
+    ylabel: Optional[str] = None,
+    ax: Optional[plt.Axes] = None,
+    figsize: tuple[float, float] = (8.0, 5.0),
+    save_as: Optional[str] = None,
+    dpi: int = 150,
+    show: bool = True,
+    **plot_kwargs,
+) -> plt.Axes:
+    """
+    Plot ``clustassoc`` diagnostics (WeightedCluster ``plot.clustassoc``).
+
+    Parameters
+    ----------
+    clustassoc_table
+        Output of :func:`cluster_association`.
+    stat
+        Column to plot: ``Unaccounted`` (default), ``Remaining``, or ``BIC``.
+    plot_type
+        Matplotlib plot type (default ``"b"``: markers and lines).
+    """
+    if stat not in _STAT_YLABELS:
+        raise ValueError(f"stat must be one of {list(_STAT_YLABELS)}.")
+
+    required = {"numcluster", stat}
+    missing = required - set(clustassoc_table.columns)
+    if missing:
+        raise ValueError(f"clustassoc_table is missing columns: {sorted(missing)}")
+
+    created_fig = ax is None
+    if created_fig:
+        _, ax = plt.subplots(figsize=figsize)
+
+    x = clustassoc_table["numcluster"].to_numpy(dtype=float)
+    y = clustassoc_table[stat].to_numpy(dtype=float)
+    ax.plot(x, y, plot_type, **plot_kwargs)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel or _STAT_YLABELS[stat])
+    if title is not None:
+        ax.set_title(title)
+
+    if created_fig:
+        fig = ax.figure
+        fig.tight_layout()
+        if save_as:
+            fig.savefig(save_as, dpi=dpi, bbox_inches="tight")
+        if show:
+            plt.show()
+        elif save_as:
+            plt.close(fig)
+
+    return ax

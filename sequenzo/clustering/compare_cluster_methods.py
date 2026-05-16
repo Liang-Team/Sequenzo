@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
+from scipy.spatial.distance import squareform
 
 from sequenzo.big_data.clara.utils.get_weighted_diss import get_weighted_diss
 from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage
@@ -77,6 +78,41 @@ def _resolve_methods(methods: Union[str, Sequence[str]], weights: Optional[np.nd
     return selected
 
 
+def _linkage_input_from_diss(
+    diss: np.ndarray,
+    weights: Optional[np.ndarray],
+) -> np.ndarray:
+    """
+    Build the condensed distance vector expected by fastcluster (R ``as.dist`` order).
+
+    Passing a full square matrix to ``linkage`` can yield a different tree than
+    ``hclust(as.dist(diss), method = "ward.D")``; R parity requires condensed form.
+    """
+    linkage_input = np.asarray(diss, dtype=np.float64, order="C").copy()
+    if weights is not None:
+        linkage_input = get_weighted_diss(
+            linkage_input, np.asarray(weights, dtype=np.float64)
+        )
+    if linkage_input.ndim == 2:
+        linkage_input = squareform(linkage_input, checks=False)
+    return linkage_input
+
+
+def hierarchical_cluster_range(
+    diss: np.ndarray,
+    maxcluster: int,
+    *,
+    method: str = "ward.d",
+    weights: Optional[np.ndarray] = None,
+) -> ClusterRangeResult:
+    """
+    Hierarchical partitions and quality for k = 2, ..., ``maxcluster``.
+
+    Mirrors WeightedCluster ``as.clustrange(hclust, diss, ncluster = maxcluster)``.
+    """
+    return _hierarchical_range(diss, weights, method.lower(), maxcluster)
+
+
 def _hierarchical_range(
     diss: np.ndarray,
     weights: Optional[np.ndarray],
@@ -86,9 +122,7 @@ def _hierarchical_range(
     if method in NO_WEIGHT_METHODS:
         linkage_matrix = divisive_hclust_linkage(diss, method)
     else:
-        linkage_input = np.asarray(diss, dtype=np.float64, order="C").copy()
-        if weights is not None:
-            linkage_input = get_weighted_diss(linkage_input, np.asarray(weights, dtype=np.float64))
+        linkage_input = _linkage_input_from_diss(diss, weights)
         linkage_matrix = linkage(linkage_input, method=_LINKAGE_METHOD[method])
     partitions = {
         f"cluster{k}": cutree_labels(linkage_matrix, k)
@@ -145,9 +179,7 @@ def compare_cluster_methods(
 
         results[method] = _hierarchical_range(diss, weights, method, maxcluster)
         if pam_combine:
-            linkage_input = np.asarray(diss, dtype=np.float64, order="C").copy()
-            if weights is not None:
-                linkage_input = get_weighted_diss(linkage_input, np.asarray(weights, dtype=np.float64))
+            linkage_input = _linkage_input_from_diss(diss, weights)
             linkage_matrix = linkage(linkage_input, method=_LINKAGE_METHOD[method])
             results[f"pam.{method}"] = k_medoids_range(
                 diss,

@@ -15,11 +15,17 @@ This split avoids confusion between:
 
 ### This module includes
 - `SAMM`
-- `sequence_analysis_multi_state_model`
+- `sequence_analysis_multi_state_model` (`seqsamm`; TraMineRextras)
 - `seqsammseq`
 - `seqsammeha`
 - `get_sequence_history_data`
 - `person_level_to_person_period`
+
+**SAMM / void:** TraMineR `seqsamm()` drops subsequence windows that contain **void**
+(out-of-window padding; default symbol `"%"`). Use `SequenceData(..., void="%")` (default)
+and list the void symbol in `states` when it appears in the data; `seqsamm` reads
+`seqdata.void_code`. Pass `void=None` only if you have no void padding. Compare row count,
+`time` range, and `spell.time` with R on the same toy data — see `samm_examples.md`.
 
 ### This module does NOT include
 - `create_event_sequences` / `seqecreate`
@@ -29,6 +35,24 @@ This split avoids confusion between:
 - event-sequence plotting helpers
 
 For these, use `sequenzo.event_sequences`.
+
+## Void design (SAMM / `SequenceData`)
+
+TraMineR separates **void** (calendar padding outside the observation window, default `%`)
+from **missing** (unknown state inside the window). This matters mainly for
+**event history analysis**: `seqsamm()` removes person-period rows whose subsequence
+contains any void, because those windows are not valid “next *k* states” for modelling.
+
+| | Void | Missing |
+|---|------|---------|
+| Meaning | Not in the observation window yet / anymore | In window, value unknown |
+| Sequenzo | `SequenceData(void="%")`, symbol in `states` → `void_code` | `missing_values`, auto `NaN` → Missing state |
+| SAMM (`seqsamm`) | Drops row if subsequence contains `void_code` | Does not drop by default |
+
+Typical state-sequence workflows (clustering, index plots) may never show `%` in the data;
+you can ignore void until you call `sequence_analysis_multi_state_model()`. For R parity,
+use the same void symbol and alphabet as `seqdef()`, then compare `nrow`, `time`, and
+`spell.time` (see `samm_examples.md`).
 
 ## Why This Split Helps
 

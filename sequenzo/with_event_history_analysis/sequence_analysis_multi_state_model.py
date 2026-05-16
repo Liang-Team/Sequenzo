@@ -7,14 +7,63 @@
            This module provides tools for analyzing sequences through a multi-state perspective,
            creating person-period datasets that can be used for event history analysis.
            
-           Based on the TraMineR package's SAMM functionality.
+           Port of the SAMM workflow from the R package **TraMineRextras** (Studer et al.;
+           not TraMineR core). Input sequences are expected as Sequenzo ``SequenceData``
+           (analogous to TraMineR ``seqdef()`` objects).
 
-IMPORTANT DIFFERENCES FROM R'S TraMineR IMPLEMENTATION:
+R package roles
+---------------
+- **TraMineRextras**: ``seqsamm()``, ``seqsammseq()``, ``seqsammeha()``, S3 ``plot.SAMM()``
+- **TraMineR** (dependency only): ``seqdef()`` for input; ``seqplot()`` inside ``plot.SAMM()``
 
-Plotting Approach Differences:
+Python ↔ R function map
+-----------------------
++-------------------------------+------------------------------------------+
+| Python (Sequenzo)             | R (TraMineRextras)                       |
++-------------------------------+------------------------------------------+
+| ``sequence_analysis_multi_state_model`` | ``seqsamm()``                    |
+| ``seqsamm`` (alias)             | ``seqsamm()``                            |
+| ``SAMM``                        | object of class ``"SAMM"``               |
+| ``plot_samm()``                 | ``plot.SAMM()`` (calls TraMineR ``seqplot()``) |
+| ``seqsammseq()``                | ``seqsammseq()``                         |
+| ``set_typology()``              | no full equivalent (R assigns typology  |
+|                               | inside ``seqsammeha()``; see note below) |
+| ``seqsammeha()``                | ``seqsammeha()``                         |
++-------------------------------+------------------------------------------+
 
-R's plot.SAMM() function:
-  - Uses TraMineR's seqplot() function with grouping
+References: TraMineRextras ``?seqsamm``;
+  source: https://rdrr.io/cran/TraMineRextras/src/R/seqsamm.R
+  manual: https://cran.r-project.org/web/packages/TraMineRextras/refman/TraMineRextras.html
+
+Column naming: primary column is ``spell.time`` (R); ``spell_time`` is kept as an alias.
+Subsequence columns ``s.1``, ``s.2``, ... store numeric state codes (TraMineR-style), not labels.
+
+Void vs missing (``seqsamm`` row filtering)
+-------------------------------------------
+TraMineR ``seqdef()`` stores a **void** symbol (default ``"%"``) in ``attr(seqdata, "void")``,
+separate from **missing** (``nr``). TraMineRextras ``seqsamm()`` keeps a person-period row only
+if the subsequence has **no void** in any of its positions (``maxmiss = 0`` when
+``minlength == sublength``).
+
+Sequenzo ``SequenceData`` accepts ``void=`` (default ``"%"``, like ``seqdef()``) and sets
+``seqdata.void_code`` when the void symbol is listed in ``states``. ``seqsamm`` drops a
+person-period row if any position in the subsequence equals ``void_code``. Pass
+``void=None`` at construction to disable void metadata and void-based row dropping.
+
+The automatic **Missing** state that ``SequenceData`` may append is **not** the same as
+void. Rows with missing codes in the subsequence are **not** dropped by ``seqsamm`` unless
+you deliberately set ``void`` to the missing symbol (not recommended).
+
+For numerical parity with R, run the **same** ``SequenceData`` / ``seqdef`` object through
+``seqsamm`` / ``sequence_analysis_multi_state_model`` and compare row count, ``time`` range,
+and ``spell.time`` (see ``samm_examples.md``).
+
+IMPORTANT DIFFERENCES FROM R'S ``plot.SAMM`` IMPLEMENTATION:
+
+Plotting approach (Python ``plot_samm`` vs R ``plot.SAMM``):
+
+R ``plot.SAMM()`` (TraMineRextras, defined in ``seqsamm.R``):
+  - Uses TraMineR ``seqplot()`` with grouping by the state transitioned out of
   - Original R code: plot.SAMM <- function(x, type="d", ...){
                        seqdata <- attr(x, "stslist")[x$transition,]
                        group <- x[x$transition, attr(x, "sname")[1]]
@@ -23,11 +72,8 @@ R's plot.SAMM() function:
                      }
   - Creates grouped sequence plots where sequences are grouped by starting state
   - Relies on TraMineR's built-in plotting system
-  - Links: 
-        Source code: https://rdrr.io/cran/TraMineRextras/src/R/seqsamm.R
-        Documentation: https://cran.r-project.org/web/packages/TraMineRextras/refman/TraMineRextras.html#seqsha 
 
-Our Python plot_samm() function:
+Our Python ``plot_samm()`` function:
   - Uses matplotlib's imshow() with sequence index plot approach
   - Creates separate subplots for each starting state (one subplot per transition state)
   - Each subplot shows all subsequences that start with a specific state as colored horizontal bars
@@ -55,10 +101,199 @@ import matplotlib.pyplot as plt
 # Import the SequenceData class from the parent package
 from sequenzo.define_sequence_data import SequenceData
 
+# R column name (TraMineRextras seqsamm); spell_time is a backward-compatible alias.
+SPELL_TIME_COL = "spell.time"
+SPELL_TIME_ALIAS = "spell_time"
+
+
+def _state_to_code_map(seqdata: SequenceData) -> Dict:
+    """Map state symbols to integer codes (inverse of ``inverse_state_mapping``)."""
+    inv = seqdata.inverse_state_mapping
+    return {state: int(code) for code, state in inv.items()}
+
+
+def _void_codes_for_samm(seqdata: SequenceData) -> set:
+    """
+    Integer codes treated as void in subsequences (TraMineR ``attr(seqdata, "void")``).
+
+    Uses ``seqdata.void_code`` when set (``void`` symbol in ``states``); otherwise no
+    void-based row dropping. See ``SequenceData(void=...)`` and ``samm_examples.md``.
+
+    With ``minlength == sublength``, R sets ``maxmiss = 0``: any void in the
+    subsequence drops that person-period row.
+    """
+    code = getattr(seqdata, "void_code", None)
+    if code is not None:
+        return {int(code)}
+    return set()
+
+
+def _subseq_rows_valid(subseq: np.ndarray, void_codes: set) -> np.ndarray:
+    """True for rows with no void code in any subsequence position (R ``cond``)."""
+    if not void_codes:
+        return np.ones(subseq.shape[0], dtype=bool)
+    invalid = np.isin(subseq, list(void_codes)).any(axis=1)
+    return ~invalid
+
+
+def _covar_rows_for_ids(covar: pd.DataFrame, id_values: np.ndarray) -> pd.DataFrame:
+    """
+    Align ``covar`` rows to sequence ids (R: ``covar[ret$id, ]``).
+
+    Requires index labels to match ``id_values`` in value and dtype (e.g. both int or both str).
+    """
+    ids = np.asarray(id_values)
+    id_index = pd.Index(ids)
+    covar = covar.copy()
+
+    if covar.index.equals(id_index):
+        return covar.loc[id_index]
+
+    covar_str = pd.Index(covar.index.astype(str))
+    id_str = pd.Index(ids.astype(str))
+    if covar_str.equals(id_str):
+        raise ValueError(
+            "covar index values match sequence ids as strings but dtypes differ "
+            f"(covar index {covar.index.dtype!r} vs sequence ids {id_index.dtype!r}). "
+            "Cast covar.index to the same type as sequence ids, as required for R "
+            "rownames(covar) == id (e.g. both int or both str)."
+        )
+
+    try:
+        cast_index = covar.index.astype(id_index.dtype, copy=False)
+        covar_cast = covar.copy()
+        covar_cast.index = cast_index
+        if cast_index.equals(id_index):
+            return covar_cast.loc[id_index]
+    except (TypeError, ValueError):
+        pass
+
+    if len(covar.index) != len(set(covar.index)):
+        raise ValueError(
+            "covar index contains duplicate row labels; each sequence id must appear once."
+        )
+
+    missing_ids = set(ids) - set(covar.index)
+    if missing_ids:
+        sample = list(missing_ids)[:5]
+        extra = list(set(covar.index) - set(ids))[:5]
+        extra_msg = f" Extra covar index labels (examples): {extra}." if extra else ""
+        raise ValueError(
+            f"covar index is missing sequence ids (examples: {sample}). "
+            f"Row index must match sequence ids (R: covar[ret$id, ]). "
+            f"covar index dtype={covar.index.dtype!r}, sequence id dtype={id_index.dtype!r}."
+            f"{extra_msg}"
+        )
+
+    return covar.loc[id_index]
+
+
+def _remap_codes_for_imshow(matrix: np.ndarray, code_to_idx: Dict[int, int]) -> np.ndarray:
+    """Map state codes to contiguous 0..K-1 indices for matplotlib colormaps."""
+    out = np.full(matrix.shape, np.nan, dtype=float)
+    for code, idx in code_to_idx.items():
+        out[matrix == code] = float(idx)
+    return out
+
+
+def _resolve_spell_value(
+    spell: Union[str, int, float],
+    state_to_code: Dict,
+    labels: List[str],
+    alphabet: List,
+) -> Union[int, float, str]:
+    """
+    Resolve ``spell`` to the value stored in ``s.1`` (numeric state code).
+
+    Accepts TraMineR-style state codes, state symbols (``alphabet``), or labels.
+    """
+    if isinstance(spell, (int, np.integer)) or (
+        isinstance(spell, float) and spell == int(spell) and not np.isnan(spell)
+    ):
+        return int(spell)
+    if isinstance(spell, str) and spell.isdigit():
+        return int(spell)
+    if spell in state_to_code:
+        return state_to_code[spell]
+    label_to_state = dict(zip(labels, alphabet))
+    if spell in label_to_state:
+        state = label_to_state[spell]
+        return state_to_code[state]
+    raise ValueError(
+        f"spell {spell!r} not found among state codes, states {alphabet}, or labels {labels}"
+    )
+
+
+def _typology_type_levels(
+    typology: Union[pd.Series, np.ndarray, list, None],
+    labels_array: Optional[np.ndarray],
+) -> List:
+    """Match R ``seqsammeha`` dummy column names: factor levels or unique values."""
+    if typology is None:
+        if labels_array is None:
+            return []
+        return list(pd.unique(labels_array))
+
+    if isinstance(typology, pd.Series) and isinstance(typology.dtype, pd.CategoricalDtype):
+        return list(typology.cat.categories)
+
+    if isinstance(typology, pd.Categorical):
+        return list(typology.categories)
+
+    return list(pd.unique(np.asarray(typology, dtype=object)))
+
+
+def _build_typology_labels(
+    samm: "SAMM",
+    spell_code: Union[int, float],
+    *,
+    typology: Union[pd.Series, np.ndarray, list, None] = None,
+    clusters: Optional[Union[pd.Series, np.ndarray, list]] = None,
+    cluster_to_name: Optional[Dict] = None,
+    mapping: Optional[Union[Dict, pd.Series]] = None,
+    by: Optional[str] = None,
+) -> np.ndarray:
+    """Row-aligned typology labels for transition rows (does not modify ``samm``)."""
+    condition = (samm.data["s.1"] == spell_code) & (samm.data["transition"].astype(bool))
+    n_transitions = int(condition.sum())
+
+    if typology is not None:
+        labels_array = (
+            typology.values if isinstance(typology, pd.Series) else np.asarray(typology, dtype=object)
+        )
+    elif clusters is not None:
+        clusters_array = clusters.values if isinstance(clusters, pd.Series) else np.asarray(clusters)
+        if len(clusters_array) != n_transitions:
+            raise ValueError(
+                f"clusters length {len(clusters_array)} must match n_transitions={n_transitions}"
+            )
+        if cluster_to_name is not None:
+            labels_array = np.asarray([cluster_to_name[c] for c in clusters_array], dtype=object)
+        else:
+            labels_array = clusters_array.astype(object)
+    elif mapping is not None:
+        labels_array = _expand_typology_for_transitions(
+            samm=samm,
+            spell=spell_code,
+            mapping=mapping,
+            by=by,
+            cluster_to_name=cluster_to_name,
+        )
+    else:
+        raise ValueError("Provide typology, clusters, or mapping.")
+
+    if len(labels_array) != n_transitions:
+        raise ValueError(
+            f"typology length {len(labels_array)} must match n_transitions={n_transitions}"
+        )
+    return labels_array
+
 
 class SAMM:
     """
     Sequence Analysis Multi-state Model (SAMM) object.
+    
+    Corresponds to the R S3 class ``"SAMM"`` returned by TraMineRextras ``seqsamm()``.
     
     This class stores a person-period dataset generated from sequence data,
     where each row represents one time point for one person, along with
@@ -71,10 +306,19 @@ class SAMM:
         color_map (dict): Color mapping for visualization
         sname (list): Column names for subsequence variables (e.g., ['s.1', 's.2', 's.3'])
         sublength (int): Length of the subsequences being tracked
+        state_to_code (dict): Map state symbols to integer codes (for ``spell`` arguments)
     """
     
-    def __init__(self, data: pd.DataFrame, alphabet: list, labels: list, 
-                 color_map: dict, sname: list, sublength: int):
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        alphabet: list,
+        labels: list,
+        color_map: dict,
+        sname: list,
+        sublength: int,
+        state_to_code: Optional[Dict] = None,
+    ):
         """
         Initialize a SAMM object.
         
@@ -85,6 +329,7 @@ class SAMM:
             color_map: Dictionary mapping states to colors
             sname: List of subsequence column names
             sublength: Length of subsequences
+            state_to_code: State symbol to numeric code (from ``SequenceData``)
         """
         self.data = data
         self.alphabet = alphabet
@@ -92,6 +337,7 @@ class SAMM:
         self.color_map = color_map
         self.sname = sname
         self.sublength = sublength
+        self.state_to_code = state_to_code or {}
         
         # Initialize typology column (will be set later using set_typology)
         if 'typology' not in self.data.columns:
@@ -109,6 +355,10 @@ class SAMM:
 def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, covar: Optional[pd.DataFrame] = None) -> SAMM:
     """
     Generate a person-period dataset from sequence data for multi-state analysis.
+    
+    R equivalent: **TraMineRextras** ``seqsamm(seqdata, sublength, covar = NULL)``.
+    ``seqdata`` should be a TraMineR ``seqdef`` object in R; here, pass a Sequenzo
+    ``SequenceData`` object (built the same way as for other Sequenzo sequence tools).
     
     This function transforms sequence data into a "person-period" format where each row 
     represents one time point for one individual. At each time position, it also extracts
@@ -137,11 +387,22 @@ def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, c
             - id: Identifier for each sequence/person
             - time: Time elapsed since the beginning of the sequence (starts at 1)
             - begin: Time when the current spell began
-            - spell_time: Time elapsed since the beginning of the current spell
+            - spell.time: Time elapsed since the beginning of the current spell (R name)
+            - spell_time: Alias of ``spell.time``
+            - s.1, s.2, ...: Subsequence state **codes** (integers), not labels
             - transition: Boolean indicator (True if there's a state transition at this point)
-            - s.1, s.2, ..., s.X: The subsequence values (number depends on sublength)
             - Additional covariate columns (if covar was provided)
-    
+
+    Notes:
+        **Void / missing:** Build ``SequenceData(..., void="%")`` (default) and include the
+        void symbol in ``states`` if it appears in the data. ``seqsamm`` uses
+        ``seqdata.void_code`` to drop subsequences containing void. Pass ``void=None`` only
+        when you have no out-of-window padding. The auto-added Missing state is not void.
+
+        **R parity check:** On the same toy data, compare ``nrow`` / ``len(samm.data)``,
+        ``range(time)``, and ``spell.time`` summaries between R ``seqsamm()`` and this
+        function (details in ``samm_examples.md``).
+
     Example:
         >>> # Suppose we have sequence data tracking employment states
         >>> # States: 'employed', 'unemployed', 'education'
@@ -155,7 +416,17 @@ def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, c
     seqdata_array = seqdata.values
     n_individuals = seqdata_array.shape[0]  # Number of sequences/people
     n_timepoints = seqdata_array.shape[1]   # Length of each sequence
-    
+
+    if sublength < 2:
+        raise ValueError(
+            "sublength must be at least 2 because transition compares s.1 and s.2."
+        )
+    if n_timepoints <= sublength:
+        raise ValueError(
+            "Sequence length must be greater than sublength. "
+            "R seqsamm uses time points 1:(L - sublength), so L must be larger than sublength."
+        )
+
     # Create column names for the subsequence variables
     # For example, if sublength=3, this creates ['s.1', 's.2', 's.3']
     sname = [f's.{i+1}' for i in range(sublength)]
@@ -175,83 +446,44 @@ def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, c
     # Initialize: everyone's spell begins at time 1
     spell_begin = np.ones(n_individuals, dtype=int)
     
-    # Loop through each time point (but stop before the end to ensure we have enough future points)
-    # For example, if sublength=3 and we have 10 time points, we only go up to time point 7
-    # because from time 8, 9, 10 we can't look 3 steps ahead
-    for tt in range(n_timepoints - sublength + 1):
-        
-        # Extract the subsequence starting at time 'tt' and going for 'sublength' time units
-        # For example, if tt=2 and sublength=3, extract columns 2, 3, 4
+    # R: for(tt in 1:(ncol(seqdata)-sublength)) — censoring limit L - sublength (not L - sublength + 1)
+    void_codes = _void_codes_for_samm(seqdata)
+    state_to_code = _state_to_code_map(seqdata)
+
+    for tt in range(n_timepoints - sublength):
         subseq = seqdata_array[:, tt:(tt + sublength)]
-        
-        # Create a DataFrame for this subsequence with proper column names
-        subseq_df = pd.DataFrame(subseq, columns=sname)
-        
-        # Detect transitions: A transition occurs when the state changes from this time to the next
-        # Compare the first column (current state) with the second column (next state)
-        transition = (subseq_df['s.1'].values != subseq_df['s.2'].values)
-        
-        # Update spell begin times
-        # If this isn't the first time point, check if there was a state change from previous time
+        valid = _subseq_rows_valid(subseq, void_codes)
+
+        transition = subseq[:, 0] != subseq[:, 1]
+
         if tt > 0:
-            # Get the state at the previous time point and current time point
-            prev_state = seqdata_array[:, tt - 1]
-            curr_state = seqdata_array[:, tt]
-            
-            # Find where the state changed (spell reset)
-            spell_reset_mask = (prev_state != curr_state)
-            
-            # For those individuals, update their spell begin time to current time (tt + 1, since time starts at 1)
+            spell_reset_mask = seqdata_array[:, tt - 1] != seqdata_array[:, tt]
             spell_begin[spell_reset_mask] = tt + 1
-        
-        # Calculate spell duration: how long has the current spell lasted?
-        # This is the current time minus when the spell began
+
         spell_time = (tt + 1) - spell_begin
-        
-        # Create the person-period dataset for this time point
-        # Each row represents one individual at this specific time point
+
         subseq_record = pd.DataFrame({
-            'id': id_values,                    # Individual identifier
-            'time': tt + 1,                     # Current time point (1-indexed)
-            'begin': spell_begin,               # When current spell began
-            'spell_time': spell_time,           # Duration of current spell
-            'transition': transition            # Whether transition occurs
+            "id": id_values,
+            "time": tt + 1,
+            "begin": spell_begin,
+            SPELL_TIME_COL: spell_time,
+            "transition": transition,
         })
-        
-        # Add the subsequence columns (s.1, s.2, ..., s.X)
+        subseq_df = pd.DataFrame(subseq, columns=sname)
         subseq_record = pd.concat([subseq_record, subseq_df], axis=1)
-        
-        # Add this time point's data to our collection
-        all_subseq_list.append(subseq_record)
-    
-    # Combine all time points into one large person-period dataset
-    # Stack all the DataFrames on top of each other
+        all_subseq_list.append(subseq_record.loc[valid].copy())
+
     result = pd.concat(all_subseq_list, ignore_index=True)
-    
-    # If time-invariant covariates were provided, merge them in
-    # These are variables that don't change over time (e.g., gender, birth year)
+
     if covar is not None:
-        # Match covariates to IDs
-        covar_with_id = covar.copy()
-        covar_with_id['id'] = id_values
-        
-        # Merge the covariates into our person-period data based on ID
-        result = result.merge(covar_with_id, on='id', how='left')
-    
-    # Sort the data by ID and time for easier reading
-    result = result.sort_values(['id', 'time']).reset_index(drop=True)
-    
-    # Map numeric state codes back to their readable labels
-    # First map to states, then to labels for better interpretability
-    inverse_mapping = seqdata.inverse_state_mapping  # Maps numeric codes to states
-    state_to_label = seqdata.state_to_label  # Maps states to descriptive labels
-    
-    for col in sname:
-        # First convert numeric codes to states
-        result[col] = result[col].map(inverse_mapping)
-        # Then convert states to labels for better readability
-        result[col] = result[col].map(state_to_label)
-    
+        covar_indexed = _covar_rows_for_ids(covar, id_values)
+        covar_indexed = covar_indexed.copy()
+        covar_indexed["id"] = id_values
+        result = result.merge(covar_indexed, on="id", how="left")
+
+    result = result.sort_values(["id", "time"]).reset_index(drop=True)
+    result[SPELL_TIME_ALIAS] = result[SPELL_TIME_COL]
+
     # Create and return the SAMM object
     samm_obj = SAMM(
         data=result,
@@ -259,7 +491,8 @@ def sequence_analysis_multi_state_model(seqdata: SequenceData, sublength: int, c
         labels=seqdata.labels,
         color_map=seqdata.color_map,
         sname=sname,
-        sublength=sublength
+        sublength=sublength,
+        state_to_code=state_to_code,
     )
     
     return samm_obj
@@ -271,8 +504,10 @@ def plot_samm(samm: SAMM, plot_type: str = "d", base_width: int = 15,
     """
     Plot subsequences following transitions in the SAMM data using sequence index plots.
     
-    This function creates sequence index visualizations showing what subsequences occur 
-    after transitions out of each state. Similar to R's TraMineR seqplot function.
+    R equivalent: **TraMineRextras** S3 method ``plot.SAMM(x, type = "d", ...)``, which
+    internally calls **TraMineR** ``seqplot()`` on transition subsequences grouped by
+    the state transitioned out of. This Python implementation does not call ``seqplot``;
+    it uses matplotlib index-style subplots instead (see module docstring).
     
     **What does this show?**
     For each state, this displays the actual subsequence patterns (as colored bars) 
@@ -345,49 +580,54 @@ def plot_samm(samm: SAMM, plot_type: str = "d", base_width: int = 15,
     gs = gridspec.GridSpec(nrows, ncols, figure=fig, height_ratios=height_ratios,
                           hspace=0.5, wspace=0.25)  # Adjusted spacing for better layout
     
-    # Create a reverse mapping from labels back to numeric codes for plotting
-    label_to_numeric = {label: i + 1 for i, label in enumerate(samm.labels)}
-    
-    # Use the color map from the original sequence data
-    cmap = ListedColormap([samm.color_map[i] for i in sorted(samm.color_map.keys())])
-    
+    # Contiguous 0..K-1 indices for imshow (state codes may not be 1..K)
+    plot_codes = sorted(int(c) for c in samm.state_to_code.values())
+    code_to_idx = {code: i for i, code in enumerate(plot_codes)}
+    cmap_colors = []
+    for code in plot_codes:
+        if code in samm.color_map:
+            cmap_colors.append(samm.color_map[code])
+        elif code - 1 in samm.color_map:
+            cmap_colors.append(samm.color_map[code - 1])
+        else:
+            cmap_colors.append("#cccccc")
+    cmap = ListedColormap(cmap_colors)
+    imshow_vmin, imshow_vmax = 0, max(0, len(plot_codes) - 1)
+
+    def _code_display_name(code) -> str:
+        for state, sc in samm.state_to_code.items():
+            if sc == code:
+                idx_lab = samm.alphabet.index(state) if state in samm.alphabet else None
+                return samm.labels[idx_lab] if idx_lab is not None else str(state)
+        return str(code)
+
     # For each starting state, create a sequence index plot
-    for idx, state in enumerate(starting_states):
+    for idx, state_code in enumerate(starting_states):
         row = idx // ncols
         col = idx % ncols
         ax = fig.add_subplot(gs[row, col])
         
-        # Get all subsequences that start with this state and have a transition
-        state_data = transition_rows[transition_rows['s.1'] == state].copy()
-        
-        # Extract subsequence columns and convert labels to numeric codes
-        subseq_cols = samm.sname
-        subseq_matrix = state_data[subseq_cols].values
-        
-        # Convert label strings to numeric codes for plotting
-        numeric_matrix = np.zeros_like(subseq_matrix, dtype=float)
-        for i in range(subseq_matrix.shape[0]):
-            for j in range(subseq_matrix.shape[1]):
-                label = subseq_matrix[i, j]
-                if pd.notna(label) and label in label_to_numeric:
-                    numeric_matrix[i, j] = label_to_numeric[label]
-                else:
-                    numeric_matrix[i, j] = np.nan
-        
+        state_data = transition_rows[transition_rows["s.1"] == state_code].copy()
+        subseq_matrix = state_data[samm.sname].to_numpy(dtype=float)
+        numeric_matrix = subseq_matrix.astype(float)
+        plot_matrix = _remap_codes_for_imshow(numeric_matrix, code_to_idx)
+
         # Plot with masked array for NaN handling
-        ax.imshow(np.ma.masked_invalid(numeric_matrix), 
-                 aspect='auto', 
-                 cmap=cmap, 
-                 interpolation='nearest',
-                 vmin=1, 
-                 vmax=len(samm.labels))
+        ax.imshow(
+            np.ma.masked_invalid(plot_matrix),
+            aspect="auto",
+            cmap=cmap,
+            interpolation="nearest",
+            vmin=imshow_vmin,
+            vmax=imshow_vmax,
+        )
         
         # Disable grid
         ax.grid(False)
         
         # Set title showing the starting state with count
         num_seqs = numeric_matrix.shape[0]
-        title_text = f'Transitions out of: {state} (n={num_seqs})'
+        title_text = f"Transitions out of: {_code_display_name(state_code)} (n={num_seqs})"
         
         # Break long titles into multiple lines
         if len(title_text) > 35:  # If title is too long
@@ -401,9 +641,9 @@ def plot_samm(samm: SAMM, plot_type: str = "d", base_width: int = 15,
         
         # X-axis: time steps in subsequence
         ax.set_xlabel('Subsequence Position', fontsize=fontsize, labelpad=8, color='black')
-        xticks = np.arange(len(subseq_cols))
+        xticks = np.arange(len(samm.sname))
         ax.set_xticks(xticks)
-        ax.set_xticklabels([f't+{i}' for i in range(len(subseq_cols))], 
+        ax.set_xticklabels([f"t+{i}" for i in range(len(samm.sname))],
                           fontsize=fontsize-2, color='gray')
         
         # Y-axis: sequence count
@@ -452,7 +692,11 @@ def plot_samm(samm: SAMM, plot_type: str = "d", base_width: int = 15,
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
     
     # Create standalone legend using the same style as index plot
-    colors = {samm.labels[i]: samm.color_map[i+1] for i in range(len(samm.labels))}
+    colors = {}
+    for i, state in enumerate(samm.alphabet):
+        code = int(samm.state_to_code[state])
+        label = samm.labels[i] if i < len(samm.labels) else str(state)
+        colors[label] = samm.color_map.get(code, samm.color_map.get(i + 1, "#cccccc"))
     legend_buffer = create_standalone_legend(
         colors=colors,
         labels=samm.labels,
@@ -486,6 +730,11 @@ def seqsammseq(samm: SAMM, spell: str) -> pd.DataFrame:
     """
     Extract subsequences that follow a specific state (spell).
     
+    R equivalent: **TraMineRextras** ``seqsammseq(samm, spell)``, which returns an
+    ``stslist`` sequence object (TraMineR ``seqdef``-style). This Python version returns
+    a ``DataFrame`` of subsequence columns (``s.1``, ``s.2``, ...) for transition rows
+    where ``s.1 == spell``.
+    
     This function returns all the subsequences that occur after a given state,
     specifically when there is a transition OUT of that state.
     
@@ -513,10 +762,8 @@ def seqsammseq(samm: SAMM, spell: str) -> pd.DataFrame:
         # This shows what typically happens after someone becomes unemployed
     """
     
-    # Filter for rows that:
-    # 1. Start with the specified state (s.1 == spell)
-    # 2. Have a transition occurring (transition == True)
-    condition = (samm.data['s.1'] == spell) & (samm.data['transition'] == True)
+    spell_code = _resolve_spell_value(spell, samm.state_to_code, samm.labels, samm.alphabet)
+    condition = (samm.data["s.1"] == spell_code) & (samm.data["transition"].astype(bool))
     
     # Extract only the subsequence columns
     subsequences = samm.data.loc[condition, samm.sname].copy()
@@ -529,10 +776,10 @@ def seqsammseq(samm: SAMM, spell: str) -> pd.DataFrame:
 
 def _expand_typology_for_transitions(
     samm: SAMM,
-    spell: str,
+    spell: Union[str, int, float],
     mapping: Union[Dict, pd.Series],
     by: Optional[str] = None,
-    cluster_to_name: Optional[Dict] = None
+    cluster_to_name: Optional[Dict] = None,
 ) -> np.ndarray:
     """
     Build a row-aligned typology vector for transition rows given a mapping.
@@ -558,8 +805,9 @@ def _expand_typology_for_transitions(
     numpy.ndarray
         A vector of labels aligned to samm.data.loc[(s.1==spell) & transition].
     """
-    condition = (samm.data['s.1'] == spell) & (samm.data['transition'] == True)
-    trans_df = samm.data.loc[condition, ['id', 'begin']].copy()
+    spell_code = _resolve_spell_value(spell, samm.state_to_code, samm.labels, samm.alphabet)
+    condition = (samm.data["s.1"] == spell_code) & (samm.data["transition"].astype(bool))
+    trans_df = samm.data.loc[condition, ["id", "begin"]].copy()
 
     # Normalize mapping to a dict for fast lookup
     if isinstance(mapping, pd.Series):
@@ -645,6 +893,11 @@ def set_typology(
     """
     Assign a typology classification to subsequences following a specific state.
     
+    **R note:** TraMineRextras documents typology assignment inside ``seqsammeha()``;
+    the source also defines a placeholder ``typology<-`` setter that does not implement
+    the full logic. ``set_typology()`` is a Sequenzo helper so typologies can be set
+    before calling ``seqsammeha()`` (with ``clusters``, ``mapping``, etc.).
+    
     This function allows you to categorize the different patterns that occur
     after transitioning out of a particular state. This is useful for creating
     meaningful groups for further analysis.
@@ -678,8 +931,8 @@ def set_typology(
         >>> samm_obj = set_typology(samm_obj, spell='unemployed', typology=my_typology)
     """
     
-    # Find rows where: state is the specified spell AND there's a transition
-    condition = (samm.data['s.1'] == spell) & (samm.data['transition'] == True)
+    spell_code = _resolve_spell_value(spell, samm.state_to_code, samm.labels, samm.alphabet)
+    condition = (samm.data["s.1"] == spell_code) & (samm.data["transition"].astype(bool))
 
     n_transitions = int(condition.sum())
 
@@ -747,6 +1000,12 @@ def seqsammeha(
     """
     Generate a dataset for Event History Analysis (EHA) with typology outcomes.
     
+    R equivalent: **TraMineRextras** ``seqsammeha(samm, spell, typology, persper = TRUE)``.
+    Adds ``SAMMtypology``, ``lastobs``, and dummy columns ``SAMM<typology_label>`` (R uses
+    the same ``SAMM`` prefix on typology level names). In R, ``typology`` is a vector with
+    one label per transition out of ``spell``; this Python API also accepts ``clusters``,
+    ``mapping``, and ``cluster_to_name`` via :func:`set_typology`.
+    
     This function prepares your data for statistical models (like logistic regression
     or survival analysis) that estimate the probability of different outcomes
     following a specific state.
@@ -790,38 +1049,33 @@ def seqsammeha(
         >>> # For example: predict probability of reemployment vs. other outcomes
     """
     
-    # First, set the typology in the SAMM object using any of the supported inputs
-    samm = set_typology(
+    spell_code = _resolve_spell_value(spell, samm.state_to_code, samm.labels, samm.alphabet)
+    labels_array = _build_typology_labels(
         samm,
-        spell=spell,
+        spell_code,
         typology=typology,
         clusters=clusters,
         cluster_to_name=cluster_to_name,
         mapping=mapping,
-        by=by
+        by=by,
     )
-    
-    # Filter data to only include rows in the specified spell
-    spell_condition = (samm.data['s.1'] == spell)
-    ppdata = samm.data[spell_condition].copy()
-    
-    # Identify the last observation for each spell
-    # Group by individual ID and spell begin time, then mark the maximum spell_time
-    ppdata['lastobs'] = ppdata.groupby(['id', 'begin'])['spell_time'].transform('max') == ppdata['spell_time']
-    
-    # Create binary indicator variables for each typology category
-    # This creates dummy variables that statistical models can use
-    # Determine unique typologies from the rows where typology is set
-    typology_series = samm.data.loc[(samm.data['s.1'] == spell) & (samm.data['transition'] == True), 'typology']
-    unique_types = typology_series.dropna().unique()
-    
-    # Create a column for each unique typology
-    for type_label in unique_types:
-        col_name = f'SAMM{type_label}'
-        ppdata[col_name] = (ppdata['typology'] == type_label).astype(int)
-    
-    # Ensure 'SAMMtypology' column exists and is properly named
-    ppdata = ppdata.rename(columns={'typology': 'SAMMtypology'})
+    types = _typology_type_levels(typology, labels_array)
+
+    spell_condition = samm.data["s.1"] == spell_code
+    ppdata = samm.data.loc[spell_condition].copy()
+
+    ppdata["SAMMtypology"] = "None"
+    trans_mask = ppdata["transition"].astype(bool)
+    ppdata.loc[trans_mask, "SAMMtypology"] = labels_array
+
+    spell_col = SPELL_TIME_COL if SPELL_TIME_COL in ppdata.columns else SPELL_TIME_ALIAS
+    ppdata["lastobs"] = (
+        ppdata.groupby(["id", "begin"])[spell_col].transform("max") == ppdata[spell_col]
+    )
+
+    for type_label in types:
+        col_name = f"SAMM{type_label}"
+        ppdata[col_name] = (ppdata["SAMMtypology"] == type_label).astype(int)
     
     # If persper=False, return only the last observation of each spell
     if not persper:
@@ -846,5 +1100,5 @@ __all__ = [
     'seqsamm'
 ]
 
-# Backward compatibility aliases
+# Backward compatibility: same name as TraMineRextras seqsamm()
 seqsamm = sequence_analysis_multi_state_model

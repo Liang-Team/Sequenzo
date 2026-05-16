@@ -70,6 +70,21 @@ class SequenceData:
     - Automatic alphabet (state space) management.
     - Efficient sequence-to-numeric conversion.
     - Color mapping & legend storage for visualization.
+    - TraMineR-compatible **void** metadata (``void``, ``void_code``) for event-history workflows.
+
+    Void vs missing (TraMineR ``seqdef``)
+    ------------------------------------
+    **Void** (default symbol ``"%"``, stored as ``self.void``) marks time positions that lie
+    **outside the observation window**—for example before labour-market entry or after exit when
+    sequences are left-aligned on a common calendar. These cells are not real states.
+
+    **Missing** (handled via ``missing_values`` / auto-detected NaN) marks positions **inside**
+    the window where the state is unknown. Void and missing are different concepts; only void
+    is used by TraMineRextras ``seqsamm()`` to drop invalid subsequence windows.
+
+    If your data contain the void symbol, include it in ``states`` and keep the default
+    ``void="%"`` (or pass another symbol, as in ``seqdef(void=".")``). Pass ``void=None`` only
+    when you deliberately do not use void padding (typical for complete rectangular state tables).
     """
 
     def __init__(
@@ -84,6 +99,7 @@ class SequenceData:
         custom_colors: list = None,
         additional_colors: dict = None,
         missing_values: Union[None, int, float, str, list] = None,
+        void: Union[str, None] = "%",
         alpha: float = 1.0
     ):
         """
@@ -97,9 +113,10 @@ class SequenceData:
         :param id_col: Column name for row identifiers, which is very important for hierarchical clustering.
         :param weights: Sequence weights (optional).
         :param start: Starting time index (default: 1).
-        :param missing_handling: Dict specifying handling for missing values (left, right, gaps).
-        :param void: Symbol for void elements (default: "%").
-        :param nr: Symbol for missing values (default: "*").
+        :param void: Symbol for **void** (out-of-window padding), TraMineR ``attr(seqdata, "void")``.
+            Default ``"%"`` matches ``seqdef()``. The symbol must appear in ``states`` if it occurs
+            in the data. Pass ``void=None`` to disable void metadata (no SAMM void filtering).
+            **Not** the same as missing values inside the observation window.
         :param custom_colors: Custom color palette for visualization. 
             If provided, should be a list of colors matching the number of states.
             Colors can be hex strings (e.g., "#FF5733") or RGB tuples.
@@ -136,6 +153,7 @@ class SequenceData:
         self.weights = weights
         self._weights_provided = weights is not None  # Track if weights were originally provided
         self.start = start
+        self.void = void
         self.custom_colors = custom_colors
         self.additional_colors = additional_colors or {}
         self.alpha = float(alpha)
@@ -183,6 +201,7 @@ class SequenceData:
         self.label_to_state = dict(zip(self.labels, self.states))
 
         self._convert_states()
+        self._finalize_void_code()
 
         # Assign colors & save legend
         self._assign_colors()
@@ -195,6 +214,26 @@ class SequenceData:
     def values(self):
         """Returns sequence data as a NumPy array, similar to xinyi_original_seqdef()."""
         return self.seqdata.to_numpy(dtype=np.int32)
+
+    def _finalize_void_code(self):
+        """Set ``void_code`` (integer) after ``state_mapping`` exists; warn if misconfigured."""
+        if self.void is None:
+            self.void_code = None
+            return
+        if self.void not in self.states:
+            self.void_code = None
+            print(
+                f"[i] void={self.void!r} is not in 'states'; void_code unset. "
+                f"Add {self.void!r} to states if your data use void padding (TraMineR default '%')."
+            )
+            return
+        self.void_code = int(self.state_mapping[self.void])
+
+    def has_void_in_data(self) -> bool:
+        """True if the void symbol appears at least once in the sequence columns."""
+        if self.void is None:
+            return False
+        return (self.data[self.time] == self.void).any().any()
 
     def __repr__(self):
         return f"SequenceData({len(self.seqdata)} sequences, States: {self.states})"
@@ -301,6 +340,16 @@ class SequenceData:
                 if dv_lower == 'nan' or dv_lower == 'missing':
                     missing_indicators.add(dv)
 
+        # Void in data must be listed in states (before generic unmatched-value errors).
+        if self.void is not None:
+            void_norm = self.void.item() if hasattr(self.void, "item") else self.void
+            if void_norm in data_values_no_nan and void_norm not in states_clean_normalized:
+                raise ValueError(
+                    f"[!] Data contain void symbol {self.void!r} but it is not listed in 'states'.\n"
+                    f"    Add {self.void!r} to states (TraMineR-style alphabet) or pass void=None if you "
+                    f"do not use void padding."
+                )
+
         # Exclude padding values from validation check
         unmatched_states = [
             s for s in data_values_no_nan
@@ -371,9 +420,14 @@ class SequenceData:
 
         # Allow provided states to be a superset of observed data states.
         # This is useful for keeping a stable state space across subsets/batches.
+        void_norm_for_skip = None
+        if self.void is not None:
+            void_norm_for_skip = self.void.item() if hasattr(self.void, "item") else self.void
         states_not_in_data = [
             s for s in states_clean_normalized
-            if s not in data_values_no_nan and s not in missing_indicators
+            if s not in data_values_no_nan
+            and s not in missing_indicators
+            and s != void_norm_for_skip
         ]
         if states_not_in_data:
             data_values_display = sorted([v for v in data_values_no_nan if not pd.isna(v)])
@@ -981,7 +1035,18 @@ class SequenceData:
 
         print(f"[>] States: {self.states}")
         print(f"[>] Labels: {self.labels}")
-        
+        if self.void is not None:
+            void_note = (
+                f"code {self.void_code}" if self.void_code is not None else "not in states (inactive)"
+            )
+            in_data = "present in data" if self.has_void_in_data() else "not observed in data"
+            print(
+                f"[>] Void: {self.void!r} ({void_note}; {in_data}) — "
+                f"out-of-window padding; SAMM/seqsamm drops subsequences containing void"
+            )
+        else:
+            print("[>] Void: disabled (void=None)")
+
         # Display weights information if weights were originally provided
         if self._weights_provided:
             weight_mean = np.mean(self.weights)
