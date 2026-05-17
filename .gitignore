@@ -6,6 +6,7 @@
 .vscode/
 
 # Python artifacts
+.matplotlib_cache/
 __pycache__/
 *.py[cod]
 *.pyo
