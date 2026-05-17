@@ -49,6 +49,20 @@ from .formulas import Formula, create_model_matrix, create_model_matrix_time_con
 
 # Advanced optimization
 from .advanced_optimization import fit_model_advanced
+from .utilities import (
+    get_initial_probs,
+    get_transition_probs,
+    get_emission_probs,
+    hidden_paths,
+    permute_states,
+    trim_model,
+    separate_mhmm,
+    data_to_stslist,
+    stslist_to_data,
+    stacked_sequence_plot,
+    ssplot,
+    gridplot,
+)
 
 __all__ = [
     # Basic HMM
@@ -92,4 +106,17 @@ __all__ = [
     'create_model_matrix_time_constant',
     # Advanced optimization
     'fit_model_advanced',
+    # seqHMM-compatible utilities
+    'get_initial_probs',
+    'get_transition_probs',
+    'get_emission_probs',
+    'hidden_paths',
+    'permute_states',
+    'trim_model',
+    'separate_mhmm',
+    'data_to_stslist',
+    'stslist_to_data',
+    'stacked_sequence_plot',
+    'ssplot',
+    'gridplot',
 ]
