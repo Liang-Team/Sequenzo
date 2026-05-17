@@ -58,30 +58,26 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_vector_length(cluster_buf.size, n, "Cluster labels and weights must have same length as matrix dimension");
         validate_vector_length(weights_buf.size, n, "Cluster labels and weights must have same length as matrix dimension");
         
-        double* diss_ptr = static_cast<double*>(diss_buf.ptr);
-        int* cluster_ptr = static_cast<int*>(cluster_buf.ptr);
-        double* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* diss_ptr = static_cast<const double*>(diss_buf.ptr);
+        const auto* cluster_ptr = static_cast<const int*>(cluster_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
         
-        // Prepare output arrays
         std::vector<double> stats(ClusterQualNumStat);
         std::vector<double> asw(2 * nclusters);
-        
-        // Create Kendall tree for caching
         KendallTree kendall;
         
-        // Call core function
-        clusterquality(diss_ptr, cluster_ptr, weights_ptr, n, 
-                      stats.data(), nclusters, asw.data(), kendall);
-        
-        // Clean up Kendall tree
-        finalizeKendall(kendall);
+        {
+            py::gil_scoped_release release;
+            clusterquality(diss_ptr, cluster_ptr, weights_ptr, n, 
+                          stats.data(), nclusters, asw.data(), kendall);
+            finalizeKendall(kendall);
+        }
         
         py::dict result = stats_vector_to_dict(stats);
         
-        // Convert ASW array to numpy array
         auto asw_array = py::array_t<double>(2 * nclusters);
-        auto asw_buf = asw_array.request();
-        double* asw_out = static_cast<double*>(asw_buf.ptr);
+        auto asw_buf2 = asw_array.request();
+        double* asw_out = static_cast<double*>(asw_buf2.ptr);
         std::copy(asw.begin(), asw.end(), asw_out);
         result["cluster_asw"] = asw_array;
         
@@ -99,31 +95,26 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_vector_length(cluster_buf.size, n, "Cluster labels and weights must have length n");
         validate_vector_length(weights_buf.size, n, "Cluster labels and weights must have length n");
         
-        double* diss_ptr = static_cast<double*>(diss_buf.ptr);
-        int* cluster_ptr = static_cast<int*>(cluster_buf.ptr);
-        double* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* diss_ptr = static_cast<const double*>(diss_buf.ptr);
+        const auto* cluster_ptr = static_cast<const int*>(cluster_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
         
-        // Prepare output arrays
         std::vector<double> stats(ClusterQualNumStat);
         std::vector<double> asw(2 * nclusters);
-        
-        // Create Kendall tree for caching
         KendallTree kendall;
         
-        // Call core function
-        clusterquality_dist(diss_ptr, cluster_ptr, weights_ptr, n,
-                           stats.data(), nclusters, asw.data(), kendall);
+        {
+            py::gil_scoped_release release;
+            clusterquality_dist(diss_ptr, cluster_ptr, weights_ptr, n,
+                               stats.data(), nclusters, asw.data(), kendall);
+            finalizeKendall(kendall);
+        }
         
-        // Clean up Kendall tree
-        finalizeKendall(kendall);
-        
-        // Return results as dictionary
         py::dict result = stats_vector_to_dict(stats);
         
-        // Convert ASW array to numpy array
         auto asw_array = py::array_t<double>(2 * nclusters);
-        auto asw_buf = asw_array.request();
-        double* asw_out = static_cast<double*>(asw_buf.ptr);
+        auto asw_buf2 = asw_array.request();
+        double* asw_out = static_cast<double*>(asw_buf2.ptr);
         std::copy(asw.begin(), asw.end(), asw_out);
         result["cluster_asw"] = asw_array;
         
@@ -143,22 +134,19 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_vector_length(cluster_buf.size, n, "Cluster labels and weights must have same length as matrix dimension");
         validate_vector_length(weights_buf.size, n, "Cluster labels and weights must have same length as matrix dimension");
         
-        double* diss_ptr = static_cast<double*>(diss_buf.ptr);
-        int* cluster_ptr = static_cast<int*>(cluster_buf.ptr);
-        double* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* diss_ptr = static_cast<const double*>(diss_buf.ptr);
+        const auto* cluster_ptr = static_cast<const int*>(cluster_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
         
-        // Prepare output arrays
         auto asw_i = py::array_t<double>(n);
         auto asw_w = py::array_t<double>(n);
+        double* asw_i_ptr = static_cast<double*>(asw_i.request().ptr);
+        double* asw_w_ptr = static_cast<double*>(asw_w.request().ptr);
         
-        auto asw_i_buf = asw_i.request();
-        auto asw_w_buf = asw_w.request();
-        
-        double* asw_i_ptr = static_cast<double*>(asw_i_buf.ptr);
-        double* asw_w_ptr = static_cast<double*>(asw_w_buf.ptr);
-        
-        // Call core function
-        indiv_asw(diss_ptr, cluster_ptr, weights_ptr, n, nclusters, asw_i_ptr, asw_w_ptr);
+        {
+            py::gil_scoped_release release;
+            indiv_asw(diss_ptr, cluster_ptr, weights_ptr, n, nclusters, asw_i_ptr, asw_w_ptr);
+        }
         
         return build_asw_result(asw_i, asw_w);
     }, "Compute individual ASW scores for all samples");
@@ -174,22 +162,19 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_vector_length(cluster_buf.size, n, "Cluster labels and weights must have length n");
         validate_vector_length(weights_buf.size, n, "Cluster labels and weights must have length n");
         
-        double* diss_ptr = static_cast<double*>(diss_buf.ptr);
-        int* cluster_ptr = static_cast<int*>(cluster_buf.ptr);
-        double* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* diss_ptr = static_cast<const double*>(diss_buf.ptr);
+        const auto* cluster_ptr = static_cast<const int*>(cluster_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
         
-        // Prepare output arrays
         auto asw_i = py::array_t<double>(n);
         auto asw_w = py::array_t<double>(n);
+        double* asw_i_ptr = static_cast<double*>(asw_i.request().ptr);
+        double* asw_w_ptr = static_cast<double*>(asw_w.request().ptr);
         
-        auto asw_i_buf = asw_i.request();
-        auto asw_w_buf = asw_w.request();
-        
-        double* asw_i_ptr = static_cast<double*>(asw_i_buf.ptr);
-        double* asw_w_ptr = static_cast<double*>(asw_w_buf.ptr);
-        
-        // Call core function
-        indiv_asw_dist(diss_ptr, cluster_ptr, weights_ptr, n, nclusters, asw_i_ptr, asw_w_ptr);
+        {
+            py::gil_scoped_release release;
+            indiv_asw_dist(diss_ptr, cluster_ptr, weights_ptr, n, nclusters, asw_i_ptr, asw_w_ptr);
+        }
         
         return build_asw_result(asw_i, asw_w);
     }, "Compute individual ASW scores for condensed distance array");
@@ -208,7 +193,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
 
         auto labels = py::array_t<int>(n);
         auto labels_buf = labels.request();
-        auto* linkage_ptr = static_cast<double*>(linkage_buf.ptr);
+        const auto* linkage_ptr = static_cast<const double*>(linkage_buf.ptr);
         auto* labels_ptr = static_cast<int*>(labels_buf.ptr);
 
         compute_labels_from_linkage(linkage_ptr, n, nclusters, labels_ptr);
@@ -229,7 +214,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         const int k_count = k_max - k_min + 1;
         auto labels = py::array_t<int>({k_count, n});
         auto labels_buf = labels.request();
-        auto* linkage_ptr = static_cast<double*>(linkage_buf.ptr);
+        const auto* linkage_ptr = static_cast<const double*>(linkage_buf.ptr);
         auto* labels_ptr = static_cast<int*>(labels_buf.ptr);
 
         for (int idx = 0; idx < k_count; ++idx) {
@@ -257,9 +242,9 @@ PYBIND11_MODULE(clustering_c_code, m) {
         }
 
         const int k_count = k_max - k_min + 1;
-        auto* diss_ptr = static_cast<double*>(diss_buf.ptr);
-        auto* linkage_ptr = static_cast<double*>(linkage_buf.ptr);
-        auto* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* diss_ptr = static_cast<const double*>(diss_buf.ptr);
+        const auto* linkage_ptr = static_cast<const double*>(linkage_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
 
         std::vector<int> labels(static_cast<size_t>(n), 1);
         std::vector<double> stats(ClusterQualNumStat);
@@ -275,57 +260,48 @@ PYBIND11_MODULE(clustering_c_code, m) {
         auto r2sq = py::array_t<double>(k_count);
         auto hc = py::array_t<double>(k_count);
 
-        auto pbc_buf = pbc.request();
-        auto hg_buf = hg.request();
-        auto hgsd_buf = hgsd.request();
-        auto asw_buf = asw.request();
-        auto asww_buf = asww.request();
-        auto ch_buf = ch.request();
-        auto r2_buf = r2.request();
-        auto chsq_buf = chsq.request();
-        auto r2sq_buf = r2sq.request();
-        auto hc_buf = hc.request();
+        auto* pbc_ptr = static_cast<double*>(pbc.request().ptr);
+        auto* hg_ptr = static_cast<double*>(hg.request().ptr);
+        auto* hgsd_ptr = static_cast<double*>(hgsd.request().ptr);
+        auto* asw_ptr = static_cast<double*>(asw.request().ptr);
+        auto* asww_ptr = static_cast<double*>(asww.request().ptr);
+        auto* ch_ptr = static_cast<double*>(ch.request().ptr);
+        auto* r2_ptr = static_cast<double*>(r2.request().ptr);
+        auto* chsq_ptr = static_cast<double*>(chsq.request().ptr);
+        auto* r2sq_ptr = static_cast<double*>(r2sq.request().ptr);
+        auto* hc_ptr = static_cast<double*>(hc.request().ptr);
 
-        auto* pbc_ptr = static_cast<double*>(pbc_buf.ptr);
-        auto* hg_ptr = static_cast<double*>(hg_buf.ptr);
-        auto* hgsd_ptr = static_cast<double*>(hgsd_buf.ptr);
-        auto* asw_ptr = static_cast<double*>(asw_buf.ptr);
-        auto* asww_ptr = static_cast<double*>(asww_buf.ptr);
-        auto* ch_ptr = static_cast<double*>(ch_buf.ptr);
-        auto* r2_ptr = static_cast<double*>(r2_buf.ptr);
-        auto* chsq_ptr = static_cast<double*>(chsq_buf.ptr);
-        auto* r2sq_ptr = static_cast<double*>(r2sq_buf.ptr);
-        auto* hc_ptr = static_cast<double*>(hc_buf.ptr);
+        {
+            py::gil_scoped_release release;
+            for (int idx = 0; idx < k_count; ++idx) {
+                const int k = k_min + idx;
+                compute_labels_from_linkage(linkage_ptr, n, k, labels.data());
 
-        for (int idx = 0; idx < k_count; ++idx) {
-            const int k = k_min + idx;
-            compute_labels_from_linkage(linkage_ptr, n, k, labels.data());
+                std::vector<double> asw_cluster(2 * k);
+                KendallTree kendall;
+                clusterquality_dist(
+                    diss_ptr,
+                    labels.data(),
+                    weights_ptr,
+                    n,
+                    stats.data(),
+                    k,
+                    asw_cluster.data(),
+                    kendall
+                );
+                finalizeKendall(kendall);
 
-            std::vector<double> asw_cluster(2 * k);
-            // clusterquality_dist expects a fresh Kendall tree state per run.
-            KendallTree kendall;
-            clusterquality_dist(
-                diss_ptr,
-                labels.data(),
-                weights_ptr,
-                n,
-                stats.data(),
-                k,
-                asw_cluster.data(),
-                kendall
-            );
-            finalizeKendall(kendall);
-
-            pbc_ptr[idx] = stats[ClusterQualHPG];
-            hg_ptr[idx] = stats[ClusterQualHG];
-            hgsd_ptr[idx] = stats[ClusterQualHGSD];
-            asw_ptr[idx] = stats[ClusterQualASWi];
-            asww_ptr[idx] = stats[ClusterQualASWw];
-            ch_ptr[idx] = stats[ClusterQualF];
-            r2_ptr[idx] = stats[ClusterQualR];
-            chsq_ptr[idx] = stats[ClusterQualF2];
-            r2sq_ptr[idx] = stats[ClusterQualR2];
-            hc_ptr[idx] = stats[ClusterQualHC];
+                pbc_ptr[idx] = stats[ClusterQualHPG];
+                hg_ptr[idx] = stats[ClusterQualHG];
+                hgsd_ptr[idx] = stats[ClusterQualHGSD];
+                asw_ptr[idx] = stats[ClusterQualASWi];
+                asww_ptr[idx] = stats[ClusterQualASWw];
+                ch_ptr[idx] = stats[ClusterQualF];
+                r2_ptr[idx] = stats[ClusterQualR];
+                chsq_ptr[idx] = stats[ClusterQualF2];
+                r2sq_ptr[idx] = stats[ClusterQualR2];
+                hc_ptr[idx] = stats[ClusterQualHC];
+            }
         }
 
         py::dict result;
@@ -354,8 +330,8 @@ PYBIND11_MODULE(clustering_c_code, m) {
         }
 
         const int n = static_cast<int>(labels_buf.size);
-        auto* labels_ptr = static_cast<int*>(labels_buf.ptr);
-        auto* weights_ptr = static_cast<double*>(weights_buf.ptr);
+        const auto* labels_ptr = static_cast<const int*>(labels_buf.ptr);
+        const auto* weights_ptr = static_cast<const double*>(weights_buf.ptr);
 
         std::unordered_map<int, int> count_map;
         std::unordered_map<int, double> weight_map;
@@ -430,10 +406,15 @@ PYBIND11_MODULE(clustering_c_code, m) {
             throw std::runtime_error("Distance matrix must be square");
         }
         const py::ssize_t n = in_buf.shape[0];
-        auto* in_ptr = static_cast<double*>(in_buf.ptr);
-        PreparedMatrixData prep = prepare_distance_matrix_impl(
-            in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
-        );
+        const auto* in_ptr = static_cast<const double*>(in_buf.ptr);
+
+        PreparedMatrixData prep;
+        {
+            py::gil_scoped_release release;
+            prep = prepare_distance_matrix_impl(
+                in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
+            );
+        }
 
         auto condensed = vector_to_pyarray_1d(std::move(prep.condensed));
 
@@ -464,7 +445,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
             throw std::runtime_error("Distance matrix must be square");
         }
         const py::ssize_t n = buf.shape[0];
-        auto* ptr = static_cast<double*>(buf.ptr);
+        const auto* ptr = static_cast<const double*>(buf.ptr);
         EuclideanCheckResult r = check_euclidean_compatibility_pure(ptr, n, method);
 
         py::dict out;
@@ -488,14 +469,18 @@ PYBIND11_MODULE(clustering_c_code, m) {
             throw std::runtime_error("Distance matrix must be square");
         }
         const py::ssize_t n = in_buf.shape[0];
-        auto* in_ptr = static_cast<double*>(in_buf.ptr);
+        const auto* in_ptr = static_cast<const double*>(in_buf.ptr);
 
-        PreparedMatrixData prep = prepare_distance_matrix_impl(
-            in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
-        );
+        PreparedMatrixData prep;
         EuclideanCheckResult eu;
-        if (run_ward_check) {
-            eu = check_euclidean_compatibility_pure(prep.full.data(), n, method);
+        {
+            py::gil_scoped_release release;
+            prep = prepare_distance_matrix_impl(
+                in_ptr, n, enforce_symmetry, rtol, atol, replacement_quantile
+            );
+            if (run_ward_check) {
+                eu = check_euclidean_compatibility_pure(prep.full.data(), n, method);
+            }
         }
 
         auto condensed = vector_to_pyarray_1d(std::move(prep.condensed));
@@ -567,7 +552,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
                 metric_values[py::str(metric)]
             );
             auto buf = arr.request();
-            auto* ptr = static_cast<double*>(buf.ptr);
+            const auto* ptr = static_cast<const double*>(buf.ptr);
             const py::ssize_t n = buf.size;
 
             double sum = 0.0;
@@ -658,7 +643,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
 
         for (py::ssize_t c = 0; c < n_metrics; ++c) {
             auto buf = arrays[static_cast<size_t>(c)].request();
-            auto* ptr = static_cast<double*>(buf.ptr);
+            const auto* ptr = static_cast<const double*>(buf.ptr);
             for (py::ssize_t r = 0; r < n_rows; ++r) {
                 out_ptr[r * n_metrics + c] = ptr[r];
             }
@@ -686,9 +671,13 @@ PYBIND11_MODULE(clustering_c_code, m) {
             throw std::runtime_error("Distance matrix must be a 2D square array.");
         }
         const int N = static_cast<int>(buf.shape[0]);
-        auto* ptr = static_cast<double*>(buf.ptr);
+        const auto* ptr = static_cast<const double*>(buf.ptr);
 
-        ClusterCoreResult res = cluster_from_matrix(ptr, N, method, fast_path, retain_condensed);
+        ClusterCoreResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_from_matrix(ptr, N, method, fast_path, retain_condensed);
+        }
 
         py::dict out;
         if (!res.linkage_matrix.empty()) {
@@ -729,9 +718,13 @@ PYBIND11_MODULE(clustering_c_code, m) {
             throw std::runtime_error("Condensed distance array must be a 1D array.");
         }
         const int N = n;
-        auto* ptr = static_cast<double*>(buf.ptr);
+        const auto* ptr = static_cast<const double*>(buf.ptr);
 
-        ClusterCoreResult res = cluster_from_condensed(ptr, N, method, fast_path, retain_condensed);
+        ClusterCoreResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_from_condensed(ptr, N, method, fast_path, retain_condensed);
+        }
 
         py::dict out;
         if (!res.linkage_matrix.empty()) {
@@ -764,9 +757,13 @@ PYBIND11_MODULE(clustering_c_code, m) {
         }
         const int N = static_cast<int>(buf.shape[0]);
         const int D = static_cast<int>(buf.shape[1]);
-        auto* ptr = static_cast<double*>(buf.ptr);
+        const auto* ptr = static_cast<const double*>(buf.ptr);
 
-        ClusterCoreResult res = cluster_from_features(ptr, N, D, method);
+        ClusterCoreResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_from_features(ptr, N, D, method);
+        }
 
         py::dict out;
         if (!res.linkage_matrix.empty()) {
@@ -806,14 +803,18 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_condensed_size(cond_buf.size, n, "Condensed distance array size mismatch");
         validate_vector_length(wt_buf.size, n, "Weights must have length n");
 
-        ClusterQualityPipelineResult res = cluster_quality_from_cluster_data(
-            static_cast<double*>(cond_buf.ptr),
-            static_cast<int>(cond_buf.size),
-            static_cast<double*>(link_buf.ptr),
-            n,
-            static_cast<double*>(wt_buf.ptr),
-            k_min, k_max
-        );
+        const auto* cond_ptr = static_cast<const double*>(cond_buf.ptr);
+        const int cond_len = static_cast<int>(cond_buf.size);
+        const auto* link_ptr = static_cast<const double*>(link_buf.ptr);
+        const auto* wt_ptr = static_cast<const double*>(wt_buf.ptr);
+
+        ClusterQualityPipelineResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_quality_from_cluster_data(
+                cond_ptr, cond_len, link_ptr, n, wt_ptr, k_min, k_max
+            );
+        }
 
         const int k_count = res.k_count;
         py::dict out;
@@ -858,10 +859,14 @@ PYBIND11_MODULE(clustering_c_code, m) {
         auto wt_buf = weights.request();
         validate_vector_length(wt_buf.size, N, "Weights must have length N");
 
-        ClusterQualityPipelineResult res = cluster_quality_from_matrix(
-            static_cast<double*>(mat_buf.ptr), N, method, max_clusters,
-            static_cast<double*>(wt_buf.ptr)
-        );
+        const auto* mat_ptr = static_cast<const double*>(mat_buf.ptr);
+        const auto* wt_ptr = static_cast<const double*>(wt_buf.ptr);
+
+        ClusterQualityPipelineResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_quality_from_matrix(mat_ptr, N, method, max_clusters, wt_ptr);
+        }
 
         const int k_count = res.k_count;
         py::dict out;
@@ -935,10 +940,14 @@ PYBIND11_MODULE(clustering_c_code, m) {
         validate_linkage(link_buf, n);
         validate_vector_length(wt_buf.size, n, "Weights must have length n");
 
-        ClusterResultData data = compute_cluster_results(
-            static_cast<double*>(link_buf.ptr), n, num_clusters,
-            static_cast<double*>(wt_buf.ptr)
-        );
+        const auto* link_ptr = static_cast<const double*>(link_buf.ptr);
+        const auto* wt_ptr = static_cast<const double*>(wt_buf.ptr);
+
+        ClusterResultData data;
+        {
+            py::gil_scoped_release release;
+            data = compute_cluster_results(link_ptr, n, num_clusters, wt_ptr);
+        }
 
         const auto m_clusters = static_cast<py::ssize_t>(data.cluster_ids.size());
 
@@ -994,7 +1003,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
                 throw std::runtime_error("diss must be a square matrix");
             }
             const int n = static_cast<int>(buf.shape[0]);
-            const double* diss_ptr = static_cast<double*>(buf.ptr);
+            const auto* diss_ptr = static_cast<const double*>(buf.ptr);
 
             const double* ini_ptr = nullptr;
             py::array_t<double, py::array::c_style | py::array::forcecast> ini_arr;
@@ -1004,12 +1013,16 @@ PYBIND11_MODULE(clustering_c_code, m) {
                 if (ini_buf.ndim != 2 || ini_buf.shape[0] != n || ini_buf.shape[1] != k) {
                     throw std::runtime_error("ini_membership must have shape (n, k)");
                 }
-                ini_ptr = static_cast<double*>(ini_buf.ptr);
+                ini_ptr = static_cast<const double*>(ini_buf.ptr);
             }
 
-            FannyCoreResult res = fanny_from_diss(
-                diss_ptr, n, k, memb_exp, max_iter, tol, ini_ptr, reorder_columns
-            );
+            FannyCoreResult res;
+            {
+                py::gil_scoped_release release;
+                res = fanny_from_diss(
+                    diss_ptr, n, k, memb_exp, max_iter, tol, ini_ptr, reorder_columns
+                );
+            }
 
             auto membership = py::array_t<double>({n, k});
             std::memcpy(

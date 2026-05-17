@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <numeric>
 #include <random>
 #include <stdexcept>
@@ -233,40 +234,43 @@ PreparedMatrixData prepare_distance_matrix_impl(
 // Use check_euclidean_compatibility_pure() instead — pure C++ with Jacobi eigenvalues.
 
 py::array_t<double> vector_to_pyarray_2d(std::vector<double>&& data, py::ssize_t rows, py::ssize_t cols) {
-    auto* heap_vec = new std::vector<double>(std::move(data));
-    py::capsule free_when_done(heap_vec, [](void* p) {
+    auto heap_vec = std::make_unique<std::vector<double>>(std::move(data));
+    auto* raw = heap_vec.get();
+    py::capsule free_when_done(heap_vec.release(), [](void* p) {
         delete reinterpret_cast<std::vector<double>*>(p);
     });
     return py::array_t<double>(
         {rows, cols},
         {static_cast<py::ssize_t>(sizeof(double) * cols), static_cast<py::ssize_t>(sizeof(double))},
-        heap_vec->data(),
+        raw->data(),
         free_when_done
     );
 }
 
 py::array_t<double> vector_to_pyarray_1d(std::vector<double>&& data) {
-    auto* heap_vec = new std::vector<double>(std::move(data));
-    py::capsule free_when_done(heap_vec, [](void* p) {
+    auto heap_vec = std::make_unique<std::vector<double>>(std::move(data));
+    auto* raw = heap_vec.get();
+    py::capsule free_when_done(heap_vec.release(), [](void* p) {
         delete reinterpret_cast<std::vector<double>*>(p);
     });
     return py::array_t<double>(
-        {static_cast<py::ssize_t>(heap_vec->size())},
+        {static_cast<py::ssize_t>(raw->size())},
         {static_cast<py::ssize_t>(sizeof(double))},
-        heap_vec->data(),
+        raw->data(),
         free_when_done
     );
 }
 
 py::array_t<double> rawbuffer_to_pyarray_1d(RawBuffer&& buf) {
-    auto* heap_buf = new RawBuffer(std::move(buf));
-    py::capsule free_when_done(heap_buf, [](void* p) {
+    auto heap_buf = std::make_unique<RawBuffer>(std::move(buf));
+    auto* raw = heap_buf.get();
+    py::capsule free_when_done(heap_buf.release(), [](void* p) {
         delete reinterpret_cast<RawBuffer*>(p);
     });
     return py::array_t<double>(
-        {static_cast<py::ssize_t>(heap_buf->size())},
+        {static_cast<py::ssize_t>(raw->size())},
         {static_cast<py::ssize_t>(sizeof(double))},
-        heap_buf->data(),
+        raw->data(),
         free_when_done
     );
 }
