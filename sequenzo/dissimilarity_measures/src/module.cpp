@@ -264,6 +264,7 @@ PYBIND11_MODULE(c_code, m) {
     py::class_<TWEDdistance>(m, "TWEDdistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, double, double, py::array_t<int>, py::array_t<int>>())
             .def("compute_all_distances", &TWEDdistance::compute_all_distances)
+            .def("compute_condensed_distances", &TWEDdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &TWEDdistance::compute_refseq_distances);
     
     // Reference-based normalization functions (Elzinga & Studer 2019)

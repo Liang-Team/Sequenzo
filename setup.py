@@ -47,111 +47,91 @@ import tempfile
 import importlib.util
 
 BASE_DIR = Path(__file__).parent.resolve()
+XSIMD_RELATIVE_DIR = Path("sequenzo/dissimilarity_measures/src/xsimd")
+XSIMD_HEADER_RELATIVE = Path("include/xsimd/xsimd.hpp")
+
+
+def _xsimd_header_exists(xsimd_dir):
+    return (xsimd_dir / XSIMD_HEADER_RELATIVE).is_file()
+
+
+def _require_xsimd_headers(xsimd_dir):
+    if _xsimd_header_exists(xsimd_dir):
+        return
+    raise RuntimeError(
+        "xsimd headers are required to build Sequenzo's C++ extensions but were not found at "
+        f"{xsimd_dir / XSIMD_HEADER_RELATIVE}. "
+        "For a Git checkout, run: git submodule update --init sequenzo/dissimilarity_measures/src/xsimd. "
+        "For source distributions, ensure MANIFEST.in includes sequenzo/dissimilarity_measures/src/xsimd/include."
+    )
+
 
 def ensure_xsimd_exists():
     """
     Ensure that `xsimd` exists and points to the correct commit.
 
-    In a Git repository: Use a submodule approach, ensuring it points to the commit recorded in the main repository.
-    In non-Git environments: Directly clone the latest version (for scenarios such as packaging and distribution).
+    In a Git repository: use the recorded submodule commit.
+    In non-Git environments: require the packaged xsimd headers.
     """
-    xsimd_dir = Path(__file__).parent / "sequenzo" / "dissimilarity_measures" / "src" / "xsimd"
+    xsimd_dir = Path(__file__).parent / XSIMD_RELATIVE_DIR
     project_root = Path(__file__).parent
     git_dir = project_root / ".git"
     gitmodules_file = project_root / ".gitmodules"
     is_git_repo = git_dir.exists() or gitmodules_file.exists()
-    
-    # Check whether it's in the Git repository.
+
     if is_git_repo:
-        # Git repository environment: Use submodules to ensure it points to the correct commit.
         try:
-            # Check submodule status
             result = subprocess.run(
-                ["git", "submodule", "status", "sequenzo/dissimilarity_measures/src/xsimd"],
+                ["git", "submodule", "status", str(XSIMD_RELATIVE_DIR)],
                 cwd=project_root,
                 capture_output=True,
                 text=True,
                 check=True
             )
-            status_line = result.stdout.strip()
-            
+            status_line = result.stdout.rstrip()
+
             if not status_line:
-                print("[WARNING] xsimd submodule not found in .gitmodules, falling back to direct clone")
+                print("[WARNING] xsimd submodule not listed; using bundled headers if available.")
             else:
-                # git submodule status output format:
-                # '-commit path' - Uninitialized
-                # ' commit path' - In the correct position (starts with a space)
-                # '+commit path' - Points to a different commit (needs to be updated)
-                # 'Ucommit path' - There is a merge conflict
-                
-                first_char = status_line[0] if status_line else ''
-                
+                first_char = status_line[0]
+
                 if first_char == '-':
-                    # Uninitialized
                     print("[INFO] xsimd submodule not initialized, initializing...")
                     subprocess.run([
-                        "git", "submodule", "update", "--init",
-                        "sequenzo/dissimilarity_measures/src/xsimd"
+                        "git", "submodule", "update", "--init", str(XSIMD_RELATIVE_DIR)
                     ], check=True, cwd=project_root)
                     print("[INFO] xsimd submodule initialized successfully.")
                 elif first_char == '+':
-                    # Point to different commits
-                    print("[INFO] xsimd submodule is at a different commit, updating to correct commit...")
+                    print("[INFO] xsimd submodule is at a different commit, updating to recorded commit...")
                     subprocess.run([
-                        "git", "submodule", "update", "--init",
-                        "sequenzo/dissimilarity_measures/src/xsimd"
+                        "git", "submodule", "update", "--init", str(XSIMD_RELATIVE_DIR)
                     ], check=True, cwd=project_root)
-                    print("[INFO] xsimd submodule updated to correct commit.")
+                    print("[INFO] xsimd submodule updated to recorded commit.")
                 elif first_char == 'U':
-                    # Merge conflict
-                    print("[WARNING] xsimd submodule has merge conflicts. Please resolve manually.")
+                    raise RuntimeError("xsimd submodule has merge conflicts. Please resolve them before building.")
                 elif first_char == ' ':
-                    # Check if the directory exists in the correct location.
-                    if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
-                        print(f"[INFO] xsimd submodule is at correct commit: {xsimd_dir}")
+                    if _xsimd_header_exists(xsimd_dir):
+                        print(f"[INFO] xsimd submodule is available at: {xsimd_dir}")
                     else:
-                        # The status shows correct but the directory does not exist. Reinitialize.
-                        print("[INFO] xsimd submodule status is correct but directory missing, reinitializing...")
+                        print("[INFO] xsimd submodule status is clean but headers are missing, reinitializing...")
                         subprocess.run([
-                            "git", "submodule", "update", "--init",
-                            "sequenzo/dissimilarity_measures/src/xsimd"
+                            "git", "submodule", "update", "--init", str(XSIMD_RELATIVE_DIR)
                         ], check=True, cwd=project_root)
                         print("[INFO] xsimd submodule reinitialized successfully.")
                 else:
-                    # Unknown status, attempting to update
-                    print(f"[WARNING] Unknown submodule status: {status_line}, attempting to update...")
-                    subprocess.run([
-                        "git", "submodule", "update", "--init",
-                        "sequenzo/dissimilarity_measures/src/xsimd"
-                    ], check=True, cwd=project_root)
+                    _require_xsimd_headers(xsimd_dir)
+
+            _require_xsimd_headers(xsimd_dir)
             return
-            
+
         except subprocess.CalledProcessError as e:
             print(f"[WARNING] Git submodule command failed: {e}")
-            print("[WARNING] Falling back to direct clone (this may cause version mismatch in Git repos)")
+            print("[WARNING] Using bundled xsimd headers if available.")
         except FileNotFoundError:
-            print("[WARNING] Git command not found, falling back to direct clone")
-    
-    # If the environment is not Git or the submodule fails: clone directly (for scenarios such as packaging and distribution).
-    if xsimd_dir.exists() and any(xsimd_dir.iterdir()):
-        print(f"[INFO] xsimd already exists at {xsimd_dir}, skipping clone.")
-        return
-    
-    print(f"[INFO] xsimd not found, cloning from repository...")
-    try:
-        xsimd_dir.parent.mkdir(parents=True, exist_ok=True)
-        
-        if xsimd_dir.exists():
-            xsimd_dir.rmdir()
-        
-        subprocess.run([
-            "git", "clone", "--depth", "1",
-            "https://github.com/xtensor-stack/xsimd.git",
-            str(xsimd_dir)
-        ], check=True)
-        print("[INFO] xsimd cloned successfully.")
-    except Exception as e:
-        raise RuntimeError(f"Failed to clone xsimd automatically: {e}")
+            print("[WARNING] Git command not found; using bundled xsimd headers if available.")
+
+    _require_xsimd_headers(xsimd_dir)
+    print(f"[INFO] xsimd headers found at {xsimd_dir}.")
 
 
 ensure_xsimd_exists()
@@ -212,22 +192,50 @@ def get_mac_arch():
         return 'x86_64'
 
 def _find_libomp_prefix():
-    """Find libomp path. Prefer conda env's libomp to avoid duplicate loading."""
+    """Find a libomp prefix compatible with the active Apple Clang/OpenMP ABI."""
     candidates = []
+    env_prefix = os.environ.get('SEQUENZO_LIBOMP_PREFIX', '').strip()
+    if env_prefix:
+        candidates.append(env_prefix)
+
     conda_prefix = os.environ.get('CONDA_PREFIX', '')
     if conda_prefix:
-        candidates.append(conda_prefix)
+        candidates.extend(sorted(glob(os.path.join(conda_prefix, 'pkgs', 'llvm-openmp-*')), reverse=True))
+
     candidates.extend([
         '/opt/homebrew/opt/libomp',   # Apple Silicon
         '/usr/local/opt/libomp',      # Intel Mac
     ])
+    if conda_prefix:
+        candidates.append(conda_prefix)
 
     for prefix in candidates:
         inc = os.path.join(prefix, 'include')
         lib = os.path.join(prefix, 'lib')
-        if os.path.isfile(os.path.join(inc, 'omp.h')) and os.path.isdir(lib):
+        libomp = os.path.join(lib, 'libomp.dylib')
+        if (
+            os.path.isfile(os.path.join(inc, 'omp.h'))
+            and os.path.isfile(libomp)
+            and _libomp_has_symbol(libomp, '___kmpc_dispatch_deinit')
+        ):
             return inc, lib
     return None, None
+
+
+def _libomp_has_symbol(libomp_path, symbol):
+    if sys.platform != 'darwin':
+        return True
+    try:
+        result = subprocess.run(
+            ['nm', '-gU', libomp_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+        )
+        return symbol in result.stdout
+    except Exception:
+        return False
 
 def install_libomp_on_apple_silicon():
     """..."""
@@ -363,7 +371,7 @@ def has_openmp_support():
         return False
 
 
-def get_compile_args_for_file(filename):
+def get_compile_args_for_file(filename, *, fast_math=True):
     if sys.platform == 'win32':
         base_cflags = ['/W1', '/bigobj']  # Reduced warning level for faster compilation
         base_cppflags = ['/std:c++17'] + base_cflags
@@ -397,11 +405,15 @@ def get_compile_args_for_file(filename):
         # More conservative Windows flags for better compatibility
         compile_args = ["/O2"]
     else:
-        # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang
+        # Use -mcpu=native for Apple Silicon, avoid -march=native which is not supported by clang.
+        # -ffast-math is explicit per extension: dissimilarity/TWED and fastcluster
+        # need IEEE NaN/Inf semantics, while clustering/core/Cython preserve prior speed.
         if sys.platform == 'darwin':
-            compile_args = ["-O3", "-ffast-math"]
+            compile_args = ["-O3"]
         else:
-            compile_args = ["-O3", "-march=native", "-ffast-math"]
+            compile_args = ["-O3", "-march=native"]
+        if fast_math:
+            compile_args.append("-ffast-math")
 
     if sys.platform == 'darwin':
         os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
@@ -434,6 +446,56 @@ def get_compile_args_for_file(filename):
         return base_cflags + arch_flags + openmp_flag + compile_args
 
 
+def without_fast_math(args):
+    """Return compile args with flags that break IEEE NaN/Inf semantics removed."""
+    return [arg for arg in args if arg != '-ffast-math']
+
+
+def _lib_exports_symbol(path, symbol):
+    """Return True when a dynamic library exports the requested symbol."""
+    try:
+        result = subprocess.run(
+            ["nm", "-gU", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False
+    return result.returncode == 0 and symbol in result.stdout
+
+
+def _find_libomp_runtime_library():
+    """Find a libomp.dylib that matches the symbols emitted by the active compiler."""
+    candidates = []
+    inc, lib = _find_libomp_prefix()
+    if lib:
+        candidates.append(Path(lib) / "libomp.dylib")
+
+    conda_prefix = os.environ.get("CONDA_PREFIX") or sys.prefix
+    if conda_prefix:
+        candidates.extend(
+            sorted(
+                Path(conda_prefix).glob("pkgs/llvm-openmp-*/lib/libomp.dylib"),
+                reverse=True,
+            )
+        )
+
+    seen = set()
+    unique_candidates = []
+    for candidate in candidates:
+        resolved = candidate.resolve() if candidate.exists() else candidate
+        if resolved not in seen:
+            seen.add(resolved)
+            unique_candidates.append(candidate)
+
+    for candidate in unique_candidates:
+        if candidate.exists() and _lib_exports_symbol(candidate, "___kmpc_dispatch_deinit"):
+            return str(candidate)
+
+    return None
+
+
 def get_dissimilarity_measures_include_dirs():
     """
     Collects all required include directories for compiling C++ and Cython code in dissimilarity measures.
@@ -457,8 +519,8 @@ def get_clustering_include_dirs():
         pybind11.get_include(),  # user=True removed in pybind11 3.0; single call is sufficient
         numpy.get_include(),
         'sequenzo/clustering/src/',
-        'sequenzo/clustering/fuzzy_clustering/src/',
         'sequenzo/clustering/sequenzo_fastcluster/src/',
+        'sequenzo/clustering/fuzzy_clustering/src/',
     ]
 
 
@@ -479,9 +541,6 @@ def get_link_args():
     
     if has_openmp_support():
         if sys.platform == 'darwin':
-            # macOS: Link against libomp
-            link_args.append('-lomp')
-            
             # Add library path from environment or Homebrew default
             ldflags = os.environ.get('LDFLAGS', '')
             if ldflags:
@@ -490,6 +549,7 @@ def get_link_args():
                 for flag in ldflags.split():
                     if flag.startswith('-L') or flag.startswith('-Wl,'):
                         link_args.append(flag)
+                link_args.append('-lomp')
             else:
                 # Fallback: try to detect Homebrew libomp location
                 try:
@@ -500,6 +560,7 @@ def get_link_args():
                     # Add rpath for both bundled and system locations
                     link_args.append(f'-Wl,-rpath,@loader_path/../.dylibs')
                     link_args.append(f'-Wl,-rpath,{lib_path}')
+                    link_args.append('-lomp')
                     print(f"[SETUP] Auto-detected libomp at: {lib_path}")
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     print("[SETUP] Warning: Could not auto-detect libomp location")
@@ -548,11 +609,16 @@ def configure_cpp_extension():
         
         # Compile only the binding translation unit to avoid duplicate symbols.
         # The binding TU `module.cpp` includes the other implementation .cpp files.
+        # TWED and several distance utilities rely on IEEE infinity/NaN
+        # semantics. Keep optimization, but do not compile the dissimilarity
+        # binding translation unit with -ffast-math.
+        dissimilarity_compile_args = get_compile_args_for_file("dummy.cpp", fast_math=False)
+
         diss_ext_module = Pybind11Extension(
             'sequenzo.dissimilarity_measures.c_code',
             sources=['sequenzo/dissimilarity_measures/src/module.cpp'],
             include_dirs=get_dissimilarity_measures_include_dirs(),
-            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_compile_args=dissimilarity_compile_args,
             extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.1.21"'),
@@ -563,8 +629,8 @@ def configure_cpp_extension():
         # Clustering extension: three translation units with different -ffast-math settings.
         #   module.cpp                   — compiled WITH  -ffast-math
         #   distance_prep_tu.cpp         — compiled WITHOUT -ffast-math (IEEE NaN handling)
-        #   fastcluster_linkage_tu.cpp   — compiled WITH  -ffast-math (linkage performance)
-        clustering_compile_args = get_compile_args_for_file("dummy.cpp")
+        #   fastcluster_linkage_tu.cpp   — compiled WITHOUT -ffast-math (Infinity handling)
+        clustering_compile_args = get_compile_args_for_file("dummy.cpp", fast_math=True)
         if sys.platform != 'win32':
             if '-ffast-math' not in clustering_compile_args:
                 clustering_compile_args.append('-ffast-math')
@@ -591,7 +657,7 @@ def configure_cpp_extension():
             'sequenzo.utils.core_distance_operations.core_distance_c_code',
             sources=['sequenzo/utils/core_distance_operations/src/module.cpp'],
             include_dirs=get_core_distance_operations_include_dirs(),
-            extra_compile_args=get_compile_args_for_file("dummy.cpp"),
+            extra_compile_args=get_compile_args_for_file("dummy.cpp", fast_math=True),
             extra_link_args=link_args,
             language='c++',
             define_macros=[('VERSION_INFO', '"0.1.21"'),
@@ -621,9 +687,9 @@ def configure_cpp_extension():
         #
         # Fastcluster requires precise floating-point operations for NaN/Infinity checks
         # Do not use -ffast-math for fastcluster as it breaks NaN detection and FENV_ACCESS
-        fastcluster_compile_args = get_compile_args_for_file("dummy.cpp")
+        fastcluster_compile_args = get_compile_args_for_file("dummy.cpp", fast_math=False)
         # Remove -ffast-math if present (breaks NaN/Infinity detection in fastcluster)
-        fastcluster_compile_args = [arg for arg in fastcluster_compile_args if arg != '-ffast-math']
+        fastcluster_compile_args = without_fast_math(fastcluster_compile_args)
         # Ensure we have optimization but without fast-math (GCC/Clang only; MSVC uses /O2)
         if sys.platform != 'win32' and '-O3' not in fastcluster_compile_args:
             fastcluster_compile_args.append('-O3')
@@ -669,7 +735,7 @@ def configure_cython_extensions():
 
         extensions = []
         for path in pyx_paths:
-            extra_args = get_compile_args_for_file(path)
+            extra_args = get_compile_args_for_file(path, fast_math=True)
             extension = Extension(
                 name=str(Path(path).with_suffix("")).replace("/", ".").replace("\\", "."),
                 sources=[path],
@@ -699,10 +765,11 @@ class BuildExt(build_ext):
             original_compile = self.compiler._compile
 
             def _per_file_compile(obj, src, ext_str, cc_args, extra_postargs, pp_opts):
-                # Both distance_prep_tu and fastcluster_linkage_tu need IEEE
+                # distance_prep_tu, fastcluster_linkage_tu, and fanny.cpp need IEEE
                 # semantics: distance_prep uses std::isfinite, fastcluster
-                # uses std::numeric_limits::infinity(). Strip -ffast-math.
-                if 'distance_prep_tu' in src or 'fastcluster_linkage_tu' in src:
+                # uses std::numeric_limits::infinity(), and fanny validates
+                # finite fuzziness parameters. Strip -ffast-math.
+                if 'distance_prep_tu' in src or 'fastcluster_linkage_tu' in src or 'fanny.cpp' in src:
                     postargs = [a for a in extra_postargs if a != '-ffast-math']
                 else:
                     postargs = extra_postargs
@@ -715,6 +782,38 @@ class BuildExt(build_ext):
                 self.compiler._compile = original_compile
         else:
             super().build_extension(ext)
+
+        self._pin_macos_libomp_runtime(ext)
+
+    def _pin_macos_libomp_runtime(self, ext):
+        """Pin @rpath/libomp.dylib to the runtime that exports compiler-required symbols."""
+        if sys.platform != 'darwin':
+            return
+
+        ext_path = Path(self.get_ext_fullpath(ext.name))
+        if not ext_path.exists():
+            return
+
+        runtime = _find_libomp_runtime_library()
+        if runtime is None:
+            return
+
+        try:
+            linked = subprocess.run(
+                ["otool", "-L", str(ext_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if "@rpath/libomp.dylib" not in linked.stdout:
+                return
+            subprocess.run(
+                ["install_name_tool", "-change", "@rpath/libomp.dylib", runtime, str(ext_path)],
+                check=True,
+            )
+            print(f"[SETUP] Pinned libomp for {ext.name}: {runtime}")
+        except Exception as exc:
+            print(f"[SETUP] Warning: unable to pin libomp for {ext.name}: {exc}")
 
     @staticmethod
     def _sanitize_windows_path_and_fix_linker(compiler):

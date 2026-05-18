@@ -2,12 +2,10 @@
  * TWEDdistance: Time Warp Edit Distance (TraMineR-aligned).
  *
  * Optimizations vs original:
- *   [OPT-1] 2D fmat[m+1][n+1] → 2-row prev/curr + swap.
- *           TWED recurrence depends only on fmat[i-1][j-1], fmat[i-1][j], fmat[i][j-1]
- *           (previous row + current row left neighbor). Original allocated fmatsize_²
- *           doubles per thread (~7.5KB for L=30, ~37KB for L=50). Now 2*fmatsize_ (~0.5KB).
- *           Better cache locality for the inner loop.
- *   [OPT-2] Manual 3-way min replaces std::min({a,b,c}).
+ *   - Use 2-row rolling DP buffers instead of a full fmat[m+1][n+1].
+ *     TWED recurrence depends only on fmat[i-1][j-1], fmat[i-1][j],
+ *     and fmat[i][j-1].
+ *   - Use a manual 3-way minimum in the inner loop.
  *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : TWEDdistance.cpp
@@ -18,6 +16,8 @@
 #include <array>
 #include <cmath>
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 #include "utils.h"
 #include "dp_utils.h"
@@ -61,19 +61,27 @@ public:
             maxscost_ = std::min(maxscost_, 2.0 * indel_);
         }
 
-        rseq1_ = refseq_id.at(0);
-        rseq2_ = refseq_id.at(1);
-        if (rseq1_ < rseq2_) {
+        const int ref_a = refseq_id.at(0);
+        const int ref_b = refseq_id.at(1);
+        if (ref_a < 0 && ref_b < 0) {
+            rseq1_ = 0;
+            rseq2_ = 0;
+            has_refseq_ = false;
+        } else if (ref_a < ref_b) {
+            rseq1_ = ref_a;
+            rseq2_ = ref_b;
             nseq_ = rseq1_;
+            has_refseq_ = true;
             refdist_matrix_ = py::array_t<double>(std::array<py::ssize_t, 2>{static_cast<py::ssize_t>(nseq_), static_cast<py::ssize_t>(rseq2_ - rseq1_)});
         } else {
-            rseq1_ = rseq1_ - 1;
+            rseq1_ = ref_a - 1;
+            rseq2_ = ref_b;
+            has_refseq_ = true;
             refdist_matrix_ = py::array_t<double>(std::array<py::ssize_t, 2>{static_cast<py::ssize_t>(nseq_), 1});
         }
-        dist_matrix_ = py::array_t<double>(std::array<py::ssize_t, 2>{static_cast<py::ssize_t>(nseq_), static_cast<py::ssize_t>(nseq_)});
     }
 
-    // [OPT-1] Changed from (int, int, double* fmat) to 2-row prev/curr.
+    // Uses 2-row rolling DP buffers shared within each worker thread.
     double compute_distance(int is, int js, double* prev, double* curr) const {
         auto ptr_len = seqlength_.unchecked<1>();
         int m = ptr_len(is);
@@ -94,7 +102,7 @@ public:
 
         auto ptr_seq = sequences_.unchecked<2>();
         auto ptr_sm = sm_.unchecked<2>();
-        const double inf = 1000.0 * (maxscost_ + nu_ + lambda_);
+        const double inf = std::numeric_limits<double>::infinity();
 
         // Initialize row 0: prev[j] = j * indel
         prev[0] = 0.0;
@@ -136,7 +144,7 @@ public:
                     sub = inf;
                 }
 
-                // [OPT-2] Manual 3-way min.
+                // Manual 3-way minimum avoids initializer-list overhead.
                 double best = sub;
                 if (i_warp < best) best = i_warp;
                 if (j_warp < best) best = j_warp;
@@ -152,49 +160,43 @@ public:
         return normalize_distance(raw, maxpossiblecost, ml, nl, norm_);
     }
 
-    // [OPT-1] Allocate 2 rows instead of fmatsize_² per thread.
+    // Allocate 2 rows instead of fmatsize_² per worker thread.
     py::array_t<double> compute_all_distances() {
-        auto buffer = dist_matrix_.mutable_unchecked<2>();
-
-#pragma omp parallel
-        {
-            double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize_));
-            double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize_));
-
-#pragma omp for schedule(static)
-            for (int i = 0; i < nseq_; i++) {
-                buffer(i, i) = 0.0;
-                for (int j = i + 1; j < nseq_; j++) {
-                    double d = compute_distance(i, j, prev, curr);
-                    buffer(i, j) = d;
-                    buffer(j, i) = d;
-                }
+        py::array_t<double> dist_matrix(std::array<py::ssize_t, 2>{static_cast<py::ssize_t>(nseq_), static_cast<py::ssize_t>(nseq_)});
+        return dp_utils::compute_all_distances(
+            nseq_,
+            fmatsize_,
+            dist_matrix,
+            [this](int i, int j, double* prev, double* curr) {
+                return this->compute_distance(i, j, prev, curr);
             }
-            dp_utils::aligned_free_double(prev);
-            dp_utils::aligned_free_double(curr);
-        }
-        return dist_matrix_;
+        );
+    }
+
+    py::array_t<double> compute_condensed_distances() {
+        return dp_utils::compute_condensed_distances(
+            nseq_,
+            fmatsize_,
+            [this](int i, int j, double* prev, double* curr) {
+                return this->compute_distance(i, j, prev, curr);
+            }
+        );
     }
 
     py::array_t<double> compute_refseq_distances() {
-        auto buffer = refdist_matrix_.mutable_unchecked<2>();
-
-#pragma omp parallel
-        {
-            double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize_));
-            double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize_));
-
-#pragma omp for schedule(static)
-            for (int rseq = rseq1_; rseq < rseq2_; rseq++) {
-                for (int is = 0; is < nseq_; is++) {
-                    double d = (is == rseq) ? 0.0 : compute_distance(is, rseq, prev, curr);
-                    buffer(is, rseq - rseq1_) = d;
-                }
-            }
-            dp_utils::aligned_free_double(prev);
-            dp_utils::aligned_free_double(curr);
+        if (!has_refseq_) {
+            throw std::runtime_error("TWED refseq distances requested without a refseq configuration.");
         }
-        return refdist_matrix_;
+        return dp_utils::compute_refseq_distances_buffered(
+            nseq_,
+            rseq1_,
+            rseq2_,
+            fmatsize_,
+            refdist_matrix_,
+            [this](int is, int rseq, double* prev, double* curr) {
+                return this->compute_distance(is, rseq, prev, curr);
+            }
+        );
     }
 
 private:
@@ -212,6 +214,6 @@ private:
     double maxscost_ = 0.0;
     int rseq1_;
     int rseq2_;
-    py::array_t<double> dist_matrix_;
+    bool has_refseq_ = false;
     py::array_t<double> refdist_matrix_;
 };
