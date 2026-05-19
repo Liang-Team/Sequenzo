@@ -501,6 +501,7 @@ jobs:
           #    所以必须在 shell 命令内临时设置，delocate 才能找到 libomp.dylib。
           # 2. 添加 --require-archs {delocate_archs} 确保打包的 dylib 架构
           #    与 .so 文件一致（防止 arm64/x86_64 混淆导致用户端 crash）。
+          # 3. wheel repair 失败时必须让 CI 失败，不能发布未打包 libomp 的 macOS wheel。
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             echo "=== Repairing macOS wheel ==="
             echo "Current architecture: $(uname -m)"
@@ -510,13 +511,8 @@ jobs:
             # 在 repair 命令内部设置 DYLD_LIBRARY_PATH，绕过 macOS SIP 的剥离
             DYLD_LIBRARY_PATH="${REPAIR_LIBRARY_PATH}:${DYLD_LIBRARY_PATH:-}" \
               delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel} || {
-              echo "[WARNING] delocate with --require-archs failed, retrying without arch check..."
-              DYLD_LIBRARY_PATH="${REPAIR_LIBRARY_PATH}:${DYLD_LIBRARY_PATH:-}" \
-                delocate-wheel -w {dest_dir} -v {wheel} || {
-                  echo "[WARNING] delocate failed completely, copying wheel as-is"
-                  mkdir -p {dest_dir}
-                  cp {wheel} {dest_dir}/
-                }
+                echo "[ERROR] delocate failed; refusing to publish an unrepaired macOS wheel."
+                exit 1
             }
 
             # 验证修复结果：确认 libomp 是否真的打包进去了
@@ -528,7 +524,8 @@ jobs:
               if delocate-listdeps --all "$REPAIRED_WHEEL" 2>&1 | grep -q "libomp"; then
                 echo "[OK] libomp successfully bundled into wheel"
               else
-                echo "[WARNING] libomp may not be bundled - check wheel manually"
+                echo "[ERROR] libomp is not bundled into the macOS wheel."
+                exit 1
               fi
             fi
 
@@ -544,9 +541,15 @@ jobs:
             python -m pip install --upgrade pip
             echo "Ensuring clean build environment..."
             
-            # 再次清理，确保没有残留的构建文件
-            find . -name "*.so" -delete 2>/dev/null || true
-            find . -name "*.c" -delete 2>/dev/null || true
+            # 再次清理，确保没有残留的项目构建文件；不要全仓库扫描依赖/实验目录。
+            find ./sequenzo -name "*.so" -type f -delete 2>/dev/null || true
+            find . -maxdepth 1 -name "*.so" -type f -delete 2>/dev/null || true
+            find ./sequenzo -path "*/utils/*.c" -type f -print0 | while IFS= read -r -d '' cfile; do
+              pyxfile="${cfile%.c}.pyx"
+              if [ -f "$pyxfile" ]; then
+                rm -f "$cfile"
+              fi
+            done
             rm -rf build/ dist/ *.egg-info
             
             echo "Clean build environment ready"
@@ -567,11 +570,10 @@ jobs:
             echo "=== Attempting wheel repair ==="
             echo "Wheel to repair: {wheel}"
             
-            # 尝试修复，如果失败则跳过修复
+            # wheel repair 失败时必须让 CI 失败，不能发布未修复 wheel。
             auditwheel repair -w {dest_dir} {wheel} || {
-              echo "[WARNING] auditwheel repair failed, copying wheel as-is"
-              mkdir -p {dest_dir}
-              cp {wheel} {dest_dir}/
+              echo "[ERROR] auditwheel repair failed; refusing to publish an unrepaired Linux wheel."
+              exit 1
             }
             
             # 检查修复结果

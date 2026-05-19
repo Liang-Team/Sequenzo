@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : sa_kob.py
 @Time    : 2026-04-20 16:30
 @Desc    :
@@ -343,10 +343,12 @@ def detect_cluster_coefficient_owners(
                 override_key = category_id
 
         if override_key is not None:
-            owner = _validate_coefficient_owner(
-                int(owner_overrides[override_key]),
-                context="[detect_cluster_coefficient_owners] owner_overrides",
-            )
+            owner = int(owner_overrides[override_key])
+            if owner not in (-1, 0, 1):
+                raise ValueError(
+                    "[detect_cluster_coefficient_owners] owner_overrides must map "
+                    "cluster labels or category ids to -1, 0, or 1."
+                )
             classification = "override"
         elif gap_percent > majority_gap_threshold:
             owner = 0 if share0 > share1 else 1

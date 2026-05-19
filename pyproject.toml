@@ -80,7 +80,9 @@ include-package-data = true
 ]
 "sequenzo.clustering" = [
   "src/**/*.cpp",
-  "src/**/*.h"
+  "src/**/*.h",
+  "fuzzy_clustering/src/**/*.cpp",
+  "fuzzy_clustering/src/**/*.h"
 ]
 "sequenzo.clustering.sequenzo_fastcluster" = [
   "src/**/*.cpp",
@@ -102,6 +104,9 @@ include = ["sequenzo*"]
 include = ["pybind11"]
 
 [tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
 norecursedirs = [
     ".git",
     ".venv",

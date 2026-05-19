@@ -264,12 +264,13 @@ def create_model_matrix_time_constant(
                 f"Variable '{term}' not found in data columns: {list(data.columns)}"
             )
         
-        covar_values = data[term].values
+        series = data[term]
+        covar_values = series.values
         
         # Check if this is a categorical variable
-        if pd.api.types.is_categorical_dtype(data[term]) or \
-           pd.api.types.is_object_dtype(data[term]) or \
-           (data[term].dtype == 'object'):
+        if isinstance(series.dtype, pd.CategoricalDtype) or \
+           pd.api.types.is_object_dtype(series) or \
+           pd.api.types.is_string_dtype(series):
             # Categorical variable: create dummy variables
             # Use pandas get_dummies to create dummies, drop first level as reference
             dummies = pd.get_dummies(data[[term]], prefix=term, drop_first=True)

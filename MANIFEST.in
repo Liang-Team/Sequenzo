@@ -13,6 +13,9 @@ recursive-include sequenzo/dissimilarity_measures/src *.hpp
 recursive-include sequenzo/clustering/src *.cpp
 recursive-include sequenzo/clustering/src *.h
 recursive-include sequenzo/clustering/src *.hpp
+recursive-include sequenzo/clustering/fuzzy_clustering/src *.cpp
+recursive-include sequenzo/clustering/fuzzy_clustering/src *.h
+recursive-include sequenzo/clustering/fuzzy_clustering/src *.hpp
 
 # Include all header files and external libraries
 recursive-include sequenzo/dissimilarity_measures/src/xsimd/include *.hpp

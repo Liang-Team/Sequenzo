@@ -331,9 +331,9 @@ class TestFormulaSanity:
             "color": ["red", "blue", "green", "red", "blue", "green"],
         })
         X = create_model_matrix_time_constant("~ color", data, n_seq)
-        # color has 3 levels, drop_first=True -> 2 dummy columns
-        # (no separate intercept column added by this function)
-        assert X.shape == (n_seq, 2)  # 2 dummies
+        # intercept + color's 3 levels with drop_first=True -> 3 columns
+        assert X.shape == (n_seq, 3)
+        assert np.allclose(X[:, 0], 1.0)
 
 
 # ============================================================================

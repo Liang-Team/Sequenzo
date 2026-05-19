@@ -309,7 +309,7 @@ def test_invalid_cluster_coefficient_reference_raises():
             cluster_labels=cluster_labels,
             k=4,
             categories=[1, 2, 3, 4],
-            cluster_coefficient_reference="pooled",
+            cluster_coefficient_reference="invalid",
         )
 
 
