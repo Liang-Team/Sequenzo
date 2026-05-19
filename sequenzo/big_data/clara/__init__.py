@@ -5,6 +5,8 @@
 @Desc    : 
 """
 from .clara import clara, seqclara_range
+from .md_clara import md_clara
+from .results import MDClaraResult
 from .visualization import plot_scores_from_dataframe
 
 
@@ -23,5 +25,7 @@ def _import_c_code():
 __all__ = [
     'clara',
     'seqclara_range',
-    'plot_scores_from_dataframe'
+    'md_clara',
+    'MDClaraResult',
+    'plot_scores_from_dataframe',
 ]

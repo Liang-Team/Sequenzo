@@ -17,6 +17,26 @@ from sequenzo.dissimilarity_measures.utils import seqlength
 from sequenzo.dissimilarity_measures import get_distance_matrix, get_substitution_cost_matrix
 
 
+def _substitution_cost_from_dataframe(sm_df: pd.DataFrame, state_i, state_j) -> float:
+    """Look up substitution cost when matrix labels may be int or str."""
+    candidates_i = [state_i, str(state_i)]
+    candidates_j = [state_j, str(state_j)]
+    try:
+        candidates_i.append(int(state_i))
+        candidates_j.append(int(state_j))
+    except (TypeError, ValueError):
+        pass
+
+    row_key = next((key for key in candidates_i if key in sm_df.index), None)
+    col_key = next((key for key in candidates_j if key in sm_df.columns), None)
+    if row_key is None or col_key is None:
+        raise ValueError(
+            f"State {state_i!r} or {state_j!r} not found in substitution matrix. "
+            f"Available indices: {list(sm_df.index)}"
+        )
+    return float(sm_df.loc[row_key, col_key])
+
+
 def compute_cat_distance_matrix(channels: List[SequenceData],
                                 method: Optional[str] = None,
                                 norm: str = "none",
@@ -403,12 +423,9 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                         state_j = statelistj[chan]  # State string from MD sequence
 
                         if isinstance(substmat_list[chan], pd.DataFrame):
-                            state_i_str = str(state_i)
-                            state_j_str = str(state_j)
-                            if state_i_str not in substmat_list[chan].index or state_j_str not in substmat_list[chan].columns:
-                                raise ValueError(f"State {state_i_str} or {state_j_str} not found in substitution matrix for channel {chan}. "
-                                               f"Available indices: {list(substmat_list[chan].index)}")
-                            cost += substmat_list[chan].loc[state_i_str, state_j_str]
+                            cost += _substitution_cost_from_dataframe(
+                                substmat_list[chan], state_i, state_j
+                            )
                         else:
                             # numpy array doesn't have "null" row/column, use index directly
                             # Get 0-based index in alphabet_list
@@ -500,11 +517,39 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             newsm = newsm / np.sum(cweight)
 
         if what == "cost":
+            newseqdata_df = pd.DataFrame(newseqdata, columns=md_cnames)
+            newseqdata_df.insert(0, channels[0].id_col, channels[0].ids)
+
+            domain_labels = [channel.labels for channel in channels]
+            md_labels = []
+            for md_state in states_space:
+                parts = md_state.split(ch_sep)
+                if len(parts) != len(domain_labels):
+                    md_labels.append(md_state)
+                else:
+                    label_parts = []
+                    for val, dom_lab in zip(parts, domain_labels):
+                        try:
+                            label_parts.append(dom_lab[int(val)])
+                        except (ValueError, IndexError):
+                            label_parts.append(str(val))
+                    md_labels.append(" + ".join(label_parts))
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                md_seqdata = SequenceData(
+                    newseqdata_df,
+                    time=md_cnames,
+                    states=states_space,
+                    labels=md_labels,
+                    id_col=channels[0].id_col,
+                )
+
             return {
+                "seqdata": md_seqdata,
                 "sm": newsm,
                 "indel": newindel,
                 "alphabet": alphabet,
-                "cweight": cweight
+                "cweight": cweight,
             }
 
         if what == "diss":
@@ -554,6 +599,39 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
             diss_matrix = pd.DataFrame(diss_matrix, index=channels[0].ids, columns=channels[0].ids)
             return diss_matrix
+
+
+def build_cat_sequence_and_costs(
+    channels: List[SequenceData],
+    method: str = "OM",
+    norm: str = "none",
+    indel: Union[float, np.ndarray, List[Union[float, List[float]]]] = "auto",
+    sm: Optional[Union[List[str], List[np.ndarray]]] = None,
+    with_missing: Optional[Union[bool, List[bool]]] = None,
+    link: str = "sum",
+    cval: float = 2,
+    miss_cost: float = 2,
+    cweight: Optional[List[float]] = None,
+    ch_sep: str = "+",
+) -> dict:
+    """
+    Build multidomain SequenceData and CAT substitution/indel costs without
+    computing the full N x N distance matrix.
+    """
+    return compute_cat_distance_matrix(
+        channels=channels,
+        method=method,
+        norm=norm,
+        indel=indel,
+        sm=sm,
+        with_missing=with_missing,
+        link=link,
+        cval=cval,
+        miss_cost=miss_cost,
+        cweight=cweight,
+        what="cost",
+        ch_sep=ch_sep,
+    )
 
 
 if __name__ == "__main__":

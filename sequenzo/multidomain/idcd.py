@@ -9,14 +9,16 @@
     multidomain level rather than deriving them additively from domain costs
     or domain distances.
 """
-from typing import List, Dict
+from typing import List, Dict, Optional
+import numpy as np
 import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 
 
 def _generate_combined_sequence_from_csv(csv_paths: List[str],
                                          time_cols: List[str],
-                                         id_col: str = "id") -> pd.DataFrame:
+                                         id_col: str = "id",
+                                         ch_sep: str = "+") -> pd.DataFrame:
     """
     Load multiple CSVs, extract time sequences, and combine into a multidomain sequence.
     Only observed combinations will be used.
@@ -66,7 +68,7 @@ def _generate_combined_sequence_from_csv(csv_paths: List[str],
     for i in range(domain_dfs[0].shape[0]):
         row = []
         for t in time_cols:
-            combo = '+'.join(str(df.at[i, t]) for df in domain_dfs)
+            combo = ch_sep.join(str(df.at[i, t]) for df in domain_dfs)
             row.append(combo)
         combined_matrix.append(row)
 
@@ -78,7 +80,8 @@ def _generate_combined_sequence_from_csv(csv_paths: List[str],
 
 def _generate_combined_sequence_from_dfs(domain_dfs: List[pd.DataFrame],
                                          time_cols: List[str],
-                                         id_col: str = "id") -> pd.DataFrame:
+                                         id_col: str = "id",
+                                         ch_sep: str = "+") -> pd.DataFrame:
     """
     Combine multiple domain DataFrames into a multidomain sequence (same logic as CSV version).
     Each DataFrame must have id_col and all time_cols; rows are aligned by id_col (assumed sorted).
@@ -105,7 +108,7 @@ def _generate_combined_sequence_from_dfs(domain_dfs: List[pd.DataFrame],
     for i in range(dfs[0].shape[0]):
         row = []
         for t in time_cols:
-            combo = '+'.join(str(df.at[i, t]) for df in dfs)
+            combo = ch_sep.join(str(df.at[i, t]) for df in dfs)
             row.append(combo)
         combined_matrix.append(row)
     combined_df = pd.DataFrame(combined_matrix, columns=time_cols)
@@ -113,10 +116,89 @@ def _generate_combined_sequence_from_dfs(domain_dfs: List[pd.DataFrame],
     return combined_df
 
 
+def validate_multidomain_domains(
+    domains: List[SequenceData],
+    *,
+    min_domains: int = 2,
+) -> None:
+    """Check that domain SequenceData objects are aligned for multidomain analysis."""
+    if len(domains) < min_domains:
+        raise ValueError(f"At least {min_domains} domains are required, got {len(domains)}.")
+
+    n_seq = domains[0].seqdata.shape[0]
+    reference_ids = list(domains[0].ids)
+
+    for idx, domain in enumerate(domains[1:], start=1):
+        if domain.seqdata.shape[0] != n_seq:
+            raise ValueError(
+                f"Domain {idx} has {domain.seqdata.shape[0]} sequences; "
+                f"expected {n_seq} to match domain 0."
+            )
+        if list(domain.ids) != reference_ids:
+            raise ValueError(
+                f"Domain {idx} IDs do not match domain 0. "
+                "Reorder or align IDs before multidomain analysis."
+            )
+        if domain.time != domains[0].time:
+            raise ValueError(
+                f"Domain {idx} time columns do not match domain 0."
+            )
+
+
+def create_idcd_sequence_from_domains(
+    domains: List[SequenceData],
+    ch_sep: str = "+",
+    domain_state_labels: Optional[List[Dict]] = None,
+    quiet: bool = False,
+) -> SequenceData:
+    """
+    Build an IDCD multidomain SequenceData object from aligned domain objects.
+
+    Only observed combined states are retained (no full Cartesian product).
+    """
+    validate_multidomain_domains(domains)
+    time_cols = list(domains[0].time)
+    n_seq = domains[0].seqdata.shape[0]
+
+    reference = domains[0]
+    if reference.id_col and reference.id_col in reference.data.columns:
+        id_col = reference.id_col
+        ids = reference.data[id_col].to_numpy()
+    else:
+        id_col = "__mdclara_id__"
+        ids = np.arange(1, n_seq + 1)
+
+    domain_dfs = []
+    for domain in domains:
+        frame = domain.data.copy()
+        if id_col not in frame.columns:
+            frame.insert(0, id_col, ids)
+        elif not np.array_equal(frame[id_col].to_numpy(), ids):
+            frame[id_col] = ids
+        cols = [id_col] + list(time_cols)
+        domain_dfs.append(frame[cols].copy())
+    combined_df = _generate_combined_sequence_from_dfs(
+        domain_dfs,
+        time_cols,
+        id_col=id_col,
+        ch_sep=ch_sep,
+    )
+    return _build_idcd_sequence_data(
+        combined_df,
+        time_cols,
+        id_col,
+        domain_state_labels,
+        quiet=quiet,
+        ch_sep=ch_sep,
+    )
+
+
 def _build_idcd_sequence_data(combined_df: pd.DataFrame,
                               time_cols: List[str],
                               id_col: str,
-                              domain_state_labels: List[Dict] = None) -> SequenceData:
+                              domain_state_labels: List[Dict] = None,
+                              quiet: bool = False,
+                              ch_sep: str = "+") -> SequenceData:
     """Build SequenceData from a combined multidomain DataFrame (used by both CSV and DFS entry points)."""
     flat_vals = combined_df[time_cols].values.ravel()
     observed_states = pd.Series(flat_vals).value_counts()
@@ -124,7 +206,7 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
     if domain_state_labels:
         pretty_labels = []
         for state in observed_states.index:
-            parts = state.split("+")
+            parts = state.split(ch_sep)
             label_parts = []
             for i, token in enumerate(parts):
                 try:
@@ -142,8 +224,9 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
         "Frequency": observed_states.values,
         "Proportion (%)": proportions.round(2)
     })
-    print("\n[IDCD] Observed Combined States Frequency Table:")
-    print(freq_table.to_string(index=False))
+    if not quiet:
+        print("\n[IDCD] Observed Combined States Frequency Table:")
+        print(freq_table.to_string(index=False))
     return SequenceData(
         data=combined_df,
         time=time_cols,

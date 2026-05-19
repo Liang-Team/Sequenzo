@@ -10,6 +10,7 @@ from .dat import compute_dat_distance_matrix
 from .combt import get_interactive_combined_typology, merge_sparse_combt_types
 from .association_between_domains import get_association_between_domains
 from .linked_polyad import linked_polyadic_sequence_analysis
+from .clara import md_clara, MDClaraResult
 
 
 __all__ = [
@@ -20,5 +21,7 @@ __all__ = [
     "get_interactive_combined_typology",
     "merge_sparse_combt_types",
     "get_association_between_domains",
-    "linked_polyadic_sequence_analysis"
+    "linked_polyadic_sequence_analysis",
+    "md_clara",
+    "MDClaraResult",
 ]
