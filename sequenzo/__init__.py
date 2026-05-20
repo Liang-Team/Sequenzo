@@ -179,6 +179,10 @@ _LAZY: dict[str, tuple[str, str]] = {
     "compare_groups_across_positions": ("sequenzo.discrepancy_analysis", "compare_groups_across_positions"),
     "plot_group_differences_across_positions": ("sequenzo.discrepancy_analysis", "plot_group_differences_across_positions"),
     "print_group_differences_across_positions": ("sequenzo.discrepancy_analysis", "print_group_differences_across_positions"),
+    # emlt (TraMineRextras seqemlt)
+    "compute_emlt": ("sequenzo.emlt", "compute_emlt"),
+    "seqemlt": ("sequenzo.emlt", "seqemlt"),
+    "EMLTResult": ("sequenzo.emlt", "EMLTResult"),
     # group_comparison
     "get_group_differences": ("sequenzo.group_comparison", "get_group_differences"),
     "get_lrt_test": ("sequenzo.group_comparison", "get_lrt_test"),
@@ -498,6 +502,9 @@ __all__ = [
     "compare_groups_across_positions",
     "plot_group_differences_across_positions",
     "print_group_differences_across_positions",
+    "compute_emlt",
+    "seqemlt",
+    "EMLTResult",
     "get_group_differences",
     "get_lrt_test",
     "get_bic_test",

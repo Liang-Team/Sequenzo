@@ -1,22 +1,20 @@
 /*
- * LCPprodDistance: Position-wise LCP with Product Duration (duration-aware).
+ * LCPprodDistance: DSS-based LCP with Product Duration (duration-aware).
  *
- * Unlike LCPspell (which compares spell-by-spell), this variant compares
- * sequences position-wise at aligned time indices t = 0, 1, ..., L-1.
- * The common prefix length k is the number of consecutive matching states
- * from the start (forward) or from the end (reverse, RLCPprod).
+ * Python supplies DSS spell sequences and spell durations (same layout as LCPmst).
+ * Element index t refers to the t-th spell-state in the DSS prefix/suffix.
  *
- * Forward (sign > 0): A_prod = sum_{t=0}^{k-1} dx[t] * dy[t]
- * Reverse (sign < 0): A_prod = sum_{t=0}^{k-1} dx[len_i-1-t] * dy[len_j-1-t]
+ * Forward (sign > 0): A_prod = sum_{t=0}^{k-1} d_x(t) * d_y(t)
+ * Reverse (sign < 0): suffix match from the last spell backward.
  *
  * Raw distance: raw_d = T_x + T_y - 2 * A_prod
- * where T_x = sum_t dx[t], T_y = sum_t dy[t] (total duration per sequence).
+ * where T_x, T_y are total spell durations per sequence.
  *
  * Note: raw_d_prod can be negative. When norm != "none", clamp to [0, 1].
  *
  * Usage (Python):
- *   d = get_distance_matrix(seqdata, method="LCPprod", norm="gmean", durations=dur_matrix)
- *   d = get_distance_matrix(seqdata, method="RLCPprod", norm="gmean", durations=dur_matrix)
+ *   d = get_distance_matrix(seqdata, method="LCPprod", norm="gmean")
+ *   d = get_distance_matrix(seqdata, method="RLCPprod", norm="gmean")
  *
  * Source:
  *   Elzinga, C. H. (2007). Sequence analysis: Metric representations of
@@ -41,10 +39,9 @@ class LCPprodDistance {
 public:
     /*
      * Constructor.
-     * - sequences: state matrix, shape (nseq, ncols); row i holds states at each time index.
-     * - durations: position-wise durations, shape (nseq, ncols); durations[t] is the
-     *   time length for position t. Default 1.0 for regular panels.
-     * - seqlength: effective length per sequence (positions), shape (nseq,).
+     * - sequences: DSS spell-state matrix, shape (nseq, max_spells).
+     * - durations: spell durations, shape (nseq, max_spells).
+     * - seqlength: number of spells per sequence, shape (nseq,).
      * - totaldur: precomputed total duration per sequence, shape (nseq,); T_i = sum_t durations[i,t].
      * - norm: normalization index (0=none, 1=maxlength, 2=gmean, 3=maxdist, 4=YujianBo).
      * - sign: 1 = forward (LCPprod), -1 = reverse from end (RLCPprod).
@@ -58,8 +55,8 @@ public:
                     int sign,
                     py::array_t<int> refseqS)
             : norm(norm), sign(sign) {
-        py::print(sign > 0 ? "[>] Starting LCPprod (position-wise LCP with product duration)..."
-                          : "[>] Starting RLCPprod (position-wise LCP with product duration)...");
+        py::print(sign > 0 ? "[>] Starting LCPprod (DSS-based LCP with product duration)..."
+                          : "[>] Starting RLCPprod (DSS-based LCP with product duration)...");
         std::cout << std::flush;
 
         try {

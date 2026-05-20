@@ -24,9 +24,10 @@
                                 except for "CHI2" and "EUCLID", "maxlength", "gmean", "maxdist", "YujianBo", or "ElzingaStuder".
                             (2)"auto" is equivalent to
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
-                                2) "gmean" when method is one of "LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
-                                3) "maxdist" when method is one of "LCPspell", "RLCPspell",
-                                4) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellUnitFree", "OMstran", "TWED".
+                                2) "gmean" when method is one of "LCS", "LCP", "RLCP",
+                                3) "maxdist" when method is one of "LCPspell", "RLCPspell", "LCPmst", "RLCPmst",
+                                4) "none" when method is one of "LCPprod", "RLCPprod" (raw distance; normalized LCPprod may be unstable),
+                                5) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellUnitFree", "OMstran", "TWED".
                             (3)"ElzingaStuder" applies a theoretical normalization following Elzinga & Studer (2019),
                                 dividing distances by their theoretical maxima to ensure comparability across measures.
                                 Requires a reference object (see normalization_reference_index parameter for details).
@@ -66,6 +67,11 @@
                             The exponential weight of spell length when method is one of "OMspell", "OMspellUnitFree", "NMSMST", or "SVRspell".
             expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "OMspellUnitFree", "LCPspell", or "RLCPspell".
                             It must be positive. The exact interpretation is distance-dependent.
+            duration_ref   : Reference duration scale tau (OMspellUnitFree, LCPspell, RLCPspell). Default:
+                            number of time positions in seqdata (observation window T). Must be positive.
+                            Recommended: set explicitly to the study-design observation window (e.g. 20 years
+                            or 240 months). Spell duration penalties use d/tau; tau is fixed before
+                            computation and must not be the dataset maximum spell duration.
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
@@ -231,7 +237,8 @@ def _validate_twed_indel_costs(indel):
 
 
 def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", indel="auto", sm=None, full_matrix=True,
-                        tpow=1.0, expcost=0.5, weighted=True, check_max_size=True, matrix_display="full", opts=None, **kwargs):
+                        tpow=1.0, expcost=0.5, duration_ref=None, weighted=True, check_max_size=True,
+                        matrix_display="full", opts=None, **kwargs):
 
     from .utils.seqconc import seqconc
     from .utils.seqdss import seqdss
@@ -255,6 +262,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         full_matrix = opts.get('full_matrix', full_matrix)
         tpow = opts.get('tpow', tpow)
         expcost = opts.get('expcost', expcost)
+        duration_ref = opts.get('duration_ref', duration_ref)
         weighted = opts.get('weighted', weighted)
         matrix_display = opts.get('matrix_display', matrix_display)
         collect_garbage = opts.get('collect_garbage', opts.get('force_gc', collect_garbage))
@@ -474,8 +482,21 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in ["LCPspell", "RLCPspell"] and expcost < 0:
         raise ValueError("[x] 'expcost' must be non-negative for LCPspell/RLCPspell (use 0 to ignore duration).")
 
+    if method in ["OMspellUnitFree", "LCPspell", "RLCPspell"]:
+        if duration_ref is None:
+            duration_ref = kwargs.pop("duration_ref", None)
+        if duration_ref is None:
+            duration_ref = float(seqdata.seqdata.shape[1])
+        else:
+            duration_ref = float(duration_ref)
+        if not np.isfinite(duration_ref) or duration_ref <= 0:
+            raise ValueError(
+                "[x] 'duration_ref' must be a finite positive number for "
+                "OMspellUnitFree, LCPspell, or RLCPspell."
+            )
+
     # 4. DHD
-    elif method == "DHD":
+    if method == "DHD":
         if sm_type == "method" and sm == "CONSTANT":
             raise ValueError("[!] 'sm = \"CONSTANT\"' is not relevant for DHD, consider HAM instead.")
 
@@ -501,8 +522,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if norm == "auto":
         if method in ["OM", "HAM", "DHD"]:
             norm = "maxlength"
-        elif method in ["LCS", "LCP", "RLCP", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+        elif method in ["LCS", "LCP", "RLCP"]:
             norm = "gmean"
+        elif method in ["LCPmst", "RLCPmst"]:
+            # DSS-based MST: raw in [0, Tx+Ty]; maxdist = (Tx+Ty-2*A_mst)/(Tx+Ty) stays in [0, 1].
+            norm = "maxdist"
+        elif method in ["LCPprod", "RLCPprod"]:
+            # Product duration can make raw distance negative; prefer raw (none) over normalized.
+            norm = "none"
         elif method in ["NMS", "NMSMST", "SVRspell"]:
             norm = "YujianBo"
         elif method in ["LCPspell", "RLCPspell"]:
@@ -521,6 +548,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     if method in ["LCPspell", "RLCPspell"] and norm == "gmean":
         print("[!] Warning: norm='gmean' for LCPspell/RLCPspell can yield distances outside [0, 1]. Prefer norm='maxdist' or norm='none'. See developer/NORM_GUIDE.md.")
+
+    if method in ["LCPmst", "RLCPmst"] and norm == "gmean":
+        print("[!] Warning: norm='gmean' for LCPmst/RLCPmst can yield distances outside [0, 1] when Tx != Ty. Prefer norm='maxdist' (auto default) or norm='none'.")
+
+    if method in ["LCPprod", "RLCPprod"] and norm != "none":
+        print("[!] Warning: norm != 'none' for LCPprod/RLCPprod: product-based raw distance may be negative; normalized values are clamped to [0, 1] and may hide instability. Prefer norm='none' (auto default).")
 
     # =========================================
     # CHI2 / EUCLID (C++ or Python implementation)
@@ -1083,7 +1116,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     
     # OMspell, OMtspell
     # Redefined dseqs.num
-    elif method in ["OMspell", "OMspellUnitFree", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
+    elif method in ["OMspell", "OMspellUnitFree", "OMtspell", "LCPspell", "RLCPspell",
+                    "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
         dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
 
         # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
@@ -1102,13 +1136,35 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         seqdata_dss = seqdss(seqdata)
         dseqs_num = seqdata_dss[dseqs_oidxs, :]
 
-        if method in ["OMspell", "OMspellUnitFree", "OMtspell", "LCPspell", "RLCPspell", "NMSMST", "SVRspell"]:
+        if method in ["OMspell", "OMspellUnitFree", "OMtspell", "LCPspell", "RLCPspell",
+                      "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
             _seqlength = seqlength(dseqs_num)
             # TraMineR uses original sequence length (number of time points) for OMspell/OMtspell normalization
-            _orig_seqlength = np.full((dseqs_num.shape[0],), seqdata.seqdata.shape[1], dtype=np.int32)
-        if method == "LCPspell":
+            if method in ["OMspell", "OMspellUnitFree", "OMtspell"]:
+                _orig_seqlength = np.full((dseqs_num.shape[0],), seqdata.seqdata.shape[1], dtype=np.int32)
+        if method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+            _totaldur = np.empty(dseqs_num.shape[0], dtype=np.float64)
+            for i in range(dseqs_num.shape[0]):
+                li = int(_seqlength[i])
+                _totaldur[i] = float(np.sum(dseqs_dur[i, :li])) if li > 0 else 0.0
+        if method in ["LCPspell", "RLCPspell"] and expcost > 0:
+            max_obs_dur = 0.0
+            for i in range(dseqs_dur.shape[0]):
+                li = int(_seqlength[i])
+                if li > 0:
+                    row_max = float(np.max(dseqs_dur[i, :li]))
+                    if row_max > max_obs_dur:
+                        max_obs_dur = row_max
+            if max_obs_dur > duration_ref:
+                warnings.warn(
+                    "[!] duration_ref is smaller than an observed spell duration. "
+                    "Normalized LCPspell/RLCPspell distances may exceed the stated bound. "
+                    "Set duration_ref to the study-design observation window (or another upper bound on spell length).",
+                    stacklevel=2,
+                )
+        if method in ["LCPspell", "LCPmst", "LCPprod"]:
             sign = 1
-        elif method == "RLCPspell":
+        elif method in ["RLCPspell", "RLCPmst", "RLCPprod"]:
             sign = -1
 
         del dseqs_oidxs
@@ -1133,34 +1189,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # RLCP
     elif method == "RLCP":
         sign = -1
-
-    # LCPspell (spell-based LCP, forward)
-    elif method == "LCPspell":
-        sign = 1
-
-    # RLCPspell (spell-based LCP, reverse)
-    elif method == "RLCPspell":
-        sign = -1
-
-    # LCPmst, RLCPmst, LCPprod, RLCPprod (position-wise duration-aware LCP)
-    elif method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
-        # Position-wise durations: default 1.0 for all positions (regular panel).
-        durations = kwargs.get("durations")
-        if durations is None:
-            durations = np.ones_like(seqdata_num, dtype=np.float64)
-        else:
-            durations = np.asarray(durations, dtype=np.float64)
-            if durations.shape != seqdata_num.shape:
-                raise ValueError("[x] 'durations' must have shape (nseqs, ncols) matching seqdata.")
-        # Map unique sequences to their duration rows (first occurrence in original data)
-        conc1 = seqconc(data=dseqs_num)
-        conc2 = seqconc(data=seqdata_num)
-        index_map = {value: idx for idx, value in enumerate(conc2)}
-        dseqs_oidxs = np.array([index_map[element] for element in conc1])
-        dseqs_durpos = durations[dseqs_oidxs, :]
-        _lengths_pos = seqlength(dseqs_num)
-        _totaldur = dseqs_durpos.sum(axis=1).astype(np.float64)
-        sign = 1 if method in ["LCPmst", "LCPprod"] else -1
 
     if 'index_map' in locals():
         del index_map
@@ -1301,6 +1329,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                             norm_num,
                                             refseq_id,
                                             expcost,
+                                            duration_ref,
                                             dseqs_dur,
                                             indellist.astype(np.float64),
                                             _seqlength)
@@ -1400,11 +1429,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                 norm_num,
                                                 sign,
                                                 refseq_id,
-                                                expcost)
+                                                expcost,
+                                                duration_ref)
             dist_matrix = LCPspell.compute_refseq_distances()
 
         elif method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
-            LCPdur = c_code.LCPmstDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id) if method in ["LCPmst", "RLCPmst"] else c_code.LCPprodDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id)
+            if method in ["LCPmst", "RLCPmst"]:
+                LCPdur = c_code.LCPmstDistance(
+                    dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
+            else:
+                LCPdur = c_code.LCPprodDistance(
+                    dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
             dist_matrix = LCPdur.compute_refseq_distances()
 
         # TraMineR applies sqrt to NMS, NMSMST, SVRspell output
@@ -1486,6 +1521,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                             norm_num,
                                             refseq_id,
                                             expcost,
+                                            duration_ref,
                                             dseqs_dur,
                                             indellist,
                                             _seqlength)
@@ -1585,11 +1621,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                norm_num,
                                                sign,
                                                refseq_id,
-                                               expcost)
+                                               expcost,
+                                               duration_ref)
             dist_matrix = LCPspell.compute_all_distances()
 
         elif method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
-            LCPdur = c_code.LCPmstDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id) if method in ["LCPmst", "RLCPmst"] else c_code.LCPprodDistance(dseqs_num, dseqs_durpos, _lengths_pos, _totaldur, norm_num, sign, refseq_id)
+            if method in ["LCPmst", "RLCPmst"]:
+                LCPdur = c_code.LCPmstDistance(
+                    dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
+            else:
+                LCPdur = c_code.LCPprodDistance(
+                    dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
             dist_matrix = LCPdur.compute_all_distances()
 
         # TraMineR applies sqrt to NMS, NMSMST, SVRspell output

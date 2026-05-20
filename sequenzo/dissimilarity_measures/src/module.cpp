@@ -181,7 +181,7 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_refseq_distances", &LCSdistance::compute_refseq_distances);
 
     py::class_<LCPspellDistance>(m, "LCPspellDistance")
-            .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double>())
+            .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double, double>())
             .def("compute_all_distances", &LCPspellDistance::compute_all_distances)
             .def("compute_refseq_distances", &LCPspellDistance::compute_refseq_distances);
 
@@ -217,7 +217,7 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_refseq_distances", &OMtspellDistance::compute_refseq_distances);
 
     py::class_<OMspellUnitFreeDistance>(m, "OMspellUnitFreeDistance")
-            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, py::array_t<double>, py::array_t<double>, py::array_t<int>>())
+            .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, double, py::array_t<double>, py::array_t<double>, py::array_t<int>>())
             .def("compute_all_distances", &OMspellUnitFreeDistance::compute_all_distances)
             .def("compute_refseq_distances", &OMspellUnitFreeDistance::compute_refseq_distances);
 
