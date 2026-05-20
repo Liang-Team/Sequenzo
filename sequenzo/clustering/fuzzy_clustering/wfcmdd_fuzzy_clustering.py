@@ -112,9 +112,11 @@ def _update_membership(
         return u
 
     if method in ("FCMdd", "NCdd"):
-        u = np.power(dist2med, mexp)
         zero_dist = dist2med == 0.0
-        all_med = np.sum(zero_dist, axis=1) > 0
+        all_med = np.any(zero_dist, axis=1)
+        u = np.zeros_like(dist2med)
+        nonzero = dist2med > 0.0
+        u[nonzero] = np.power(dist2med[nonzero], mexp)
         u[all_med, :] = 0.0
         u[zero_dist] = 1.0
         row_sums = u.sum(axis=1, keepdims=True)

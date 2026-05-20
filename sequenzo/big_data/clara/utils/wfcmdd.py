@@ -7,7 +7,6 @@
 
 import numpy as np
 import pandas as pd
-import warnings
 
 
 def wfcmdd(diss, memb, weights=None, method="FCMdd", m=2, dnoise=None, eta=None, alpha=0.001,
@@ -137,13 +136,17 @@ def wfcmdd(diss, memb, weights=None, method="FCMdd", m=2, dnoise=None, eta=None,
                 u[i, minC[i]] = 1
 
         elif method in ["FCMdd", "NCdd"]:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                # dist2med_safe = np.where(dist2med == 0, 1e-10, dist2med)
-                # TODO : 不显示中间报错
-                u = (1 / dist2med) ** (1 / (m - 1))
-                u /= np.sum(u, axis=1, keepdims=True)
-                u[dist2med == 0] = 1
+            mexp = -1.0 / (m - 1.0)
+            zero_dist = dist2med == 0.0
+            all_med = np.any(zero_dist, axis=1)
+            u = np.zeros_like(dist2med)
+            nonzero = dist2med > 0.0
+            u[nonzero] = np.power(dist2med[nonzero], mexp)
+            u[all_med, :] = 0.0
+            u[zero_dist] = 1.0
+            row_sums = u.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0.0] = 1.0
+            u /= row_sums
 
         elif method == "PCMdd":
             for k in range(kMov):

@@ -118,7 +118,11 @@ def _extract_state_properties(seqdata: SequenceData) -> pd.DataFrame:
             pass
         return _as_state_label(value, seqdata, labels)
 
-    mapped = panel.map(_to_label)
+    # DataFrame.map: pandas >= 2.1; applymap: pandas < 3.0 (pyproject: pandas>=1.2.5).
+    if hasattr(panel, "map"):
+        mapped = panel.map(_to_label)
+    else:
+        mapped = panel.applymap(_to_label)
     return mapped.reset_index(drop=True)
 
 
