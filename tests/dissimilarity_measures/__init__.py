@@ -1,1 +1,1 @@
-# Tests for OM+INDELS, OM+INDELSLOG, FUTURE, FEATURES, OMtspell vs TraMineR
+# Dissimilarity tests: TraMineR parity (see README.md) and LCPspell paper appendix (OMspell/UnitFree/LCPspell).

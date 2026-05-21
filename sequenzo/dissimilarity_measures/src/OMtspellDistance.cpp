@@ -1,5 +1,14 @@
 /*
- * OMtspellDistance: Optimal Matching with spell durations and token-dependent costs.
+ * OMtspellDistance: TraMineR OMspell with token-dependent spell costs (tokdep.coeff).
+ *
+ * Spell-level costs (timecost = expcost = lambda, omega = tokdep):
+ *   Indel/del:                  c_indel(a) + lambda * omega(a) * (d - 1)
+ *   Sub same state:             lambda * omega(a) * |d_i - d_j|
+ *   Sub different state:        sigma(i,j) + lambda * (omega(i)*(d_i-1) + omega(j)*(d_j-1))
+ *
+ * Normalization (optional): structural upper bound (same as OMspell / OMspellUnitFree)
+ *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
+ * ml/nl: sum of c_indel over spells (structural scale; no token/duration terms).
  *
  * Optimizations vs original:
  *   [OPT-1] Removed pseudo-SIMD (same rationale as OMspell).
@@ -26,7 +35,7 @@ class OMtspellDistance {
 public:
     OMtspellDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
                      double timecost, py::array_t<double> seqdur, py::array_t<double> indellist,
-                     py::array_t<int> seqlength, py::array_t<double> tokdeplist, py::array_t<int> norm_seqlength)
+                     py::array_t<int> seqlength, py::array_t<double> tokdeplist)
             : indel(indel), norm(norm), timecost(timecost) {
 
         py::print("[>] Starting Optimal Matching with token-dependent spell (OMtspell)...");
@@ -39,7 +48,6 @@ public:
             this->indellist = indellist;
             this->seqlength = seqlength;
             this->tokdeplist = tokdeplist;
-            this->norm_seqlength = norm_seqlength;
 
             auto seq_shape = sequences.shape();
             nseq = seq_shape[0];
@@ -51,15 +59,24 @@ public:
             auto sm_shape = sm.shape();
             alphasize = sm_shape[0];
 
+            maxindel = indel;
+            if (indellist.size() > 0) {
+                auto ptr_indel_init = indellist.unchecked<1>();
+                maxindel = 0.0;
+                for (py::ssize_t i = 0; i < indellist.shape(0); ++i) {
+                    if (ptr_indel_init(i) > maxindel) maxindel = ptr_indel_init(i);
+                }
+            }
+
             auto ptr = sm.mutable_unchecked<2>();
             if (norm == 4) {
-                maxscost = 2 * indel;
+                maxscost = 2 * maxindel;
             } else {
                 for (int i = 0; i < alphasize; i++)
                     for (int j = i + 1; j < alphasize; j++)
                         if (ptr(i, j) > maxscost)
                             maxscost = ptr(i, j);
-                maxscost = std::min(maxscost, 2 * indel);
+                maxscost = std::min(maxscost, 2 * maxindel);
             }
 
             nans = nseq;
@@ -82,7 +99,7 @@ public:
         auto ptr_indel = indellist.mutable_unchecked<1>();
         auto ptr_tok = tokdeplist.mutable_unchecked<1>();
         auto ptr_dur = seqdur.mutable_unchecked<2>();
-        return ptr_indel(state) + timecost * ptr_tok(state) * ptr_dur(i, j);
+        return ptr_indel(state) + timecost * ptr_tok(state) * (ptr_dur(i, j) - 1.0);
     }
 
     double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y) {
@@ -94,14 +111,13 @@ public:
         }
         auto ptr_sm = sm.mutable_unchecked<2>();
         return ptr_sm(i_state, j_state) +
-               (ptr_tok(i_state) * ptr_dur(i_x, i_y) + ptr_tok(j_state) * ptr_dur(j_x, j_y)) * timecost;
+               (ptr_tok(i_state) * (ptr_dur(i_x, i_y) - 1.0) + ptr_tok(j_state) * (ptr_dur(j_x, j_y) - 1.0)) * timecost;
     }
 
     double compute_distance(int is, int js, double* prev, double* curr) {
         try {
             auto ptr_seq = sequences.unchecked<2>();
             auto ptr_len = seqlength.unchecked<1>();
-            auto ptr_norm_len = norm_seqlength.unchecked<1>();
             auto ptr_sm = sm.unchecked<2>();
             auto ptr_dur = seqdur.unchecked<2>();
             auto ptr_indel = indellist.unchecked<1>();
@@ -117,7 +133,7 @@ public:
 
             for (int jj = 1; jj < nSuf; jj++) {
                 int bj = ptr_seq(js, jj - 1);
-                prev[jj] = prev[jj - 1] + (ptr_indel(bj) + timecost * ptr_tok(bj) * ptr_dur(js, jj - 1));
+                prev[jj] = prev[jj - 1] + (ptr_indel(bj) + timecost * ptr_tok(bj) * (ptr_dur(js, jj - 1) - 1.0));
             }
 
             // [OPT-1] Pure scalar DP — pseudo-SIMD removed.
@@ -125,7 +141,7 @@ public:
                 int i_state = ptr_seq(is, i - 1);
                 double dur_i = ptr_dur(is, i - 1);
                 double tok_i = ptr_tok(i_state);
-                double del_cost_i = ptr_indel(i_state) + timecost * tok_i * dur_i;
+                double del_cost_i = ptr_indel(i_state) + timecost * tok_i * (dur_i - 1.0);
 
                 curr[0] = prev[0] + del_cost_i;
 
@@ -135,11 +151,11 @@ public:
                     double tok_j = ptr_tok(j_state);      // [OPT-3]
 
                     double del_cost = prev[j] + del_cost_i;
-                    double ins_cost = curr[j - 1] + (ptr_indel(j_state) + timecost * tok_j * dur_j);
+                    double ins_cost = curr[j - 1] + (ptr_indel(j_state) + timecost * tok_j * (dur_j - 1.0));
                     double sub_cost = prev[j - 1] + (
                         (i_state == j_state)
                         ? std::abs(timecost * (dur_i - dur_j) * tok_i)
-                        : (ptr_sm(i_state, j_state) + (tok_i * dur_i + tok_j * dur_j) * timecost)
+                        : (ptr_sm(i_state, j_state) + (tok_i * (dur_i - 1.0) + tok_j * (dur_j - 1.0)) * timecost)
                     );
 
                     // [OPT-2] Manual 3-way min.
@@ -151,11 +167,17 @@ public:
                 std::swap(prev, curr);
             }
 
-            int mm_norm = ptr_norm_len(is);
-            int nn_norm = ptr_norm_len(js);
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += ptr_indel(ptr_seq(is, spell_i));
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += ptr_indel(ptr_seq(js, spell_j));
+            }
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in OMtspell compute_distance: ", e.what());
@@ -212,11 +234,11 @@ private:
     int fmatsize;
     py::array_t<double> dist_matrix;
     double maxscost = 0.0;
+    double maxindel = 0.0;
     double timecost;
     py::array_t<double> seqdur;
     py::array_t<double> indellist;
     py::array_t<double> tokdeplist;
-    py::array_t<int> norm_seqlength;
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;

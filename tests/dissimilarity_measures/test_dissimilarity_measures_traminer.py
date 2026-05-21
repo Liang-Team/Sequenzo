@@ -9,7 +9,10 @@ Tests for dissimilarity measures vs TraMineR. All measures are covered in one mo
   - Small synthetic data: TWED (4 sequences, 5 positions, 2 states).
 
 Three main groups (with TraMineR ref comparison):
-  1) OM variants: OM+INDELS, OM+INDELSLOG, OM+FUTURE, OM+FEATURES, OMtspell, OMstran.
+  1) OM variants: OM+INDELS, OM+INDELSLOG, OM+FUTURE, OM+FEATURES, OMstran.
+     OMtspell vs TraMineR tests are skipped: Sequenzo follows Studer & Ritschard (2016) spell
+     expansion costs (d-1), (d_i+d_j-2), and spell-based normalization; TraMineR seqdist
+     may differ. See test_LCPspell_paper_appendix_sequences_9_10.py and README.md here.
   2) Attribute-based: LCS, NMS, NMSMST, NMSSTSSoft, SVRspell.
   3) TWED: norm=none, nu=0.5, h=0.5, sm constant 2, indel=2 (hardcoded ref).
 
@@ -38,6 +41,14 @@ from sequenzo.dissimilarity_measures import get_distance_matrix
 
 # Number of rows to use (must match R script default)
 NROWS = 10
+
+# OMspell / OMtspell: Sequenzo implements Studer & Ritschard (2016) costs and spell-based
+# normalization; TraMineR reference matrices are not expected to match.
+OMSPELL_TRAMINER_SKIP = (
+    "Sequenzo OMspell/OMtspell use Studer & Ritschard (2016) expansion (d-1), "
+    "(d_i+d_j-2), and spell-based ml/nl/maxdist; TraMineR seqdist may differ. "
+    "See tests/dissimilarity_measures/test_LCPspell_paper_appendix_sequences_9_10.py."
+)
 
 # For attribute-based measures (NMS, NMSSTSSoft, SVRspell), use only first 10 time columns
 # to avoid C++ overflow "Number of subsequences is getting too big" (double overflow in recurrence).
@@ -200,7 +211,7 @@ def _assert_valid_distance_matrix(D, n_expected=None):
 @pytest.fixture(scope="module")
 def ref_dir_om():
     """Generate R reference matrices for OM variants, or use THIS_DIR if refs already exist."""
-    ref_names = ["om_indels", "om_indelslog", "om_future", "om_features", "omtspell"]
+    ref_names = ["om_indels", "om_indelslog", "om_future", "om_features"]
     for name in ref_names:
         p = os.path.join(THIS_DIR, f"ref_{name}.csv")
         if os.path.isfile(p):
@@ -404,6 +415,7 @@ def test_om_variant_features_matches_traminer(seqdata_subset, ref_dir_om):
     _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.skip(reason=OMSPELL_TRAMINER_SKIP)
 def test_om_variant_omtspell_matches_traminer(seqdata_subset, ref_dir_om):
     """OM variant: OMtspell (OMspell + tokdep_coeff) with TRATE sm, norm=YujianBo vs TraMineR."""
     D_ref = _load_ref_matrix(ref_dir_om, "omtspell")
@@ -469,6 +481,7 @@ def test_om_trate_norm_gmean_matches_traminer(seqdata_subset, ref_dir_om):
     _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.skip(reason=OMSPELL_TRAMINER_SKIP)
 def test_omtspell_expcost_03_matches_traminer(seqdata_subset, ref_dir_om):
     """OMtspell with expcost=0.3 vs TraMineR."""
     D_ref = _load_ref_matrix(ref_dir_om, "omtspell_expcost03")
@@ -487,6 +500,7 @@ def test_omtspell_expcost_03_matches_traminer(seqdata_subset, ref_dir_om):
     _align_and_compare(D, D_ref, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.skip(reason=OMSPELL_TRAMINER_SKIP)
 def test_omtspell_expcost_07_matches_traminer(seqdata_subset, ref_dir_om):
     """OMtspell with expcost=0.7 vs TraMineR."""
     D_ref = _load_ref_matrix(ref_dir_om, "omtspell_expcost07")

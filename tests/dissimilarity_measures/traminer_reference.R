@@ -56,6 +56,8 @@ suppressMessages({
 write.csv(as.matrix(D_features), file.path(outdir, "ref_om_features.csv"), row.names = TRUE)
 
 # ----- OMtspell (OMspell with tokdep.coeff; TraMineR opt.args) -----
+# Legacy reference only: Sequenzo pytest skips TraMineR parity for OMspell/OMtspell
+# (Studer & Ritschard 2016 expansion costs and spell-based normalization in C++).
 # tokdep.coeff same length as indel; seqdist expands scalar indel to nstates before check
 nstates <- length(states)
 tokdep_coeff <- rep(1, nstates)

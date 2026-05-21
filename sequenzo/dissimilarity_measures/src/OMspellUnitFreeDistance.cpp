@@ -5,15 +5,16 @@
  * (duration_ref, passed from Python) before multiplying by timecost (lambda / expcost).
  * tau is fixed before distance computation (not dataset- or pair-dependent).
  *
- * Spell-level costs (timecost = lambda):
- *   Indel/del of (a_k, d_k):  c_indel(a_k) + lambda * d_k / tau
+ * Spell-level costs (timecost = lambda), corrected OMspell then scaled by tau:
+ *   Indel/del of (a_k, d_k):  c_indel(a_k) + lambda * (d_k - 1) / tau
  *   Sub same state:           lambda * |d_i - d_j| / tau
- *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j) / tau
+ *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j - 2) / tau
  *
  * Normalization (optional, separate from unit-free costs): structural upper bound
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * using maxindel from indellist and maxscost from sm. Duration expansion is not added
  * (OMspell minimum-cost alignment; unlike LCPspell).
+ * ml/nl: sum of state-specific c_indel over spells (same convention as OMspell/OMtspell).
  *
  * Parameter timecost (Python expcost) is the linear duration_weight, not exponential.
  * @Author  : Yuqi Liang 梁彧祺
@@ -125,7 +126,7 @@
  
              for (int jj = 1; jj < nSuf; jj++) {
                  int bj = ptr_seq(js, jj - 1);
-                 double ins_cost = ptr_indel(bj) + timecost * (ptr_dur(js, jj - 1) * dur_scale);
+                 double ins_cost = ptr_indel(bj) + timecost * ((ptr_dur(js, jj - 1) - 1.0) * dur_scale);
                  prev[jj] = prev[jj - 1] + ins_cost;
              }
  
@@ -135,7 +136,7 @@
              for (int i = 1; i < mSuf; i++) {
                  int i_state = ptr_seq(is, i - 1);
                  double dur_i = ptr_dur(is, i - 1);
-                 double del_cost_i = ptr_indel(i_state) + timecost * (dur_i * dur_scale);
+                 double del_cost_i = ptr_indel(i_state) + timecost * ((dur_i - 1.0) * dur_scale);
  
                  curr[0] = prev[0] + del_cost_i;
  
@@ -155,9 +156,9 @@
                          if (i_state == bj) {
                              subs[b] = timecost * std::fabs(dur_i - dur_j) * dur_scale;
                          } else {
-                             subs[b] = ptr_sm(i_state, bj) + timecost * (dur_i + dur_j) * dur_scale;
-                         }
-                         ins[b] = ptr_indel(bj) + timecost * (dur_j * dur_scale);
+                            subs[b] = ptr_sm(i_state, bj) + timecost * (dur_i + dur_j - 2.0) * dur_scale;
+                        }
+                        ins[b] = ptr_indel(bj) + timecost * ((dur_j - 1.0) * dur_scale);
                      }
  
                      batch_t sub_batch = batch_t::load_unaligned(subs);
@@ -178,12 +179,12 @@
                      int j_state = ptr_seq(js, j - 1);
                      double dur_j = ptr_dur(js, j - 1);
                      double minimum = prev[j] + del_cost_i;
-                     double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * (dur_j * dur_scale));
-                     double sub = prev[j - 1] + (
-                         (i_state == j_state)
-                         ? (timecost * std::fabs(dur_i - dur_j) * dur_scale)
-                         : (ptr_sm(i_state, j_state) + timecost * (dur_i + dur_j) * dur_scale)
-                     );
+                    double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * ((dur_j - 1.0) * dur_scale));
+                    double sub = prev[j - 1] + (
+                        (i_state == j_state)
+                        ? (timecost * std::fabs(dur_i - dur_j) * dur_scale)
+                        : (ptr_sm(i_state, j_state) + timecost * (dur_i + dur_j - 2.0) * dur_scale)
+                    );
                      curr[j] = std::min({ minimum, j_indel, sub });
                  }
  

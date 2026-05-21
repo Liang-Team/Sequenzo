@@ -1,5 +1,17 @@
 /*
- * OMspellDistance: Optimal Matching on spell sequences (duration-weighted).
+ * OMspellDistance: Optimal Matching on spell sequences (TraMineR / Studer & Ritschard OMspell).
+ *
+ * Spell-level costs (timecost = expcost = lambda):
+ *   Indel/del of spell (a_k, d_k):  c_indel(a_k) + lambda * (d_k - 1)
+ *   Sub same state:                 lambda * |d_i - d_j|
+ *   Sub different state:            sigma(i,j) + lambda * (d_i + d_j - 2)
+ * Duration d_k = 1 contributes no expansion cost (minimum spell unit).
+ *
+ * Normalization (optional): structural upper bound (no duration term in maxdist)
+ *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
+ * using spell counts n_s, m_s, maxindel from indellist, maxscost from sm.
+ * ml/nl for maxlength, gmean, YujianBo: sum of state-specific c_indel over spells
+ * (not time-expanded sequence length).
  *
  * Optimizations vs original:
  *   [OPT-1] Removed pseudo-SIMD. xsimd batch loaded B cells for del/sub but insertion
@@ -26,8 +38,7 @@ namespace py = pybind11;
 class OMspellDistance {
 public:
     OMspellDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
-                    double timecost, py::array_t<double> seqdur, py::array_t<double> indellist, py::array_t<int> seqlength,
-                    py::array_t<int> norm_seqlength)
+                    double timecost, py::array_t<double> seqdur, py::array_t<double> indellist, py::array_t<int> seqlength)
             : indel(indel), norm(norm), timecost(timecost) {
 
         py::print("[>] Starting Optimal Matching with spell(OMspell)...");
@@ -39,7 +50,6 @@ public:
             this->seqdur = seqdur;
             this->indellist = indellist;
             this->seqlength = seqlength;
-            this->norm_seqlength = norm_seqlength;
 
             auto seq_shape = sequences.shape();
             nseq = seq_shape[0];
@@ -58,7 +68,6 @@ public:
             dur_cols = static_cast<int>(seqdur.shape(1));
             indel_ptr = indellist.data();
             len_ptr = seqlength.data();
-            norm_len_ptr = norm_seqlength.data();
 
             cost_cols = seq_cols;
             dur_cost_buf.resize(static_cast<size_t>(nseq) * static_cast<size_t>(cost_cols));
@@ -70,7 +79,7 @@ public:
                 double* indel_dur_cost_row = indel_dur_cost_buf.data() + static_cast<ptrdiff_t>(row) * cost_cols;
                 for (int col = 0; col < cost_cols; col++) {
                     const int state = seq_row[col];
-                    const double dur_cost = timecost * dur_row[col];
+                    const double dur_cost = timecost * (dur_row[col] - 1.0);
                     dur_cost_row[col] = dur_cost;
                     indel_dur_cost_row[col] = indel_ptr[state] + dur_cost;
                 }
@@ -91,15 +100,23 @@ public:
                 if (!mismatch_sub_dominated) break;
             }
 
+            maxindel = indel;
+            if (indellist.size() > 0) {
+                maxindel = 0.0;
+                for (int i = 0; i < alphasize; i++) {
+                    if (indel_ptr[i] > maxindel) maxindel = indel_ptr[i];
+                }
+            }
+
             auto ptr = sm.mutable_unchecked<2>();
             if (norm == 4) {
-                maxscost = 2 * indel;
+                maxscost = 2 * maxindel;
             } else {
                 for (int i = 0; i < alphasize; i++)
                     for (int j = i + 1; j < alphasize; j++)
                         if (ptr(i, j) > maxscost)
                             maxscost = ptr(i, j);
-                maxscost = std::min(maxscost, 2 * indel);
+                maxscost = std::min(maxscost, 2 * maxindel);
             }
 
             nans = nseq;
@@ -121,7 +138,7 @@ public:
     double getIndel(int i, int j, int state) {
         auto ptr_indel = indellist.mutable_unchecked<1>();
         auto ptr_dur = seqdur.mutable_unchecked<2>();
-        return ptr_indel(state) + timecost * ptr_dur(i, j);
+        return ptr_indel(state) + timecost * (ptr_dur(i, j) - 1.0);
     }
 
     double getSubCost(int i_state, int j_state, int i_x, int i_y, int j_x, int j_y) {
@@ -130,7 +147,8 @@ public:
             return abs(timecost * (ptr_dur(i_x, i_y) - ptr_dur(j_x, j_y)));
         }
         auto ptr_sm = sm.mutable_unchecked<2>();
-        return ptr_sm(i_state, j_state) + (ptr_dur(i_x, i_y) + ptr_dur(j_x, j_y)) * timecost;
+        return ptr_sm(i_state, j_state)
+               + (ptr_dur(i_x, i_y) + ptr_dur(j_x, j_y) - 2.0) * timecost;
     }
 
     double compute_distance(int is, int js, double* prev, double* curr) {
@@ -183,11 +201,17 @@ public:
                 std::swap(prev, curr);
             }
 
-            int mm_norm = norm_len_ptr[is];
-            int nn_norm = norm_len_ptr[js];
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += indel_ptr[seq_i[spell_i]];
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += indel_ptr[seq_j[spell_j]];
+            }
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
@@ -248,11 +272,17 @@ public:
                 }
             }
 
-            int mm_norm = norm_len_ptr[is];
-            int nn_norm = norm_len_ptr[js];
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += indel_ptr[seq_i[spell_i]];
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += indel_ptr[seq_j[spell_j]];
+            }
             return normalize_distance(fmat[(mSuf - 1) + static_cast<ptrdiff_t>(nSuf - 1) * fmatsize],
                                       maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
@@ -310,11 +340,17 @@ public:
                 std::swap(prev, curr);
             }
 
-            int mm_norm = norm_len_ptr[is];
-            int nn_norm = norm_len_ptr[js];
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += indel_ptr[seq_i[spell_i]];
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += indel_ptr[seq_j[spell_j]];
+            }
             return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling: ", e.what());
@@ -366,11 +402,17 @@ public:
                 std::swap(prev, curr);
             }
 
-            int mm_norm = norm_len_ptr[is];
-            int nn_norm = norm_len_ptr[js];
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += indel_ptr[seq_i[spell_i]];
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += indel_ptr[seq_j[spell_j]];
+            }
             return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling_dominated: ", e.what());
@@ -419,11 +461,17 @@ public:
                 std::swap(prev, curr);
             }
 
-            int mm_norm = norm_len_ptr[is];
-            int nn_norm = norm_len_ptr[js];
-            double maxpossiblecost = std::abs(nn_norm - mm_norm) * indel + maxscost * std::min(mm_norm, nn_norm);
-            double ml = double(mm_norm) * indel;
-            double nl = double(nn_norm) * indel;
+            const int max_nm = (mm > nn) ? mm : nn;
+            double maxpossiblecost =
+                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+            double ml = 0.0;
+            for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                ml += indel_ptr[seq_i[spell_i]];
+            }
+            double nl = 0.0;
+            for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                nl += indel_ptr[seq_j[spell_j]];
+            }
             return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling_dominated_low_state: ", e.what());
@@ -712,7 +760,6 @@ public:
 private:
     py::array_t<int> sequences;
     py::array_t<int> seqlength;
-    py::array_t<int> norm_seqlength;
     py::array_t<double> sm;
     double indel;
     int norm;
@@ -722,9 +769,9 @@ private:
     int fmatsize;
     py::array_t<double> dist_matrix;
     double maxscost = 0.0;
+    double maxindel = 0.0;
     const int* seq_ptr = nullptr;
     const int* len_ptr = nullptr;
-    const int* norm_len_ptr = nullptr;
     const double* sm_ptr = nullptr;
     const double* dur_ptr = nullptr;
     const double* indel_ptr = nullptr;

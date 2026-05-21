@@ -55,6 +55,16 @@ _LAZY: dict[str, tuple[str, str]] = {
     "plot_transition_matrix": ("sequenzo.visualization", "plot_transition_matrix"),
     # dissimilarity_measures
     "get_distance_matrix": ("sequenzo.dissimilarity_measures.get_distance_matrix", "get_distance_matrix"),
+    # uncertainty (timing uncertainty first; see sequenzo/uncertainty/README.md)
+    "get_timing_perturbed_sequences": ("sequenzo.uncertainty", "get_timing_perturbed_sequences"),
+    "get_timing_error_distribution": ("sequenzo.uncertainty", "get_timing_error_distribution"),
+    "get_distance_matrices_per_replicate": ("sequenzo.uncertainty", "get_distance_matrices_per_replicate"),
+    "get_distance_matrix_stability": ("sequenzo.uncertainty", "get_distance_matrix_stability"),
+    "get_distance_timing_uncertainty": ("sequenzo.uncertainty", "get_distance_timing_uncertainty"),
+    "print_distance_uncertainty": ("sequenzo.uncertainty", "print_distance_uncertainty"),
+    "summarize_distance_uncertainty": ("sequenzo.uncertainty", "summarize_distance_uncertainty"),
+    "plot_distance_uncertainty_heatmap": ("sequenzo.uncertainty", "plot_distance_uncertainty_heatmap"),
+    "DistMCResult": ("sequenzo.uncertainty", "DistMCResult"),
     "get_substitution_cost_matrix": ("sequenzo.dissimilarity_measures.get_substitution_cost_matrix", "get_substitution_cost_matrix"),
     "get_LCP_length_for_2_seq": ("sequenzo.dissimilarity_measures.utils.get_LCP_length_for_2_seq", "get_LCP_length_for_2_seq"),
     # clustering (triggers OpenMP setup on first use)
@@ -357,6 +367,10 @@ def _setup_openmp_if_needed():
 
 
 def __getattr__(name: str) -> Any:
+    if name == "uncertainty":
+        if "sequenzo.uncertainty" not in _loaded:
+            _loaded["sequenzo.uncertainty"] = importlib.import_module("sequenzo.uncertainty")
+        return _loaded["sequenzo.uncertainty"]
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     mod_path, attr = _LAZY[name]
@@ -391,6 +405,16 @@ __all__ = [
     "get_distance_matrix",
     "get_substitution_cost_matrix",
     "get_LCP_length_for_2_seq",
+    "uncertainty",
+    "get_timing_perturbed_sequences",
+    "get_timing_error_distribution",
+    "get_distance_matrices_per_replicate",
+    "get_distance_matrix_stability",
+    "get_distance_timing_uncertainty",
+    "print_distance_uncertainty",
+    "summarize_distance_uncertainty",
+    "plot_distance_uncertainty_heatmap",
+    "DistMCResult",
     "Cluster",
     "ClusterResults",
     "ClusterQuality",

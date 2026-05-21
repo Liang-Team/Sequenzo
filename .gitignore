@@ -61,6 +61,7 @@ developer/seqHMM-main/
 developer/Py_FS-main/
 developer/eBoruta-master/
 developer/cluster-master/
+developer/MCseqReplic/
 
 # ignore RData and Rhistory
 .RData

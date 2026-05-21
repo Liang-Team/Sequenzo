@@ -27,7 +27,7 @@
                                 2) "gmean" when method is one of "LCS", "LCP", "RLCP",
                                 3) "maxdist" when method is one of "LCPspell", "RLCPspell", "LCPmst", "RLCPmst",
                                 4) "none" when method is one of "LCPprod", "RLCPprod" (raw distance; normalized LCPprod may be unstable),
-                                5) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellUnitFree", "OMstran", "TWED".
+                                5) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellUnitFree", "OMtspell", "OMstran", "TWED".
                             (3)"ElzingaStuder" applies a theoretical normalization following Elzinga & Studer (2019),
                                 dividing distances by their theoretical maxima to ensure comparability across measures.
                                 Requires a reference object (see normalization_reference_index parameter for details).
@@ -70,7 +70,10 @@
             duration_ref   : Reference duration scale tau (OMspellUnitFree, LCPspell, RLCPspell). Default:
                             number of time positions in seqdata (observation window T). Must be positive.
                             Recommended: set explicitly to the study-design observation window (e.g. 20 years
-                            or 240 months). Spell duration penalties use d/tau; tau is fixed before
+                            or 240 months). Duration penalties are scaled by tau. OMspellUnitFree uses the
+                            corrected spell-expansion convention, e.g. (d-1)/tau for indel/del, |d_i-d_j|/tau for
+                            same-state substitution, and (d_i+d_j-2)/tau for different-state substitution.
+                            LCPspell/RLCPspell use |d_i-d_j|/tau on matched spells. tau is fixed before
                             computation and must not be the dataset maximum spell duration.
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
@@ -1128,9 +1131,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
-        # Get duration
-        c = 1 if method in ["OMspell", "OMspellUnitFree", "OMtspell"] else 0
-        dseqs_dur = dseqs_dur[dseqs_oidxs, :] - c
+        # Spell durations passed to C++ are raw lengths d_k; OMspell expansion (d_k - 1) is in C++.
+        dseqs_dur = dseqs_dur[dseqs_oidxs, :]
 
         # Get DSS
         seqdata_dss = seqdss(seqdata)
@@ -1139,9 +1141,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if method in ["OMspell", "OMspellUnitFree", "OMtspell", "LCPspell", "RLCPspell",
                       "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
             _seqlength = seqlength(dseqs_num)
-            # TraMineR uses original sequence length (number of time points) for OMspell/OMtspell normalization
-            if method in ["OMspell", "OMspellUnitFree", "OMtspell"]:
-                _orig_seqlength = np.full((dseqs_num.shape[0],), seqdata.seqdata.shape[1], dtype=np.int32)
         if method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             _totaldur = np.empty(dseqs_num.shape[0], dtype=np.float64)
             for i in range(dseqs_num.shape[0]):
@@ -1168,7 +1167,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             sign = -1
 
         del dseqs_oidxs
-        del c
         del seqdata_dss
 
     # HAM, DHD
@@ -1318,8 +1316,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          expcost,
                                          dseqs_dur,
                                          indellist.astype(np.float64),
-                                         _seqlength,
-                                         _orig_seqlength)
+                                         _seqlength)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMspellUnitFree":
@@ -1345,8 +1342,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          dseqs_dur,
                                          indellist.astype(np.float64),
                                          _seqlength,
-                                         tokdeplist,
-                                         _orig_seqlength)
+                                         tokdeplist)
             dist_matrix = om.compute_refseq_distances()
 
         elif method == "OMslen":
@@ -1510,8 +1506,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          expcost,
                                          dseqs_dur,
                                          indellist,
-                                         _seqlength,
-                                         _orig_seqlength)
+                                         _seqlength)
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMspellUnitFree":
@@ -1537,8 +1532,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          dseqs_dur,
                                          indellist,
                                          _seqlength,
-                                         tokdeplist,
-                                         _orig_seqlength)
+                                         tokdeplist)
             dist_matrix = om.compute_all_distances()
 
         elif method == "OMslen":
