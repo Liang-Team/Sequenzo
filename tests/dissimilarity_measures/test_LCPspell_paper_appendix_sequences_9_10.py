@@ -156,7 +156,7 @@ class TestAppendixSequences9And10:
     ):
         assert _pair_distance(
             appendix_seqdata_9_10,
-            "OMspellUnitFree",
+            "OMspellRS",
             sm=om_substitution_matrix,
             indel=1.0,
             expcost=1.0,
@@ -168,7 +168,7 @@ class TestAppendixSequences9And10:
     ):
         assert _pair_distance(
             appendix_seqdata_9_10,
-            "OMspellUnitFree",
+            "OMspellRS",
             norm="maxdist",
             sm=om_substitution_matrix,
             indel=1.0,
@@ -181,7 +181,7 @@ class TestAppendixSequences9And10:
     ):
         d_auto = _pair_distance(
             appendix_seqdata_9_10,
-            "OMspellUnitFree",
+            "OMspellRS",
             norm="auto",
             sm=om_substitution_matrix,
             indel=1.0,
@@ -190,7 +190,7 @@ class TestAppendixSequences9And10:
         )
         d_yb = _pair_distance(
             appendix_seqdata_9_10,
-            "OMspellUnitFree",
+            "OMspellRS",
             norm="YujianBo",
             sm=om_substitution_matrix,
             indel=1.0,
@@ -252,7 +252,7 @@ class TestAppendixSequences1And2:
         """sigma + lambda(d_a+d_b-2)/tau = 2 + 10/6 = 11/3."""
         assert _pair_distance(
             appendix_seqdata_1_2,
-            "OMspellUnitFree",
+            "OMspellRS",
             sm=om_substitution_matrix,
             indel=1.0,
             expcost=1.0,

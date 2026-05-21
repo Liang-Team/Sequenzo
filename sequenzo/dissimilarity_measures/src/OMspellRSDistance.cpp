@@ -1,5 +1,5 @@
 /*
- * OMspellUnitFreeDistance: Reference-scaled Optimal Matching on spells.
+ * OMspellRSDistance: Reference-scaled Optimal Matching on spells.
  *
  * Same DP as OMspell. Duration terms are divided by a fixed reference scale tau
  * (duration_ref, passed from Python) before multiplying by timecost (lambda / expcost).
@@ -10,7 +10,7 @@
  *   Sub same state:           lambda * |d_i - d_j| / tau
  *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j - 2) / tau
  *
- * Normalization (optional, separate from unit-free costs): structural upper bound
+ * Normalization (optional, separate from reference-scaled costs): structural upper bound
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * using maxindel from indellist and maxscost from sm. Duration expansion is not added
  * (OMspell minimum-cost alignment; unlike LCPspell).
@@ -18,7 +18,7 @@
  *
  * Parameter timecost (Python expcost) is the linear duration_weight, not exponential.
  * @Author  : Yuqi Liang 梁彧祺
- * @File    : OMspellUnitFreeDistance.cpp
+ * @File    : OMspellRSDistance.cpp
  * @Time    : 2026/1/31 22:12
  */
 
@@ -37,18 +37,18 @@
  
  namespace py = pybind11;
  
- class OMspellUnitFreeDistance {
+ class OMspellRSDistance {
  public:
-     OMspellUnitFreeDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
+     OMspellRSDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
                                double timecost, double duration_ref, py::array_t<double> seqdur, py::array_t<double> indellist,
                                py::array_t<int> seqlength)
              : indel(indel), norm(norm), timecost(timecost), duration_ref(duration_ref) {
  
-         py::print("[>] Starting Optimal Matching with spell (OMspell-unit-free, reference-scaled duration)...");
+         py::print("[>] Starting Optimal Matching with spell (OMspellRS, reference-scaled duration)...");
          std::cout << std::flush;
  
          if (duration_ref <= 0.0) {
-             throw std::invalid_argument("duration_ref must be positive for OMspellUnitFree.");
+             throw std::invalid_argument("duration_ref must be positive for OMspellRS.");
          }
  
          try {
@@ -101,7 +101,7 @@
              }
              refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
          } catch (const std::exception& e) {
-             py::print("Error in OMspellUnitFreeDistance constructor: ", e.what());
+             py::print("Error in OMspellRSDistance constructor: ", e.what());
              throw;
          }
      }
@@ -207,7 +207,7 @@
             }
             return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
          } catch (const std::exception& e) {
-             py::print("Error in OMspellUnitFreeDistance::compute_distance: ", e.what());
+             py::print("Error in OMspellRSDistance::compute_distance: ", e.what());
              throw;
          }
      }
@@ -223,7 +223,7 @@
                  }
              );
          } catch (const std::exception& e) {
-             py::print("Error in OMspellUnitFreeDistance::compute_all_distances: ", e.what());
+             py::print("Error in OMspellRSDistance::compute_all_distances: ", e.what());
              throw;
          }
      }
@@ -246,7 +246,7 @@
              }
              return refdist_matrix;
          } catch (const std::exception& e) {
-             py::print("Error in OMspellUnitFreeDistance::compute_refseq_distances: ", e.what());
+             py::print("Error in OMspellRSDistance::compute_refseq_distances: ", e.what());
              throw;
          }
      }

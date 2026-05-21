@@ -74,7 +74,7 @@ def _build_dist_args(
     om_needs_sm = {
         "OM",
         "OMspell",
-        "OMspellUnitFree",
+        "OMspellRS",
         "OMtspell",
         "OMstran",
         "OMloc",

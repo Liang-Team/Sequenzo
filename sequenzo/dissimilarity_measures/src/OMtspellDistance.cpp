@@ -6,7 +6,7 @@
  *   Sub same state:             lambda * omega(a) * |d_i - d_j|
  *   Sub different state:        sigma(i,j) + lambda * (omega(i)*(d_i-1) + omega(j)*(d_j-1))
  *
- * Normalization (optional): structural upper bound (same as OMspell / OMspellUnitFree)
+ * Normalization (optional): structural upper bound (same as OMspell / OMspellRS)
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * ml/nl: sum of c_indel over spells (structural scale; no token/duration terms).
  *

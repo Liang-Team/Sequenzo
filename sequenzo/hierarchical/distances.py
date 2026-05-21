@@ -126,7 +126,7 @@ def compute_relational_distance_matrix(
         Sequenzo distance method (e.g. ``"HAM"``, ``"OM"``, ``"LCPspell"``).
     representation : str
         ``"state"`` for position-wise methods, or ``"spell"`` to prefer spell-based
-        methods (``OMspell``, ``OMspellUnitFree``, ``LCPspell``, ``RLCPspell``).
+        methods (``OMspell``, ``OMspellRS``, ``LCPspell``, ``RLCPspell``).
         If ``representation="spell"`` and ``method`` is a generic name like ``"OM"``,
         ``method`` is mapped to ``"OMspell"``.
     states : list, optional
@@ -163,7 +163,7 @@ def compute_relational_distance_matrix(
     om_needs_sm = {
         "OM",
         "OMspell",
-        "OMspellUnitFree",
+        "OMspellRS",
         "OMtspell",
         "OMstran",
         "OMloc",

@@ -5,7 +5,7 @@
 `test_LCPspell_paper_appendix_sequences_9_10.py` checks illustration Sequences **9--10** (same spell order, duration differences) and **1--2** (different-state single-spell substitution) from the LCPspell paper appendix (`main.tex`, labels `app:om-omspell-illustration` and `app:lcp-variants`):
 
 - **OMspell**: Studer & Ritschard (2016) spell costs with expansion terms `(d_k-1)` and `(d_k+e_\ell-2)` for indel/del and different-state substitution; same-state substitution uses `\lambda|d_k-e_\ell|`.
-- **OMspellUnitFree**: same alignment logic with duration terms scaled by reference `\tau`; normalization uses spell-count structural upper bound and spell-sum `c_indel` for `ml`/`nl`.
+- **OMspellRS**: same alignment logic with duration terms scaled by reference `\tau`; normalization uses spell-count structural upper bound and spell-sum `c_indel` for `ml`/`nl`.
 - **LCPspell / LCP / LCPmst / LCPprod / OM**: appendix worked distances for both sequence pairs.
 - **Seq. 1--2**: highlights OMspell different-state cost `sigma + lambda(d_i+d_j-2)` (raw 12; UnitFree raw 11/3).
 
