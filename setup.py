@@ -217,26 +217,45 @@ def _find_libomp_prefix():
         if (
             os.path.isfile(os.path.join(inc, 'omp.h'))
             and os.path.isfile(libomp)
-            and _libomp_has_symbol(libomp, '___kmpc_dispatch_deinit')
+            and _libomp_prefix_is_usable(prefix, libomp)
         ):
             return inc, lib
     return None, None
 
 
-def _libomp_has_symbol(libomp_path, symbol):
+def _libomp_exports_runtime_symbols(libomp_path):
+    """Return True when libomp.dylib exposes usable OpenMP/kmpc entry points."""
     if sys.platform != 'darwin':
         return True
     try:
         result = subprocess.run(
-            ['nm', '-gU', libomp_path],
+            ['nm', '-g', libomp_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
             check=False,
         )
-        return symbol in result.stdout
     except Exception:
         return False
+    if result.returncode != 0:
+        return False
+    text = result.stdout
+    markers = (
+        '___kmpc_dispatch_deinit',
+        '___kmpc_barrier',
+        '_omp_get_max_threads',
+        'omp_get_max_threads',
+        '__kmpc_',
+    )
+    return any(marker in text for marker in markers)
+
+
+def _libomp_prefix_is_usable(prefix, libomp_path):
+    """Validate libomp prefix; trust CI-built runtimes from SEQUENZO_LIBOMP_PREFIX."""
+    ci_prefix = os.environ.get('SEQUENZO_LIBOMP_PREFIX', '').strip()
+    if ci_prefix and os.path.abspath(prefix) == os.path.abspath(ci_prefix):
+        return True
+    return _libomp_exports_runtime_symbols(libomp_path)
 
 def install_libomp_on_apple_silicon():
     """..."""
@@ -493,7 +512,7 @@ def _find_libomp_runtime_library():
             unique_candidates.append(candidate)
 
     for candidate in unique_candidates:
-        if candidate.exists() and _lib_exports_symbol(candidate, "___kmpc_dispatch_deinit"):
+        if candidate.exists() and _libomp_exports_runtime_symbols(str(candidate)):
             return str(candidate)
 
     return None

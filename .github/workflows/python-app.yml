@@ -565,12 +565,12 @@ jobs:
             fi
             if [ -n "$LLVM_OMP_BIN" ]; then
               echo "Bundling OpenMP from $LLVM_OMP_BIN"
-              delvewheel repair --add-path "$LLVM_OMP_BIN" -w {dest_dir} {wheel} || true
+              delvewheel repair --add-path "$LLVM_OMP_BIN" -w "{dest_dir}" "{wheel}" || true
             else
               echo "WARNING: MSVC LLVM OpenMP not found; running delvewheel without --add-path"
-              delvewheel repair -w {dest_dir} {wheel} || true
+              delvewheel repair -w "{dest_dir}" "{wheel}" || true
             fi
-            python "{project}/maintenance_scripts/repair_windows_wheel.py" {dest_dir} {wheel}
+            python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。

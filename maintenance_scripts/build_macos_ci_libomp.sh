@@ -47,8 +47,8 @@ _libomp_deploy_ok() {
 }
 
 _libomp_symbol_ok() {
-  # LLVM-built libomp exports kmpc symbols with nm -g; avoid brittle exact names.
-  nm -g "$LIBOMP" 2>/dev/null | grep -q 'kmpc_dispatch_deinit'
+  # LLVM-built libomp may not export dispatch_deinit, but always exports kmpc/omp APIs.
+  nm -g "$LIBOMP" 2>/dev/null | grep -Eq '__kmpc_|omp_get_max_threads'
 }
 
 if [[ -f "$LIBOMP" ]] && _libomp_arch_ok && _libomp_deploy_ok && _libomp_symbol_ok; then
@@ -115,7 +115,7 @@ if ! _libomp_arch_ok || ! _libomp_deploy_ok || ! _libomp_symbol_ok; then
   _libomp_symbol_ok || echo "  - missing OpenMP runtime symbols" >&2
   file "$LIBOMP" >&2 || true
   otool -l "$LIBOMP" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/' >&2 || true
-  nm -g "$LIBOMP" 2>/dev/null | grep kmpc | head -5 >&2 || true
+  nm -g "$LIBOMP" 2>/dev/null | grep -E '__kmpc_|omp_get_max_threads' | head -5 >&2 || true
   exit 1
 fi
 

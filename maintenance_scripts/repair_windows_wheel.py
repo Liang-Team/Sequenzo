@@ -15,9 +15,13 @@ def main() -> int:
         )
         return 2
 
-    dest = Path(sys.argv[1])
-    wheel = Path(sys.argv[2])
+    dest = Path(sys.argv[1]).resolve()
+    wheel = Path(sys.argv[2]).resolve()
     dest.mkdir(parents=True, exist_ok=True)
+
+    if not wheel.is_file():
+        print(f"Source wheel not found: {wheel}", file=sys.stderr)
+        return 1
 
     wheels = sorted(dest.glob("*.whl"))
     if not wheels:
@@ -29,7 +33,11 @@ def main() -> int:
             wheels = [target]
 
     if not wheels:
-        print(f"Failed to place repaired wheel in {dest}", file=sys.stderr)
+        print(
+            f"Failed to place repaired wheel in {dest} "
+            f"(source={wheel}, dest_exists={dest.is_dir()})",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Repaired wheel: {wheels[0]}")
