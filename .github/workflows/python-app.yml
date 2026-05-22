@@ -565,16 +565,7 @@ jobs:
             python -m pip install --upgrade pip
             python -m pip install delvewheel
 
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
-            # All DLL discovery and delvewheel invocation is handled inside
-            # repair_windows_wheel.py to avoid YAML multi-line shell quoting
-            # issues (nested if/else blocks at deep indentation caused the
-            # script to be duplicated verbatim in the executed shell command).
-            python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
-
-            echo "=== delvewheel show repaired wheel ==="
-            python -c "import glob, subprocess; wheels = sorted(glob.glob(r'{dest_dir}/*.whl')); assert wheels, 'No repaired wheel found'; [subprocess.run(['delvewheel', 'show', wheel], check=True) for wheel in wheels]"
-            python -c "import glob, zipfile; wheels = sorted(glob.glob(r'{dest_dir}/*.whl')); assert wheels, 'No repaired wheel found'; found = {wheel: [name for name in zipfile.ZipFile(wheel).namelist() if name.startswith('sequenzo.libs/') and name.lower().endswith('.dll') and 'libomp140' in name.lower()] for wheel in wheels}; missing = [wheel for wheel, dlls in found.items() if not dlls]; assert not missing, 'Missing bundled libomp140*.dll in sequenzo.libs for: ' + ', '.join(missing); print('[OK] bundled OpenMP DLLs:', found)"
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。

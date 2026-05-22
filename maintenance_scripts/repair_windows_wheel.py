@@ -151,7 +151,7 @@ def main() -> int:
     if run_delvewheel(dest, wheel, omp_bin):
         repaired = sorted(dest.glob("*.whl"))[0]
         print(f"[repair] Repaired wheel (delvewheel): {repaired}")
-        return 0
+        return _finalize_repaired_wheel(repaired)
 
     # --- Step 3: safety net — copy built wheel as-is ---
     print("[repair] delvewheel did not emit a wheel; copying built wheel as-is.")
@@ -162,6 +162,33 @@ def main() -> int:
         return 1
 
     print(f"[repair] Repaired wheel (copied as-is): {target}")
+    return _finalize_repaired_wheel(target)
+
+
+def _verify_bundled_openmp(wheel_path: Path) -> None:
+    import zipfile
+
+    with zipfile.ZipFile(wheel_path) as zf:
+        dlls = [
+            name
+            for name in zf.namelist()
+            if name.startswith("sequenzo.libs/")
+            and name.lower().endswith(".dll")
+            and "libomp140" in name.lower()
+        ]
+    if not dlls:
+        print(
+            f"[repair] ERROR: missing bundled libomp140*.dll in sequenzo.libs for {wheel_path}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    print(f"[OK] bundled OpenMP DLLs: {dlls}")
+
+
+def _finalize_repaired_wheel(wheel_path: Path) -> int:
+    print("=== delvewheel show repaired wheel ===")
+    subprocess.run(["delvewheel", "show", str(wheel_path)], check=True)
+    _verify_bundled_openmp(wheel_path)
     return 0
 
 
