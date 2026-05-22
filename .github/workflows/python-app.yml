@@ -1243,29 +1243,53 @@ jobs:
           echo "=== Windows Conda wheel smoke test ==="
           conda info
           python -m pip install --upgrade pip
-          PY_TAG="cp${{ matrix.python-version-nodot }}"
-          WHEEL=$(python - <<PY
-          import glob
-          import sys
-          wheels = glob.glob("dist/*${PY_TAG}*win_amd64.whl")
-          if not wheels:
-              raise SystemExit("No Windows wheel found for ${PY_TAG}")
-          print(wheels[0])
-          PY
-          )
           echo "Installing $WHEEL into Conda environment"
-          python -m pip install --force-reinstall "$WHEEL"
+          python - <<'PY'
+          import glob
+          import os
+          import zipfile
+
+          py_tag = "cp${{ matrix.python-version-nodot }}"
+          wheels = sorted(glob.glob(f"dist/*{py_tag}*win_amd64.whl"))
+          if not wheels:
+              raise SystemExit(f"No Windows wheel found for {py_tag}")
+          wheel = os.path.abspath(wheels[-1])
+
+          with zipfile.ZipFile(wheel) as zf:
+              native = [
+                  name
+                  for name in zf.namelist()
+                  if "core_distance_c_code" in name.replace("\\", "/")
+                  and name.lower().endswith((".pyd", ".so"))
+              ]
+          if not native:
+              raise SystemExit(
+                  f"Wheel missing core_distance_c_code binary: {wheel}"
+              )
+          print(f"[OK] wheel contains core_distance_c_code: {native[0]}")
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "sequenzo-wheel-smoke.env"), "w", encoding="utf-8") as fh:
+              fh.write(f"WHEEL={wheel}\n")
+          PY
+          python -m pip install --force-reinstall "$(grep '^WHEEL=' "$RUNNER_TEMP/sequenzo-wheel-smoke.env" | cut -d= -f2-)"
+          mkdir -p "$RUNNER_TEMP/sequenzo-wheel-smoke"
+          cd "$RUNNER_TEMP/sequenzo-wheel-smoke"
           python - <<'PY'
           import importlib.util
           import os
           import sys
 
-          # Avoid importing the checkout's source tree (no compiled .pyd/.so there).
-          sys.path = [p for p in sys.path if p]
+          workspace = os.path.abspath(os.environ.get("GITHUB_WORKSPACE", ""))
+          sys.path = [
+              p
+              for p in sys.path
+              if p
+              and (not workspace or os.path.abspath(p) != workspace)
+          ]
 
           import numpy as np
 
           print("CONDA_PREFIX=" + os.environ.get("CONDA_PREFIX", ""))
+          print("CWD=" + os.getcwd())
 
           from sequenzo import SequenceData, get_distance_matrix, Cluster
           import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code

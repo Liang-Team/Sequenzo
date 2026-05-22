@@ -30,6 +30,8 @@ def test_windows_conda_smoke_installs_repaired_wheel():
     assert "conda-incubator/setup-miniconda@v3" in workflow
     assert "Windows Conda wheel smoke test" in workflow
     assert "CONDA_PREFIX=" in workflow
-    assert "python -m pip install --force-reinstall \"$WHEEL\"" in workflow
-    assert "sys.path = [p for p in sys.path if p]" in workflow
+    assert "python -m pip install --force-reinstall" in workflow
+    assert 'cd "$RUNNER_TEMP/sequenzo-wheel-smoke"' in workflow
+    assert "GITHUB_WORKSPACE" in workflow
+    assert "Wheel missing core_distance_c_code binary" in workflow
     assert "[OK] Windows Conda wheel smoke test passed" in workflow
