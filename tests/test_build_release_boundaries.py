@@ -32,6 +32,8 @@ def test_macos_wheel_repair_fails_instead_of_copying_unrepaired_wheel():
     assert 'CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: python maintenance_scripts/repair_windows_wheel.py' in source
     repair_script = (repo_root / "maintenance_scripts" / "repair_windows_wheel.py").read_text()
     assert "delvewheel did not emit a wheel; copying built wheel as-is" in repair_script
+    assert '"-m", "delvewheel"' in repair_script or "'-m', 'delvewheel'" in repair_script
+    assert "libomp.dll" not in repair_script or "libomp140" in repair_script
     assert "bundled OpenMP DLLs" in repair_script
     assert (repo_root / "maintenance_scripts" / "repair_windows_wheel.py").is_file()
     assert "exit 1" in source
