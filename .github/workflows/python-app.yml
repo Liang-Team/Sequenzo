@@ -570,23 +570,7 @@ jobs:
               echo "WARNING: MSVC LLVM OpenMP not found; running delvewheel without --add-path"
               delvewheel repair -w {dest_dir} {wheel} || true
             fi
-            python - <<'PY'
-            import shutil
-            import sys
-            from pathlib import Path
-
-            dest = Path(r"{dest_dir}")
-            wheel = Path(r"{wheel}")
-            wheels = sorted(dest.glob("*.whl"))
-            if not wheels:
-                print("delvewheel did not emit a wheel; copying built wheel as-is")
-                shutil.copy2(wheel, dest / wheel.name)
-                wheels = sorted(dest.glob("*.whl"))
-            if not wheels:
-                print(f"[ERROR] No repaired wheel in {dest}")
-                sys.exit(1)
-            print(f"Repaired wheel: {wheels[0]}")
-            PY
+            python "{project}/maintenance_scripts/repair_windows_wheel.py" {dest_dir} {wheel}
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。

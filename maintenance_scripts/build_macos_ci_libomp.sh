@@ -34,20 +34,21 @@ _libomp_arch_ok() {
 _libomp_deploy_ok() {
   local minos=""
   minos=$(otool -l "$LIBOMP" | awk '
-    /LC_BUILD_VERSION/ { capture=1; next }
-    capture && /minos/ { print $2; exit }
+    /cmd LC_BUILD_VERSION/ { in_build=1; next }
+    in_build && /minos/ { print $2; exit }
   ')
   if [[ -z "$minos" ]]; then
     minos=$(otool -l "$LIBOMP" | awk '
-      /LC_VERSION_MIN_MACOSX/ { capture=1; next }
-      capture && /version/ { print $2; exit }
+      /cmd LC_VERSION_MIN_MACOSX/ { in_min=1; next }
+      in_min && /version/ { print $2; exit }
     ')
   fi
-  [[ "$minos" == "$DEPLOY_TARGET" ]]
+  [[ "$(printf '%s' "$minos" | tr -d '[:space:]')" == "$DEPLOY_TARGET" ]]
 }
 
 _libomp_symbol_ok() {
-  nm -gU "$LIBOMP" 2>/dev/null | grep -q '___kmpc_dispatch_deinit'
+  # LLVM-built libomp exports kmpc symbols with nm -g; avoid brittle exact names.
+  nm -g "$LIBOMP" 2>/dev/null | grep -q 'kmpc_dispatch_deinit'
 }
 
 if [[ -f "$LIBOMP" ]] && _libomp_arch_ok && _libomp_deploy_ok && _libomp_symbol_ok; then
@@ -109,8 +110,12 @@ cmake --build "$BUILD" --target install -j"$(sysctl -n hw.ncpu 2>/dev/null || ec
 
 if ! _libomp_arch_ok || ! _libomp_deploy_ok || ! _libomp_symbol_ok; then
   echo "[ERROR] Built libomp failed verification:" >&2
+  _libomp_arch_ok || echo "  - architecture mismatch (expected ${ARCH})" >&2
+  _libomp_deploy_ok || echo "  - deployment target mismatch (expected ${DEPLOY_TARGET})" >&2
+  _libomp_symbol_ok || echo "  - missing OpenMP runtime symbols" >&2
   file "$LIBOMP" >&2 || true
   otool -l "$LIBOMP" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/' >&2 || true
+  nm -g "$LIBOMP" 2>/dev/null | grep kmpc | head -5 >&2 || true
   exit 1
 fi
 

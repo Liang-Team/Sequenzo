@@ -28,7 +28,10 @@ def test_macos_wheel_repair_fails_instead_of_copying_unrepaired_wheel():
     assert 'CIBW_TARGET_OSX_x86_64: "10.15"' in source
     assert 'CIBW_TARGET_OSX_arm64: "11.0"' in source
     assert "build_macos_ci_libomp.sh" in source
-    assert "delvewheel did not emit a wheel; copying built wheel as-is" in source
+    assert "repair_windows_wheel.py" in source
+    repair_script = (repo_root / "maintenance_scripts" / "repair_windows_wheel.py").read_text()
+    assert "delvewheel did not emit a wheel; copying built wheel as-is" in repair_script
+    assert (repo_root / "maintenance_scripts" / "repair_windows_wheel.py").is_file()
     assert "exit 1" in source
     assert (repo_root / "maintenance_scripts" / "build_macos_ci_libomp.sh").is_file()
 
