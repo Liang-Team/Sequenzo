@@ -18,7 +18,7 @@ if [[ -z "$ARCH" || -z "$DEPLOY_TARGET" ]]; then
   usage
 fi
 
-for tool in cmake clang clang++ curl tar; do
+for tool in cmake clang clang++ git; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "[ERROR] Required tool not found: $tool" >&2
     exit 1
@@ -61,26 +61,41 @@ WORK="$(mktemp -d)"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
 
-TARBALL="$WORK/openmp-${LLVM_OPENMP_VERSION}.src.tar.xz"
-URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_OPENMP_VERSION}/openmp-${LLVM_OPENMP_VERSION}.src.tar.xz"
+LLVM_SRC="$WORK/llvm-project"
 for attempt in 1 2 3; do
-  if curl -fsSL --http1.1 "$URL" -o "$TARBALL"; then
+  if git clone --depth 1 --branch "llvmorg-${LLVM_OPENMP_VERSION}" --filter=blob:none --sparse \
+    https://github.com/llvm/llvm-project.git "$LLVM_SRC"; then
     break
   fi
   if [ "$attempt" -eq 3 ]; then
-    echo "[ERROR] Failed to download LLVM OpenMP source after 3 attempts" >&2
+    echo "[ERROR] Failed to clone llvm-project after 3 attempts" >&2
     exit 1
   fi
-  echo "Download failed, retrying in ${attempt}0s..." >&2
+  echo "git clone failed, retrying in ${attempt}0s..." >&2
+  rm -rf "$LLVM_SRC"
   sleep $((attempt * 10))
 done
-tar -xJf "$TARBALL" -C "$WORK"
 
-SRC="$WORK/openmp-${LLVM_OPENMP_VERSION}.src"
+(
+  cd "$LLVM_SRC"
+  git sparse-checkout set openmp cmake
+)
+
+OPENMP_SRC="$LLVM_SRC/openmp"
+for required_path in \
+  "$OPENMP_SRC/CMakeLists.txt" \
+  "$LLVM_SRC/cmake/Modules/ExtendPath.cmake" \
+  "$LLVM_SRC/cmake/Modules/LLVMCheckCompilerLinkerFlag.cmake"; do
+  if [[ ! -f "$required_path" ]]; then
+    echo "[ERROR] Missing LLVM source component: $required_path" >&2
+    exit 1
+  fi
+done
+
 BUILD="$WORK/build"
 mkdir -p "$BUILD" "$INSTALL_PREFIX"
 
-cmake -S "$SRC" -B "$BUILD" \
+cmake -S "$OPENMP_SRC" -B "$BUILD" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
   -DCMAKE_OSX_ARCHITECTURES="$ARCH" \

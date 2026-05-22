@@ -553,25 +553,40 @@ jobs:
             python -m pip install delvewheel
 
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
+            set -euo pipefail
             echo "=== Repairing Windows wheel with delvewheel ==="
-            for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find VC\Tools\Llvm\x64\bin\libomp140.x86_64.dll`) do set "LLVM_OMP_BIN=%%~dpi"
-            if defined LLVM_OMP_BIN (
-              echo "Bundling OpenMP from %LLVM_OMP_BIN%"
-              delvewheel repair --add-path "%LLVM_OMP_BIN%" -w {dest_dir} {wheel}
-            ) else (
+            LLVM_OMP_BIN=""
+            VSWHERE="${PROGRAMFILES(x86)/Microsoft Visual Studio/Installer/vswhere.exe}"
+            if [ -f "$VSWHERE" ]; then
+              OMP_DLL="$("$VSWHERE" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC/Tools/Llvm/x64/bin/libomp140.x86_64.dll' 2>/dev/null | head -1)"
+              if [ -n "$OMP_DLL" ] && [ -f "$OMP_DLL" ]; then
+                LLVM_OMP_BIN="$(dirname "$OMP_DLL")"
+              fi
+            fi
+            if [ -n "$LLVM_OMP_BIN" ]; then
+              echo "Bundling OpenMP from $LLVM_OMP_BIN"
+              delvewheel repair --add-path "$LLVM_OMP_BIN" -w {dest_dir} {wheel} || true
+            else
               echo "WARNING: MSVC LLVM OpenMP not found; running delvewheel without --add-path"
-              delvewheel repair -w {dest_dir} {wheel}
-            )
-            dir /b {dest_dir}\*.whl >nul 2>&1
-            if errorlevel 1 (
-              echo "delvewheel did not emit a wheel; copying built wheel as-is"
-              copy /Y {wheel} {dest_dir}\
-            )
-            dir /b {dest_dir}\*.whl >nul 2>&1
-            if errorlevel 1 (
-              echo "[ERROR] No repaired wheel in {dest_dir}"
-              exit /b 1
-            )
+              delvewheel repair -w {dest_dir} {wheel} || true
+            fi
+            python - <<'PY'
+            import shutil
+            import sys
+            from pathlib import Path
+
+            dest = Path(r"{dest_dir}")
+            wheel = Path(r"{wheel}")
+            wheels = sorted(dest.glob("*.whl"))
+            if not wheels:
+                print("delvewheel did not emit a wheel; copying built wheel as-is")
+                shutil.copy2(wheel, dest / wheel.name)
+                wheels = sorted(dest.glob("*.whl"))
+            if not wheels:
+                print(f"[ERROR] No repaired wheel in {dest}")
+                sys.exit(1)
+            print(f"Repaired wheel: {wheels[0]}")
+            PY
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
