@@ -315,24 +315,24 @@ def main() -> int:
     return _finalize_repaired_wheel(target)
 
 
-def _verify_bundled_openmp(wheel_path: Path) -> None:
+def _find_bundled_openmp_dlls_in_wheel(wheel_path: Path) -> list[str]:
+    """Return libomp140*.dll entries vendored anywhere inside the wheel."""
     import zipfile
 
     with zipfile.ZipFile(wheel_path) as zf:
-        dlls = [
+        return sorted(
             name
             for name in zf.namelist()
-            if name.endswith(".dll")
-            and "libomp140" in name.lower()
-            and ("/" in name or "\\" in name)
-            and (
-                name.startswith("sequenzo.libs/")
-                or ".libs/" in name.replace("\\", "/")
-            )
-        ]
+            if name.lower().endswith(".dll")
+            and "libomp140" in name.replace("\\", "/").lower()
+        )
+
+
+def _verify_bundled_openmp(wheel_path: Path) -> None:
+    dlls = _find_bundled_openmp_dlls_in_wheel(wheel_path)
     if not dlls:
         print(
-            f"[repair] ERROR: missing bundled libomp140*.dll in sequenzo.libs for {wheel_path}",
+            f"[repair] ERROR: missing bundled libomp140*.dll in {wheel_path}",
             file=sys.stderr,
         )
         raise SystemExit(1)

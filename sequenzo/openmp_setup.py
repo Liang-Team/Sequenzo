@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺，Yapeng Wei 卫亚鹏，Xinyi Li 李欣怡
 @File    : openmp_setup.py
 @Time    : 07/10/2025 10:42
 @Desc    :
@@ -37,8 +37,6 @@ _CONDA_OMP_DLL_NAMES = (
     "libiomp5.dll",
 )
 
-_WINDOWS_DLL_DIRECTORY_HANDLES: list[object] = []
-
 _MACOS_HOMEBREW_LIBOMP_PATHS = (
     "/opt/homebrew/opt/libomp/lib/libomp.dylib",
     "/opt/homebrew/lib/libomp.dylib",
@@ -61,6 +59,27 @@ def _get_sequenzo_package_dir() -> Path:
 
 def _get_sequenzo_libs_dir() -> Path:
     return _get_sequenzo_package_dir().parent / "sequenzo.libs"
+
+
+def _iter_windows_wheel_openmp_dirs() -> list[Path]:
+    """Directories where delvewheel may vendor OpenMP DLLs on Windows."""
+    site_packages = _get_sequenzo_package_dir().parent
+    candidates = [
+        site_packages / "sequenzo.libs",
+        site_packages,
+    ]
+    return [path for path in candidates if path.is_dir()]
+
+
+def _find_windows_bundled_openmp_dlls(directory: Path) -> dict[str, Path]:
+    found = _find_dlls(directory, _WINDOWS_BUNDLED_OMP_NAMES)
+    if found:
+        return found
+
+    for path in directory.glob("libomp140*.dll"):
+        if path.is_file():
+            found[path.name.lower()] = path
+    return found
 
 
 def _iter_conda_openmp_dirs(conda_prefix: str) -> list[Path]:
@@ -108,9 +127,9 @@ def check_libomp_availability():
         for directory in _iter_conda_openmp_dirs(os.environ.get("CONDA_PREFIX", "")):
             if _find_dlls(directory, _CONDA_OMP_DLL_NAMES):
                 return True
-        libs_dir = _get_sequenzo_libs_dir()
-        if libs_dir.is_dir() and _find_dlls(libs_dir, _WINDOWS_BUNDLED_OMP_NAMES):
-            return True
+        for directory in _iter_windows_wheel_openmp_dirs():
+            if _find_windows_bundled_openmp_dlls(directory):
+                return True
         return False
 
     return True
@@ -248,11 +267,9 @@ def _register_windows_dll_directory(path: Path) -> None:
     if not hasattr(os, "add_dll_directory"):
         return
     try:
-        handle = os.add_dll_directory(str(path))
+        os.add_dll_directory(str(path))
     except OSError:
         pass
-    else:
-        _WINDOWS_DLL_DIRECTORY_HANDLES.append(handle)
 
 
 def _replace_bundled_openmp_with_conda_copy(
@@ -298,14 +315,17 @@ def _fix_duplicate_libomp_in_conda_windows() -> None:
     for directory in conda_dirs:
         _register_windows_dll_directory(directory)
 
-    sequenzo_libs = _get_sequenzo_libs_dir()
-    if sequenzo_libs.is_dir():
-        _register_windows_dll_directory(sequenzo_libs)
+    for directory in _iter_windows_wheel_openmp_dirs():
+        if _find_windows_bundled_openmp_dlls(directory):
+            _register_windows_dll_directory(directory)
 
-    if not sequenzo_libs.is_dir():
+    bundled_dlls: dict[str, Path] = {}
+    for directory in _iter_windows_wheel_openmp_dirs():
+        bundled_dlls.update(_find_windows_bundled_openmp_dlls(directory))
+
+    if not bundled_dlls:
         return
 
-    bundled_dlls = _find_dlls(sequenzo_libs, _WINDOWS_BUNDLED_OMP_NAMES)
     for bundled_name in _WINDOWS_BUNDLED_OMP_NAMES:
         bundled_path = bundled_dlls.get(bundled_name.lower())
         if bundled_path is None:

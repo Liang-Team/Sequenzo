@@ -59,3 +59,17 @@ def test_pick_best_redist_match_prefers_release_over_debug(tmp_path):
     debug.write_bytes(b"debug")
 
     assert repair._pick_best_redist_match([debug, release]) == release
+
+
+def test_verify_bundled_openmp_accepts_platlib_layout(tmp_path):
+    repair = _load_repair_module()
+    import zipfile
+
+    wheel = tmp_path / "sequenzo-0.1.39-cp310-cp310-win_amd64.whl"
+    with zipfile.ZipFile(wheel, "w") as zf:
+        zf.writestr(
+            "sequenzo-0.1.39.data/platlib/libomp140.x86_64.dll",
+            b"fake",
+        )
+
+    repair._verify_bundled_openmp(wheel)

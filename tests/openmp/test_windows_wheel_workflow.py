@@ -20,8 +20,8 @@ def test_windows_wheel_repair_verifies_bundled_openmp_dlls():
 
     assert "delvewheel show" in repair_script
     assert "LIBOMP_DLL_DIR" in workflow
-    assert "sequenzo.libs" in repair_script
     assert "libomp140" in repair_script
+    assert "_find_bundled_openmp_dlls_in_wheel" in repair_script
 
 
 def test_windows_conda_smoke_installs_repaired_wheel():
