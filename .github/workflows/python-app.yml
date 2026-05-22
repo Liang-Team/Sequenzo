@@ -280,8 +280,19 @@ jobs:
         if: runner.os == 'macOS'
         run: python -m pip install --upgrade --retries 10 --timeout 120 pip setuptools wheel "cibuildwheel==${CIBW_VERSION}"
 
-      # Build libomp from source so delocate can bundle a runtime that matches
-      # the wheel's minimum macOS version (Homebrew libomp often requires 14+).
+      # Build libomp from LLVM source so the bundled dylib's minos matches the
+      # wheel deployment target (Homebrew libomp 18+ requires macOS 13+, which
+      # would break the minos guarantee of macosx_10_15 / macosx_11_0 wheels).
+      #
+      # Previously this caused "symbol not found in flat namespace
+      # '___kmpc_dispatch_deinit'" at import time.  Root cause: that symbol is
+      # an Intel-private OpenMP extension emitted by clang's -fopenmp when
+      # dynamic/guided schedules are used, but the LLVM openmp *runtime* we build
+      # from source deliberately omits it (it was removed in LLVM 13).
+      # Fix: pass -fno-openmp-extensions at compile time so clang never emits a
+      # reference to __kmpc_dispatch_deinit (or any other Intel-private symbol).
+      # The resulting .so is pure OpenMP-standard and links cleanly against our
+      # self-built libomp whose minos == the wheel deployment target.
       - name: Cache CI libomp (macOS)
         if: runner.os == 'macOS'
         uses: actions/cache@v4
@@ -410,7 +421,7 @@ jobs:
 
           # 显式将 runner 级别的环境变量传入 cibuildwheel 的隔离 venv
           # 避免 $LIBOMP_PATH 因隐式继承失败而导致 delocate 找不到 libomp
-          CIBW_PASS_ENV: "LIBOMP_PATH SEQUENZO_LIBOMP_PREFIX SEQUENZO_ENABLE_OPENMP MACOSX_DEPLOYMENT_TARGET"
+          CIBW_PASS_ENV: "LIBOMP_PATH SEQUENZO_LIBOMP_PREFIX SEQUENZO_ENABLE_OPENMP MACOSX_DEPLOYMENT_TARGET GITHUB_WORKSPACE"
 
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
           # REPAIR_LIBRARY_PATH 是 libomp 路径的副本，专用于在 repair 阶段
@@ -420,6 +431,8 @@ jobs:
             REPAIR_LIBRARY_PATH="$LIBOMP_PATH"
             LDFLAGS="-L$LIBOMP_PATH -Wl,-rpath,@loader_path/../.dylibs"
             CPPFLAGS="-I$LIBOMP_PATH/../include"
+            CFLAGS="-fno-openmp-extensions"
+            CXXFLAGS="-fno-openmp-extensions"
 
           # macOS: ensure libomp is available and properly linked
           CIBW_BEFORE_BUILD_MACOS: |
@@ -610,7 +623,7 @@ jobs:
             # repair_windows_wheel.py is the safety net: if delvewheel emitted a
             # repaired wheel it confirms it; otherwise it copies the built wheel
             # as-is so cibuildwheel always finds a wheel in dest_dir.
-            python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
+            python "$GITHUB_WORKSPACE/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
