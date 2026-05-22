@@ -9,7 +9,6 @@ and adapts it for use with Sequenzo's SequenceData format.
 """
 
 import numpy as np
-import pandas as pd
 from typing import Optional, List, Dict, Tuple, Union
 from hmmlearn.hmm import CategoricalHMM
 from sequenzo.define_sequence_data import SequenceData
@@ -191,6 +190,11 @@ class HMM:
             raise ValueError(
                 f"Expected {self.n_channels} channels, got {len(channels)}"
             )
+        for ch_idx, channel in enumerate(channels):
+            if list(channel.alphabet) != list(self.alphabets[ch_idx]):
+                raise ValueError(
+                    f"Channel {ch_idx} alphabet does not match the fitted model alphabet"
+                )
         return channels
 
     def _multichannel_arrays(

@@ -507,7 +507,7 @@ ci = boot_results['summary']['initial_probs']['ci_95']
 ### Fully Implemented Features
 
 - **Basic HMM**: Complete implementation with EM algorithm
-- **Mixture HMM (MHMM)**: Cluster estimation with weighted Baum-Welch M-step (single-channel only; multichannel and covariate support not yet available in `build_mhmm`)
+- **Mixture HMM (MHMM)**: Cluster estimation with weighted Baum-Welch M-step, fixed-parameter multichannel inference, posterior cluster probabilities, and repeated-sequence compression for scoring and multichannel fitting
 - **Non-homogeneous HMM (NHMM)**: Formula-based covariate support for
   initial, transition, and emission probabilities, with focused seqHMM parity
   guards for the migrated NHMM behavior
@@ -532,9 +532,9 @@ ci = boot_results['summary']['initial_probs']['ci_95']
 
 2. **Multichannel NHMM**: Multichannel support is available for HMM, but not yet for NHMM
 
-3. **MHMM Multichannel & Covariates**: `build_mhmm()` only accepts a single `SequenceData` object (not `List[SequenceData]` for multichannel) and has no `formula`/`data` parameters for covariates, unlike R's `seqHMM`
+3. **MHMM Covariates**: `build_mhmm()` supports `List[SequenceData]` for fixed-parameter multichannel inference, but MHMM mixture-weight covariate formulas are not yet implemented.
 
-4. **Multichannel EM Performance**: The multichannel EM algorithm (`multichannel_emission.py`) is implemented in pure Python with nested loops, which is significantly slower than R's C backend for large datasets. For datasets with >500 sequences, consider using a subset for fitting
+4. **Multichannel EM Performance**: Multichannel EM uses NumPy/scaled forward-backward and can compress repeated complete trajectories, but it remains a Python implementation and should be benchmarked for very large all-unique panels.
 
 ### Recent Bug Fixes (February 2026)
 

@@ -16,7 +16,8 @@ def fit_mhmm(
     model: MHMM,
     n_iter: int = 100,
     tol: float = 1e-2,
-    verbose: bool = False
+    verbose: bool = False,
+    compress: Optional[bool] = None,
 ) -> MHMM:
     """
     Fit a Mixture HMM model to the observations using EM algorithm.
@@ -57,6 +58,6 @@ def fit_mhmm(
         >>> print(f"Cluster probabilities: {mhmm.cluster_probs}")
     """
     # Fit the model
-    model.fit(n_iter=n_iter, tol=tol, verbose=verbose)
+    model.fit(n_iter=n_iter, tol=tol, verbose=verbose, compress=compress)
     
     return model

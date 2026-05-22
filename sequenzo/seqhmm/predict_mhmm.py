@@ -10,15 +10,15 @@ posterior probabilities for Mixture HMM models.
 
 import numpy as np
 import pandas as pd
-from typing import Optional
+from typing import List, Optional, Union
 from sequenzo.define_sequence_data import SequenceData
 from .mhmm import MHMM
-from .utils import sequence_data_to_hmmlearn_format
 
 
 def predict_mhmm(
     model: MHMM,
-    newdata: Optional[SequenceData] = None
+    newdata: Optional[Union[SequenceData, List[SequenceData]]] = None,
+    compress: bool = False,
 ) -> np.ndarray:
     """
     Predict the most likely cluster for each sequence.
@@ -30,6 +30,7 @@ def predict_mhmm(
         model: Fitted MHMM model object
         newdata: Optional SequenceData to predict. If None, uses the data
                  the model was fitted on.
+        compress: Whether to reuse likelihoods for repeated sequences
         
     Returns:
         numpy array: Predicted cluster index for each sequence
@@ -50,15 +51,20 @@ def predict_mhmm(
         >>> predicted_clusters = predict_mhmm(mhmm)
         >>> print(f"Predicted clusters: {predicted_clusters}")
     """
-    if model.log_likelihood is None:
-        raise ValueError("Model must be fitted before prediction. Use fit_mhmm() first.")
-    
-    return model.predict_cluster(newdata)
+    if model.log_likelihood is None and not model.has_complete_parameters:
+        raise ValueError(
+            "Model must be fitted before prediction, or all cluster HMMs "
+            "must have complete fixed parameters."
+        )
+
+    responsibilities = model.compute_responsibilities(newdata, compress=compress)
+    return np.argmax(responsibilities, axis=1)
 
 
 def posterior_probs_mhmm(
     model: MHMM,
-    newdata: Optional[SequenceData] = None
+    newdata: Optional[Union[SequenceData, List[SequenceData]]] = None,
+    compress: bool = False,
 ) -> pd.DataFrame:
     """
     Compute posterior probabilities of cluster membership.
@@ -73,7 +79,7 @@ def posterior_probs_mhmm(
     Returns:
         pandas DataFrame: Posterior probabilities with columns:
             - id: Sequence identifier (index in the original data)
-            - cluster: Cluster index
+            - cluster: Cluster name
             - probability: Posterior probability of belonging to this cluster
             
     Examples:
@@ -92,51 +98,20 @@ def posterior_probs_mhmm(
         >>> posteriors = posterior_probs_mhmm(mhmm)
         >>> print(posteriors.head())
     """
-    if model.log_likelihood is None:
+    if model.log_likelihood is None and not model.has_complete_parameters:
         raise ValueError(
-            "Model must be fitted before computing posterior probabilities. Use fit_mhmm() first."
+            "Model must be fitted before computing posterior probabilities, "
+            "or all cluster HMMs must have complete fixed parameters."
         )
-    
-    # Get sequences to use
-    sequences = newdata if newdata is not None else model.observations
-    
-    # Get responsibilities (posterior cluster probabilities)
-    if newdata is None:
-        # Use stored responsibilities from fitting
-        responsibilities = model.responsibilities
-    else:
-        # Compute responsibilities for new sequences
-        X, lengths = sequence_data_to_hmmlearn_format(sequences)
-        n_sequences = len(lengths)
-        
-        log_likelihoods = np.zeros((n_sequences, model.n_clusters))
-        
-        for k in range(model.n_clusters):
-            for seq_idx in range(n_sequences):
-                start_idx = lengths[:seq_idx].sum()
-                end_idx = start_idx + lengths[seq_idx]
-                seq_X = X[start_idx:end_idx]
-                seq_lengths = np.array([lengths[seq_idx]])
-                
-                log_likelihoods[seq_idx, k] = model.clusters[k]._hmm_model.score(seq_X, seq_lengths)
-        
-        log_probs = np.log(model.cluster_probs + 1e-10)
-        log_likelihoods += log_probs[np.newaxis, :]
-        
-        max_log_lik = np.max(log_likelihoods, axis=1, keepdims=True)
-        exp_log_lik = np.exp(log_likelihoods - max_log_lik)
-        responsibilities = exp_log_lik / np.sum(exp_log_lik, axis=1, keepdims=True)
-    
-    # Create DataFrame
-    rows = []
-    for seq_id in range(len(responsibilities)):
-        for cluster_idx in range(model.n_clusters):
-            rows.append({
-                'id': seq_id,
-                'cluster': cluster_idx,
-                'probability': responsibilities[seq_id, cluster_idx]
-            })
-    
-    df = pd.DataFrame(rows)
-    
-    return df
+
+    responsibilities = model.compute_responsibilities(newdata, compress=compress)
+    sequences = newdata if newdata is not None else model._default_sequences()
+    primary = sequences[0] if isinstance(sequences, list) else sequences
+    ids = np.asarray(getattr(primary, "ids", np.arange(responsibilities.shape[0])))
+    clusters = np.asarray(model.cluster_names)
+
+    return pd.DataFrame({
+        'id': np.repeat(ids, model.n_clusters),
+        'cluster': np.tile(clusters, len(ids)),
+        'probability': responsibilities.reshape(-1),
+    })

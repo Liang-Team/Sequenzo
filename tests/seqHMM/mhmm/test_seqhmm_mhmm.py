@@ -466,9 +466,16 @@ class TestMHMMSanity:
         assert len(clusters) == N_SEQUENCES
         assert all(0 <= c < N_CLUSTERS for c in clusters)
 
-    def test_predict_cluster_before_fit_raises(self, seqdata):
-        """predict_cluster() raises ValueError before fit."""
+    def test_predict_cluster_before_fit_with_fixed_parameters(self, seqdata):
+        """predict_cluster() works before fit when all fixed parameters exist."""
         mhmm = _build_test_mhmm(seqdata)
+        clusters = mhmm.predict_cluster()
+        assert len(clusters) == N_SEQUENCES
+        assert all(0 <= c < N_CLUSTERS for c in clusters)
+
+    def test_predict_cluster_before_fit_raises_when_parameters_incomplete(self, seqdata):
+        """predict_cluster() raises before fit if component parameters are incomplete."""
+        mhmm = build_mhmm(seqdata, n_clusters=2, n_states=2, random_state=1)
         with pytest.raises(ValueError, match="fitted"):
             mhmm.predict_cluster()
 
