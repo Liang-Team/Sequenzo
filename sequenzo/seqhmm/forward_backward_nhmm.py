@@ -1,5 +1,5 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : forward_backward_nhmm.py
 @Time    : 2025-10-20 09:41
 @Desc    : Forward-Backward algorithm for Non-homogeneous HMM
@@ -11,14 +11,8 @@ This is similar to seqHMM's forward_backward.nhmm() function in R.
 
 import numpy as np
 import pandas as pd
-from typing import Optional, Tuple
+from typing import Optional
 from .nhmm import NHMM
-from .nhmm_utils import (
-    compute_transition_probs_with_covariates,
-    compute_emission_probs_with_covariates,
-    compute_initial_probs_with_covariates
-)
-from .utils import sequence_data_to_hmmlearn_format
 
 
 def forward_backward_nhmm(
@@ -64,9 +58,8 @@ def forward_backward_nhmm(
     if sequences is None:
         sequences = model.observations
     
-    # Convert sequences to integer format
-    X_int, lengths = sequence_data_to_hmmlearn_format(sequences)
-    n_sequences = len(lengths)
+    observations = _nhmm_observation_arrays(sequences, model.n_symbols)
+    n_sequences = len(observations)
     
     # Compute probabilities for all sequences and time points
     initial_probs, transition_probs, emission_probs = model._compute_probs()
@@ -76,17 +69,13 @@ def forward_backward_nhmm(
     
     # Process each sequence
     for seq_idx in range(n_sequences):
-        seq_length = lengths[seq_idx]
-        start_idx = lengths[:seq_idx].sum()
-        end_idx = start_idx + seq_length
-        
-        # Get sequence observations (0-indexed integers)
-        obs_seq = X_int[start_idx:end_idx, 0]  # Shape: (seq_length,)
+        original_idx, obs_seq = observations[seq_idx]
+        seq_length = len(obs_seq)
         
         # Get probabilities for this sequence
-        seq_initial = initial_probs[seq_idx, :]  # Shape: (n_states,)
-        seq_transition = transition_probs[seq_idx, :seq_length, :, :]  # Shape: (seq_length, n_states, n_states)
-        seq_emission = emission_probs[seq_idx, :seq_length, :, :]  # Shape: (seq_length, n_states, n_symbols)
+        seq_initial = initial_probs[original_idx, :]  # Shape: (n_states,)
+        seq_transition = transition_probs[original_idx, :seq_length, :, :]  # Shape: (seq_length, n_states, n_states)
+        seq_emission = emission_probs[original_idx, :seq_length, :, :]  # Shape: (seq_length, n_states, n_symbols)
         
         # Compute forward probabilities
         log_alpha = _forward_nhmm(seq_initial, seq_transition, seq_emission, obs_seq, model.n_states)
@@ -101,8 +90,8 @@ def forward_backward_nhmm(
         for t in range(seq_length):
             for state_idx in range(model.n_states):
                 result_row = {
-                    'id': seq_idx,
-                    'time': t + 1,  # 1-indexed
+                    'id': sequences.ids[original_idx] if getattr(sequences, "ids", None) is not None else original_idx,
+                    'time': sequences.time[t] if getattr(sequences, "time", None) is not None else t + 1,
                     'state': state_idx,
                     'log_alpha': log_alpha[state_idx, t]
                 }
@@ -143,12 +132,11 @@ def _forward_nhmm(
     
     # Initialization: alpha[i, 0] = pi[i] * B[i, obs[0]]
     for i in range(n_states):
-        log_alpha[i, 0] = (
-            np.log(initial_probs[i] + 1e-10) +
-            np.log(emission_probs[0, i, observations[0]] + 1e-10)
-        )
+        log_alpha[i, 0] = np.log(initial_probs[i] + 1e-10)
+        if observations[0] >= 0:
+            log_alpha[i, 0] += np.log(emission_probs[0, i, observations[0]] + 1e-10)
     
-    # Recursion: alpha[j, t] = sum_i(alpha[i, t-1] * A[i, j, t] * B[j, obs[t], t])
+    # Recursion uses the destination-time transition matrix.
     for t in range(1, T):
         for j in range(n_states):
             # Compute log-sum-exp for numerical stability
@@ -156,9 +144,10 @@ def _forward_nhmm(
             for i in range(n_states):
                 log_term = (
                     log_alpha[i, t-1] +
-                    np.log(transition_probs[t-1, i, j] + 1e-10) +
-                    np.log(emission_probs[t, j, observations[t]] + 1e-10)
+                    np.log(transition_probs[t, i, j] + 1e-10)
                 )
+                if observations[t] >= 0:
+                    log_term += np.log(emission_probs[t, j, observations[t]] + 1e-10)
                 # Log-sum-exp trick
                 if log_sum == -np.inf:
                     log_sum = log_term
@@ -196,16 +185,17 @@ def _backward_nhmm(
     # Initialization: beta[i, T-1] = 1 for all i
     log_beta[:, T-1] = 0.0  # log(1) = 0
     
-    # Recursion: beta[i, t] = sum_j(A[i, j, t] * B[j, obs[t+1], t+1] * beta[j, t+1])
+    # Recursion uses the destination-time transition matrix.
     for t in range(T-2, -1, -1):
         for i in range(n_states):
             log_sum = -np.inf
             for j in range(n_states):
                 log_term = (
-                    np.log(transition_probs[t, i, j] + 1e-10) +
-                    np.log(emission_probs[t+1, j, observations[t+1]] + 1e-10) +
+                    np.log(transition_probs[t+1, i, j] + 1e-10) +
                     log_beta[j, t+1]
                 )
+                if observations[t+1] >= 0:
+                    log_term += np.log(emission_probs[t+1, j, observations[t+1]] + 1e-10)
                 # Log-sum-exp trick
                 if log_sum == -np.inf:
                     log_sum = log_term
@@ -236,9 +226,8 @@ def log_likelihood_nhmm(model: NHMM, sequences: Optional = None) -> float:
     if sequences is None:
         sequences = model.observations
     
-    # Convert sequences to integer format
-    X_int, lengths = sequence_data_to_hmmlearn_format(sequences)
-    n_sequences = len(lengths)
+    observations = _nhmm_observation_arrays(sequences, model.n_symbols)
+    n_sequences = len(observations)
     
     # Compute probabilities
     initial_probs, transition_probs, emission_probs = model._compute_probs()
@@ -247,17 +236,13 @@ def log_likelihood_nhmm(model: NHMM, sequences: Optional = None) -> float:
     
     # Process each sequence
     for seq_idx in range(n_sequences):
-        seq_length = lengths[seq_idx]
-        start_idx = lengths[:seq_idx].sum()
-        end_idx = start_idx + seq_length
-        
-        # Get sequence observations
-        obs_seq = X_int[start_idx:end_idx, 0]
+        original_idx, obs_seq = observations[seq_idx]
+        seq_length = len(obs_seq)
         
         # Get probabilities for this sequence
-        seq_initial = initial_probs[seq_idx, :]
-        seq_transition = transition_probs[seq_idx, :seq_length, :, :]
-        seq_emission = emission_probs[seq_idx, :seq_length, :, :]
+        seq_initial = initial_probs[original_idx, :]
+        seq_transition = transition_probs[original_idx, :seq_length, :, :]
+        seq_emission = emission_probs[original_idx, :seq_length, :, :]
         
         # Compute forward probabilities
         log_alpha = _forward_nhmm(seq_initial, seq_transition, seq_emission, obs_seq, model.n_states)
@@ -274,3 +259,22 @@ def log_likelihood_nhmm(model: NHMM, sequences: Optional = None) -> float:
         total_log_lik += log_lik_seq
     
     return total_log_lik
+
+
+def _nhmm_observation_arrays(sequences, n_symbols: int) -> list[tuple[int, np.ndarray]]:
+    observation_arrays = []
+    alphabet = getattr(sequences, "alphabet", [])
+    state_to_int = {state: idx for idx, state in enumerate(alphabet[:n_symbols])}
+
+    for seq_idx, seq in enumerate(sequences.sequences):
+        obs = []
+        for state in seq:
+            if isinstance(state, (int, np.integer)):
+                obs.append(state - 1 if 1 <= state <= n_symbols else -1)
+            else:
+                obs.append(state_to_int.get(state, -1))
+        observation_arrays.append((seq_idx, np.asarray(obs, dtype=np.int32)))
+
+    if not observation_arrays:
+        raise ValueError("No valid observations found for NHMM likelihood.")
+    return observation_arrays

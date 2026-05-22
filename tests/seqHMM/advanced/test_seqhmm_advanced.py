@@ -267,10 +267,7 @@ class TestFormulaSanity:
 
     def test_formula_intercept_only(self):
         """Formula('~ 1') has no terms."""
-        f = Formula("~ 1")
-        # '1' is treated as a term or empty depending on implementation
-        # The key point is create_matrix should return intercept-only
-        pass  # Checked indirectly via create_matrix
+        assert Formula("~ 1").terms == []
 
     def test_create_matrix_shape(self):
         """create_model_matrix returns (n_seq, n_time, n_cov) array."""
@@ -304,6 +301,30 @@ class TestFormulaSanity:
         )
         assert np.allclose(X[:, :, 0], 1.0), "Intercept column not all ones"
 
+    def test_create_matrix_supports_interactions_transforms_and_lags(self):
+        """Formula path supports interactions, numpy transforms, and grouped lags."""
+        n_seq, n_time = 2, 3
+        data = pd.DataFrame({
+            "id": np.repeat([1, 2], n_time),
+            "time": np.tile([1, 2, 3], n_seq),
+            "x": [1.0, 2.0, 4.0, 2.0, 3.0, 5.0],
+            "z": [0.5, 0.5, 1.0, 1.0, 2.0, 2.0],
+        })
+        X = create_model_matrix(
+            "~ x:z + np.log1p(x) + lag(x)",
+            data,
+            id_var="id",
+            time_var="time",
+            n_sequences=n_seq,
+            n_timepoints=n_time,
+        )
+
+        assert X.shape == (n_seq, n_time, 4)
+        assert np.allclose(X[:, :, 0], 1.0)
+        assert np.allclose(X[0, :, 1], [0.5, 1.0, 4.0])
+        assert np.allclose(X[0, :, 2], np.log1p([1.0, 2.0, 4.0]))
+        assert np.allclose(X[0, :, 3], [0.0, 1.0, 2.0])
+
     def test_create_matrix_time_constant_shape(self):
         """create_model_matrix_time_constant returns (n_seq, n_cov)."""
         n_seq = 5
@@ -331,9 +352,23 @@ class TestFormulaSanity:
             "color": ["red", "blue", "green", "red", "blue", "green"],
         })
         X = create_model_matrix_time_constant("~ color", data, n_seq)
-        # intercept + color's 3 levels with drop_first=True -> 3 columns
+        # R/patsy model.matrix-style output keeps the intercept plus k-1 dummies.
         assert X.shape == (n_seq, 3)
         assert np.allclose(X[:, 0], 1.0)
+
+    def test_create_matrix_time_constant_supports_interaction_terms(self):
+        """Time-constant formula path supports patsy-style interactions."""
+        n_seq = 4
+        data = pd.DataFrame({
+            "x1": [1.0, 2.0, 3.0, 4.0],
+            "x2": [0.5, 1.0, 1.5, 2.0],
+        })
+
+        X = create_model_matrix_time_constant("~ x1 * x2", data, n_seq)
+
+        assert X.shape == (n_seq, 4)
+        assert np.allclose(X[:, 0], 1.0)
+        assert np.allclose(X[:, 3], data["x1"] * data["x2"])
 
 
 # ============================================================================

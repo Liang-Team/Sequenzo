@@ -66,7 +66,6 @@ def _make_panel_and_nhmm(random_state=42):
 
     # Build covariate matrix X: (n_seq, n_time, n_cov) with intercept + x
     x_wide = panel.pivot(index="id", columns="time", values="x").values
-    intercept = np.ones((N_ID, N_TIME, 1))
     x_3d = np.stack([np.ones((N_ID, N_TIME)), x_wide], axis=-1)
 
     nhmm = build_nhmm(
@@ -76,6 +75,43 @@ def _make_panel_and_nhmm(random_state=42):
         random_state=random_state,
     )
     return nhmm
+
+
+def _make_nhmm_with_separate_covariates(random_state=42):
+    """Build a parameterised NHMM with unequal formula-family dimensions."""
+    rng = np.random.RandomState(random_state)
+    wide = pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "t1": rng.choice(STATES, size=3),
+            "t2": rng.choice(STATES, size=3),
+            "t3": rng.choice(STATES, size=3),
+            "t4": rng.choice(STATES, size=3),
+        }
+    )
+    seqdata = SequenceData(wide, time=["t1", "t2", "t3", "t4"], states=STATES, id_col="id")
+    n_id = len(wide)
+    n_time = 4
+    trend = np.tile(np.linspace(-1.0, 1.0, n_time), (n_id, 1))
+    group = np.arange(n_id, dtype=float).reshape(n_id, 1)
+    X_pi = np.ones((n_id, n_time, 1))
+    X_A = np.stack([np.ones((n_id, n_time)), trend], axis=-1)
+    X_B = np.stack(
+        [
+            np.ones((n_id, n_time)),
+            trend,
+            np.repeat(group, n_time, axis=1),
+        ],
+        axis=-1,
+    )
+    return build_nhmm(
+        observations=seqdata,
+        n_states=N_STATES,
+        X_pi=X_pi,
+        X_A=X_A,
+        X_B=X_B,
+        random_state=random_state,
+    )
 
 
 def _perturb_and_loglik(nhmm, param_name, flat_idx, eps):
@@ -192,15 +228,15 @@ class TestGradientFiniteDifference:
         n_param = eta.size
 
         # Determine offset into the flattened gradient vector
-        n_cov = nhmm_model.X.shape[2]
         n_st = nhmm_model.n_states
-        n_sym = nhmm_model.n_symbols
+        n_pi = nhmm_model.n_covariates_pi * n_st
+        n_A = nhmm_model.n_covariates_A * n_st * n_st
         if param_name == "eta_pi":
             offset = 0
         elif param_name == "eta_A":
-            offset = n_cov * n_st
+            offset = n_pi
         else:  # eta_B
-            offset = n_cov * n_st + n_cov * n_st * n_st
+            offset = n_pi + n_A
 
         rng = np.random.RandomState(0)
         indices = rng.choice(n_param, size=min(n_checks, n_param), replace=False)
@@ -227,19 +263,28 @@ class TestGradientFiniteDifference:
         """Finite-difference check for eta_pi (initial probs)."""
         mismatches = self._check_fd(nhmm, "eta_pi", n_checks=4)
         assert len(mismatches) == 0, (
-            f"eta_pi gradient mismatch:\n" + "\n".join(mismatches)
+            "eta_pi gradient mismatch:\n" + "\n".join(mismatches)
         )
 
     def test_fd_eta_A(self, nhmm):
         """Finite-difference check for eta_A (transition probs)."""
         mismatches = self._check_fd(nhmm, "eta_A", n_checks=6)
         assert len(mismatches) == 0, (
-            f"eta_A gradient mismatch:\n" + "\n".join(mismatches)
+            "eta_A gradient mismatch:\n" + "\n".join(mismatches)
         )
 
     def test_fd_eta_B(self, nhmm):
         """Finite-difference check for eta_B (emission probs)."""
         mismatches = self._check_fd(nhmm, "eta_B", n_checks=6)
         assert len(mismatches) == 0, (
-            f"eta_B gradient mismatch:\n" + "\n".join(mismatches)
+            "eta_B gradient mismatch:\n" + "\n".join(mismatches)
         )
+
+    def test_fd_unequal_family_covariates(self):
+        """Finite-difference check with separate X_pi, X_A, and X_B widths."""
+        model = _make_nhmm_with_separate_covariates()
+        for param_name in ("eta_pi", "eta_A", "eta_B"):
+            mismatches = self._check_fd(model, param_name, n_checks=4)
+            assert len(mismatches) == 0, (
+                f"{param_name} gradient mismatch:\n" + "\n".join(mismatches)
+            )

@@ -508,7 +508,9 @@ ci = boot_results['summary']['initial_probs']['ci_95']
 
 - **Basic HMM**: Complete implementation with EM algorithm
 - **Mixture HMM (MHMM)**: Cluster estimation with weighted Baum-Welch M-step (single-channel only; multichannel and covariate support not yet available in `build_mhmm`)
-- **Non-homogeneous HMM (NHMM)**: Complete with covariate support
+- **Non-homogeneous HMM (NHMM)**: Formula-based covariate support for
+  initial, transition, and emission probabilities, with focused seqHMM parity
+  guards for the migrated NHMM behavior
 - **Multichannel Support**: `build_hmm()` and `HMM()` support `List[SequenceData]` for multichannel data; multichannel EM fitting is implemented in pure Python
 - **Formula-Based Covariates**: R-style formula interface for NHMM and MHMM simulation
 - **Model Simulation**: Simulate sequences from HMM and MHMM models
@@ -519,10 +521,14 @@ ci = boot_results['summary']['initial_probs']['ci_95']
 
 ### ⚠️ Known Limitations
 
-1. **Formula Interface**: Currently supports basic additive formulas (e.g., "~ x1 + x2"). Advanced features not yet supported:
-   - Interactions (e.g., "~ x1 * x2")
-   - Lag terms (e.g., "~ lag(x1)")
-   - Transformations (e.g., "~ log(x1)")
+1. **Formula Interface**: NHMM formulas support additive terms, patsy-backed
+   interactions, transformations, categorical encodings, grouped covariate
+   lag helpers, and separate initial/transition/emission design matrices.
+   `initial_formula` and `transition_formula` follow seqHMM's no-left-hand-side
+   convention; `emission_formula` may use either `response ~ terms` or `~ terms`.
+   This is a Python/patsy formula implementation rather than full R formula
+   syntax parity; R-specific constructs such as `.` expansion and exact R
+   contrast behavior should be validated before use.
 
 2. **Multichannel NHMM**: Multichannel support is available for HMM, but not yet for NHMM
 

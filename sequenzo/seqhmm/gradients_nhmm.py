@@ -13,11 +13,12 @@ the forward-backward algorithm and chain rule through the Softmax function.
 """
 
 import numpy as np
-from typing import Tuple
 from .nhmm import NHMM
-from .forward_backward_nhmm import _forward_nhmm, _backward_nhmm
-from .nhmm_utils import softmax
-from .utils import sequence_data_to_hmmlearn_format
+from .forward_backward_nhmm import (
+    _backward_nhmm,
+    _forward_nhmm,
+    _nhmm_observation_arrays,
+)
 
 
 def compute_gradient_nhmm(model: NHMM) -> np.ndarray:
@@ -35,9 +36,8 @@ def compute_gradient_nhmm(model: NHMM) -> np.ndarray:
     Returns:
         numpy array: Flattened gradient vector [grad_eta_pi, grad_eta_A, grad_eta_B]
     """
-    # Convert sequences to integer format
-    X_int, lengths = sequence_data_to_hmmlearn_format(model.observations)
-    n_sequences = len(lengths)
+    observations = _nhmm_observation_arrays(model.observations, model.n_symbols)
+    n_sequences = len(observations)
     
     # Compute probabilities
     initial_probs, transition_probs, emission_probs = model._compute_probs()
@@ -49,20 +49,19 @@ def compute_gradient_nhmm(model: NHMM) -> np.ndarray:
     
     # Process each sequence
     for seq_idx in range(n_sequences):
-        seq_length = lengths[seq_idx]
-        start_idx = lengths[:seq_idx].sum()
-        end_idx = start_idx + seq_length
-        
-        # Get sequence observations
-        obs_seq = X_int[start_idx:end_idx, 0]
+        original_idx, obs_seq = observations[seq_idx]
+        seq_length = len(obs_seq)
         
         # Get probabilities for this sequence
-        seq_initial = initial_probs[seq_idx, :]
-        seq_transition = transition_probs[seq_idx, :seq_length, :, :]
-        seq_emission = emission_probs[seq_idx, :seq_length, :, :]
+        seq_initial = initial_probs[original_idx, :]
+        seq_transition = transition_probs[original_idx, :seq_length, :, :]
+        seq_emission = emission_probs[original_idx, :seq_length, :, :]
         
-        # Get covariates for this sequence
-        X_seq = model.X[seq_idx, :seq_length, :]  # Shape: (seq_length, n_covariates)
+        # Get covariates for this sequence. NHMM supports separate formula
+        # families for initial, transition, and emission probabilities.
+        X_pi_seq = model.X_pi[original_idx, :seq_length, :]
+        X_A_seq = model.X_A[original_idx, :seq_length, :]
+        X_B_seq = model.X_B[original_idx, :seq_length, :]
         
         # Compute forward and backward probabilities
         log_alpha = _forward_nhmm(seq_initial, seq_transition, seq_emission, obs_seq, model.n_states)
@@ -86,34 +85,47 @@ def compute_gradient_nhmm(model: NHMM) -> np.ndarray:
         # Compute xi: xi[i, j, t] = P(state_t = i, state_{t+1} = j | obs)
         xi = np.zeros((model.n_states, model.n_states, seq_length - 1))
         for t in range(seq_length - 1):
+            transition_t = t + 1
             for i in range(model.n_states):
                 for j in range(model.n_states):
                     log_xi = (
                         log_alpha[i, t] +
-                        np.log(seq_transition[t, i, j] + 1e-10) +
-                        np.log(seq_emission[t+1, j, obs_seq[t+1]] + 1e-10) +
+                        np.log(seq_transition[transition_t, i, j] + 1e-10) +
                         log_beta[j, t+1] -
                         log_lik_seq
                     )
+                    if obs_seq[t+1] >= 0:
+                        log_xi += np.log(seq_emission[t+1, j, obs_seq[t+1]] + 1e-10)
                     xi[i, j, t] = np.exp(log_xi)
         
         # Compute gradients using chain rule through Softmax
         # Gradient w.r.t. eta_pi (initial probabilities)
         grad_pi = _gradient_initial_probs(gamma, seq_initial, model.n_states)
-        grad_eta_pi += _gradient_softmax_to_eta(grad_pi, seq_initial, X_seq[0, :], model.n_states)
+        grad_eta_pi += _gradient_softmax_to_eta(grad_pi, seq_initial, X_pi_seq[0, :], model.n_states)
         
         # Gradient w.r.t. eta_A (transition probabilities)
         for t in range(seq_length - 1):
-            grad_A_t = _gradient_transition_probs(xi[:, :, t], gamma[:, t], seq_transition[t, :, :], model.n_states)
+            transition_t = t + 1
+            grad_A_t = _gradient_transition_probs(
+                xi[:, :, t],
+                gamma[:, t],
+                seq_transition[transition_t, :, :],
+                model.n_states,
+            )
             grad_eta_A += _gradient_softmax_to_eta_transition(
-                grad_A_t, seq_transition[t, :, :], X_seq[t, :], model.n_states
+                grad_A_t,
+                seq_transition[transition_t, :, :],
+                X_A_seq[transition_t, :],
+                model.n_states,
             )
         
         # Gradient w.r.t. eta_B (emission probabilities)
         for t in range(seq_length):
+            if obs_seq[t] < 0:
+                continue
             grad_B_t = _gradient_emission_probs(gamma[:, t], obs_seq[t], seq_emission[t, :, :], model.n_states, model.n_symbols)
             grad_eta_B += _gradient_softmax_to_eta_emission(
-                grad_B_t, seq_emission[t, :, :], X_seq[t, :], model.n_states, model.n_symbols
+                grad_B_t, seq_emission[t, :, :], X_B_seq[t, :], model.n_states, model.n_symbols
             )
     
     # Flatten gradients

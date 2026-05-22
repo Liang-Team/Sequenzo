@@ -9,7 +9,6 @@ and gradient computation.
 """
 
 import numpy as np
-from typing import Optional, Tuple
 
 
 def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
@@ -29,6 +28,9 @@ def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     Returns:
         numpy array: Softmax probabilities (sums to 1 along specified axis)
     """
+    if not np.isfinite(x).all():
+        raise ValueError("linear predictors must contain only finite values")
+
     # Subtract max for numerical stability
     x_shifted = x - np.max(x, axis=axis, keepdims=True)
     exp_x = np.exp(x_shifted)
@@ -83,29 +85,9 @@ def compute_transition_probs_with_covariates(
     Returns:
         numpy array: Transition probabilities of shape (n_sequences, n_timepoints, n_states, n_states)
     """
-    n_sequences, n_timepoints, n_covariates = X.shape
-    
-    # Initialize transition probability matrix
-    transition_probs = np.zeros((n_sequences, n_timepoints, n_states, n_states))
-    
-    # For each sequence and time point
-    for seq_idx in range(n_sequences):
-        for t in range(n_timepoints):
-            # Get covariates for this time point
-            x_t = X[seq_idx, t, :]  # Shape: (n_covariates,)
-            
-            # Compute linear predictor for each transition
-            # eta[i, j] = sum over covariates: x[c] * eta_A[c, i, j]
-            eta = np.zeros((n_states, n_states))
-            for i in range(n_states):
-                for j in range(n_states):
-                    eta[i, j] = np.sum(x_t * eta_A[:, i, j])
-            
-            # Convert to probabilities using softmax (row-wise)
-            for i in range(n_states):
-                transition_probs[seq_idx, t, i, :] = softmax(eta[i, :])
-    
-    return transition_probs
+    with np.errstate(over="ignore", invalid="ignore"):
+        eta = np.einsum("ntc,cij->ntij", X, eta_A)
+    return softmax(eta, axis=-1)
 
 
 def compute_emission_probs_with_covariates(
@@ -128,29 +110,9 @@ def compute_emission_probs_with_covariates(
     Returns:
         numpy array: Emission probabilities of shape (n_sequences, n_timepoints, n_states, n_symbols)
     """
-    n_sequences, n_timepoints, n_covariates = X.shape
-    
-    # Initialize emission probability matrix
-    emission_probs = np.zeros((n_sequences, n_timepoints, n_states, n_symbols))
-    
-    # For each sequence and time point
-    for seq_idx in range(n_sequences):
-        for t in range(n_timepoints):
-            # Get covariates for this time point
-            x_t = X[seq_idx, t, :]  # Shape: (n_covariates,)
-            
-            # Compute linear predictor for each emission
-            # eta[i, j] = sum over covariates: x[c] * eta_B[c, i, j]
-            eta = np.zeros((n_states, n_symbols))
-            for i in range(n_states):
-                for j in range(n_symbols):
-                    eta[i, j] = np.sum(x_t * eta_B[:, i, j])
-            
-            # Convert to probabilities using softmax (row-wise)
-            for i in range(n_states):
-                emission_probs[seq_idx, t, i, :] = softmax(eta[i, :])
-    
-    return emission_probs
+    with np.errstate(over="ignore", invalid="ignore"):
+        eta = np.einsum("ntc,cik->ntik", X, eta_B)
+    return softmax(eta, axis=-1)
 
 
 def compute_initial_probs_with_covariates(
@@ -169,23 +131,6 @@ def compute_initial_probs_with_covariates(
     Returns:
         numpy array: Initial probabilities of shape (n_sequences, n_states)
     """
-    n_sequences = X.shape[0]
-    
-    # Initialize initial probability matrix
-    initial_probs = np.zeros((n_sequences, n_states))
-    
-    # For each sequence
-    for seq_idx in range(n_sequences):
-        # Get covariates for initial time point
-        x_0 = X[seq_idx, 0, :]  # Shape: (n_covariates,)
-        
-        # Compute linear predictor
-        # eta[i] = sum over covariates: x[c] * eta_pi[c, i]
-        eta = np.zeros(n_states)
-        for i in range(n_states):
-            eta[i] = np.sum(x_0 * eta_pi[:, i])
-        
-        # Convert to probabilities using softmax
-        initial_probs[seq_idx, :] = softmax(eta)
-    
-    return initial_probs
+    with np.errstate(over="ignore", invalid="ignore"):
+        eta = X[:, 0, :] @ eta_pi
+    return softmax(eta, axis=-1)

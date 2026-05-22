@@ -6,17 +6,20 @@
 
 This module provides a formula interface for specifying covariates in NHMM,
 similar to seqHMM's formula interface in R. Users can specify covariates
-using a string formula like "~ x1 + x2" instead of manually creating
-covariate matrices.
-
-Note: This is a simplified implementation. A full implementation would
-support more complex formulas (interactions, transformations, etc.).
+using string formulas, including patsy-supported interactions and transforms,
+instead of manually creating covariate matrices.
 """
 
 import numpy as np
 import pandas as pd
-from typing import Optional, List, Union, Dict
-from sequenzo.define_sequence_data import SequenceData
+from typing import Optional, List, Union, Sequence
+
+try:
+    from patsy import EvalEnvironment, PatsyError, dmatrix
+except ImportError:  # pragma: no cover - patsy is provided by statsmodels in normal installs
+    EvalEnvironment = None
+    PatsyError = None
+    dmatrix = None
 
 
 class Formula:
@@ -41,10 +44,14 @@ class Formula:
         """
         # Remove leading/trailing whitespace
         formula = formula.strip()
+        self.raw_formula = formula
+        self.lhs = None
         
-        # Remove tilde if present
-        if formula.startswith('~'):
-            formula = formula[1:].strip()
+        # Keep only the RHS when callers use an R-style ``response ~ terms`` formula.
+        if "~" in formula:
+            lhs, formula = formula.split("~", 1)
+            self.lhs = lhs.strip() or None
+            formula = formula.strip()
         
         self.formula = formula
         self.terms = self._parse_formula(formula)
@@ -59,7 +66,7 @@ class Formula:
         Returns:
             List of variable names
         """
-        if not formula:
+        if not formula or formula == '1':
             return []
         
         # Split by + and clean up
@@ -72,7 +79,9 @@ class Formula:
         id_var: str,
         time_var: str,
         n_sequences: int,
-        n_timepoints: int
+        n_timepoints: int,
+        id_values: Optional[Sequence] = None,
+        time_values: Optional[Sequence] = None,
     ) -> np.ndarray:
         """
         Create covariate matrix from formula and data.
@@ -91,53 +100,97 @@ class Formula:
         Returns:
             numpy array: Covariate matrix (n_sequences, n_timepoints, n_covariates)
         """
-        if not self.terms:
-            # No covariates: return matrix of ones (intercept only)
-            return np.ones((n_sequences, n_timepoints, 1))
-        
-        # Initialize covariate matrix
-        X = np.zeros((n_sequences, n_timepoints, len(self.terms) + 1))  # +1 for intercept
-        
-        # First column is intercept (always 1)
-        X[:, :, 0] = 1.0
-        
-        # Fill in covariates
-        for term_idx, term in enumerate(self.terms):
-            col_idx = term_idx + 1  # +1 because first column is intercept
-            
-            if term not in data.columns:
-                raise ValueError(f"Variable '{term}' not found in data columns: {list(data.columns)}")
-            
-            # Get values for this covariate
-            covar_values = data[term].values
-            
-            # Reshape to match sequence structure
-            # This assumes data is in long format (one row per sequence-time combination)
-            # We need to reshape it to (n_sequences, n_timepoints)
-            
-            # If data has id_var and time_var, use them to reshape
-            if id_var in data.columns and time_var in data.columns:
-                # Pivot to wide format
-                pivot_df = data.pivot(index=id_var, columns=time_var, values=term)
-                
-                # Fill matrix
-                for seq_idx, seq_id in enumerate(pivot_df.index):
-                    if seq_idx < n_sequences:
-                        for t_idx, time_val in enumerate(pivot_df.columns):
-                            if t_idx < n_timepoints:
-                                X[seq_idx, t_idx, col_idx] = pivot_df.loc[seq_id, time_val]
-            else:
-                # Assume data is already in sequence-time order
-                # Reshape assuming row-major order (sequence by sequence)
-                if len(covar_values) == n_sequences * n_timepoints:
-                    X[:, :, col_idx] = covar_values.reshape(n_sequences, n_timepoints)
-                else:
-                    raise ValueError(
-                        f"Data length ({len(covar_values)}) doesn't match "
-                        f"n_sequences * n_timepoints ({n_sequences * n_timepoints})"
-                    )
-        
-        return X
+        if dmatrix is None:
+            raise ImportError("patsy is required for formula model matrices")
+
+        if id_var not in data.columns or time_var not in data.columns:
+            raise ValueError(f"data must contain id_var={id_var!r} and time_var={time_var!r}")
+
+        if data.duplicated([id_var, time_var]).any():
+            raise ValueError("data must not contain duplicate id/time cells")
+
+        if id_values is None:
+            ids = list(pd.unique(data[id_var]))[:n_sequences]
+        else:
+            ids = list(id_values)
+            if len(ids) != n_sequences:
+                raise ValueError("id_values length must equal n_sequences")
+
+        if time_values is None:
+            times = list(pd.unique(data[time_var]))[:n_timepoints]
+        else:
+            times = list(time_values)
+            if len(times) != n_timepoints:
+                raise ValueError("time_values length must equal n_timepoints")
+
+        if len(ids) < n_sequences or len(times) < n_timepoints:
+            raise ValueError("data does not contain enough ids or time points")
+
+        grid = pd.MultiIndex.from_product(
+            [ids, times],
+            names=[id_var, time_var],
+        ).to_frame(index=False)
+        grid_pairs = set(map(tuple, grid[[id_var, time_var]].to_numpy()))
+        data_pairs = set(map(tuple, data[[id_var, time_var]].to_numpy()))
+        if not grid_pairs.issubset(data_pairs):
+            raise ValueError(
+                "data must contain a complete id x time grid matching "
+                "the SequenceData id and time order for formula covariates"
+            )
+        if id_values is not None and time_values is not None and data_pairs != grid_pairs:
+            raise ValueError(
+                "data must not contain id/time cells outside the SequenceData grid"
+            )
+
+        design_data = grid.merge(data, on=[id_var, time_var], how="left", validate="one_to_one")
+
+        def lag(x, n=1, fill=0.0):
+            n = int(n)
+            values = pd.Series(x)
+            numeric_values = pd.to_numeric(values, errors="coerce")
+            if not np.isfinite(numeric_values.to_numpy(dtype=float)).all():
+                return values.to_numpy()
+            shifted = values.groupby(design_data[id_var], sort=False).shift(n)
+            return shifted.fillna(fill).to_numpy()
+
+        formula = _as_patsy_formula(self)
+        env = EvalEnvironment.capture(0).with_outer_namespace({"np": np, "lag": lag})
+        try:
+            design = dmatrix(
+                formula,
+                design_data,
+                return_type="dataframe",
+                eval_env=env,
+                NA_action="raise",
+            )
+        except PatsyError as exc:
+            raise ValueError(
+                "formula covariates must be non-missing and finite"
+            ) from exc
+        design = design.astype(float)
+        if len(design) != len(design_data):
+            raise ValueError(
+                "formula covariates must preserve one row per id/time cell"
+            )
+
+        values = design.to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError("formula covariates must be non-missing and finite")
+        return values.reshape(n_sequences, n_timepoints, design.shape[1])
+
+
+def _as_patsy_formula(formula: Union[str, Formula, None]) -> str:
+    if formula is None:
+        return "~ 1"
+    if isinstance(formula, Formula):
+        rhs = formula.formula
+    else:
+        rhs = str(formula).strip()
+        if rhs.startswith('~'):
+            return rhs
+    if not rhs:
+        rhs = "1"
+    return f"~ {rhs}"
 
 
 def create_model_matrix(
@@ -146,7 +199,9 @@ def create_model_matrix(
     id_var: str,
     time_var: str,
     n_sequences: int,
-    n_timepoints: int
+    n_timepoints: int,
+    id_values: Optional[Sequence] = None,
+    time_values: Optional[Sequence] = None,
 ) -> np.ndarray:
     """
     Create model matrix from formula and data.
@@ -183,8 +238,16 @@ def create_model_matrix(
     """
     if isinstance(formula, str):
         formula = Formula(formula)
-    
-    return formula.create_matrix(data, id_var, time_var, n_sequences, n_timepoints)
+
+    return formula.create_matrix(
+        data,
+        id_var,
+        time_var,
+        n_sequences,
+        n_timepoints,
+        id_values=id_values,
+        time_values=time_values,
+    )
 
 
 def create_model_matrix_time_constant(
@@ -246,45 +309,26 @@ def create_model_matrix_time_constant(
             f"Number of rows in data ({len(data)}) must equal n_sequences ({n_sequences})"
         )
     
-    # Get terms from formula
-    terms = formula.terms
-    
-    # Initialize model matrix with intercept column
-    # We'll build it step by step, handling factor variables
-    columns_list = []
-    column_names = ['(Intercept)']
-    
-    # Add intercept column (all ones)
-    columns_list.append(np.ones(n_sequences))
-    
-    # Process each term in the formula
-    for term in terms:
-        if term not in data.columns:
-            raise ValueError(
-                f"Variable '{term}' not found in data columns: {list(data.columns)}"
-            )
-        
-        series = data[term]
-        covar_values = series.values
-        
-        # Check if this is a categorical variable
-        if isinstance(series.dtype, pd.CategoricalDtype) or \
-           pd.api.types.is_object_dtype(series) or \
-           pd.api.types.is_string_dtype(series):
-            # Categorical variable: create dummy variables
-            # Use pandas get_dummies to create dummies, drop first level as reference
-            dummies = pd.get_dummies(data[[term]], prefix=term, drop_first=True)
-            
-            # Add each dummy column
-            for dummy_col in dummies.columns:
-                columns_list.append(dummies[dummy_col].values)
-                column_names.append(dummy_col)
-        else:
-            # Numeric variable: add as is
-            columns_list.append(covar_values)
-            column_names.append(term)
-    
-    # Stack all columns into a matrix
-    X = np.column_stack(columns_list)
-    
-    return X
+    if dmatrix is None:
+        raise ImportError("patsy is required for formula model matrices")
+
+    formula_obj = formula
+    formula_string = _as_patsy_formula(formula_obj)
+    env = EvalEnvironment.capture(0).with_outer_namespace({"np": np})
+    try:
+        design = dmatrix(
+            formula_string,
+            data,
+            return_type="dataframe",
+            eval_env=env,
+            NA_action="raise",
+        )
+    except PatsyError as exc:
+        raise ValueError(
+            "formula covariates must be non-missing and finite"
+        ) from exc
+    values = design.to_numpy(dtype=float)
+    if not np.isfinite(values).all():
+        raise ValueError("formula covariates must be non-missing and finite")
+
+    return values
