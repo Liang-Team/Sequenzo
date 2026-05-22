@@ -565,7 +565,7 @@ jobs:
             python -m pip install --upgrade pip
             python -m pip install delvewheel
 
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: python maintenance_scripts/repair_windows_wheel.py "{dest_dir}" "{wheel}"
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。

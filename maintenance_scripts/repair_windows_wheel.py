@@ -10,8 +10,8 @@ Responsibilities:
    wheel has no external dependencies), copy the built wheel as-is so that
    cibuildwheel always finds something in dest_dir.
 
-Usage (called from CIBW_REPAIR_WHEEL_COMMAND_WINDOWS):
-    python repair_windows_wheel.py <dest_dir> <wheel>
+Usage (called from CIBW_REPAIR_WHEEL_COMMAND_WINDOWS, cwd = project root):
+    python maintenance_scripts/repair_windows_wheel.py <dest_dir> <wheel>
 """
 from __future__ import annotations
 
