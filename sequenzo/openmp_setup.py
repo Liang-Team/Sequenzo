@@ -37,6 +37,8 @@ _CONDA_OMP_DLL_NAMES = (
     "libiomp5.dll",
 )
 
+_WINDOWS_DLL_DIRECTORY_HANDLES: list[object] = []
+
 _MACOS_HOMEBREW_LIBOMP_PATHS = (
     "/opt/homebrew/opt/libomp/lib/libomp.dylib",
     "/opt/homebrew/lib/libomp.dylib",
@@ -246,9 +248,11 @@ def _register_windows_dll_directory(path: Path) -> None:
     if not hasattr(os, "add_dll_directory"):
         return
     try:
-        os.add_dll_directory(str(path))
+        handle = os.add_dll_directory(str(path))
     except OSError:
         pass
+    else:
+        _WINDOWS_DLL_DIRECTORY_HANDLES.append(handle)
 
 
 def _replace_bundled_openmp_with_conda_copy(

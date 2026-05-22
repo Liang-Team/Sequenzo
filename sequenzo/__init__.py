@@ -73,9 +73,9 @@ _LAZY: dict[str, tuple[str, str]] = {
     "get_substitution_cost_matrix": ("sequenzo.dissimilarity_measures.get_substitution_cost_matrix", "get_substitution_cost_matrix"),
     "get_LCP_length_for_2_seq": ("sequenzo.dissimilarity_measures.utils.get_LCP_length_for_2_seq", "get_LCP_length_for_2_seq"),
     # clustering (triggers OpenMP setup on first use)
-    "Cluster": ("sequenzo.clustering", "Cluster"),
-    "ClusterResults": ("sequenzo.clustering", "ClusterResults"),
-    "ClusterQuality": ("sequenzo.clustering", "ClusterQuality"),
+    "Cluster": ("sequenzo.clustering.hierarchical_clustering", "Cluster"),
+    "ClusterResults": ("sequenzo.clustering.hierarchical_clustering", "ClusterResults"),
+    "ClusterQuality": ("sequenzo.clustering.hierarchical_clustering", "ClusterQuality"),
     "hierarchical_cluster_range": ("sequenzo.clustering", "hierarchical_cluster_range"),
     "cluster_association": ("sequenzo.clustering", "cluster_association"),
     "plot_cluster_association": ("sequenzo.clustering", "plot_cluster_association"),
@@ -343,10 +343,12 @@ _LAZY: dict[str, tuple[str, str]] = {
 # Modules that need OpenMP setup before import (clustering, etc.)
 _OPENMP_MODULES = frozenset({
     "sequenzo.clustering",
+    "sequenzo.clustering.hierarchical_clustering",
     "sequenzo.clustering.k_medoids",
     "sequenzo.big_data.clara.clara",
     "sequenzo.big_data.clara.visualization",
     "sequenzo.dissimilarity_measures",
+    "sequenzo.dissimilarity_measures.get_distance_matrix",
 })
 
 _loaded: dict[str, Any] = {}  # module_path -> module, for caching

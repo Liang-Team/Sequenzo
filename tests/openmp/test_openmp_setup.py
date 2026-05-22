@@ -89,6 +89,31 @@ class TestFixDuplicateLibompInConda:
         assert bundled_dll.read_bytes() == conda_dll.read_bytes()
         assert os.environ.get("KMP_DUPLICATE_LIB_OK") == "TRUE"
 
+    def test_windows_dll_directory_handle_is_retained(self, monkeypatch, tmp_path):
+        from sequenzo import openmp_setup
+
+        retained_handles = []
+
+        class FakeDllDirectoryHandle:
+            pass
+
+        def fake_add_dll_directory(path):
+            handle = FakeDllDirectoryHandle()
+            retained_handles.append((path, handle))
+            return handle
+
+        monkeypatch.setattr(
+            openmp_setup.os,
+            "add_dll_directory",
+            fake_add_dll_directory,
+            raising=False,
+        )
+        monkeypatch.setattr(openmp_setup, "_WINDOWS_DLL_DIRECTORY_HANDLES", [])
+
+        openmp_setup._register_windows_dll_directory(tmp_path)
+
+        assert retained_handles == [(str(tmp_path), openmp_setup._WINDOWS_DLL_DIRECTORY_HANDLES[-1])]
+
     def test_windows_skips_without_conda_prefix(self, monkeypatch):
         from sequenzo import openmp_setup
 

@@ -265,7 +265,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     from .utils.seqdss import seqdss
     from .utils.seqdur import seqdur
     from .utils.seqlength import seqlength
-    from . import get_substitution_cost_matrix
+    from .get_substitution_cost_matrix import get_substitution_cost_matrix
 
     # Lazily import the c_code module to avoid circular dependencies during installation
     from .__init__ import _import_c_code

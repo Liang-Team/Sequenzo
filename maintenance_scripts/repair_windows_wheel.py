@@ -154,7 +154,7 @@ def main() -> int:
         return 0
 
     # --- Step 3: safety net — copy built wheel as-is ---
-    print("[repair] delvewheel did not produce a wheel; copying built wheel as-is.")
+    print("[repair] delvewheel did not emit a wheel; copying built wheel as-is.")
     target = dest / wheel.name
     shutil.copy2(wheel, target)
     if not target.is_file():

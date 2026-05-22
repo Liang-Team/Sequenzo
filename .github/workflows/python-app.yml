@@ -571,6 +571,11 @@ jobs:
             # issues (nested if/else blocks at deep indentation caused the
             # script to be duplicated verbatim in the executed shell command).
             python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
+
+            echo "=== delvewheel show repaired wheel ==="
+            python -c "import glob, subprocess; wheels = sorted(glob.glob(r'{dest_dir}/*.whl')); assert wheels, 'No repaired wheel found'; [subprocess.run(['delvewheel', 'show', wheel], check=True) for wheel in wheels]"
+            python -c "import glob, zipfile; wheels = sorted(glob.glob(r'{dest_dir}/*.whl')); assert wheels, 'No repaired wheel found'; found = {wheel: [name for name in zipfile.ZipFile(wheel).namelist() if name.startswith('sequenzo.libs/') and name.lower().endswith('.dll') and 'libomp140' in name.lower()] for wheel in wheels}; missing = [wheel for wheel, dlls in found.items() if not dlls]; assert not missing, 'Missing bundled libomp140*.dll in sequenzo.libs for: ' + ', '.join(missing); print('[OK] bundled OpenMP DLLs:', found)"
+
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
 
@@ -849,102 +854,10 @@ jobs:
             print('[INFO] All tests completed')
             PY
 
-          # Windows test command using python -c with exec for multiline code
+          # Windows smoke test uses cmd-compatible python -c.
           CIBW_TEST_COMMAND_WINDOWS: |
             echo "Testing Sequenzo wheel on Windows"
-            echo "" > test_sequenzo_ci.py
-            Add-Content test_sequenzo_ci.py @"
-            import importlib.util, sys
-            import numpy as np
-            import sequenzo
-            print('Sequenzo import successful')
-          
-            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
-            print('Clustering C++ extensions loaded' if mod else 'WARNING: Clustering C++ extensions not found')
-          
-            try:
-                from sequenzo.dissimilarity_measures import c_code
-                print('[OK] Dissimilarity measures C++ extensions (c_code) loaded successfully')
-                for name in ['OMdistance', 'OMspellDistance', 'DHDdistance', 'LCPdistance', 'dist2matrix']:
-                    if hasattr(c_code, name):
-                        print(f'[OK] {name} class available')
-            except ImportError as e:
-                print(f'ERROR: Failed to import c_code: {e}')
-
-            print('')
-            print('=== Testing core distance and Cluster import path ===')
-            try:
-                import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code
-                print('[OK] core_distance_c_code loaded successfully')
-            except ImportError as e:
-                print(f'[WARNING] core_distance_c_code failed to load: {e}')
-
-            try:
-                from sequenzo.utils.core_distance_operations import weighted_inertia_contrib
-                test_dist = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64)
-                contrib = weighted_inertia_contrib(
-                    test_dist,
-                    np.array([0, 1], dtype=np.int32),
-                    np.array([1.0, 1.0], dtype=np.float64),
-                )
-                assert contrib.shape == (2,)
-                print('[OK] weighted_inertia_contrib works')
-            except Exception as e:
-                print(f'[ERROR] weighted_inertia_contrib failed: {e}')
-                sys.exit(1)
-
-            try:
-                from sequenzo import Cluster
-                print('[OK] Cluster import successful')
-            except ImportError as e:
-                print(f'[ERROR] Cluster import failed: {e}')
-                sys.exit(1)
-            
-            # Check sequenzo_fastcluster module
-            print('')
-            print('=== Testing sequenzo_fastcluster module ===')
-            try:
-                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector, single, complete, average
-                print('[OK] sequenzo_fastcluster wrapper imported successfully')
-                
-                # Test linkage function with small dataset
-                from scipy.spatial.distance import pdist
-                test_data = np.array([[1, 2], [1, 4], [1, 0], [4, 2], [4, 4], [4, 0]])
-                dist_matrix = pdist(test_data)
-                
-                # Test different linkage methods
-                for method in ['single', 'complete', 'average']:
-                    try:
-                        Z = linkage(dist_matrix, method=method)
-                        assert Z.shape == (len(test_data) - 1, 4)
-                        assert np.all(np.isfinite(Z))
-                        print(f'[OK] linkage({method}) works correctly')
-                    except Exception as e:
-                        print(f'[WARNING] linkage({method}) failed: {e}')
-                
-                # Test linkage_vector
-                try:
-                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
-                    assert Z_vec.shape == (len(test_data) - 1, 4)
-                    assert np.all(np.isfinite(Z_vec))
-                    print('[OK] linkage_vector works correctly')
-                except Exception as e:
-                    print(f'[WARNING] linkage_vector failed: {e}')
-                
-            except ImportError as e:
-                print(f'[WARNING] sequenzo_fastcluster module not available: {e}')
-                print('[INFO] This module provides optimized hierarchical clustering')
-            
-            # 为 NumPy 2.0 设置兼容性
-            if sys.version_info >= (3, 12):
-                try:
-                    np._import_array()
-                    print('[OK] NumPy array imported for NumPy 2.0 compatibility')
-                except Exception as e:
-                    print(f'[INFO] NumPy array import: {e}')
-            print('[INFO] All tests completed')
-            "@
-            python test_sequenzo_ci.py
+            python -c "import numpy as np; from sequenzo import SequenceData, get_distance_matrix, Cluster; import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code; from sequenzo.utils.core_distance_operations import weighted_inertia_contrib; contrib = weighted_inertia_contrib(np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64), np.array([0, 1], dtype=np.int32), np.array([1.0, 1.0], dtype=np.float64)); assert contrib.shape == (2,); print('[OK] Windows wheel smoke test passed')"
 
       - name: Show dist content
         run: ls -lah dist/
@@ -1288,6 +1201,35 @@ jobs:
               exit 1
           fi
         shell: bash
+
+      - name: Set up Miniconda for Windows wheel smoke
+        if: runner.os == 'Windows'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          activate-environment: sequenzo-wheel-smoke
+          auto-update-conda: true
+
+      - name: Windows Conda wheel smoke test
+        if: runner.os == 'Windows'
+        shell: bash -el {0}
+        run: |
+          echo "=== Windows Conda wheel smoke test ==="
+          conda info
+          python -m pip install --upgrade pip
+          PY_TAG="cp${{ matrix.python-version-nodot }}"
+          WHEEL=$(python - <<PY
+          import glob
+          import sys
+          wheels = glob.glob("dist/*${PY_TAG}*win_amd64.whl")
+          if not wheels:
+              raise SystemExit("No Windows wheel found for ${PY_TAG}")
+          print(wheels[0])
+          PY
+          )
+          echo "Installing $WHEEL into Conda environment"
+          python -m pip install --force-reinstall "$WHEEL"
+          python -c "import os; import numpy as np; print('CONDA_PREFIX=' + os.environ.get('CONDA_PREFIX', '')); from sequenzo import SequenceData, get_distance_matrix, Cluster; import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code; from sequenzo.utils.core_distance_operations import weighted_inertia_contrib; contrib = weighted_inertia_contrib(np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64), np.array([0, 1], dtype=np.int32), np.array([1.0, 1.0], dtype=np.float64)); assert contrib.shape == (2,); print('[OK] Windows Conda wheel smoke test passed')"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4

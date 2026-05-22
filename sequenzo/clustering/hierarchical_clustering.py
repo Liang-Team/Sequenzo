@@ -65,6 +65,7 @@
 """
 import matplotlib.pyplot as plt
 import seaborn as sns
+import importlib
 import warnings
 from matplotlib.ticker import MaxNLocator
 
@@ -73,32 +74,39 @@ import numpy as np
 from scipy.cluster.hierarchy import fcluster, dendrogram
 from scipy.spatial.distance import squareform, pdist
 # sklearn metrics no longer needed - using C++ implementation
-# Import from sequenzo_fastcluster (our custom fastcluster with ward_d and ward_d2 support)
-try:
-    from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector
-except ImportError:
-    # Fallback: try absolute import
+
+clustering_c_code = None
+_CPP_IMPORT_ERROR = None
+
+
+def _get_clustering_c_code():
+    """Load the C++ clustering extension only when clustering work needs it."""
+    global clustering_c_code, _CPP_IMPORT_ERROR
+    if clustering_c_code is not None:
+        return clustering_c_code
+
     try:
-        from sequenzo_fastcluster.fastcluster import linkage, linkage_vector
-    except ImportError:
-        # Last resort: try relative import
-        from .sequenzo_fastcluster.fastcluster import linkage, linkage_vector
-
-# Import C++ clustering extensions (required for all clustering operations)
-try:
-    from . import clustering_c_code
-    _CPP_AVAILABLE = True
-    _CPP_CUTREE_AVAILABLE = hasattr(clustering_c_code, "cutree_maxclust")
-    _CPP_EUCLIDEAN_CHECK_AVAILABLE = hasattr(clustering_c_code, "check_euclidean_compatibility")
-except ImportError:
-    _CPP_AVAILABLE = False
-    _CPP_CUTREE_AVAILABLE = False
-    _CPP_EUCLIDEAN_CHECK_AVAILABLE = False
-    print("[!] Warning: C++ clustering extensions not available. Cluster class will not work.")
+        clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
+    except ImportError as exc:
+        _CPP_IMPORT_ERROR = exc
+        raise RuntimeError(
+            "C++ clustering core is not available. "
+            "Please ensure the C++ extensions are properly compiled."
+        ) from exc
+    return clustering_c_code
 
 
-# Corrected imports: Use relative imports *within* the package.
-from sequenzo.visualization.utils import save_and_show_results
+def _get_optional_clustering_c_code():
+    try:
+        return _get_clustering_c_code()
+    except RuntimeError:
+        return None
+
+
+def _save_and_show_results(*args, **kwargs):
+    from sequenzo.visualization.utils import save_and_show_results
+
+    return save_and_show_results(*args, **kwargs)
 
 # Global flag to ensure Ward warning is only shown once per session
 _WARD_WARNING_SHOWN = False
@@ -113,9 +121,10 @@ def _cutree_maxclust(linkage_matrix, num_clusters):
     Cut linkage tree into `num_clusters` flat clusters (1-based labels).
     Prefer C++ implementation for speed and fall back to SciPy if unavailable.
     """
-    if _CPP_AVAILABLE and _CPP_CUTREE_AVAILABLE:
+    cpp = _get_optional_clustering_c_code()
+    if cpp is not None and hasattr(cpp, "cutree_maxclust"):
         n = linkage_matrix.shape[0] + 1
-        labels = clustering_c_code.cutree_maxclust(
+        labels = cpp.cutree_maxclust(
             np.asarray(linkage_matrix, dtype=np.float64, order="C"),
             int(n),
             int(num_clusters),
@@ -133,12 +142,13 @@ def _check_euclidean_compatibility(matrix, method):
     if method.lower() not in ["ward", "ward_d", "ward_d2"]:
         return True
 
-    if not (_CPP_AVAILABLE and _CPP_EUCLIDEAN_CHECK_AVAILABLE):
+    cpp = _get_clustering_c_code()
+    if not hasattr(cpp, "check_euclidean_compatibility"):
         raise RuntimeError(
             "C++ check_euclidean_compatibility is not available. "
             "Please ensure the C++ extensions are properly compiled.")
 
-    result = clustering_c_code.check_euclidean_compatibility(
+    result = cpp.check_euclidean_compatibility(
         np.asarray(matrix, dtype=np.float64, order="C"),
         method.lower(),
     )
@@ -214,10 +224,7 @@ class Cluster:
             with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)).
         :param fast_path: If True, skips Ward compatibility checking and full_matrix retention.
         """
-        if not _CPP_AVAILABLE:
-            raise RuntimeError(
-                "C++ clustering core is not available. "
-                "Please ensure the C++ extensions are properly compiled.")
+        cpp = _get_clustering_c_code()
 
         method = clustering_method.lower()
 
@@ -269,15 +276,15 @@ class Cluster:
             self.weights = np.ones(n, dtype=np.float64)
 
         if use_vector_path:
-            result = clustering_c_code.cluster_from_features(X, method)
+            result = cpp.cluster_from_features(X, method)
             self._X_features = X
         elif use_condensed_path:
-            result = clustering_c_code.cluster_from_condensed(
+            result = cpp.cluster_from_condensed(
                 matrix, int(n), method, bool(fast_path),
                 False)  # retain_condensed=False for performance
             self._X_features = None
         else:
-            result = clustering_c_code.cluster_from_matrix(
+            result = cpp.cluster_from_matrix(
                 matrix, method, bool(fast_path),
                 False)  # retain_condensed=False for performance
             self._X_features = None
@@ -384,7 +391,7 @@ class Cluster:
         if not grid:
             plt.grid(False)
 
-        save_and_show_results(save_as, dpi=200)
+        _save_and_show_results(save_as, dpi=200)
 
     def get_cluster_labels(self, num_clusters):
         """
@@ -472,10 +479,7 @@ class ClusterQuality:
         :param weights: Optional array of weights for each entity. If None and using Cluster instance,
                        weights will be extracted from the Cluster object.
         """
-        if not _CPP_AVAILABLE:
-            raise RuntimeError(
-                "C++ clustering core is not available. "
-                "Please ensure the C++ extensions are properly compiled.")
+        cpp = _get_clustering_c_code()
 
         self.metric_order = [
             "PBC", "HG", "HGSD", "ASW", "ASWw",
@@ -495,7 +499,7 @@ class ClusterQuality:
             if k_max < 2:
                 raise ValueError("max_clusters must be at least 2 and no greater than the sample size.")
 
-            result = clustering_c_code.cluster_quality_from_cluster_data(
+            result = cpp.cluster_quality_from_cluster_data(
                 np.asarray(self._condensed_matrix, dtype=np.float64, order="C"),
                 np.asarray(self.linkage_matrix, dtype=np.float64, order="C"),
                 np.asarray(self.weights, dtype=np.float64, order="C"),
@@ -525,7 +529,7 @@ class ClusterQuality:
             else:
                 w = np.ones(n, dtype=np.float64)
 
-            result = clustering_c_code.cluster_quality_from_matrix(
+            result = cpp.cluster_quality_from_matrix(
                 matrix, method, k_max, w,
             )
 
@@ -741,7 +745,7 @@ class ClusterQuality:
         plt.tight_layout()
         plt.subplots_adjust(bottom=0.1)
 
-        return save_and_show_results(save_as, dpi, show=show)
+        return _save_and_show_results(save_as, dpi, show=show)
 
 
 class ClusterResults:
@@ -753,10 +757,7 @@ class ClusterResults:
         """
         if not isinstance(cluster, Cluster):
             raise ValueError("Input must be an instance of the Cluster class.")
-        if not _CPP_AVAILABLE:
-            raise RuntimeError(
-                "C++ clustering core is not available. "
-                "Please ensure the C++ extensions are properly compiled.")
+        self._cpp = _get_clustering_c_code()
 
         self.linkage_matrix = cluster.linkage_matrix
         self.entity_ids = cluster.entity_ids
@@ -766,7 +767,7 @@ class ClusterResults:
     def _get_cached_result(self, num_clusters):
         """Single C++ call for cutree + distribution, with per-k caching."""
         if num_clusters not in self._results_cache:
-            self._results_cache[num_clusters] = clustering_c_code.cluster_results_compute(
+            self._results_cache[num_clusters] = self._cpp.cluster_results_compute(
                 np.asarray(self.linkage_matrix, dtype=np.float64, order="C"),
                 len(self.entity_ids),
                 int(num_clusters),
@@ -869,7 +870,7 @@ class ClusterResults:
         plt.subplots_adjust(bottom=0.13)
         plt.figtext(0.5, 0.01, note_text, ha='center', fontsize=10, style='italic')
 
-        save_and_show_results(save_as, dpi)
+        _save_and_show_results(save_as, dpi)
 
 
 # For xinyi's test, because she can't debug in Jupyter :
