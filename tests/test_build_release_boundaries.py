@@ -36,6 +36,7 @@ def test_macos_wheel_repair_fails_instead_of_copying_unrepaired_wheel():
     assert "delvewheel did not emit a wheel; copying built wheel as-is" in repair_script
     assert '"-m", "delvewheel"' in repair_script or "'-m', 'delvewheel'" in repair_script
     assert "_ensure_delvewheel" in repair_script
+    assert "--include" in repair_script
     assert "LIBOMP_DLL_DIR" in repair_script
     assert "libomp.dll" not in repair_script or "libomp140" in repair_script
     assert "bundled OpenMP DLLs" in repair_script

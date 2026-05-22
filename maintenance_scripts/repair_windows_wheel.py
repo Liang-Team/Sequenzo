@@ -145,6 +145,17 @@ def _find_omp_dll_via_vswhere(vswhere: Path) -> Path | None:
     return None
 
 
+def _pick_best_redist_match(matches: list[Path]) -> Path:
+    """Prefer release redist OpenMP DLLs over debug_nonredist copies."""
+    release = [
+        path
+        for path in matches
+        if "debug_nonredist" not in path.as_posix().casefold()
+    ]
+    pool = release or matches
+    return sorted(pool)[-1]
+
+
 def _find_omp_dll_via_redist(install_root: Path | None = None) -> Path | None:
     """Search VC Redist trees where MSVC ships libomp140 for /openmp:llvm."""
     roots: list[Path] = []
@@ -175,8 +186,9 @@ def _find_omp_dll_via_redist(install_root: Path | None = None) -> Path | None:
             ):
                 matches = sorted(resolved.glob(pattern))
                 if matches:
-                    print(f"[repair] Found DLL via VS redist: {matches[0]}")
-                    return matches[0]
+                    best = _pick_best_redist_match(matches)
+                    print(f"[repair] Found DLL via VS redist: {best}")
+                    return best
 
     return None
 
@@ -239,11 +251,23 @@ def find_omp_dll() -> Path | None:
 # Wheel repair
 # ---------------------------------------------------------------------------
 
-def run_delvewheel(dest: Path, wheel: Path, omp_bin: Path | None) -> bool:
+def run_delvewheel(
+    dest: Path,
+    wheel: Path,
+    omp_bin: Path | None,
+    omp_dll: Path | None,
+) -> bool:
     """Run delvewheel; return True if it produced at least one wheel."""
+    for existing in dest.glob("*.whl"):
+        existing.unlink()
+
     args = ["repair", "-w", str(dest)]
     if omp_bin:
         args += ["--add-path", str(omp_bin)]
+    if omp_dll:
+        # --add-path only helps dependency discovery; OpenMP is often loaded
+        # indirectly, so force-vendor the runtime into sequenzo.libs/.
+        args += ["--include", omp_dll.name]
     args.append(str(wheel))
 
     result = _run_delvewheel(args)
@@ -275,7 +299,7 @@ def main() -> int:
     else:
         print("[repair] WARNING: libomp140*.dll not found; repair may miss OpenMP runtime")
 
-    if run_delvewheel(dest, wheel, omp_bin):
+    if run_delvewheel(dest, wheel, omp_bin, omp_dll):
         repaired = sorted(dest.glob("*.whl"))[0]
         print(f"[repair] Repaired wheel (delvewheel): {repaired}")
         return _finalize_repaired_wheel(repaired)
@@ -298,9 +322,13 @@ def _verify_bundled_openmp(wheel_path: Path) -> None:
         dlls = [
             name
             for name in zf.namelist()
-            if name.startswith("sequenzo.libs/")
-            and name.lower().endswith(".dll")
+            if name.endswith(".dll")
             and "libomp140" in name.lower()
+            and ("/" in name or "\\" in name)
+            and (
+                name.startswith("sequenzo.libs/")
+                or ".libs/" in name.replace("\\", "/")
+            )
         ]
     if not dlls:
         print(

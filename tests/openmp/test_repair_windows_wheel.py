@@ -41,3 +41,21 @@ def test_find_omp_dll_via_redist_glob(tmp_path):
     dll.write_bytes(b"fake")
 
     assert repair._find_omp_dll_via_redist(tmp_path) == dll
+
+
+def test_pick_best_redist_match_prefers_release_over_debug(tmp_path):
+    repair = _load_repair_module()
+    release = (
+        tmp_path
+        / "VC/Redist/MSVC/14.44.35207/x64/Microsoft.VC143.OpenMP.LLVM/libomp140.x86_64.dll"
+    )
+    debug = (
+        tmp_path
+        / "VC/Redist/MSVC/14.29.30133/debug_nonredist/x64/Microsoft.VC142.OpenMP.LLVM/libomp140.x86_64.dll"
+    )
+    release.parent.mkdir(parents=True)
+    debug.parent.mkdir(parents=True)
+    release.write_bytes(b"release")
+    debug.write_bytes(b"debug")
+
+    assert repair._pick_best_redist_match([debug, release]) == release

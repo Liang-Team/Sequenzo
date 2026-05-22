@@ -380,20 +380,21 @@ jobs:
             throw "vswhere did not return a Visual Studio installation path"
           }
 
-          $patterns = @(
-            "$installPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.OpenMP.LLVM\libomp140.x86_64.dll",
-            "$installPath\VC\Redist\MSVC\*\debug_nonredist\x64\Microsoft.VC*.OpenMP.LLVM\libomp140.x86_64.dll",
-            "$installPath\VC\Tools\Llvm\x64\bin\libomp140.x86_64.dll",
-            "$installPath\VC\Tools\Llvm\x64\bin\libomp140.dll"
-          )
+          $releaseMatches = Get-ChildItem -Path "$installPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.OpenMP.LLVM\libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Sort-Object FullName
+          $debugMatches = Get-ChildItem -Path "$installPath\VC\Redist\MSVC\*\debug_nonredist\x64\Microsoft.VC*.OpenMP.LLVM\libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Sort-Object FullName
+          $llvmMatches = @(
+            Get-ChildItem -Path "$installPath\VC\Tools\Llvm\x64\bin\libomp140.x86_64.dll" -ErrorAction SilentlyContinue
+            Get-ChildItem -Path "$installPath\VC\Tools\Llvm\x64\bin\libomp140.dll" -ErrorAction SilentlyContinue
+          ) | Sort-Object FullName
 
           $dll = $null
-          foreach ($pattern in $patterns) {
-            $match = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($match) {
-              $dll = $match
-              break
-            }
+          if ($releaseMatches) {
+            $dll = $releaseMatches[-1]
+          } elseif ($debugMatches) {
+            $dll = $debugMatches[-1]
+            Write-Host "WARNING: using debug_nonredist OpenMP runtime: $($dll.FullName)"
+          } elseif ($llvmMatches) {
+            $dll = $llvmMatches[-1]
           }
 
           if (-not $dll) {
