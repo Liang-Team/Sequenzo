@@ -1,10 +1,106 @@
 """
 Tests for OpenMP configuration fixes.
-Run: pytest tests/test_openmp_setup.py -v
+Run: pytest tests/openmp/test_openmp_setup.py -v
 """
 import os
 import sys
+import inspect
+from pathlib import Path
+from unittest import mock
+
 import pytest
+
+
+class TestCondaPrefixDetection:
+    def test_get_conda_prefix_uses_conda_prefix_only(self, tmp_path):
+        from sequenzo.openmp_setup import _get_conda_prefix
+
+        conda_prefix = tmp_path / "conda-env"
+        conda_prefix.mkdir()
+        with mock.patch.dict(
+            os.environ,
+            {"CONDA_PREFIX": str(conda_prefix), "CONDA_DEFAULT_ENV": "base"},
+            clear=False,
+        ):
+            assert _get_conda_prefix() == str(conda_prefix)
+
+    def test_get_conda_prefix_ignores_env_name(self):
+        from sequenzo.openmp_setup import _get_conda_prefix
+
+        env = os.environ.copy()
+        env.pop("CONDA_PREFIX", None)
+        env["CONDA_DEFAULT_ENV"] = "base"
+        with mock.patch.dict(os.environ, env, clear=True):
+            assert _get_conda_prefix() is None
+
+
+class TestFixDuplicateLibompInConda:
+    def test_dispatcher_calls_windows_helper(self, monkeypatch):
+        from sequenzo import openmp_setup
+
+        called = {"win": False, "mac": False}
+
+        monkeypatch.setattr(openmp_setup.sys, "platform", "win32")
+        monkeypatch.setattr(
+            openmp_setup,
+            "_fix_duplicate_libomp_in_conda_windows",
+            lambda: called.__setitem__("win", True),
+        )
+        monkeypatch.setattr(
+            openmp_setup,
+            "_fix_duplicate_libomp_in_conda_darwin",
+            lambda: called.__setitem__("mac", True),
+        )
+
+        openmp_setup.fix_duplicate_libomp_in_conda()
+        assert called["win"] is True
+        assert called["mac"] is False
+
+    def test_windows_conda_registers_dll_directories(self, monkeypatch, tmp_path):
+        from sequenzo import openmp_setup
+
+        conda_prefix = tmp_path / "conda"
+        conda_bin = conda_prefix / "Library" / "bin"
+        conda_bin.mkdir(parents=True)
+        conda_dll = conda_bin / "libomp140.x86_64.dll"
+        conda_dll.write_bytes(b"fake")
+
+        pkg_dir = tmp_path / "site-packages" / "sequenzo"
+        pkg_dir.mkdir(parents=True)
+        libs_dir = tmp_path / "site-packages" / "sequenzo.libs"
+        libs_dir.mkdir()
+        bundled_dll = libs_dir / "libomp140.x86_64.dll"
+        bundled_dll.write_bytes(b"old")
+
+        added = []
+        monkeypatch.setattr(
+            openmp_setup,
+            "_register_windows_dll_directory",
+            lambda path: added.append(str(path)),
+        )
+        monkeypatch.setattr(openmp_setup, "_get_conda_prefix", lambda: str(conda_prefix))
+        monkeypatch.setattr(openmp_setup, "_get_sequenzo_package_dir", lambda: pkg_dir)
+        monkeypatch.setattr(openmp_setup, "_get_sequenzo_libs_dir", lambda: libs_dir)
+
+        openmp_setup._fix_duplicate_libomp_in_conda_windows()
+
+        assert str(conda_bin) in added
+        assert str(libs_dir) in added
+        assert bundled_dll.read_bytes() == conda_dll.read_bytes()
+        assert os.environ.get("KMP_DUPLICATE_LIB_OK") == "TRUE"
+
+    def test_windows_skips_without_conda_prefix(self, monkeypatch):
+        from sequenzo import openmp_setup
+
+        monkeypatch.setattr(openmp_setup, "_get_conda_prefix", lambda: None)
+        called = {"added": False}
+
+        def _add(path):
+            called["added"] = True
+
+        monkeypatch.setattr(openmp_setup, "_register_windows_dll_directory", _add)
+        openmp_setup._fix_duplicate_libomp_in_conda_windows()
+        assert called["added"] is False
 
 
 class TestKMPDuplicateLib:
@@ -125,23 +221,34 @@ class TestOpenMPCompiled:
 class TestCondaNoSkip:
     """Test that Conda environment no longer skips OpenMP."""
 
-    def test_openmp_setup_no_conda_skip(self):
-        """openmp_setup.ensure_openmp_support should not return early for Conda."""
-        import inspect
+    def test_openmp_setup_runs_conda_fix_before_early_return(self, monkeypatch):
+        """ensure_openmp_support should not skip Conda duplicate-libomp mitigation."""
+        from sequenzo import openmp_setup
+
+        calls = []
+        monkeypatch.setattr(openmp_setup, "_get_conda_prefix", lambda: "/fake/conda")
+        monkeypatch.setattr(
+            openmp_setup,
+            "fix_duplicate_libomp_in_conda",
+            lambda: calls.append("fix"),
+        )
+        monkeypatch.setattr(openmp_setup.sys, "platform", "linux")
+
+        result = openmp_setup.ensure_openmp_support()
+
+        assert result is True
+        assert calls == ["fix"]
+
+    def test_openmp_setup_source_runs_conda_fix_first(self):
+        """Conda duplicate-libomp mitigation must precede platform early return."""
         from sequenzo.openmp_setup import ensure_openmp_support
+
         source = inspect.getsource(ensure_openmp_support)
-        lines = source.split('\n')
-        for i, line in enumerate(lines):
-            if 'CONDA_DEFAULT_ENV' in line:
-                # Check next non-empty lines don't have bare "return True"
-                for j in range(i + 1, min(i + 3, len(lines))):
-                    stripped = lines[j].strip()
-                    if stripped == 'return True':
-                        pytest.fail(
-                            f"openmp_setup still returns True immediately "
-                            f"for Conda environments (line {j + 1})"
-                        )
-                break
+        conda_fix_idx = source.index("fix_duplicate_libomp_in_conda()")
+        early_return_idx = source.index(
+            'if sys.platform != "darwin" or platform.machine() != "arm64":'
+        )
+        assert conda_fix_idx < early_return_idx
 
     def test_init_no_conda_skip(self):
         """__init__._setup_openmp_if_needed should not skip for Conda."""

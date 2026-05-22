@@ -6,6 +6,11 @@
 """
 import os as _os
 _os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+try:
+    from sequenzo.openmp_setup import fix_duplicate_libomp_in_conda as _fix_duplicate_libomp_in_conda
+    _fix_duplicate_libomp_in_conda()
+except Exception:
+    pass
 _nt = _os.environ.get("SEQUENZO_NUM_THREADS")
 if _nt is not None:
     _os.environ.setdefault("OMP_NUM_THREADS", str(_nt))

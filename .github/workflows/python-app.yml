@@ -597,6 +597,11 @@ jobs:
             where link
             echo "Using minimal build dependencies"
             python -m pip install --upgrade pip
+            python -m pip install delvewheel
+
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
+            echo "=== Repairing Windows wheel with delvewheel ==="
+            delvewheel repair -w {dest_dir} {wheel}
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
@@ -897,6 +902,35 @@ jobs:
                         print(f'[OK] {name} class available')
             except ImportError as e:
                 print(f'ERROR: Failed to import c_code: {e}')
+
+            print('')
+            print('=== Testing core distance and Cluster import path ===')
+            try:
+                import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code
+                print('[OK] core_distance_c_code loaded successfully')
+            except ImportError as e:
+                print(f'[WARNING] core_distance_c_code failed to load: {e}')
+
+            try:
+                from sequenzo.utils.core_distance_operations import weighted_inertia_contrib
+                test_dist = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64)
+                contrib = weighted_inertia_contrib(
+                    test_dist,
+                    np.array([0, 1], dtype=np.int32),
+                    np.array([1.0, 1.0], dtype=np.float64),
+                )
+                assert contrib.shape == (2,)
+                print('[OK] weighted_inertia_contrib works')
+            except Exception as e:
+                print(f'[ERROR] weighted_inertia_contrib failed: {e}')
+                sys.exit(1)
+
+            try:
+                from sequenzo import Cluster
+                print('[OK] Cluster import successful')
+            except ImportError as e:
+                print(f'[ERROR] Cluster import failed: {e}')
+                sys.exit(1)
             
             # Check sequenzo_fastcluster module
             print('')
