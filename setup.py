@@ -411,9 +411,16 @@ def get_compile_args_for_file(filename, *, fast_math=True):
         # OpenMP flags with platform-specific optimization
         if has_openmp_support():
             if sys.platform == 'darwin':
-                # macOS: 使用libomp，分离编译和链接标志
-                openmp_flag = ['-Xpreprocessor', '-fopenmp']
-                print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp")
+                # macOS: use libomp with separated compile/link flags.
+                # -fno-openmp-extensions suppresses Intel-private OpenMP symbols
+                # (e.g. __kmpc_dispatch_deinit) that clang emits by default but
+                # the LLVM openmp runtime built from source does not export.
+                # Without this flag the .so loads fine against Homebrew libomp
+                # but fails with "symbol not found in flat namespace" against any
+                # self-built libomp (used in CI to enforce the minos deployment
+                # target of the wheel, e.g. 10.15 or 11.0).
+                openmp_flag = ['-Xpreprocessor', '-fopenmp', '-fno-openmp-extensions']
+                print("[SETUP] macOS OpenMP flags: -Xpreprocessor -fopenmp -fno-openmp-extensions")
             else:
                 # Linux/Other: 使用libgomp
                 openmp_flag = ['-fopenmp']  
