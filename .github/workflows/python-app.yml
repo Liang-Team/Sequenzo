@@ -1255,7 +1255,40 @@ jobs:
           )
           echo "Installing $WHEEL into Conda environment"
           python -m pip install --force-reinstall "$WHEEL"
-          python -c "import os; import numpy as np; print('CONDA_PREFIX=' + os.environ.get('CONDA_PREFIX', '')); from sequenzo import SequenceData, get_distance_matrix, Cluster; import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code; from sequenzo.utils.core_distance_operations import weighted_inertia_contrib; contrib = weighted_inertia_contrib(np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64), np.array([0, 1], dtype=np.int32), np.array([1.0, 1.0], dtype=np.float64)); assert contrib.shape == (2,); print('[OK] Windows Conda wheel smoke test passed')"
+          python - <<'PY'
+          import importlib.util
+          import os
+          import sys
+
+          # Avoid importing the checkout's source tree (no compiled .pyd/.so there).
+          sys.path = [p for p in sys.path if p]
+
+          import numpy as np
+
+          print("CONDA_PREFIX=" + os.environ.get("CONDA_PREFIX", ""))
+
+          from sequenzo import SequenceData, get_distance_matrix, Cluster
+          import sequenzo.utils.core_distance_operations.core_distance_c_code as core_distance_c_code
+          from sequenzo.utils.core_distance_operations import weighted_inertia_contrib
+
+          spec = importlib.util.find_spec(
+              "sequenzo.utils.core_distance_operations.core_distance_c_code"
+          )
+          if spec is None or not spec.origin:
+              raise SystemExit(
+                  "core_distance_c_code not found after wheel install; "
+                  f"sys.path={sys.path!r}"
+              )
+          print(f"[OK] core_distance_c_code loaded from: {spec.origin}")
+
+          contrib = weighted_inertia_contrib(
+              np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64),
+              np.array([0, 1], dtype=np.int32),
+              np.array([1.0, 1.0], dtype=np.float64),
+          )
+          assert contrib.shape == (2,)
+          print("[OK] Windows Conda wheel smoke test passed")
+          PY
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4

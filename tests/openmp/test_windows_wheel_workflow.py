@@ -31,4 +31,5 @@ def test_windows_conda_smoke_installs_repaired_wheel():
     assert "Windows Conda wheel smoke test" in workflow
     assert "CONDA_PREFIX=" in workflow
     assert "python -m pip install --force-reinstall \"$WHEEL\"" in workflow
+    assert "sys.path = [p for p in sys.path if p]" in workflow
     assert "[OK] Windows Conda wheel smoke test passed" in workflow
