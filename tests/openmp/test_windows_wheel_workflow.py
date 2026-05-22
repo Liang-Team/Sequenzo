@@ -14,10 +14,14 @@ def test_windows_cibuildwheel_smoke_test_uses_cmd_safe_python():
 
 def test_windows_wheel_repair_verifies_bundled_openmp_dlls():
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    repair_script = (
+        WORKFLOW.parents[2] / "maintenance_scripts" / "repair_windows_wheel.py"
+    ).read_text(encoding="utf-8")
 
-    assert "delvewheel show" in workflow
-    assert "sequenzo.libs" in workflow
-    assert "libomp140" in workflow
+    assert "delvewheel show" in repair_script
+    assert "LIBOMP_DLL_DIR" in workflow
+    assert "sequenzo.libs" in repair_script
+    assert "libomp140" in repair_script
 
 
 def test_windows_conda_smoke_installs_repaired_wheel():

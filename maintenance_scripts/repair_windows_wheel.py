@@ -15,6 +15,7 @@ Usage (called from CIBW_REPAIR_WHEEL_COMMAND_WINDOWS, cwd = project root):
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -30,6 +31,21 @@ _MSVC_OMP_DLL_NAMES = (
 # ---------------------------------------------------------------------------
 # delvewheel invocation
 # ---------------------------------------------------------------------------
+
+def _ensure_delvewheel() -> None:
+    """Install delvewheel into the active cibuildwheel venv when missing."""
+    if importlib.util.find_spec("delvewheel") is not None:
+        return
+
+    print("[repair] delvewheel not found in build venv; installing...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "delvewheel"],
+        check=False,
+    )
+    if result.returncode != 0 or importlib.util.find_spec("delvewheel") is None:
+        print("[repair] ERROR: failed to install delvewheel", file=sys.stderr)
+        raise SystemExit(1)
+
 
 def _delvewheel_cmd(*args: str) -> list[str]:
     """Invoke delvewheel via the active Python (Scripts/ may be off PATH)."""
@@ -122,6 +138,61 @@ def _find_omp_dll_via_vswhere(vswhere: Path) -> Path | None:
                 print(f"[repair] Found DLL under VS install root: {matches[0]}")
                 return matches[0]
 
+        redist_match = _find_omp_dll_via_redist(install_root)
+        if redist_match:
+            return redist_match
+
+    return None
+
+
+def _find_omp_dll_via_redist(install_root: Path | None = None) -> Path | None:
+    """Search VC Redist trees where MSVC ships libomp140 for /openmp:llvm."""
+    roots: list[Path] = []
+    if install_root is not None and install_root.is_dir():
+        roots.append(install_root)
+    roots.extend(
+        [
+            Path("C:/Program Files/Microsoft Visual Studio/2022/Enterprise"),
+            Path("C:/Program Files/Microsoft Visual Studio/2022/Community"),
+            Path("C:/Program Files/Microsoft Visual Studio/2022/Professional"),
+        ]
+    )
+
+    seen: set[Path] = set()
+    for root in roots:
+        try:
+            resolved = root.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_dir():
+            continue
+        seen.add(resolved)
+
+        for name in _MSVC_OMP_DLL_NAMES:
+            for pattern in (
+                f"VC/Redist/MSVC/*/x64/Microsoft.VC*.OpenMP.LLVM/{name}",
+                f"VC/Redist/MSVC/*/debug_nonredist/x64/Microsoft.VC*.OpenMP.LLVM/{name}",
+            ):
+                matches = sorted(resolved.glob(pattern))
+                if matches:
+                    print(f"[repair] Found DLL via VS redist: {matches[0]}")
+                    return matches[0]
+
+    return None
+
+
+def _find_omp_dll_from_env() -> Path | None:
+    """Use LIBOMP_DLL_DIR when CI has already resolved the OpenMP runtime."""
+    env_dir = os.environ.get("LIBOMP_DLL_DIR", "").strip()
+    if not env_dir:
+        return None
+
+    directory = Path(env_dir)
+    for name in _MSVC_OMP_DLL_NAMES:
+        candidate = directory / name
+        if candidate.is_file():
+            print(f"[repair] Found DLL via LIBOMP_DLL_DIR: {candidate}")
+            return candidate
     return None
 
 
@@ -143,6 +214,10 @@ def _find_omp_dll_fallback() -> Path | None:
 
 
 def find_omp_dll() -> Path | None:
+    dll = _find_omp_dll_from_env()
+    if dll:
+        return dll
+
     vswhere = _find_vswhere()
     if vswhere:
         print(f"[repair] Using vswhere: {vswhere}")
@@ -152,6 +227,11 @@ def find_omp_dll() -> Path | None:
         print("[repair] vswhere did not find libomp140*.dll; trying fallback paths...")
     else:
         print("[repair] vswhere.exe not found; trying fallback paths...")
+
+    dll = _find_omp_dll_via_redist()
+    if dll:
+        return dll
+
     return _find_omp_dll_fallback()
 
 
@@ -177,6 +257,8 @@ def main() -> int:
     if len(sys.argv) != 3:
         print("Usage: repair_windows_wheel.py <dest_dir> <wheel>", file=sys.stderr)
         return 2
+
+    _ensure_delvewheel()
 
     dest = Path(sys.argv[1]).resolve()
     wheel = Path(sys.argv[2]).resolve()
