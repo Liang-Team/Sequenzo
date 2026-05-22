@@ -48,7 +48,18 @@ _libomp_deploy_ok() {
 
 _libomp_symbol_ok() {
   # LLVM-built libomp may not export dispatch_deinit, but always exports kmpc/omp APIs.
-  nm -g "$LIBOMP" 2>/dev/null | grep -Eq '__kmpc_|omp_get_max_threads'
+  # NOTE: Avoid piping `nm` output directly into `grep -E` with `set -o pipefail`.
+  # On macOS, `grep -Eq` exits as soon as the first match is found, which causes
+  # `nm` to get a broken-pipe signal (SIGPIPE). Under pipefail, that non-zero exit
+  # from `nm` propagates and kills the script even though the symbols *were* found.
+  # Fix: dump symbols to a temp file first, then grep — no pipe, no broken-pipe risk.
+  local _sym_tmp
+  _sym_tmp="$(mktemp)"
+  nm -g "$LIBOMP" 2>/dev/null > "$_sym_tmp" || true
+  grep -Eq '__kmpc_|omp_get_max_threads' "$_sym_tmp"
+  local _rc=$?
+  rm -f "$_sym_tmp"
+  return $_rc
 }
 
 if [[ -f "$LIBOMP" ]] && _libomp_arch_ok && _libomp_deploy_ok && _libomp_symbol_ok; then
@@ -115,7 +126,7 @@ if ! _libomp_arch_ok || ! _libomp_deploy_ok || ! _libomp_symbol_ok; then
   _libomp_symbol_ok || echo "  - missing OpenMP runtime symbols" >&2
   file "$LIBOMP" >&2 || true
   otool -l "$LIBOMP" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/' >&2 || true
-  nm -g "$LIBOMP" 2>/dev/null | grep -E '__kmpc_|omp_get_max_threads' | head -5 >&2 || true
+  nm -g "$LIBOMP" 2>/dev/null | { grep -E '__kmpc_|omp_get_max_threads' || true; } | head -5 >&2 || true
   exit 1
 fi
 

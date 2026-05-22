@@ -555,21 +555,61 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
             set -euo pipefail
             echo "=== Repairing Windows wheel with delvewheel ==="
+            echo "Wheel: {wheel}"
+            echo "Dest:  {dest_dir}"
+
             LLVM_OMP_BIN=""
-            VSWHERE="${PROGRAMFILES(x86)/Microsoft Visual Studio/Installer/vswhere.exe}"
+
+            # vswhere.exe path — use Windows-style separators and the canonical env var name.
+            VSWHERE="$PROGRAMFILES(X86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            # Git-Bash on Windows sometimes exposes PROGRAMFILES_X86 instead; fall back to it.
+            if [ ! -f "$VSWHERE" ] && [ -n "${PROGRAMFILES_X86:-}" ]; then
+              VSWHERE="$PROGRAMFILES_X86/Microsoft Visual Studio/Installer/vswhere.exe"
+            fi
+            # Last-resort hard-coded path used on GitHub-hosted runners.
+            if [ ! -f "$VSWHERE" ]; then
+              VSWHERE="C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            fi
+
             if [ -f "$VSWHERE" ]; then
-              OMP_DLL="$("$VSWHERE" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC/Tools/Llvm/x64/bin/libomp140.x86_64.dll' 2>/dev/null | head -1)"
+              echo "Using vswhere: $VSWHERE"
+              # -find accepts glob patterns; use backslash path separators (Windows convention).
+              OMP_DLL="$("$VSWHERE" -latest -products '*' \
+                -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+                -find 'VC\Tools\Llvm\x64\bin\libomp140.x86_64.dll' 2>/dev/null | head -1 || true)"
               if [ -n "$OMP_DLL" ] && [ -f "$OMP_DLL" ]; then
                 LLVM_OMP_BIN="$(dirname "$OMP_DLL")"
+                echo "Found libomp140.x86_64.dll via vswhere: $OMP_DLL"
+              else
+                echo "vswhere: libomp140.x86_64.dll not found via -find; trying glob fallback..."
+                # Broad glob fallback: walk all MSVC LLVM bin dirs for the DLL.
+                for candidate in \
+                  "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/Llvm/x64/bin/libomp140.x86_64.dll" \
+                  "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/libomp140.x86_64.dll" \
+                  "C:/Program Files/LLVM/bin/libomp.dll" \
+                  "C:/Program Files/LLVM/bin/libomp140.x86_64.dll"; do
+                  if [ -f "$candidate" ]; then
+                    LLVM_OMP_BIN="$(dirname "$candidate")"
+                    echo "Found OpenMP DLL via fallback path: $candidate"
+                    break
+                  fi
+                done
               fi
+            else
+              echo "WARNING: vswhere.exe not found; skipping OpenMP DLL search"
             fi
+
             if [ -n "$LLVM_OMP_BIN" ]; then
-              echo "Bundling OpenMP from $LLVM_OMP_BIN"
+              echo "Bundling OpenMP from: $LLVM_OMP_BIN"
               delvewheel repair --add-path "$LLVM_OMP_BIN" -w "{dest_dir}" "{wheel}" || true
             else
-              echo "WARNING: MSVC LLVM OpenMP not found; running delvewheel without --add-path"
+              echo "WARNING: MSVC LLVM OpenMP not found; running delvewheel without --add-path (OpenMP may be missing from wheel)"
               delvewheel repair -w "{dest_dir}" "{wheel}" || true
             fi
+
+            # repair_windows_wheel.py is the safety net: if delvewheel emitted a
+            # repaired wheel it confirms it; otherwise it copies the built wheel
+            # as-is so cibuildwheel always finds a wheel in dest_dir.
             python "{project}/maintenance_scripts/repair_windows_wheel.py" "{dest_dir}" "{wheel}"
 
           # 注意：CIBW_BEFORE_BUILD（通用）在所有平台都提供了平台专用版本时
