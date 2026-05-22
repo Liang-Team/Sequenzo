@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Build a libomp.dylib whose minimum macOS version matches the wheel tag.
+# Homebrew libomp on modern CI runners often requires macOS 14+, which breaks
+# delocate when wheels target older macOS releases.
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 <arch> <deployment_target> [install_prefix]" >&2
+  exit 1
+}
+
+ARCH="${1:-}"
+DEPLOY_TARGET="${2:-}"
+INSTALL_PREFIX="${3:-${GITHUB_WORKSPACE:-$(pwd)}/.local-libomp}"
+LLVM_OPENMP_VERSION="${LLVM_OPENMP_VERSION:-18.1.8}"
+
+if [[ -z "$ARCH" || -z "$DEPLOY_TARGET" ]]; then
+  usage
+fi
+
+for tool in cmake clang clang++ curl tar; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "[ERROR] Required tool not found: $tool" >&2
+    exit 1
+  fi
+done
+
+LIBOMP="$INSTALL_PREFIX/lib/libomp.dylib"
+
+_libomp_arch_ok() {
+  file "$LIBOMP" | grep -Eiq "$ARCH"
+}
+
+_libomp_deploy_ok() {
+  local minos=""
+  minos=$(otool -l "$LIBOMP" | awk '
+    /LC_BUILD_VERSION/ { capture=1; next }
+    capture && /minos/ { print $2; exit }
+  ')
+  if [[ -z "$minos" ]]; then
+    minos=$(otool -l "$LIBOMP" | awk '
+      /LC_VERSION_MIN_MACOSX/ { capture=1; next }
+      capture && /version/ { print $2; exit }
+    ')
+  fi
+  [[ "$minos" == "$DEPLOY_TARGET" ]]
+}
+
+_libomp_symbol_ok() {
+  nm -gU "$LIBOMP" 2>/dev/null | grep -q '___kmpc_dispatch_deinit'
+}
+
+if [[ -f "$LIBOMP" ]] && _libomp_arch_ok && _libomp_deploy_ok && _libomp_symbol_ok; then
+  echo "[OK] Reusing libomp at $INSTALL_PREFIX (arch=$ARCH, min macOS=$DEPLOY_TARGET)"
+  exit 0
+fi
+
+echo "Building LLVM OpenMP ${LLVM_OPENMP_VERSION} for ${ARCH} (min macOS ${DEPLOY_TARGET})..."
+
+WORK="$(mktemp -d)"
+cleanup() { rm -rf "$WORK"; }
+trap cleanup EXIT
+
+TARBALL="$WORK/openmp-${LLVM_OPENMP_VERSION}.src.tar.xz"
+URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_OPENMP_VERSION}/openmp-${LLVM_OPENMP_VERSION}.src.tar.xz"
+for attempt in 1 2 3; do
+  if curl -fsSL --http1.1 "$URL" -o "$TARBALL"; then
+    break
+  fi
+  if [ "$attempt" -eq 3 ]; then
+    echo "[ERROR] Failed to download LLVM OpenMP source after 3 attempts" >&2
+    exit 1
+  fi
+  echo "Download failed, retrying in ${attempt}0s..." >&2
+  sleep $((attempt * 10))
+done
+tar -xJf "$TARBALL" -C "$WORK"
+
+SRC="$WORK/openmp-${LLVM_OPENMP_VERSION}.src"
+BUILD="$WORK/build"
+mkdir -p "$BUILD" "$INSTALL_PREFIX"
+
+cmake -S "$SRC" -B "$BUILD" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+  -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET="$DEPLOY_TARGET" \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DLIBOMP_ENABLE_SHARED=ON \
+  -DLIBOMP_INSTALL_ALIASES=OFF
+
+cmake --build "$BUILD" --target install -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+
+if ! _libomp_arch_ok || ! _libomp_deploy_ok || ! _libomp_symbol_ok; then
+  echo "[ERROR] Built libomp failed verification:" >&2
+  file "$LIBOMP" >&2 || true
+  otool -l "$LIBOMP" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/' >&2 || true
+  exit 1
+fi
+
+echo "[OK] Installed libomp to $INSTALL_PREFIX"
+file "$LIBOMP"
+otool -l "$LIBOMP" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/'

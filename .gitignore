@@ -16,6 +16,7 @@ __pycache__/
 build/
 dist/
 unit_test/
+.local-libomp/
 *.log
 *.tmp
 

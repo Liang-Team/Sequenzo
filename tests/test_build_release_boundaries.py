@@ -18,13 +18,28 @@ def test_setup_does_not_clone_unpinned_xsimd_from_network():
 def test_macos_wheel_repair_fails_instead_of_copying_unrepaired_wheel():
     workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "python-app.yml"
     source = workflow.read_text()
+    repo_root = Path(__file__).resolve().parents[1]
 
     assert "copying wheel as-is" not in source
     assert "cp {wheel} {dest_dir}/" not in source
     assert 'find . -name "*.c" -delete' not in source
     assert 'find . -name "*.so" -delete' not in source
     assert "delocate-wheel --require-archs {delocate_archs}" in source
+    assert 'CIBW_TARGET_OSX_x86_64: "10.15"' in source
+    assert 'CIBW_TARGET_OSX_arm64: "11.0"' in source
+    assert "build_macos_ci_libomp.sh" in source
+    assert "copy /Y {wheel} {dest_dir}" in source
     assert "exit 1" in source
+    assert (repo_root / "maintenance_scripts" / "build_macos_ci_libomp.sh").is_file()
+
+
+def test_setup_respects_macos_deployment_target_from_environment():
+    setup_py = Path(__file__).resolve().parents[1] / "setup.py"
+    source = setup_py.read_text()
+
+    assert "os.environ.setdefault('MACOSX_DEPLOYMENT_TARGET', '10.15')" in source
+    assert "os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'" not in source
+    assert "os.environ.setdefault('MACOSX_DEPLOYMENT_TARGET', '14.0')" not in source
 
 
 def test_setup_builds_fanny_cpp_binding_without_fast_math():

@@ -203,6 +203,7 @@ def _find_libomp_prefix():
         candidates.extend(sorted(glob(os.path.join(conda_prefix, 'pkgs', 'llvm-openmp-*')), reverse=True))
 
     candidates.extend([
+        str(BASE_DIR / '.local-libomp'),
         '/opt/homebrew/opt/libomp',   # Apple Silicon
         '/usr/local/opt/libomp',      # Intel Mac
     ])
@@ -416,7 +417,9 @@ def get_compile_args_for_file(filename, *, fast_math=True):
             compile_args.append("-ffast-math")
 
     if sys.platform == 'darwin':
-        os.environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
+        # Respect cibuildwheel / caller-provided deployment target. CI builds libomp
+        # from source to match the wheel tag; local dev may still use Homebrew libomp.
+        os.environ.setdefault('MACOSX_DEPLOYMENT_TARGET', '10.15')
         arch = get_mac_arch()
         
         # Handle both single architecture and multiple architectures
