@@ -1,8 +1,8 @@
 """
 Small seqHMM-compatibility utilities for fitted and parameterized models.
 
-The utilities in this module intentionally stay scoped to model families that
-exist in this repository: HMM, MHMM, and NHMM.
+The functions in this module intentionally keep Python semantics simple: they
+return defensive copies by default and do not mutate models unless requested.
 """
 
 from __future__ import annotations
@@ -17,10 +17,12 @@ from scipy.optimize import linear_sum_assignment
 from sequenzo.define_sequence_data import SequenceData
 from .hmm import HMM
 from .mhmm import MHMM
+from .mnhmm import MNHMM
+from .multichannel_utils import multichannel_to_hmmlearn_format, prepare_multichannel_data
 from .nhmm import NHMM
 
 
-Model = Union[HMM, MHMM, NHMM]
+Model = Union[HMM, MHMM, MNHMM, NHMM]
 
 
 def _copy(value, copy: bool = True):
@@ -31,6 +33,10 @@ def _copy(value, copy: bool = True):
     if isinstance(value, dict):
         return {key: _copy(item, copy=copy) for key, item in value.items()}
     return np.array(value, copy=copy)
+
+
+def _normalize_observations_input(observations):
+    return list(observations) if isinstance(observations, tuple) else observations
 
 
 def get_initial_probs(
@@ -46,12 +52,22 @@ def get_initial_probs(
                 for component in model.clusters
             ]
         return get_initial_probs(model.clusters[cluster], copy=copy)
+    if isinstance(model, MNHMM):
+        if cluster is None:
+            return [
+                get_initial_probs(model, cluster=i, copy=copy)
+                for i in range(model.n_clusters)
+            ]
+        initial_probs, _, _ = model._component_probs(cluster)
+        return _copy(initial_probs, copy=copy)
     if isinstance(model, NHMM):
         initial_probs, _, _ = model._compute_probs()
         return _copy(initial_probs, copy=copy)
     if isinstance(model, HMM):
         return _copy(model.initial_probs, copy=copy)
-    raise TypeError("get_initial_probs expects an HMM, MHMM, or NHMM model")
+    raise TypeError(
+        "get_initial_probs expects an HMM, MHMM, NHMM, or MNHMM model"
+    )
 
 
 def get_transition_probs(
@@ -67,12 +83,22 @@ def get_transition_probs(
                 for component in model.clusters
             ]
         return get_transition_probs(model.clusters[cluster], copy=copy)
+    if isinstance(model, MNHMM):
+        if cluster is None:
+            return [
+                get_transition_probs(model, cluster=i, copy=copy)
+                for i in range(model.n_clusters)
+            ]
+        _, transition_probs, _ = model._component_probs(cluster)
+        return _copy(transition_probs, copy=copy)
     if isinstance(model, NHMM):
         _, transition_probs, _ = model._compute_probs()
         return _copy(transition_probs, copy=copy)
     if isinstance(model, HMM):
         return _copy(model.transition_probs, copy=copy)
-    raise TypeError("get_transition_probs expects an HMM, MHMM, or NHMM model")
+    raise TypeError(
+        "get_transition_probs expects an HMM, MHMM, NHMM, or MNHMM model"
+    )
 
 
 def get_emission_probs(
@@ -88,19 +114,31 @@ def get_emission_probs(
                 for component in model.clusters
             ]
         return get_emission_probs(model.clusters[cluster], copy=copy)
+    if isinstance(model, MNHMM):
+        if cluster is None:
+            return [
+                get_emission_probs(model, cluster=i, copy=copy)
+                for i in range(model.n_clusters)
+            ]
+        _, _, emission_probs = model._component_probs(cluster)
+        return _copy(emission_probs, copy=copy)
     if isinstance(model, NHMM):
         _, _, emission_probs = model._compute_probs()
         return _copy(emission_probs, copy=copy)
     if isinstance(model, HMM):
         return _copy(model.emission_probs, copy=copy)
-    raise TypeError("get_emission_probs expects an HMM, MHMM, or NHMM model")
+    raise TypeError(
+        "get_emission_probs expects an HMM, MHMM, NHMM, or MNHMM model"
+    )
 
 
 def _primary_sequence_data(model, newdata=None):
     sequences = newdata
     if sequences is None:
         if isinstance(model, MHMM):
-            sequences = _mhmm_default_sequences(model)
+            sequences = model._default_sequences()
+        elif isinstance(model, MNHMM):
+            sequences = model.observations
         elif getattr(model, "n_channels", 1) > 1:
             sequences = model.channels
         else:
@@ -294,54 +332,10 @@ def _hidden_paths_hmm(model: HMM, newdata=None):
     )
 
 
-def _mhmm_default_sequences(model: MHMM):
-    return getattr(model, "observations")
-
-
-def _mhmm_check_fixed_inference_ready(model: MHMM) -> None:
-    ready = all(
-        getattr(cluster, "has_complete_parameters", False)
-        for cluster in model.clusters
-    )
-    if not ready:
-        raise ValueError(
-            "Model must be fitted before prediction, or all cluster HMMs "
-            "must have initial_probs, transition_probs, and emission_probs."
-        )
-
-
-def _mhmm_sequence_log_likelihoods(
-    model: MHMM,
-    sequences: Optional[SequenceData] = None,
-) -> np.ndarray:
-    _mhmm_check_fixed_inference_ready(model)
-    from .utils import sequence_data_to_hmmlearn_format
-
-    sequences = (
-        sequences if sequences is not None else _mhmm_default_sequences(model)
-    )
-    X, lengths = sequence_data_to_hmmlearn_format(sequences)
-    log_likelihoods = np.zeros((len(lengths), model.n_clusters))
-    starts = np.zeros(len(lengths) + 1, dtype=int)
-    starts[1:] = np.cumsum(lengths)
-
-    for cluster_idx, cluster in enumerate(model.clusters):
-        for seq_idx, seq_length in enumerate(lengths):
-            start = starts[seq_idx]
-            end = starts[seq_idx + 1]
-            log_likelihoods[seq_idx, cluster_idx] = cluster._hmm_model.score(
-                X[start:end],
-                np.array([seq_length]),
-            )
-    return log_likelihoods
-
-
 def _hidden_paths_mhmm(model: MHMM, newdata=None):
-    _mhmm_check_fixed_inference_ready(model)
-    sequences = (
-        newdata if newdata is not None else _mhmm_default_sequences(model)
-    )
-    log_likelihoods = _mhmm_sequence_log_likelihoods(model, sequences)
+    model._check_fixed_inference_ready()
+    sequences = newdata if newdata is not None else model._default_sequences()
+    log_likelihoods = model._sequence_log_likelihoods(sequences)
     log_joint = (
         log_likelihoods + np.log(model.cluster_probs + 1e-300)[np.newaxis, :]
     )
@@ -390,6 +384,7 @@ def _hidden_paths_nhmm(model: NHMM, newdata=None):
     initial, transition, emission = model._compute_probs()
     starts = np.zeros(len(lengths) + 1, dtype=int)
     starts[1:] = np.cumsum(lengths)
+    max_sequence_length = int(np.max(lengths)) if len(lengths) else 0
     paths = []
     log_probs = []
     for seq_idx, seq_length in enumerate(lengths):
@@ -407,6 +402,125 @@ def _hidden_paths_nhmm(model: NHMM, newdata=None):
     return np.concatenate(paths), lengths, np.asarray(log_probs), None, None
 
 
+def _hidden_paths_mnhmm(model: MNHMM, newdata=None):
+    sequences = newdata if newdata is not None else model.observations
+    if model.n_channels > 1:
+        channels, _, _ = prepare_multichannel_data(
+            _normalize_observations_input(sequences)
+        )
+        model._validate_observation_alphabets(channels)
+        observations, lengths = multichannel_to_hmmlearn_format(channels)
+        observations = [X[:, 0].astype(int, copy=False) for X in observations]
+    else:
+        from .utils import sequence_data_to_hmmlearn_format
+
+        model._validate_observation_alphabets([sequences])
+        X, lengths = sequence_data_to_hmmlearn_format(sequences)
+        observations = [X[:, 0].astype(int, copy=False)]
+    if model._uses_covariate_probabilities():
+        alignment_channels = channels if model.n_channels > 1 else [sequences]
+        model._validate_covariate_newdata_alignment(alignment_channels)
+    cluster_priors = model._cluster_probs_for_n(len(lengths))
+    starts = np.zeros(len(lengths) + 1, dtype=int)
+    starts[1:] = np.cumsum(lengths)
+    max_sequence_length = int(np.max(lengths)) if len(lengths) else 0
+    paths = []
+    state_labels = []
+    log_probs = []
+    clusters = []
+    components_fixed = (
+        model.initial_probs is not None
+        and model.transition_probs is not None
+        and model.emission_probs is not None
+    )
+    component_probs = []
+    for cluster_idx in range(model.n_clusters):
+        if components_fixed:
+            initial = np.tile(
+                model.initial_probs[cluster_idx],
+                (len(lengths), 1),
+            )
+            transition = np.tile(
+                model.transition_probs[cluster_idx],
+                (len(lengths), max_sequence_length, 1, 1),
+            )
+            if model.n_channels == 1:
+                emission = np.tile(
+                    model.emission_probs[cluster_idx],
+                    (len(lengths), max_sequence_length, 1, 1),
+                )
+            else:
+                emission = [
+                    np.tile(
+                        channel_emission,
+                        (len(lengths), max_sequence_length, 1, 1),
+                    )
+                    for channel_emission in model.emission_probs[cluster_idx]
+                ]
+            component_probs.append((initial, transition, emission))
+        else:
+            component_probs.append(model._component_probs(cluster_idx))
+
+    for seq_idx, seq_length in enumerate(lengths):
+        obs = [
+            channel[starts[seq_idx]:starts[seq_idx + 1]]
+            for channel in observations
+        ]
+        best_path = None
+        best_log_prob = -np.inf
+        best_cluster_idx = 0
+        for cluster_idx in range(model.n_clusters):
+            initial, transition, emission = component_probs[cluster_idx]
+
+            if model.n_channels == 1:
+                path, path_log_prob = _viterbi_timevarying(
+                    initial[seq_idx],
+                    transition[seq_idx, :seq_length],
+                    emission[seq_idx, :seq_length],
+                    obs[0],
+                )
+            else:
+                combined = np.ones((int(seq_length), model.n_states[cluster_idx], 1))
+                for channel_idx, channel_obs in enumerate(obs):
+                    channel_emission = emission[channel_idx][seq_idx, :seq_length]
+                    combined[:, :, 0] *= channel_emission[
+                        np.arange(int(seq_length))[:, None],
+                        np.arange(model.n_states[cluster_idx])[None, :],
+                        channel_obs[:, None],
+                    ]
+                path, path_log_prob = _viterbi_timevarying(
+                    initial[seq_idx],
+                    transition[seq_idx, :seq_length],
+                    combined,
+                    np.zeros(int(seq_length), dtype=int),
+                )
+            joint_log_prob = path_log_prob + np.log(
+                max(cluster_priors[seq_idx, cluster_idx], 1e-300)
+            )
+            if joint_log_prob > best_log_prob:
+                best_path = path
+                best_log_prob = joint_log_prob
+                best_cluster_idx = cluster_idx
+        cluster_idx = int(best_cluster_idx)
+        path = best_path
+        paths.append(path)
+        names = (
+            model.state_names[cluster_idx]
+            if model.n_clusters > 1
+            else model.state_names
+        )
+        state_labels.extend(names[int(state_idx)] for state_idx in path)
+        log_probs.append(best_log_prob)
+        clusters.append(model.cluster_names[cluster_idx])
+    return (
+        np.concatenate(paths),
+        lengths,
+        np.asarray(log_probs),
+        clusters,
+        state_labels,
+    )
+
+
 def hidden_paths(
     model: Model,
     newdata=None,
@@ -419,6 +533,10 @@ def hidden_paths(
         paths, lengths, log_prob, clusters, state_labels = _hidden_paths_mhmm(
             model, newdata
         )
+    elif isinstance(model, MNHMM):
+        paths, lengths, log_prob, clusters, state_labels = _hidden_paths_mnhmm(
+            model, newdata
+        )
     elif isinstance(model, NHMM):
         paths, lengths, log_prob, clusters, state_labels = _hidden_paths_nhmm(
             model, newdata
@@ -428,7 +546,9 @@ def hidden_paths(
             model, newdata
         )
     else:
-        raise TypeError("hidden_paths expects an HMM, MHMM, or NHMM model")
+        raise TypeError(
+            "hidden_paths expects an HMM, MHMM, NHMM, or MNHMM model"
+        )
 
     if output == "array" and not as_stslist:
         return paths
@@ -606,7 +726,7 @@ def trim_model(
 
 def _model_log_likelihood(model) -> float:
     if isinstance(model, MHMM):
-        log_likelihoods = _mhmm_sequence_log_likelihoods(model)
+        log_likelihoods = model._sequence_log_likelihoods()
         from scipy.special import logsumexp
 
         return float(
@@ -855,6 +975,14 @@ def stslist_to_data(
             response: out.to_numpy(dtype=object).reshape(-1),
         }
     )
+
+
+def _figure_or_current(result):
+    if result is not None:
+        return result
+    import matplotlib.pyplot as plt
+
+    return plt.gcf()
 
 
 def _plot_stacked_sequences(seq_data: SequenceData, ax=None):

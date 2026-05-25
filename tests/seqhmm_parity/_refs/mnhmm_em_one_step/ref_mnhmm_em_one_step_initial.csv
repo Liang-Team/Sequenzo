@@ -1,0 +1,17 @@
+"cluster","id","state","probability"
+"Cluster 1","s0","State 1",0.930056552171163
+"Cluster 1","s0","State 2",0.0699434478288373
+"Cluster 1","s1","State 1",0.930056552171163
+"Cluster 1","s1","State 2",0.0699434478288373
+"Cluster 1","s2","State 1",0.930056552171163
+"Cluster 1","s2","State 2",0.0699434478288373
+"Cluster 1","s3","State 1",0.930056552171163
+"Cluster 1","s3","State 2",0.0699434478288373
+"Cluster 2","s0","State 1",0.0699434478288373
+"Cluster 2","s0","State 2",0.930056552171163
+"Cluster 2","s1","State 1",0.0699434478288373
+"Cluster 2","s1","State 2",0.930056552171163
+"Cluster 2","s2","State 1",0.0699434478288373
+"Cluster 2","s2","State 2",0.930056552171163
+"Cluster 2","s3","State 1",0.0699434478288373
+"Cluster 2","s3","State 2",0.930056552171163

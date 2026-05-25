@@ -610,10 +610,14 @@ class MHMM:
                 acc_A += weight * xi.sum(axis=0)
                 acc_A_den += weight * gamma[:-1].sum(axis=0)
 
+            gamma_sum = gamma.sum(axis=0)
             for ch_idx, obs_ch in enumerate(obs_list):
-                for t, symbol in enumerate(obs_ch):
-                    acc_B[ch_idx][:, symbol] += weight * gamma[t]
-                acc_B_den[ch_idx] += weight * gamma.sum(axis=0)
+                np.add.at(
+                    acc_B[ch_idx],
+                    (np.arange(S)[:, np.newaxis], obs_ch[np.newaxis, :]),
+                    weight * gamma.T,
+                )
+                acc_B_den[ch_idx] += weight * gamma_sum
 
         if total_weight <= EPS:
             return

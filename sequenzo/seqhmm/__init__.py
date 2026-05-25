@@ -33,6 +33,12 @@ from .nhmm import NHMM
 from .build_nhmm import build_nhmm
 from .fit_nhmm import fit_nhmm
 
+# Mixture non-homogeneous HMM
+from .mnhmm import MNHMM
+from .build_mnhmm import build_mnhmm
+from .estimate_mnhmm import estimate_mnhmm
+from .simulate_mnhmm import simulate_mnhmm
+
 # Model comparison and simulation
 from .model_comparison import aic, bic, compare_models, compute_n_parameters, compute_n_observations
 from .simulate import simulate_hmm, simulate_mhmm, simulate_nhmm
@@ -83,6 +89,11 @@ __all__ = [
     'NHMM',
     'build_nhmm',
     'fit_nhmm',
+    # Mixture non-homogeneous HMM
+    'MNHMM',
+    'build_mnhmm',
+    'estimate_mnhmm',
+    'simulate_mnhmm',
     # Model comparison
     'aic',
     'bic',

@@ -6,6 +6,7 @@ import pytest
 
 from sequenzo import SequenceData
 from sequenzo.seqhmm import (
+    MNHMM,
     build_hmm,
     build_mhmm,
     build_nhmm,
@@ -530,16 +531,136 @@ def test_utility_getters_and_hidden_paths_reject_unsupported_objects():
 
     dummy = Dummy()
 
-    with pytest.raises(TypeError, match="HMM, MHMM, or NHMM"):
+    with pytest.raises(TypeError, match="HMM, MHMM, NHMM, or MNHMM"):
         hidden_paths(dummy)
-    with pytest.raises(TypeError, match="HMM, MHMM, or NHMM"):
+    with pytest.raises(TypeError, match="HMM, MHMM, NHMM, or MNHMM"):
         get_initial_probs(dummy)
-    with pytest.raises(TypeError, match="HMM, MHMM, or NHMM"):
+    with pytest.raises(TypeError, match="HMM, MHMM, NHMM, or MNHMM"):
         get_transition_probs(dummy)
-    with pytest.raises(TypeError, match="HMM, MHMM, or NHMM"):
+    with pytest.raises(TypeError, match="HMM, MHMM, NHMM, or MNHMM"):
         get_emission_probs(dummy)
     with pytest.raises(TypeError, match="HMM or MHMM"):
         trim_model(dummy)
+
+
+def test_getters_return_nested_defensive_copies_for_mnhmm_multichannel():
+    channels = [
+        SequenceData(
+            pd.DataFrame(
+                [
+                    ["s1", "A", "A", "B"],
+                    ["s2", "B", "B", "A"],
+                ],
+                columns=["id", *TIME_COLS],
+            ),
+            time=TIME_COLS,
+            states=["A", "B"],
+            id_col="id",
+        ),
+        SequenceData(
+            pd.DataFrame(
+                [
+                    ["s1", "X", "X", "Y"],
+                    ["s2", "Y", "Y", "X"],
+                ],
+                columns=["id", *TIME_COLS],
+            ),
+            time=TIME_COLS,
+            states=["X", "Y"],
+            id_col="id",
+        ),
+    ]
+    model = MNHMM(
+        channels,
+        n_clusters=2,
+        n_states=2,
+        initial_probs=[np.array([0.9, 0.1]), np.array([0.2, 0.8])],
+        transition_probs=[
+            np.array([[0.8, 0.2], [0.1, 0.9]]),
+            np.array([[0.7, 0.3], [0.2, 0.8]]),
+        ],
+        emission_probs=[
+            [
+                np.array([[0.95, 0.05], [0.30, 0.70]]),
+                np.array([[0.90, 0.10], [0.40, 0.60]]),
+            ],
+            [
+                np.array([[0.35, 0.65], [0.05, 0.95]]),
+                np.array([[0.45, 0.55], [0.10, 0.90]]),
+            ],
+        ],
+    )
+
+    emissions = get_emission_probs(model)
+    emissions[0][0][0, 0] = 0.01
+
+    assert not np.isclose(model.emission_probs[0][0][0, 0], 0.01)
+
+
+def test_hidden_paths_mnhmm_log_prob_uses_prior_cluster_probability():
+    seq = _seqdata()
+    model = MNHMM(
+        seq,
+        n_clusters=2,
+        n_states=2,
+        initial_probs=[np.array([0.8, 0.2]), np.array([0.3, 0.7])],
+        transition_probs=[
+            np.array([[0.9, 0.1], [0.2, 0.8]]),
+            np.array([[0.7, 0.3], [0.4, 0.6]]),
+        ],
+        emission_probs=[
+            np.array([[0.95, 0.05], [0.2, 0.8]]),
+            np.array([[0.1, 0.9], [0.85, 0.15]]),
+        ],
+        cluster_probs=np.array([0.65, 0.35]),
+    )
+
+    paths = hidden_paths(model)
+    cluster_idx = model.cluster_names.index(paths.loc[paths["id"] == "s1", "cluster"].iloc[0])
+    initial, transition, emission = model._component_probs(cluster_idx)
+    obs = np.array(seq.sequences[0], dtype=int) - 1
+    path = [
+        model.state_names[cluster_idx].index(state)
+        for state in paths.loc[paths["id"] == "s1", "state"].tolist()
+    ]
+    expected = np.log(model.cluster_probs[cluster_idx])
+    expected += np.log(initial[0, path[0]]) + np.log(
+        emission[0, 0, path[0], obs[0]]
+    )
+    for t in range(1, len(path)):
+        expected += np.log(transition[0, t, path[t - 1], path[t]])
+        expected += np.log(emission[0, t, path[t], obs[t]])
+
+    np.testing.assert_allclose(paths.attrs["log_prob"][0], expected)
+
+
+def test_hidden_paths_mnhmm_uses_joint_cluster_and_path_probability():
+    seq = SequenceData(
+        pd.DataFrame([["s1", "A"]], columns=["id", "t1"]),
+        time=["t1"],
+        states=["A", "B"],
+        id_col="id",
+    )
+    model = MNHMM(
+        seq,
+        n_clusters=2,
+        n_states=[3, 2],
+        initial_probs=[np.array([1 / 3, 1 / 3, 1 / 3]), np.array([0.5, 0.5])],
+        transition_probs=[np.eye(3), np.eye(2)],
+        emission_probs=[
+            np.array([[0.9, 0.1], [0.9, 0.1], [0.9, 0.1]]),
+            np.array([[0.7, 0.3], [1e-12, 1.0 - 1e-12]]),
+        ],
+        cluster_probs=np.array([0.5, 0.5]),
+        cluster_names=["higher-marginal", "higher-joint"],
+        state_names=[["c0_s1", "c0_s2", "c0_s3"], ["c1_s1", "c1_s2"]],
+    )
+
+    paths = hidden_paths(model)
+
+    assert paths.loc[0, "cluster"] == "higher-joint"
+    assert paths.loc[0, "state"] == "c1_s1"
+    np.testing.assert_allclose(paths.attrs["log_prob"][0], np.log(0.5 * 0.5 * 0.7))
 
 
 def test_seqhmm_plot_compatibility_wrappers_return_figures():

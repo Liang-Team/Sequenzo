@@ -1,17 +1,18 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : model_comparison.py
 @Time    : 2025-10-08 14:32
-@Desc    : Model comparison functions (AIC, BIC) for HMM models
+@Desc    : Model comparison functions (AIC, BIC) for seqHMM-style models
 
 This module provides functions for computing AIC and BIC to compare different
-HMM models, similar to seqHMM's logLik() and summary() functions in R.
+HMM-family models, similar to seqHMM's logLik() and summary() functions in R.
 """
 
 import numpy as np
 from typing import Optional
 from .hmm import HMM
 from .mhmm import MHMM
+from .mnhmm import MNHMM
 from .nhmm import NHMM
 
 
@@ -23,7 +24,7 @@ def compute_n_parameters(model) -> int:
     (degrees of freedom) is the number of estimable parameters in the model.
     
     Args:
-        model: HMM, MHMM, or NHMM model object
+        model: HMM, MHMM, MNHMM, or NHMM model object
         
     Returns:
         int: Number of free parameters
@@ -71,6 +72,60 @@ def compute_n_parameters(model) -> int:
         n_A = model.n_covariates * model.n_states * model.n_states
         n_B = model.n_covariates * model.n_states * model.n_symbols
         return n_pi + n_A + n_B
+
+    elif isinstance(model, MNHMM):
+        n_cluster = 0
+        if model.eta_omega is not None:
+            n_cluster = model.X_cluster.shape[1] * (model.n_clusters - 1)
+        elif model.cluster_probs is not None:
+            n_cluster = model.n_clusters - 1
+
+        n_initial = 0
+        if model.initial_probs is not None:
+            n_initial = sum(n_states - 1 for n_states in model.n_states)
+        elif model.eta_pi is not None:
+            n_initial = sum(eta.shape[0] * (eta.shape[1] - 1) for eta in model.eta_pi)
+
+        n_transition = 0
+        if model.transition_probs is not None:
+            n_transition = sum(
+                n_states * (n_states - 1)
+                for n_states in model.n_states
+            )
+        elif model.eta_A is not None:
+            n_transition = sum(
+                eta.shape[0] * eta.shape[1] * (eta.shape[2] - 1)
+                for eta in model.eta_A
+            )
+
+        n_emission = 0
+        if model.emission_probs is not None:
+            if model.n_channels == 1:
+                n_symbols = int(model.n_symbols)
+                n_emission = sum(
+                    n_states * (n_symbols - 1)
+                    for n_states in model.n_states
+                )
+            else:
+                n_emission = sum(
+                    n_states * (n_symbols - 1)
+                    for n_states in model.n_states
+                    for n_symbols in model.n_symbols
+                )
+        elif model.eta_B is not None:
+            if model.n_channels == 1:
+                n_emission = sum(
+                    eta.shape[0] * eta.shape[1] * (eta.shape[2] - 1)
+                    for eta in model.eta_B
+                )
+            else:
+                n_emission = sum(
+                    eta.shape[0] * eta.shape[1] * (eta.shape[2] - 1)
+                    for cluster_eta in model.eta_B
+                    for eta in cluster_eta
+                )
+
+        return int(n_cluster + n_initial + n_transition + n_emission)
     
     else:
         raise ValueError(f"Unknown model type: {type(model)}")
@@ -85,11 +140,14 @@ def compute_n_observations(model) -> int:
     for a single sequence amounts to one observation.
     
     Args:
-        model: HMM, MHMM, or NHMM model object
+        model: HMM, MHMM, MNHMM, or NHMM model object
         
     Returns:
         int: Number of observations
     """
+    if isinstance(model, MNHMM):
+        return int(sum(model.sequence_lengths))
+
     if isinstance(model, (HMM, MHMM, NHMM)):
         # For single-channel models, each time point is one observation
         # For multichannel models, we divide by number of channels
@@ -111,7 +169,7 @@ def aic(model, log_likelihood: Optional[float] = None) -> float:
     This is similar to seqHMM's AIC computation via stats::AIC(logLik(model)).
     
     Args:
-        model: Fitted HMM, MHMM, or NHMM model object
+        model: Fitted HMM, MHMM, MNHMM, or NHMM model object
         log_likelihood: Optional log-likelihood value. If None, uses model.log_likelihood
         
     Returns:
@@ -148,7 +206,7 @@ def bic(model, log_likelihood: Optional[float] = None) -> float:
     This is similar to seqHMM's BIC computation via stats::BIC(logLik(model)).
     
     Args:
-        model: Fitted HMM, MHMM, or NHMM model object
+        model: Fitted HMM, MHMM, MNHMM, or NHMM model object
         log_likelihood: Optional log-likelihood value. If None, uses model.log_likelihood
         
     Returns:
@@ -182,7 +240,7 @@ def compare_models(models: list, criterion: str = 'BIC') -> dict:
     a comparison table, similar to comparing models in seqHMM.
     
     Args:
-        models: List of fitted model objects (HMM, MHMM, or NHMM)
+        models: List of fitted model objects (HMM, MHMM, MNHMM, or NHMM)
         criterion: Criterion to use ('AIC' or 'BIC'). Default is 'BIC'.
         
     Returns:
