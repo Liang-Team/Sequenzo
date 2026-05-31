@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from sequenzo.big_data.clara.clara import adjustedRandIndex, jaccardCoef
-from sequenzo.big_data.clara.utils.aggregatecases import DataFrameAggregator
 from sequenzo.big_data.clara.utils.davies_bouldin import (
     davies_bouldin_internal,
     fuzzy_davies_bouldin_internal,
@@ -33,7 +32,13 @@ from sequenzo.clustering.sequences_to_variables.helske_regression_variables impo
 from sequenzo.define_sequence_data import SequenceData
 
 from .distance_providers import DistanceProvider
-from ._utils import check_sample_size_for_k
+from ._utils import (
+    aggregate_domains,
+    build_multidomain_profile_frame,
+    check_sample_size_for_k,
+    one_based_to_zero_based,
+    validate_domain_weights,
+)
 
 
 def _quality_from_distances(
@@ -43,12 +48,21 @@ def _quality_from_distances(
     method: str,
     weights: np.ndarray,
     m: float = 1.5,
-) -> Tuple[float, float, float, float, float, np.ndarray]:
+) -> Tuple[float, float, float, float, float, float, np.ndarray]:
     """
-    Compute mean distance, DB, XB, PBM, AMS, and cluster labels from N x K distances.
+    Compute total distance, average distance, DB, XB, PBM, AMS, and cluster labels.
+
+    ``weights`` are profile frequencies (``aggWeights``), not normalized probabilities.
     """
+    weight_sum = float(np.sum(weights))
     alphabeta = np.array([np.sort(row)[:2] for row in diss_to_medoids])
-    sil = (alphabeta[:, 1] - alphabeta[:, 0]) / np.maximum(alphabeta[:, 1], alphabeta[:, 0])
+    denom = np.maximum(alphabeta[:, 1], alphabeta[:, 0])
+    sil = np.divide(
+        alphabeta[:, 1] - alphabeta[:, 0],
+        denom,
+        out=np.zeros_like(denom, dtype=float),
+        where=denom > 0,
+    )
 
     if method == "fuzzy":
         mexp = -1.0 / (m - 1.0)
@@ -58,18 +72,36 @@ def _quality_from_distances(
         memb[all_med, :] = 0.0
         memb[zero_dist] = 1.0
         memb = memb / memb.sum(axis=1, keepdims=True)
-        mean_diss = float(np.sum(np.sum(np.power(memb, m) * diss_to_medoids, axis=1) * weights))
+        total_diss = float(
+            np.sum(np.sum(np.power(memb, m) * diss_to_medoids, axis=1) * weights)
+        )
+        avg_diss = total_diss / weight_sum if weight_sum > 0 else float(np.mean(diss_to_medoids))
         db = fuzzy_davies_bouldin_internal(
             diss_to_medoids, memb, medoids, weights=weights
         )["db"]
         highest_memb = np.sort(memb, axis=1)[:, -2:]
         crispness = np.power(highest_memb[:, 1] - highest_memb[:, 0], 1.0)
-        pbm = ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / mean_diss)) ** 2
-        ams = float(np.sum(crispness * sil * weights) / np.sum(crispness * weights))
+        crisp_sum = float(np.sum(crispness * weights))
+        pbm = (
+            ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / avg_diss)) ** 2
+            if avg_diss > 0
+            else np.inf
+        )
+        ams = (
+            float(np.sum(crispness * sil * weights) / crisp_sum)
+            if crisp_sum > 0
+            else 0.0
+        )
         labels = memb
     else:
         labels = np.argmin(diss_to_medoids, axis=1)
-        mean_diss = float(np.sum(alphabeta[:, 0] * weights))
+        nearest = np.min(diss_to_medoids, axis=1)
+        total_diss = float(np.sum(nearest * weights))
+        avg_diss = (
+            total_diss / weight_sum
+            if weight_sum > 0
+            else float(np.mean(nearest))
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             db = davies_bouldin_internal(
@@ -78,15 +110,23 @@ def _quality_from_distances(
                 medoids=medoids,
                 weights=weights,
             )["db"]
-        pbm = ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / mean_diss)) ** 2
-        ams = float(np.sum(sil * weights))
+        pbm = (
+            ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / avg_diss)) ** 2
+            if avg_diss > 0
+            else np.inf
+        )
+        ams = (
+            float(np.sum(sil * weights) / weight_sum)
+            if weight_sum > 0
+            else float(np.mean(sil))
+        )
 
     distmed = diss_to_medoids[medoids, :]
     distmed_flat = distmed[np.triu_indices_from(distmed, k=1)]
     minsep = float(np.min(distmed_flat)) if distmed_flat.size else 1.0
-    xb = mean_diss / minsep if minsep > 0 else np.inf
+    xb = avg_diss / minsep if minsep > 0 else np.inf
 
-    return mean_diss, db, pbm, ams, xb, labels
+    return total_diss, avg_diss, db, pbm, ams, xb, labels
 
 
 def _run_single_iteration(
@@ -100,31 +140,33 @@ def _run_single_iteration(
 ) -> List[Dict[str, Any]]:
     """One CLARA iteration: sample, cluster the sample, assign all sequences."""
     n_agg = provider.n_sequences()
-    probs = np.asarray(aggregation["probs"], dtype=float)
+    profile_weights = np.asarray(aggregation["aggWeights"], dtype=float)
     max_k = max(kvals)
 
-    # Without replacement when possible so unique sample size is not collapsed.
-    replace = sample_size > n_agg
+    if sample_size > n_agg:
+        raise ValueError(
+            f"sample_size ({sample_size}) cannot exceed the number of "
+            f"unique multidomain profiles ({n_agg}) when sampling without replacement."
+        )
+
     sample_rows = rng.choice(
         n_agg,
         size=sample_size,
-        p=probs,
-        replace=replace,
+        replace=False,
     )
-    sample_df = pd.DataFrame({"id": sample_rows})
-    ac2 = DataFrameAggregator().aggregate(sample_df)
-    local_indices = sample_rows[np.asarray(ac2["aggIndex"], dtype=int) - 1]
+
+    local_indices = np.asarray(sample_rows, dtype=int)
+    sample_weights = profile_weights[local_indices]
     n_unique_sample = len(local_indices)
+
     if n_unique_sample < max_k:
         raise ValueError(
-            f"Only {n_unique_sample} unique sampled cases after aggregation, but "
-            f"max(kvals)={max_k}. Increase sample_size, reduce k, or set "
-            f"sample_size <= n_unique_cases ({n_agg}) to sample without replacement."
+            f"Only {n_unique_sample} sampled profiles, but max(kvals)={max_k}."
         )
 
     diss_sample = provider.sample_distance_matrix(local_indices)
     diss_sample = np.asarray(diss_sample, dtype=float)
-    weighted = get_weighted_diss(diss_sample.copy(), ac2["aggWeights"])
+    weighted = get_weighted_diss(diss_sample.copy(), sample_weights)
     hc = linkage(weighted, method="ward")
 
     outputs: List[Dict[str, Any]] = []
@@ -136,23 +178,24 @@ def _run_single_iteration(
             diss=diss_sample,
             k=k,
             initialclust=hc,
-            weights=ac2["aggWeights"],
+            weights=sample_weights,
             verbose=False,
         )
         medoid_rows = medoid_indices_from_kmedoids_result(clustering)
         medoids = local_indices[medoid_rows]
 
         diss_full = provider.distance_to_medoids(medoids)
-        mean_diss, db, pbm, ams, xb, labels = _quality_from_distances(
+        total_diss, avg_diss, db, pbm, ams, xb, labels = _quality_from_distances(
             diss_full,
             medoids,
             method="crisp",
-            weights=probs,
+            weights=profile_weights,
         )
 
         outputs.append(
             {
-                "mean_diss": mean_diss,
+                "total_diss": total_diss,
+                "avg_diss": avg_diss,
                 "db": db,
                 "pbm": pbm,
                 "ams": ams,
@@ -201,15 +244,29 @@ def clara_from_distance_provider(
     if sample_size is None:
         sample_size = 40 + 2 * max(kvals)
 
+    if R < 1:
+        raise ValueError("R must be at least 1.")
+    if stability and R < 2:
+        raise ValueError("stability=True requires R >= 2.")
+
     if aggregation is None:
-        ac = DataFrameAggregator().aggregate(reference_seqdata.seqdata)
-    else:
-        ac = dict(aggregation)
+        raise ValueError(
+            "aggregation must be provided explicitly for multidomain CLARA. "
+            "Use md_clara() as the public API."
+        )
+    ac = dict(aggregation)
+
+    profile_weights = np.asarray(ac["aggWeights"], dtype=float)
+    if len(profile_weights) != provider.n_sequences():
+        raise ValueError(
+            "aggWeights length does not match provider.n_sequences(). "
+            f"Got {len(profile_weights)} weights for {provider.n_sequences()} profiles."
+        )
 
     check_sample_size_for_k(
         sample_size,
         kvals,
-        n_unique_cases=len(ac["aggWeights"]),
+        n_unique_cases=len(profile_weights),
     )
 
     method = method.lower()
@@ -220,22 +277,16 @@ def clara_from_distance_provider(
         )
 
     criteria = tuple(c.lower() for c in criteria)
-    if len(criteria) != 1:
+    if len(criteria) != 1 or criteria[0] != "distance":
         raise ValueError(
-            "Exactly one clustering criterion is supported per run. "
-            f"Got {criteria!r}. Use a single value such as criteria=('distance',). "
-            "Multi-criterion output (result.by_criterion) is planned for a later release."
+            "MD-CLARA selects the best repetition by minimizing total nearest-medoid "
+            "distance. Pass criteria=('distance',) only."
         )
-    criterion = criteria[0]
-    valid = {"distance", "db", "xb", "pbm", "ams"}
-    if criterion not in valid:
-        raise ValueError(f"criterion must be one of {sorted(valid)}; got {criterion!r}.")
+    criterion = "distance"
 
     if verbose:
         print("[>] Starting multidomain CLARA with distance provider.")
         print(f"  - Strategy sample size: {sample_size}, iterations: {R}")
-
-    ac["probs"] = np.asarray(ac["aggWeights"], dtype=float) / len(reference_seqdata.seqdata)
 
     rng = np.random.default_rng(random_state)
     iteration_seeds = rng.integers(0, np.iinfo(np.int64).max, size=R)
@@ -274,7 +325,8 @@ def clara_from_distance_provider(
 
     for k_index, k_value in enumerate(kvals):
         bucket = collected[k_index]
-        mean_all = [d["mean_diss"] for d in bucket]
+        total_all = [d["total_diss"] for d in bucket]
+        avg_all = [d["avg_diss"] for d in bucket]
         db_all = [d["db"] for d in bucket]
         pbm_all = [d["pbm"] for d in bucket]
         ams_all = [d["ams"] for d in bucket]
@@ -282,19 +334,11 @@ def clara_from_distance_provider(
         clustering_all = [d["clustering"] for d in bucket]
         med_all = [d["medoids"] for d in bucket]
 
-        objective_map = {
-            "distance": mean_all,
-            "pbm": pbm_all,
-            "db": db_all,
-            "ams": ams_all,
-            "xb": xb_all,
-        }
-        objective = objective_map[criterion]
-        best = int(
-            np.argmax(objective) if criterion in {"ams", "pbm"} else np.argmin(objective)
-        )
+        objective = total_all
+        best = int(np.argmin(total_all))
 
         if stability:
+            comparison_indices = [j for j in range(R) if j != best]
 
             def _stability_pair(j: int) -> Tuple[float, float]:
                 left_labels = clustering_all[j]
@@ -310,27 +354,23 @@ def clara_from_distance_provider(
                 return adjustedRandIndex(tab), jaccardCoef(tab)
 
             if n_jobs == 1:
-                arilist = [_stability_pair(j) for j in range(R)]
+                arilist = [_stability_pair(j) for j in comparison_indices]
             else:
                 arilist = Parallel(n_jobs=n_jobs)(
-                    delayed(_stability_pair)(j) for j in range(R)
+                    delayed(_stability_pair)(j) for j in comparison_indices
                 )
             arimatrix = pd.DataFrame(arilist, columns=["ARI", "JC"])
             ari08 = int(np.sum(arimatrix.iloc[:, 0] >= 0.8))
             jc08 = int(np.sum(arimatrix.iloc[:, 1] >= 0.8))
+            n_comparisons = len(comparison_indices)
             stability_info = {
                 "ari": arimatrix["ARI"].to_numpy(),
                 "jc": arimatrix["JC"].to_numpy(),
                 "ari08": ari08,
                 "jc08": jc08,
-                "mean_ari": float(arimatrix["ARI"].mean()),
-                "mean_jc": float(arimatrix["JC"].mean()),
-                "trimmed_mean_ari": float(
-                    np.mean(np.sort(arimatrix["ARI"].to_numpy())[-max(1, R // 5) :])
-                ),
-                "trimmed_mean_jc": float(
-                    np.mean(np.sort(arimatrix["JC"].to_numpy())[-max(1, R // 5) :])
-                ),
+                "mean_ari": float(arimatrix["ARI"].mean()) if n_comparisons else np.nan,
+                "mean_jc": float(arimatrix["JC"].mean()) if n_comparisons else np.nan,
+                "n_comparisons": n_comparisons,
             }
         else:
             arimatrix = None
@@ -340,17 +380,18 @@ def clara_from_distance_provider(
 
         best_clustering = clustering_all[best]
         disag = np.full(reference_seqdata.seqdata.shape[0], -1, dtype=float)
-        for row_idx, agg_idx in enumerate(np.asarray(ac["disaggIndex"], dtype=int) - 1):
+        for row_idx, agg_idx in enumerate(
+            one_based_to_zero_based(ac["disaggIndex"], name="disaggIndex")
+        ):
             disag[row_idx] = best_clustering[agg_idx] + 1
 
-        evol = (
-            np.maximum.accumulate(objective)
-            if criterion in {"ams", "pbm"}
-            else np.minimum.accumulate(objective)
-        )
+        evol = np.minimum.accumulate(objective)
 
         bestcluster = {
-            "medoids": np.asarray(ac["aggIndex"], dtype=int)[med_all[best]] - 1,
+            "medoids": one_based_to_zero_based(
+                np.asarray(ac["aggIndex"], dtype=int)[med_all[best]],
+                name="aggIndex",
+            ),
             "medoids_agg": med_all[best],
             "clustering": disag,
             "membership": None,
@@ -362,7 +403,8 @@ def clara_from_distance_provider(
             "stability": stability_info,
             "criteria": criterion,
             "method": method,
-            "avg_dist": mean_all[best],
+            "total_diss": total_all[best],
+            "avg_dist": avg_all[best],
             "pbm": pbm_all[best],
             "db": db_all[best],
             "xb": xb_all[best],
@@ -379,6 +421,7 @@ def clara_from_distance_provider(
                 "k": k_value,
                 "criteria": criterion,
                 "stats": [
+                    bestcluster["total_diss"],
                     bestcluster["avg_dist"],
                     bestcluster["pbm"],
                     bestcluster["db"],
@@ -421,7 +464,7 @@ def _package_clara_output(
         index=reference_seqdata.ids,
         columns=[f"Cluster {k}" for k in kvals],
     )
-    stats = np.full((len(kvals), 8), -1.0, dtype=float)
+    stats = np.full((len(kvals), 9), -1.0, dtype=float)
     clara_dict: Dict[int, Any] = {}
 
     for entry in kret:
@@ -433,7 +476,17 @@ def _package_clara_output(
 
     stats_df = pd.DataFrame(
         stats,
-        columns=["avg_dist", "pbm", "db", "xb", "ams", "ari08", "jc08", "best_iter"],
+        columns=[
+            "total_diss",
+            "avg_dist",
+            "pbm",
+            "db",
+            "xb",
+            "ams",
+            "ari08",
+            "jc08",
+            "best_iter",
+        ],
     )
     stats_df.insert(0, "k", list(kvals))
     stats_df["criterion"] = criterion

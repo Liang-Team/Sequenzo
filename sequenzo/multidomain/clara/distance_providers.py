@@ -28,7 +28,7 @@ from ._utils import (
     compute_distance_matrix,
     parallel_map,
     subset_sequence_data,
-    warn_large_expanded_alphabet,
+    warn_large_combined_state_space,
 )
 
 # Picklable workers for DAT domain-level parallelism (joblib processes).
@@ -40,7 +40,7 @@ def _dat_sample_domain_matrix(work: _DATSampleWork) -> np.ndarray:
     domain, params, sample_indices = work
     subset = subset_sequence_data(domain, sample_indices)
     dist_args = dict(params)
-    dist_args.setdefault("full_matrix", True)
+    dist_args["full_matrix"] = True
     return np.asarray(compute_distance_matrix(subset, dist_args), dtype=float)
 
 
@@ -48,13 +48,28 @@ def _dat_medoid_domain_matrix(work: _DATMedoidWork) -> np.ndarray:
     domain, params, n_sequences, medoids = work
     refseq = [list(range(n_sequences)), list(medoids)]
     dist_args = dict(params)
-    dist_args.setdefault("full_matrix", True)
+    dist_args["full_matrix"] = True
     return np.asarray(
         compute_distance_matrix(domain, dist_args, refseq=refseq),
         dtype=float,
     )
 
-_CAT_METHODS = frozenset({"OM", "HAM", "LCS"})
+_CAT_METHODS = frozenset({"OM", "HAM"})
+
+
+def _validate_nonnegative_weights(
+    weights: Sequence[float],
+    *,
+    label: str,
+) -> np.ndarray:
+    arr = np.asarray(weights, dtype=float)
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{label} must contain only finite values.")
+    if np.any(arr < 0):
+        raise ValueError(f"{label} must be non-negative.")
+    if float(np.sum(arr)) <= 0:
+        raise ValueError(f"At least one {label} entry must be positive.")
+    return arr
 
 
 class DistanceProvider(ABC):
@@ -77,7 +92,7 @@ class IDCDDistanceProvider(DistanceProvider):
     """
     Independence from domain costs and distances (IDCD).
 
-    Builds observed expanded-alphabet multidomain sequences, then computes
+    Builds observed combined-state multidomain sequences, then computes
     standard sequence distances on that object.
     """
 
@@ -96,7 +111,7 @@ class IDCDDistanceProvider(DistanceProvider):
             ch_sep=ch_sep,
             quiet=quiet,
         )
-        warn_large_expanded_alphabet(self._md_seqdata)
+        warn_large_combined_state_space(self._md_seqdata)
         if not seqdist_args:
             raise ValueError(
                 "distance_params must include seqdist settings, e.g. "
@@ -155,8 +170,8 @@ class CATDistanceProvider(DistanceProvider):
         method = str(method).upper()
         if method not in _CAT_METHODS:
             raise ValueError(
-                f"CATDistanceProvider supports method in {sorted(_CAT_METHODS)}; "
-                f"got {method!r}. DHD is not supported in the cost-only path yet."
+                f"CATDistanceProvider currently supports methods in "
+                f"{sorted(_CAT_METHODS)}; got {method!r}."
             )
         if sm is None:
             raise ValueError("CAT requires 'sm': substitution-cost specs per domain.")
@@ -167,6 +182,13 @@ class CATDistanceProvider(DistanceProvider):
                 "CAT requires sm to be a list (one entry per domain) or a single "
                 "string that is replicated across domains."
             )
+
+        if cweight is not None:
+            cweight_arr = _validate_nonnegative_weights(
+                cweight,
+                label="cweight",
+            )
+            cweight = cweight_arr.tolist()
 
         bundle = build_cat_sequence_and_costs(
             channels=domains,
@@ -182,7 +204,7 @@ class CATDistanceProvider(DistanceProvider):
             ch_sep=ch_sep,
         )
         self._md_seqdata: SequenceData = bundle["seqdata"]
-        warn_large_expanded_alphabet(self._md_seqdata)
+        warn_large_combined_state_space(self._md_seqdata)
 
         sm_matrix = bundle["sm"]
         if not isinstance(sm_matrix, pd.DataFrame):
@@ -254,16 +276,18 @@ class DATDistanceProvider(DistanceProvider):
 
         self._domains = domains
         self._method_params = [dict(p) for p in method_params]
-        self._weights = (
-            list(domain_weights)
-            if domain_weights is not None
-            else [1.0] * len(domains)
+        weights_arr = (
+            _validate_nonnegative_weights(
+                domain_weights if domain_weights is not None else [1.0] * len(domains),
+                label="domain_weights",
+            )
         )
+        self._weights = weights_arr.tolist()
         if len(self._weights) != len(domains):
             raise ValueError("domain_weights length must match number of domains.")
 
         self._link = link
-        self._weight_sum = float(np.sum(self._weights))
+        self._weight_sum = float(np.sum(weights_arr))
         self._n_jobs_domains = int(n_jobs_domains)
 
     def n_sequences(self) -> int:

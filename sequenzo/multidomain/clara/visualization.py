@@ -18,6 +18,7 @@ import seaborn as sns
 from sequenzo.big_data.clara.visualization import plot_scores_from_dataframe
 from sequenzo.define_sequence_data import SequenceData
 
+from ._utils import subset_sequence_data
 from .results import MDClaraResult
 
 
@@ -82,6 +83,9 @@ def plot_md_clara_stability(
 
     rows = []
     for k, info in sorted(result.stability.items()):
+        n_comparisons = info.get("n_comparisons")
+        if n_comparisons is None:
+            n_comparisons = max(int(result.settings.get("R", 0)) - 1, 0)
         rows.append(
             {
                 "k": k,
@@ -89,23 +93,16 @@ def plot_md_clara_stability(
                 "jc08": info.get("jc08", np.nan),
                 "mean_ari": info.get("mean_ari", np.nan),
                 "mean_jc": info.get("mean_jc", np.nan),
-                "trimmed_mean_ari": info.get("trimmed_mean_ari", np.nan),
-                "trimmed_mean_jc": info.get("trimmed_mean_jc", np.nan),
+                "n_comparisons": n_comparisons,
             }
         )
     df = pd.DataFrame(rows)
-    r_value = float(result.settings.get("R", np.nan))
-    if np.isfinite(r_value) and r_value > 0:
-        df["ari08_rate"] = df["ari08"] / r_value
-        df["jc08_rate"] = df["jc08"] / r_value
-    else:
-        df["ari08_rate"] = np.nan
-        df["jc08_rate"] = np.nan
+    df["ari08_rate"] = df["ari08"] / df["n_comparisons"].replace(0, np.nan)
+    df["jc08_rate"] = df["jc08"] / df["n_comparisons"].replace(0, np.nan)
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
 
     axes[0, 0].plot(df["k"], df["mean_ari"], marker="o", label="Mean ARI")
-    axes[0, 0].plot(df["k"], df["trimmed_mean_ari"], marker="s", label="Trimmed mean ARI (top 20%)")
     axes[0, 0].set_ylim(0, 1)
     axes[0, 0].set_xlabel("Number of clusters (k)")
     axes[0, 0].set_ylabel("ARI (0–1)")
@@ -113,7 +110,6 @@ def plot_md_clara_stability(
     axes[0, 0].grid(True, alpha=0.3)
 
     axes[0, 1].plot(df["k"], df["mean_jc"], marker="o", label="Mean JC")
-    axes[0, 1].plot(df["k"], df["trimmed_mean_jc"], marker="s", label="Trimmed mean JC (top 20%)")
     axes[0, 1].set_ylim(0, 1)
     axes[0, 1].set_xlabel("Number of clusters (k)")
     axes[0, 1].set_ylabel("JC (0–1)")
@@ -123,14 +119,14 @@ def plot_md_clara_stability(
     axes[1, 0].plot(df["k"], df["ari08_rate"], marker="o", color="tab:green", label="Share with ARI ≥ 0.8")
     axes[1, 0].set_ylim(0, 1)
     axes[1, 0].set_xlabel("Number of clusters (k)")
-    axes[1, 0].set_ylabel("Fraction of iterations")
+    axes[1, 0].set_ylabel("Fraction of other repetitions")
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
     axes[1, 1].plot(df["k"], df["jc08_rate"], marker="o", color="tab:purple", label="Share with JC ≥ 0.8")
     axes[1, 1].set_ylim(0, 1)
     axes[1, 1].set_xlabel("Number of clusters (k)")
-    axes[1, 1].set_ylabel("Fraction of iterations")
+    axes[1, 1].set_ylabel("Fraction of other repetitions")
     axes[1, 1].legend()
     axes[1, 1].grid(True, alpha=0.3)
 
@@ -204,10 +200,16 @@ def plot_md_cluster_by_domain(
 
     The same sequence order is used across domains within each cluster column.
     """
-    from sequenzo.multidomain.clara._utils import subset_sequence_data
-
     labels = np.asarray(labels).reshape(-1)
+    if len(labels) != len(domains[0].data):
+        raise ValueError(
+            "labels length must match the number of cases in each domain."
+        )
+
     unique_clusters = sorted(np.unique(labels[labels >= 0]))
+    if len(unique_clusters) == 0:
+        raise ValueError("No non-negative cluster labels available for plotting.")
+
     n_domains = len(domains)
     n_clusters = len(unique_clusters)
 

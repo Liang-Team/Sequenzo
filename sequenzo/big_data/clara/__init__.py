@@ -5,9 +5,17 @@
 @Desc    : 
 """
 from .clara import clara, seqclara_range
-from .md_clara import md_clara
 from .results import MDClaraResult
 from .visualization import plot_scores_from_dataframe
+
+# md_clara is a thin re-export of sequenzo.multidomain.clara; loading it here
+# eagerly creates a circular import (multidomain.clara -> clara_engine -> big_data.clara).
+def __getattr__(name: str):
+    if name == "md_clara":
+        from sequenzo.multidomain.clara import md_clara as _md_clara
+
+        return _md_clara
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _import_c_code():

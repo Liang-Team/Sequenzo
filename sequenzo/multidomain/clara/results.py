@@ -17,7 +17,13 @@ import pandas as pd
 
 @dataclass
 class MDClaraResult:
-    """Output of :func:`md_clara`."""
+    """
+    Output of :func:`md_clara`.
+
+    ``stats`` columns include ``total_diss`` (weighted total nearest-medoid distance)
+    and ``avg_dist`` (weighted average distance). Repetition selection for
+    ``criteria='distance'`` uses ``total_diss``.
+    """
 
     strategy: str
     method: str

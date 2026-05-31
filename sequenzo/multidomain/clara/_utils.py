@@ -19,6 +19,90 @@ from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
 from sequenzo.multidomain.idcd import validate_multidomain_domains
 
+
+def validate_domain_weights(domains: List[SequenceData]) -> Optional[np.ndarray]:
+    """
+    Return aligned case weights from domain 0, or ``None`` when unweighted.
+
+    Raises if some domains carry weights and others do not, or if weights differ.
+    """
+    if not domains:
+        raise ValueError("domains must contain at least one SequenceData object.")
+
+    reference_weights = getattr(domains[0], "weights", None)
+
+    for domain_index, domain in enumerate(domains[1:], start=1):
+        domain_weights = getattr(domain, "weights", None)
+
+        if reference_weights is None and domain_weights is None:
+            continue
+
+        if reference_weights is None or domain_weights is None:
+            raise ValueError(
+                "Either provide case weights for every domain or for none of them."
+            )
+
+        if not np.allclose(
+            np.asarray(reference_weights, dtype=float),
+            np.asarray(domain_weights, dtype=float),
+        ):
+            raise ValueError(
+                f"Case weights in domain {domain_index} do not match domain 0."
+            )
+
+    if reference_weights is None:
+        return None
+
+    weights = np.asarray(reference_weights, dtype=float)
+    if weights.ndim != 1:
+        raise ValueError("Case weights must be one-dimensional.")
+    if len(weights) != len(domains[0].data):
+        raise ValueError("Case weights must match the number of cases.")
+    if not np.all(np.isfinite(weights)):
+        raise ValueError("Case weights must contain only finite values.")
+    if np.any(weights < 0):
+        raise ValueError("Case weights must be non-negative.")
+    if float(np.sum(weights)) <= 0:
+        raise ValueError("At least one case weight must be positive.")
+
+    return weights
+
+
+def one_based_to_zero_based(
+    values: Sequence[int],
+    *,
+    name: str,
+) -> np.ndarray:
+    """Convert Sequenzo aggregation indices from one-based to zero-based."""
+    arr = np.asarray(values, dtype=int)
+
+    if arr.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional.")
+    if arr.size and np.any(arr < 1):
+        raise ValueError(
+            f"{name} is expected to use one-based indexing, "
+            "but it contains values below 1."
+        )
+
+    return arr - 1
+
+
+def _validate_distance_matrix_values(
+    matrix: np.ndarray,
+    *,
+    label: str,
+    check_symmetry: bool = False,
+) -> None:
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError(f"{label} contains NaN or infinite values.")
+    if np.any(matrix < -1e-12):
+        raise ValueError(f"{label} contains negative values.")
+    if check_symmetry:
+        if not np.allclose(matrix, matrix.T):
+            raise ValueError(f"{label} must be symmetric.")
+        if not np.allclose(np.diag(matrix), 0):
+            raise ValueError(f"{label} must have a zero diagonal.")
+
 try:
     from joblib import Parallel, delayed
 except ImportError:  # pragma: no cover
@@ -59,6 +143,11 @@ def assert_sample_distance_shape(
         raise ValueError(
             f"Expected sample_distance_matrix shape {expected}, got {matrix.shape}."
         )
+    _validate_distance_matrix_values(
+        matrix,
+        label="Sample distance matrix",
+        check_symmetry=True,
+    )
     return matrix
 
 
@@ -75,6 +164,7 @@ def assert_distance_to_medoids_shape(
             f"Expected distance_to_medoids shape {expected}, got {matrix.shape}. "
             "Check get_distance_matrix(refseq=[all_indices, medoid_indices]) orientation."
         )
+    _validate_distance_matrix_values(matrix, label="Distance-to-medoid matrix")
     return matrix
 
 
@@ -112,7 +202,7 @@ def compute_distance_matrix(
     """Call get_distance_matrix with stdout suppressed and return a NumPy array."""
     opts = dict(dist_args)
     opts["seqdata"] = seqdata
-    opts.setdefault("full_matrix", True)
+    opts["full_matrix"] = True
     if refseq is not None:
         opts["refseq"] = refseq
 
@@ -127,27 +217,64 @@ def compute_distance_matrix(
     return np.asarray(result, dtype=float)
 
 
+def build_multidomain_profile_frame(
+    domains: List[SequenceData],
+) -> pd.DataFrame:
+    """
+    Construct one complete multidomain trajectory signature per case.
+
+    Two cases are treated as duplicates only when they have identical
+    sequences in every domain and at every time position.
+    """
+    validate_multidomain_domains(domains)
+
+    blocks = []
+
+    for domain_index, domain in enumerate(domains):
+        time_cols = list(domain.time)
+
+        block = (
+            domain.data.loc[:, time_cols]
+            .reset_index(drop=True)
+            .copy()
+        )
+
+        block.columns = [
+            f"domain_{domain_index}__{time_col}"
+            for time_col in time_cols
+        ]
+
+        blocks.append(block)
+
+    return pd.concat(blocks, axis=1)
+
+
 def aggregate_domains(
     domains: List[SequenceData],
     aggregation: Dict[str, Any],
 ) -> List[SequenceData]:
     """Subset each domain to the aggregated unique-case indices."""
-    agg_idx = np.asarray(aggregation["aggIndex"], dtype=int) - 1
+    agg_idx = one_based_to_zero_based(aggregation["aggIndex"], name="aggIndex")
     return [subset_sequence_data(domain, agg_idx) for domain in domains]
 
 
-def warn_large_expanded_alphabet(seqdata: SequenceData, threshold: int = 500) -> None:
-    """Warn when the observed expanded alphabet is very large."""
+def warn_large_combined_state_space(seqdata: SequenceData, threshold: int = 500) -> None:
+    """Warn when the observed multidomain combined state space is very large."""
     n_states = len(seqdata.states)
     if n_states >= threshold:
         import warnings
 
         warnings.warn(
-            f"The multidomain expanded alphabet has {n_states} observed states "
+            f"The observed multidomain state space contains {n_states} combined states "
             f"(threshold={threshold}). IDCD distances may be slow or memory-intensive.",
             UserWarning,
             stacklevel=3,
         )
+
+
+def warn_large_expanded_alphabet(seqdata: SequenceData, threshold: int = 500) -> None:
+    """Backward-compatible alias for :func:`warn_large_combined_state_space`."""
+    warn_large_combined_state_space(seqdata, threshold=threshold)
 
 
 def check_sample_size_for_k(
@@ -200,10 +327,14 @@ __all__ = [
     "subset_sequence_data",
     "compute_distance_matrix",
     "parallel_map",
+    "build_multidomain_profile_frame",
     "aggregate_domains",
+    "one_based_to_zero_based",
+    "warn_large_combined_state_space",
     "warn_large_expanded_alphabet",
     "check_sample_size_for_k",
     "validate_multidomain_domains",
+    "validate_domain_weights",
     "assert_sample_distance_shape",
     "assert_distance_to_medoids_shape",
 ]
