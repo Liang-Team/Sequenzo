@@ -1,15 +1,17 @@
-# 在 Sequenzo 中实现 Helske et al. (2024) 的“从序列到变量”方法 — 实现需求与步骤
+# Sequenzo 中 Helske et al. (2024) 的“从序列到变量”方法
 
-本文档**仅**基于 Helske et al. (2024) 文章正文与 Table 1 的描述，列出 sequenzo **尚未实现**的功能，并给出分阶段实现步骤。不加入文章未提及的算法或变量定义。
+本文档依据 Helske et al. (2024) 文章正文与 Table 1，说明 Sequenzo `sequenzo.clustering.sequences_to_variables` 的变量构造 API、论文契约与验收标准。除明确标注的实现边界外，不引入文章未描述的变量定义。
 
 **参考文献**：Helske, S., Helske, J., & Chihaya, G. K. (2024). From Sequences to Variables: Rethinking the Relationship between Sequences and Outcomes. *Sociological Methodology*, 54(1), 27–51.  
-本地全文：`developer/2024-helske.md`。
+本地文献镜像：`developer/important-literature/2024-helske.md`。
+
+**实现范围**：`sequenzo/clustering/sequences_to_variables/` 提供 `max_distance`、`cluster_labels_to_dummies`、`representativeness_matrix`、`hard_classification_variables`、FANNY `fanny_membership`、`soft_classification_variables`、`pseudoclass_regression` 等 API。单元测试见 `tests/clustering/test_sequences_to_variables.py`；最小工作流示例见 `Tutorials/cluster_analysis/test_sequences_to_variables.py`。
 
 ---
 
-## 文章依据（避免幻觉）
+## 文章依据
 
-以下每条需求均对应文章中的具体表述，实现时以文章为准。
+以下需求均对应文章中的具体表述，实现与文档说明以文章契约为准。
 
 | 需求 | 文章依据（2024-helske.md） |
 |------|----------------------------|
@@ -24,12 +26,12 @@
 
 ---
 
-## 从哪里开始（推荐阅读顺序）
+## 阅读顺序
 
-1. **先看 1. 目标概览**：弄清四种方法分别是什么、当前 sequenzo 缺什么。
+1. **先看 1. 目标概览**：弄清四种方法分别是什么、Sequenzo 已提供哪些接口。
 2. **再看 2. 实现原则与依赖关系**：理解“先 Representativeness、再 Hard 封装、再 Soft、最后 Pseudoclass”的顺序原因。
 3. **按 3. 分阶段实现步骤** 从 **Phase 0** 做到 **Phase 1**，即可得到第一个可用的“代表性变量”API；之后按需做 Phase 2–5。
-4. **实现时对照 4. 实现顺序小结** 和 **5. 验收与文档**；完成后可勾选 **6. 任务清单**。
+4. **实现时对照 4. 实现顺序小结** 和 **5. 验收与文档**；完成状态见 **6. 实现核对清单**。
 
 ---
 
@@ -39,17 +41,17 @@
 
 | 方法 | 聚类算法 | 变量形式 | 用途 |
 |------|----------|----------|------|
-| **Hard classification** | 硬聚类 (PAM) | 聚类成员 → K 个虚拟变量 (dummies) | 传统做法 |
-| **Soft classification** | 模糊聚类 (FANNY) | 成员概率 → K 个连续变量（每行和为 1） | 考虑归属不确定性 |
+| **Hard classification** | 硬聚类 (PAM) | K 类聚类成员；回归设计通常省略参考类后使用 K−1 个 dummy | 传统做法 |
+| **Soft classification** | 模糊聚类 (FANNY) | 原始成员概率为 K 列（每行和为 1）；回归设计通常省略参考类后使用 K−1 个连续变量 | 考虑归属不确定性 |
 | **Pseudoclass** | FANNY + 多次抽样 | 每次为虚拟变量，多次拟合后按 Rubin 规则合并 | 考虑分类误差 |
 | **Representativeness** | PAM 取 medoid | \(R_i^k = 1 - \frac{d(i,k)}{d_{\max}}\) → K 个连续变量 | 基于相似度的连续变量 |
 
-### 1.2 Sequenzo 当前状态（简要）
+### 1.2 Sequenzo 实现范围
 
-- **Hard classification**：已有 PAM/KMedoids、CLARA、层次聚类，输出聚类标签；**缺少**：文章 Table 1 中的“变量构造”一步——将聚类成员转为 K（或 K−1，省略参考类）个 dummy 的封装。
-- **Representativeness**：已有距离矩阵、medoid、`get_distance_matrix(..., refseq=...)`；**缺少**：文章中的公式 R_i^k = 1 − (distance to representative k) / (maximum distance between two sequences) 及返回 n×K 连续变量的 API。
-- **Soft classification**：**未实现**。文章 Table 1 要求 Fuzzy (FANNY) 得到 membership degree（每行和为 1 的 K 个连续变量），sequenzo 目前无 FANNY。
-- **Pseudoclass**：**未实现**。文章要求基于 FANNY 的成员概率多次抽样、每次用 categorical 变量拟合、再按 Rubin 规则合并，sequenzo 目前无此流程。
+- **Hard classification**：已实现 `hard_classification_variables(labels, k, reference)`，将聚类成员转为 K−1 个 dummy（省略参考类）。
+- **Representativeness**：已实现 `representativeness_matrix(diss, medoid_indices, d_max)`，返回 n×K 连续变量；这些变量按文章说明不要求逐行求和为 1。
+- **Soft classification**：已实现 R-derived 距离矩阵 FANNY 与 `fanny_membership(diss, k, m=1.4)`；R parity 限于测试覆盖的多簇非退化情形，`k=1` 为 Sequenzo 确定性快捷路径。另提供 `soft_classification_variables(U, reference)` 生成省略参考类后的 K−1 个连续回归变量。
+- **Pseudoclass**：已实现 `pseudoclass_regression(y, U, X_fixed, M, reference, ...)`，支持按成员概率多次抽样、分类变量回归、Rubin 式合并，并返回 `param_names`、`within_cov`、`between_cov`、`success_rate`、`failed_reasons` 等诊断。
 
 ### 1.3 与 WeightedCluster (R) 的对比
 
@@ -159,24 +161,23 @@ R 包 **WeightedCluster**（`developer/WeightedCluster-master`）在 `seqclarara
 #### Step 3.1 依赖与算法
 
 - 文章使用 **FANNY**（Kaufman & Rousseeuw），基于**距离矩阵**的模糊 K-medoid 类算法，输出成员度（membership）\(u_{ik}\)。
-- R 的 `cluster::fanny(..., diss = TRUE)` 接受距离矩阵；Python 需引入或实现等价算法。
+- R 的 `cluster::fanny(..., diss = TRUE)` 接受距离矩阵；Python 需引入或实现 R-derived 距离矩阵算法，并明确退化输入和 `k=1` 的边界。
 - **可选方案**：
   - **A**：用 `sklearn_extra.cluster.FuzzyKMedoids`（若项目可接受依赖 `sklearn-contrib`），或其它接受 precomputed distance 的模糊聚类实现。
-  - **B**：自实现一个基于 diss 的 FANNY 风格迭代（成员度更新 + medoid 更新），参考 R 的 FANNY 或文献。
+  - **B**：自实现一个基于 diss 的 FANNY 风格迭代（成员度更新 + medoid 更新），参考 R 的 FANNY 或文献；R parity 只针对测试覆盖的多簇非退化情形。
 - **建议**：先做方案 A（若有现成库），保证接口统一；否则再考虑 B。
 
 #### Step 3.2 API
 
-- **函数名建议**：`fanny_membership(diss, k, m=1.4, max_iter=100, tol=1e-6)` 或 `soft_clustering_membership(...)`。
+- **函数名**：`fanny_membership(diss, k, m=1.4, max_iter=500, tol=1e-15)`。
 - **参数**：`diss`（n×n），`k`，模糊系数 `m`（>1；**文章模拟中固定为 1.4**，见 2024-helske.md 正文），最大迭代次数与收敛容差。
 - **返回**：
   - 成员概率矩阵 `U`，形状 (n, K)，每行和为 1；
-  - 可选：medoid 索引（若算法内部会得到）。
+  - `highest_membership_indices`：每个 FANNY membership 列中成员度最高的行索引。它**不是** PAM medoid，不能传给 `representativeness_matrix`。
 
 #### Step 3.3 变量构造
 
-- **Soft classification 变量**：即 U 的 K 列（或 K−1 列，省略参考类），作为连续变量直接用于回归。
-- 可在同一模块提供：`soft_classification_variables(U, reference=0)` → 返回 (n, K) 或 (n, K−1) 的数组/DataFrame，列名如 `P1, P2, ...`。
+- **Soft classification 变量**：原始 `U` 是 K 列；回归用 `soft_classification_variables(U, reference=0)` 返回省略参考类后的 (n, K−1) 数组/DataFrame，列名如 `P_2, P_3, ...`。
 
 #### Step 3.4 文档与测试
 
@@ -206,18 +207,22 @@ R 包 **WeightedCluster**（`developer/WeightedCluster-master`）在 `seqclarara
 
 #### Step 4.2 API 设计（高层）
 
-- **函数名建议**：`pseudoclass_regression(y, U, X_fixed, M=20, reference=0, fit_func=None)`。
+- **函数名**：`pseudoclass_regression(y, U, X_fixed=None, M=20, reference=0, random_state=None, model_type="ols", add_intercept=True, x_fixed_names=None, cluster_names=None)`。
 - **参数**：
   - `y`：因变量（1维数组）。
   - `U`：成员概率矩阵 (n, K)。
-  - `X_fixed`：其余自变量（截距、控制变量等），与 y 行对齐。
+  - `X_fixed`：其余自变量（控制变量等），与 y 行对齐。若 `add_intercept=True` 且 `X_fixed` 中没有全 1 截距列，函数会自动加入截距；若已有截距列则不会重复加入。
   - `M`：伪类重复次数。
   - `reference`：参考类。
-  - `fit_func`：可选的拟合函数，签名为 `(y, X) -> (beta, se)` 或返回带 `.params` 和 `.bse` 的对象；默认可用 `statsmodels.OLS` 或 `sklearn.linear_model.LinearRegression` + 自举/解析标准误。
+  - `model_type`：`"ols"` 或 `"logit"`；logit 要求 y 为同时包含 0 和 1 的二元变量。
+  - `x_fixed_names`、`cluster_names`：可选列名；返回的 `param_names` 与系数/协方差矩阵顺序一致。
 - **返回**：
   - 合并后的系数估计 `beta_combined`；
   - 合并后的标准误 `se_combined`；
-  - 可选：每次的 \(\hat\beta^{(m)}\) 列表，便于诊断。
+  - `cov_combined`、`within_cov`、`between_cov`；
+  - 每次成功拟合的 `beta_list` 和 `cov_list`；
+  - `m_eff`、`failed`、`success_rate`、`failed_reasons`；
+  - `param_names`，用于解释截距、固定协变量和 K−1 个非参考类 cluster 系数的顺序。
 
 #### Step 4.3 依赖
 
@@ -290,37 +295,37 @@ R 包 **WeightedCluster**（`developer/WeightedCluster-master`）在 `seqclarara
 
 ---
 
-## 7. 任务清单（实现时可勾选）
+## 7. 实现核对清单
 
 | 阶段 | 任务 | 状态 |
 |------|------|------|
-| **Phase 0** | 实现 `max_distance(diss)` | ☐ |
-| | 实现 `cluster_labels_to_dummies(labels, k, reference)` | ☐ |
-| | （可选）从聚类标签/ KMedoids 结果得到 medoid 索引的辅助函数 | ☐ |
-| **Phase 1** | 实现 `representativeness_matrix(diss, medoid_indices, d_max=None)` | ☐ |
-| | 单元测试 + 文档/示例（PAM → medoid → R） | ☐ |
-| **Phase 2** | 实现 `hard_classification_variables(labels, k, reference)` | ☐ |
-| | 与 Step 0.2 复用，避免重复 | ☐ |
-| **Phase 3** | 引入或实现 FANNY/模糊聚类 → 成员概率 U | ☐ |
-| | 实现 `soft_classification_variables(U, reference)` | ☐ |
-| **Phase 4** | 实现 `pseudoclass_regression(y, U, X_fixed, M, ...)` | ☐ |
-| | Rubin 规则合并系数与标准误 | ☐ |
-| **Phase 5** | 新建 `sequences_to_variables` 模块并集中上述 API | ☐ |
+| **Phase 0** | 实现 `max_distance(diss)` | ✅ |
+| | 实现 `cluster_labels_to_dummies(labels, k, reference)` | ✅ |
+| | （可选）从聚类标签/ KMedoids 结果得到 medoid 索引的辅助函数 | ✅ |
+| **Phase 1** | 实现 `representativeness_matrix(diss, medoid_indices, d_max=None)` | ✅ |
+| | 单元测试 + 文档/示例（PAM → medoid → R） | ✅ |
+| **Phase 2** | 实现 `hard_classification_variables(labels, k, reference)` | ✅ |
+| | 与 Step 0.2 复用，避免重复 | ✅ |
+| **Phase 3** | 引入或实现 FANNY/模糊聚类 → 成员概率 U | ✅ |
+| | 实现 `soft_classification_variables(U, reference)` | ✅ |
+| **Phase 4** | 实现 `pseudoclass_regression(y, U, X_fixed, M, ...)` | ✅ |
+| | Rubin 规则合并系数与标准误 | ✅ |
+| **Phase 5** | 新建 `sequences_to_variables` 模块并集中上述 API | ✅ |
 | | （可选）统一入口 `sequences_to_variables(seqdata, diss, method, k)` | ☐ |
-| **验收** | 各 Phase 单元测试通过 | ☐ |
-| | 示例脚本/笔记本：四种变量 + 简单回归 | ☐ |
-| | 用户文档“从序列到变量”小节 | ☐ |
+| **验收** | 各 Phase 单元测试通过 | ✅ |
+| | 示例脚本/笔记本：四种变量 + 简单回归 | ✅ |
+| | 用户文档“从序列到变量”小节 | 需与网站源码同步 |
 
 ---
 
 ## 8. 仅实现文章描述且 sequenzo 未实现的功能（核对用）
 
-- **Representativeness**：文章给出唯一公式与“K continuous variables (do not sum to 1)”；sequenzo 无此 API → 需实现。
-- **Hard 的变量构造**：文章 Table 1 为 cluster membership → Dummies，参考类省略；sequenzo 有聚类标签、无“标签→dummy 矩阵”封装 → 可做封装。
-- **Soft**：文章 Table 1 为 FANNY → membership degree（K 连续，和为 1），参考类省略；sequenzo 无 FANNY → 需实现。
-- **Pseudoclass**：文章为按 U 多次抽样→每次 dummy 回归→Rubin 合并；sequenzo 无 → 需实现。
+- **Representativeness**：文章给出唯一公式与“K continuous variables (do not sum to 1)”；sequenzo 已实现 `representativeness_matrix`。
+- **Hard 的变量构造**：文章 Table 1 为 cluster membership → Dummies，参考类省略；sequenzo 已实现标签→dummy 矩阵封装。
+- **Soft**：文章 Table 1 为 FANNY → membership degree（K 连续，和为 1），参考类省略；sequenzo 已实现 R-derived FANNY 成员度与回归用 K−1 连续变量封装。`k=1` 与全零距离等退化输入不作为 R iterative parity 结果。
+- **Pseudoclass**：文章为按 U 多次抽样→每次 dummy 回归→Rubin 合并；sequenzo 已实现并暴露参数名、协方差分解、成功率与失败原因诊断。
 - **不实现**：gravity centers、AMPs/AMEs（文章用于结果展示，非变量构造）、其他文章未明确描述的算法。
 
 ---
 
-*文档版本：1.1 | 严格依据 Helske et al. (2024) 正文与 Table 1，仅列 sequenzo 未实现部分*
+*文档版本：1.2 | 依据 Helske et al. (2024) 正文与 Table 1，记录 Sequenzo 的实现范围、验收标准与已知边界。*

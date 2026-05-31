@@ -8,6 +8,53 @@ Utilities for "sequences to variables" (Helske et al. 2024).
 import numpy as np
 
 
+def _validate_positive_integer(value, name):
+    if not isinstance(value, (int, np.integer)) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    value = int(value)
+    if value < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return value
+
+
+def validate_reference_index(reference, k, name="reference"):
+    """Validate and normalize an omitted-reference category index."""
+    k = _validate_positive_integer(k, "k")
+    if not isinstance(reference, (int, np.integer)) or isinstance(reference, bool):
+        raise ValueError(f"{name} must be an integer category index")
+    reference = int(reference)
+    if reference < 0 or reference >= k:
+        raise ValueError(f"{name} must be between 0 and {k - 1}; got {reference}")
+    return reference
+
+
+def validate_integer_labels(labels, name="labels"):
+    """Validate cluster labels without silently truncating floats or booleans."""
+    raw = np.asarray(labels, dtype=object).ravel()
+    if any(isinstance(value, (bool, np.bool_)) for value in raw):
+        raise ValueError(f"{name} must contain integer cluster labels")
+    if not all(isinstance(value, (int, np.integer)) for value in raw):
+        raise ValueError(f"{name} must contain integer cluster labels")
+    return np.asarray(raw, dtype=int)
+
+
+def validate_name_sequence(names, expected_length, name):
+    """Validate optional user-facing column-name sequences."""
+    if names is None:
+        return None
+    if isinstance(names, (str, bytes)):
+        raise ValueError(f"{name} must be a sequence of strings, not a string")
+    try:
+        names = list(names)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a sequence of strings") from exc
+    if len(names) != expected_length:
+        raise ValueError(f"{name} must have length {expected_length}")
+    if not all(isinstance(value, str) for value in names):
+        raise ValueError(f"{name} must contain only strings")
+    return names
+
+
 def validate_diss_matrix(diss):
     """Check square distance/dissimilarity matrix conventions."""
     diss = np.asarray(diss, dtype=float)
@@ -15,6 +62,8 @@ def validate_diss_matrix(diss):
         raise ValueError("diss must be a square matrix")
     if np.any(np.isnan(diss)):
         raise ValueError("NA values in the dissimilarity matrix are not allowed")
+    if np.any(~np.isfinite(diss)):
+        raise ValueError("diss must contain only finite dissimilarities")
     if np.any(diss < 0):
         raise ValueError("diss must contain nonnegative dissimilarities")
     if not np.allclose(diss, diss.T):
@@ -29,6 +78,8 @@ def validate_membership_matrix(U, name="U"):
     U = np.asarray(U, dtype=float)
     if U.ndim != 2:
         raise ValueError(f"{name} must be a 2D membership matrix")
+    if np.any(~np.isfinite(U)):
+        raise ValueError(f"{name} must contain only finite membership probabilities")
     if np.any(U < 0):
         raise ValueError(f"{name} must contain nonnegative membership probabilities")
     if not np.allclose(U.sum(axis=1), 1.0):
@@ -57,6 +108,8 @@ def max_distance(diss):
     if diss.ndim == 1:
         if np.any(np.isnan(diss)):
             raise ValueError("diss must not contain NA values")
+        if np.any(~np.isfinite(diss)):
+            raise ValueError("diss must contain only finite dissimilarities")
         if np.any(diss < 0):
             raise ValueError("diss must contain nonnegative dissimilarities")
         from scipy.spatial.distance import squareform
@@ -98,10 +151,12 @@ def cluster_labels_to_dummies(labels, k=None, reference=0):
         retained category after sorting unique labels and dropping the reference
         category, 0 otherwise.
     """
-    labels = np.asarray(labels, dtype=int).ravel()
+    labels = validate_integer_labels(labels)
     uniq = np.unique(labels)
     if k is None:
         k = len(uniq)
+    else:
+        k = _validate_positive_integer(k, "k")
     if len(uniq) != k:
         raise ValueError(f"Number of unique labels ({len(uniq)}) does not match k={k}")
 
@@ -109,9 +164,7 @@ def cluster_labels_to_dummies(labels, k=None, reference=0):
     label_to_idx = {u: i for i, u in enumerate(uniq)}
     idx = np.array([label_to_idx[l] for l in labels])
 
-    if reference < 0 or reference >= k:
-        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
-    ref_idx = reference
+    ref_idx = validate_reference_index(reference, k)
     col_indices = [i for i in range(k) if i != ref_idx]
     n = len(labels)
     out = np.zeros((n, k - 1), dtype=float)
@@ -122,14 +175,15 @@ def cluster_labels_to_dummies(labels, k=None, reference=0):
 
 def dummy_column_names(labels, k=None, reference=0, prefix="C"):
     """Column names for omitted-reference dummy encoding."""
-    labels = np.asarray(labels, dtype=int).ravel()
+    labels = validate_integer_labels(labels)
     categories = np.sort(np.unique(labels))
     if k is None:
         k = len(categories)
+    else:
+        k = _validate_positive_integer(k, "k")
     if len(categories) != k:
         raise ValueError(f"Number of unique labels ({len(categories)}) does not match k={k}")
-    if reference < 0 or reference >= k:
-        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
+    reference = validate_reference_index(reference, k)
     col_indices = [i for i in range(k) if i != reference]
     return [f"{prefix}_{categories[c]}" for c in col_indices]
 
@@ -157,7 +211,10 @@ def medoid_indices_from_kmedoids_result(
     np.ndarray of shape (K,)
         Sorted 0-based medoid row indices.
     """
-    assigned_medoid_indices = np.asarray(assigned_medoid_indices, dtype=int).ravel()
+    assigned_medoid_indices = validate_integer_labels(
+        assigned_medoid_indices,
+        name="assigned_medoid_indices",
+    )
     if assigned_medoid_indices.size == 0:
         return np.array([], dtype=int)
     medoids = np.unique(assigned_medoid_indices)
@@ -190,7 +247,10 @@ def cluster_labels_from_kmedoids_result(
     np.ndarray of shape (n,)
         Cluster labels ``0 .. K-1`` (ordered by medoid index).
     """
-    assigned_medoid_indices = np.asarray(assigned_medoid_indices, dtype=int).ravel()
+    assigned_medoid_indices = validate_integer_labels(
+        assigned_medoid_indices,
+        name="assigned_medoid_indices",
+    )
     if assigned_medoid_indices.size == 0:
         return assigned_medoid_indices
     memb = assigned_medoid_indices.copy()

@@ -30,6 +30,7 @@ Example (representativeness + hard dummies):
     cluster_labels = cluster_labels_from_kmedoids_result(kmed_result)
     dummies = hard_classification_variables(cluster_labels, k=5, reference=0, as_dataframe=True, ids=seqdata.ids)
 """
+import warnings
 import numpy as np
 import pandas as pd
 from typing import Optional, Union, List, Tuple
@@ -41,7 +42,10 @@ from .helpers import (
     max_distance,
     medoid_indices_from_kmedoids_result,
     validate_diss_matrix,
+    validate_integer_labels,
     validate_membership_matrix,
+    validate_name_sequence,
+    validate_reference_index,
 )
 from .fanny import (
     FannyResult,
@@ -91,7 +95,10 @@ def representativeness_matrix(
     medoid_indices : array-like of int
         Length K. Row/column indices of the K medoids in diss (0-based).
     d_max : float, optional
-        Maximum distance between two sequences. If None, computed as max_distance(diss).
+        Maximum distance between two sequences. If None, computed as
+        ``max_distance(diss)``. If supplied, it must be finite, nonnegative,
+        and at least the observed maximum distance in ``diss`` unless all
+        distances are zero.
     ids : array-like, optional
         Sequence IDs for DataFrame index when as_dataframe=True. When ``diss`` is a
         DataFrame and ``ids`` is None, the DataFrame index is used.
@@ -111,21 +118,39 @@ def representativeness_matrix(
     if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
         raise ValueError("diss must be a square matrix")
     validate_diss_matrix(diss)
-    medoid_indices = np.asarray(medoid_indices, dtype=int).ravel()
+    medoid_indices = validate_integer_labels(medoid_indices, name="medoid_indices")
     n = diss.shape[0]
     k = len(medoid_indices)
     if np.any(medoid_indices < 0) or np.any(medoid_indices >= n):
         raise ValueError("medoid_indices must be in [0, n-1]")
-    if representative_names is not None and len(representative_names) != k:
-        raise ValueError("representative_names must have length K")
+    representative_names = validate_name_sequence(
+        representative_names,
+        k,
+        "representative_names",
+    )
 
+    observed_d_max = max_distance(diss)
     if d_max is None:
-        d_max = max_distance(diss)
-    if d_max <= 0:
+        d_max = observed_d_max
+    else:
+        d_max = float(d_max)
+        if not np.isfinite(d_max):
+            raise ValueError("d_max must be finite")
+    if d_max < 0:
+        raise ValueError("d_max must be nonnegative")
+    if d_max == 0:
+        if np.any(diss > 0):
+            raise ValueError("d_max must be positive when diss contains nonzero distances")
         R = np.ones((n, k))
         if as_dataframe:
             return _to_rep_dataframe(R, ids, k, representative_names)
         return R
+    if d_max < observed_d_max and not np.isclose(
+        d_max, observed_d_max, rtol=1e-12, atol=1e-12
+    ):
+        raise ValueError(
+            "d_max must be at least the maximum observed distance in diss"
+        )
 
     R = np.zeros((n, k))
     for j, med in enumerate(medoid_indices):
@@ -230,14 +255,12 @@ def soft_classification_variables(
     """
     U = validate_membership_matrix(U)
     n, k = U.shape
-    if reference < 0 or reference >= k:
-        raise ValueError(f"reference must be between 0 and {k - 1}; got {reference}")
+    reference = validate_reference_index(reference, k)
+    cluster_names = validate_name_sequence(cluster_names, k, "cluster_names")
     cols_keep = [j for j in range(k) if j != reference]
     X = U[:, cols_keep].copy()
     if as_dataframe:
         if cluster_names is not None:
-            if len(cluster_names) != k:
-                raise ValueError("cluster_names must have length K")
             col_names = [f"P_{cluster_names[j]}" for j in cols_keep]
         else:
             col_names = [f"P_{j + 1}" for j in cols_keep]
@@ -261,6 +284,8 @@ def pseudoclass_regression(
     random_state: Optional[int] = None,
     model_type: str = "ols",
     add_intercept: bool = True,
+    x_fixed_names: Optional[List[str]] = None,
+    cluster_names: Optional[List[str]] = None,
 ) -> dict:
     """
     Pseudoclass regression: draw M categorical memberships from U, fit each, combine with Rubin's rules.
@@ -285,39 +310,84 @@ def pseudoclass_regression(
     model_type : {"ols", "logit"}, default "ols"
         Regression model type.
     add_intercept : bool, default True
-        If True, prepend an intercept column to the design matrix.
+        If True, prepend an intercept column to the design matrix unless
+        ``X_fixed`` already contains an exact all-ones intercept column. Other
+        constant columns are treated as user covariates and may yield
+        rank-deficient pseudoclass draws.
+    x_fixed_names : list of str, optional
+        Names for columns in ``X_fixed``. When omitted, columns are named
+        ``X_fixed_1``, ``X_fixed_2``, ...
+    cluster_names : list of str, optional
+        Names for the K membership clusters. The reference cluster name is
+        omitted, matching the dummy columns used in each pseudoclass draw.
 
     Returns
     -------
     dict with keys
-        beta_combined, se_combined, cov_combined, beta_list, m_eff, failed
+        beta_combined, se_combined, cov_combined, within_cov, between_cov,
+        beta_list, cov_list, m_eff, failed, success_rate, failed_reasons,
+        param_names, M, reference, model_type, add_intercept
 
     Notes
     -----
-    Failed replications are skipped and counted in ``failed``. A replication may
-    fail because of a rank-deficient design matrix, logit non-convergence,
-    perfect separation, or other model-fitting errors.
+    Coefficients are returned in the same order as ``param_names``. With the
+    default ``add_intercept=True`` and no fixed covariates, this is
+    ``["const", "C_2", ...]`` when ``reference=0``.
+
+    Failed replications are skipped and counted in ``failed_reasons``. A
+    replication may fail because of a rank-deficient design matrix, logit
+    non-convergence, perfect separation, or other model-fitting errors. A
+    warning is emitted when any draw fails, because Rubin-style inference is
+    then conditional on the successful fitted draws.
     """
     try:
         import statsmodels.api as sm
+        from statsmodels.tools.sm_exceptions import (
+            ConvergenceWarning,
+            PerfectSeparationError,
+            PerfectSeparationWarning,
+        )
     except ImportError as exc:
         raise ImportError("pseudoclass_regression requires statsmodels") from exc
 
+    if not isinstance(model_type, str):
+        raise ValueError("model_type must be 'ols' or 'logit'")
     model_type = model_type.lower()
     if model_type not in {"ols", "logit"}:
         raise ValueError("model_type must be 'ols' or 'logit'")
+    if not isinstance(M, (int, np.integer)) or isinstance(M, bool):
+        raise ValueError("M must be an integer")
+    M = int(M)
     if M < 1:
         raise ValueError("M must be at least 1")
+    if not isinstance(add_intercept, (bool, np.bool_)):
+        raise ValueError("add_intercept must be a bool")
+    add_intercept = bool(add_intercept)
 
     U = validate_membership_matrix(U)
-    y = np.asarray(y, dtype=float).ravel()
+    y = np.asarray(y, dtype=float)
+    if y.ndim == 2 and y.shape[1] == 1:
+        y = y[:, 0]
+    elif y.ndim != 1:
+        raise ValueError("y must be a 1D array or a single-column 2D array")
     n, K = U.shape
     if K < 2:
         raise ValueError("pseudoclass_regression requires at least two clusters")
     if y.shape[0] != n:
         raise ValueError("y must have the same number of rows as U")
+    if np.any(~np.isfinite(y)):
+        raise ValueError("y must contain only finite values")
+    if model_type == "logit":
+        y_values = np.unique(y)
+        if not np.all(np.isin(y_values, [0.0, 1.0])):
+            raise ValueError("y must be binary 0/1 for logit")
+        if y_values.size != 2:
+            raise ValueError("y must contain both 0 and 1 for logit")
 
     rng = np.random.default_rng(random_state)
+    if not isinstance(reference, (int, np.integer)) or isinstance(reference, bool):
+        raise ValueError("reference must be an integer cluster index")
+    reference = int(reference)
     if reference < 0 or reference >= K:
         raise ValueError(f"reference must be between 0 and {K - 1}; got {reference}")
 
@@ -331,10 +401,46 @@ def pseudoclass_regression(
             raise ValueError("X_fixed must be a 1D or 2D array")
         if X_fixed.shape[0] != n:
             raise ValueError("X_fixed must have same number of rows as U")
+        if np.any(~np.isfinite(X_fixed)):
+            raise ValueError("X_fixed must contain only finite values")
+
+    x_fixed_names = validate_name_sequence(
+        x_fixed_names,
+        X_fixed.shape[1],
+        "x_fixed_names",
+    )
+    cluster_names = validate_name_sequence(cluster_names, K, "cluster_names")
 
     cols_keep = [j for j in range(K) if j != reference]
+    x_has_intercept = (
+        X_fixed.shape[1] > 0
+        and np.any(np.all(X_fixed == 1.0, axis=0))
+    )
+    x_names = []
+    for j in range(X_fixed.shape[1]):
+        is_intercept = np.all(X_fixed[:, j] == 1.0)
+        if is_intercept:
+            x_names.append("const")
+        elif x_fixed_names is not None:
+            x_names.append(x_fixed_names[j])
+        else:
+            x_names.append(f"X_fixed_{j + 1}")
+    cluster_param_names = [
+        f"C_{cluster_names[j]}" if cluster_names is not None else f"C_{j + 1}"
+        for j in cols_keep
+    ]
+    param_names = []
+    if add_intercept and not x_has_intercept:
+        param_names.append("const")
+    param_names.extend(x_names)
+    param_names.extend(cluster_param_names)
+
     beta_list = []
     cov_list = []
+    failed_reasons = {}
+
+    def _record_failure(reason: str) -> None:
+        failed_reasons[reason] = failed_reasons.get(reason, 0) + 1
 
     for _ in range(M):
         try:
@@ -343,29 +449,67 @@ def pseudoclass_regression(
                 (labels_m == c).astype(float) for c in cols_keep
             ])
             parts = []
+            if add_intercept and not x_has_intercept:
+                parts.append(np.ones((n, 1), dtype=float))
             if X_fixed.size > 0:
                 parts.append(X_fixed)
             parts.append(dummies_m)
             X_m = np.hstack(parts)
-            if add_intercept:
-                X_m = sm.add_constant(X_m, has_constant="add")
             if np.linalg.matrix_rank(X_m) < X_m.shape[1]:
+                _record_failure("rank_deficient")
                 continue
             if model_type == "ols":
                 model = sm.OLS(y, X_m).fit()
             else:
-                model = sm.Logit(y, X_m).fit(disp=False)
-        except Exception:
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always", ConvergenceWarning)
+                    warnings.simplefilter("always", PerfectSeparationWarning)
+                    model = sm.Logit(y, X_m).fit(disp=False)
+                if any(isinstance(w.message, PerfectSeparationWarning) for w in caught):
+                    _record_failure("perfect_separation")
+                    continue
+                if any(isinstance(w.message, ConvergenceWarning) for w in caught):
+                    _record_failure("logit_convergence_warning")
+                    continue
+                if not bool(model.mle_retvals.get("converged", True)):
+                    _record_failure("logit_nonconverged")
+                    continue
+            params = np.asarray(model.params, dtype=float)
+            cov = np.asarray(model.cov_params(), dtype=float)
+            if params.shape[0] != len(param_names) or cov.shape != (len(param_names), len(param_names)):
+                _record_failure("unexpected_result_shape")
+                continue
+            if np.any(~np.isfinite(params)) or np.any(~np.isfinite(cov)):
+                _record_failure("nonfinite_result")
+                continue
+        except PerfectSeparationError:
+            _record_failure("perfect_separation")
             continue
-        beta_list.append(model.params)
-        cov_list.append(np.asarray(model.cov_params()))
+        except np.linalg.LinAlgError:
+            _record_failure("linear_algebra_error")
+            continue
+        except ValueError:
+            _record_failure("value_error")
+            continue
+        except Exception:
+            _record_failure("model_error")
+            continue
+        beta_list.append(params)
+        cov_list.append(cov)
 
     m_eff = len(beta_list)
     failed = M - m_eff
     if m_eff == 0:
         raise RuntimeError(
             "All M pseudoclass replications failed due to rank-deficient "
-            "design matrices or model-fitting errors"
+            f"design matrices or model-fitting errors: {failed_reasons}"
+        )
+    if failed:
+        warnings.warn(
+            f"{failed} of {M} pseudoclass replications failed; pooled inference "
+            "is conditional on the successful fitted draws.",
+            RuntimeWarning,
+            stacklevel=2,
         )
 
     beta_stack = np.array(beta_list)
@@ -376,7 +520,7 @@ def pseudoclass_regression(
     if m_eff == 1:
         B = np.zeros_like(W)
     else:
-        B = np.cov(beta_stack, rowvar=False, ddof=1)
+        B = np.atleast_2d(np.cov(beta_stack, rowvar=False, ddof=1))
     T = W + (1.0 + 1.0 / m_eff) * B
     se_combined = np.sqrt(np.diag(T))
 
@@ -384,7 +528,17 @@ def pseudoclass_regression(
         "beta_combined": beta_combined,
         "se_combined": se_combined,
         "cov_combined": T,
+        "within_cov": W,
+        "between_cov": B,
         "beta_list": beta_list,
+        "cov_list": cov_list,
         "m_eff": m_eff,
         "failed": failed,
+        "success_rate": m_eff / M,
+        "failed_reasons": failed_reasons,
+        "param_names": param_names,
+        "M": M,
+        "reference": reference,
+        "model_type": model_type,
+        "add_intercept": bool(add_intercept),
     }

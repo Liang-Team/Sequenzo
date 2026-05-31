@@ -10,6 +10,7 @@ import os
 from contextlib import redirect_stdout
 import warnings
 
+import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 
@@ -80,6 +81,16 @@ def _membership_from_labels(labels: np.ndarray) -> np.ndarray:
     return membership
 
 
+def _optional_fanny_seed_unavailable(exc: ValueError) -> bool:
+    """Return True when optional FANNY seeding cannot run for valid CLARA data."""
+    message = str(exc)
+    return (
+        "k must be at most n//2 - 1" in message
+        or "all-zero distances cannot define multiple fuzzy clusters" in message
+        or "For R cluster::fanny parity" in message
+    )
+
+
 def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_args=None,
           criteria=["distance"], stability=False, max_dist=None, m=1.5, dnoise=None):
 
@@ -106,8 +117,17 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     if method not in allmethods:
         raise ValueError(f"[!] Unknown method {method}. Please specify one of the following: {', '.join(allmethods)}")
 
-    if method == "representativeness" and max_dist is None:
-        raise ValueError("[!] You need to set max.dist when using representativeness method.")
+    if method == "representativeness":
+        if max_dist is None:
+            raise ValueError("[!] You need to set max.dist when using representativeness method.")
+        if isinstance(max_dist, (bool, np.bool_)):
+            raise ValueError("[!] max.dist must be a positive finite number.")
+        try:
+            max_dist = float(max_dist)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("[!] max.dist must be a positive finite number.") from exc
+        if not np.isfinite(max_dist) or max_dist <= 0:
+            raise ValueError("[!] max.dist must be a positive finite number.")
 
     allcriteria = ["distance", "db", "xb", "pbm", "ams"]
     criteria = [c.lower() for c in criteria]
@@ -133,6 +153,8 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     # agseqdata.attrs['weights'] = None
     ac['probs'] = ac['aggWeights'] / number_seq
     print(f"  - OK ({len(ac['aggWeights'])} unique cases).")
+    if len(agseqdata) < max(kvals):
+        raise ValueError("[!] Fewer unique cases than requested clusters after aggregation.")
 
     # Memory cleanup before parallel computation
     gc.collect()
@@ -141,7 +163,20 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     def calc_pam_iter(circle, agseqdata, sample_size, kvals, ac):
         # Sampling with replacement allows the process to proceed normally
         # even when the sample size exceeds the dataset size, as samples can be repeatedly drawn."
-        mysample = np.random.choice(len(agseqdata), size=sample_size, p=ac['probs'], replace=True)
+        n_unique = len(agseqdata)
+        probs = np.asarray(ac["probs"], dtype=float)
+        min_unique = min(max(kvals), n_unique)
+        if sample_size >= n_unique:
+            required = np.arange(n_unique, dtype=int)
+            extra = np.random.choice(
+                n_unique, size=sample_size - n_unique, p=probs, replace=True
+            )
+            mysample = np.concatenate([required, extra])
+        else:
+            mysample = np.random.choice(n_unique, size=sample_size, p=probs, replace=True)
+            if np.unique(mysample).size < min_unique:
+                required = np.random.choice(n_unique, size=min_unique, p=probs, replace=False)
+                mysample[:min_unique] = required
         mysample = pd.DataFrame({'id': mysample})
 
         # Re-aggregate!
@@ -167,6 +202,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         allclust = []
 
         for k in kvals:
+            iter_dnoise = dnoise
             if method in ("fuzzy", "noise"):
                 seed_labels = cut_tree(hc, n_clusters=k).ravel()
                 seed_membership = _membership_from_labels(seed_labels)
@@ -177,25 +213,32 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                     weights=ac2["aggWeights"],
                     method=algo,
                     m=m,
-                    dnoise=dnoise,
+                    dnoise=iter_dnoise,
                 )
-                fanny_membership_matrix, _ = fanny_membership(
-                    diss,
-                    k=k,
-                    m=m,
-                    weights=ac2["aggWeights"],
-                )
-                clustering_f = wfcmdd(
-                    diss,
-                    memb=fanny_membership_matrix,
-                    weights=ac2["aggWeights"],
-                    method=algo,
-                    m=m,
-                    dnoise=dnoise,
-                )
-                clustering = clustering_c if clustering_c.functional < clustering_f.functional else clustering_f
+                clustering = clustering_c
+                try:
+                    fanny_membership_matrix, _ = fanny_membership(
+                        diss,
+                        k=k,
+                        m=m,
+                        weights=ac2["aggWeights"],
+                    )
+                except ValueError as exc:
+                    if not _optional_fanny_seed_unavailable(exc):
+                        raise
+                else:
+                    clustering_f = wfcmdd(
+                        diss,
+                        memb=fanny_membership_matrix,
+                        weights=ac2["aggWeights"],
+                        method=algo,
+                        m=m,
+                        dnoise=iter_dnoise,
+                    )
+                    if clustering_f.functional < clustering.functional:
+                        clustering = clustering_f
                 if method == "noise":
-                    dnoise = clustering.dnoise
+                    iter_dnoise = clustering.dnoise
                 medoids = mysample.iloc[np.asarray(ac2["aggIndex"], dtype=int)[clustering.mobile_centers] - 1].to_numpy().flatten()
             else:
                 clustering = KMedoids(
@@ -241,7 +284,7 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                 pbm = ((1 / len(medoids)) * (np.max(diss2[medoids]) / mean_diss)) ** 2
                 ams = np.sum(crispness * sil * ac["probs"]) / np.sum(crispness * ac["probs"])
             elif method == "noise":
-                diss3 = np.column_stack([diss2, np.full(diss2.shape[0], dnoise)])
+                diss3 = np.column_stack([diss2, np.full(diss2.shape[0], iter_dnoise)])
                 mexp = -1.0 / (m - 1.0)
                 memb = np.power(diss3, mexp)
                 zero_dist = diss3 == 0.0
@@ -327,16 +370,17 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
     kvalscriteria = list(product(range(len(kvals)), criteria))
     kret = []
     for item in kvalscriteria:
-        k = item[0]
+        k_index = item[0]
+        k_value = kvals[k_index]
         _criteria = item[1]
 
-        mean_all_diss = [d['mean_diss'] for d in collected_data[k]]
-        db_all = [d['db'] for d in collected_data[k]]
-        pbm_all = [d['pbm'] for d in collected_data[k]]
-        ams_all = [d['ams'] for d in collected_data[k]]
-        xb_all = [d['xb'] for d in collected_data[k]]
-        clustering_all_diss = [d['clustering'] for d in collected_data[k]]
-        med_all_diss = [d['medoids'] for d in collected_data[k]]
+        mean_all_diss = [d['mean_diss'] for d in collected_data[k_index]]
+        db_all = [d['db'] for d in collected_data[k_index]]
+        pbm_all = [d['pbm'] for d in collected_data[k_index]]
+        ams_all = [d['ams'] for d in collected_data[k_index]]
+        xb_all = [d['xb'] for d in collected_data[k_index]]
+        clustering_all_diss = [d['clustering'] for d in collected_data[k_index]]
+        med_all_diss = [d['medoids'] for d in collected_data[k_index]]
 
         # Find best clustering
         objective = {
@@ -351,10 +395,20 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         # Compute clustering stability of the best partition
         if stability:
+            def stability_labels(clustering):
+                # ARI/JC stability is defined on crisp partitions here. Fuzzy/noise
+                # memberships are reduced only for this stability cross-tab.
+                clustering = np.asarray(clustering)
+                if clustering.ndim == 1:
+                    return clustering
+                if clustering.ndim == 2:
+                    return np.argmax(clustering, axis=1)
+                raise ValueError("clustering must be a vector or membership matrix")
+
             def process_task(j, clustering_all_diss, ac, best):
                 df = pd.DataFrame({
-                    'clustering_j': clustering_all_diss[j],        # The J-TH cluster
-                    'clustering_best': clustering_all_diss[best],  # The best-TH clustering
+                    'clustering_j': stability_labels(clustering_all_diss[j]),        # The J-TH cluster
+                    'clustering_best': stability_labels(clustering_all_diss[best]),  # The best-TH clustering
                     'aggWeights': ac['aggWeights']
                 })
                 tab = df.groupby(['clustering_j', 'clustering_best'])['aggWeights'].sum().unstack(fill_value=0)
@@ -393,9 +447,13 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
 
         evol_diss = np.maximum.accumulate(objective) if _criteria in ["ams", "pbm"] else np.minimum.accumulate(objective)
 
+        medoids_agg = np.asarray(med_all_diss[best], dtype=int)
+        medoids_original = np.asarray(ac["aggIndex"], dtype=int)[medoids_agg] - 1
+
         # Store the best solution and evaluations of the others
         bestcluster = {
-            "medoids": np.asarray(ac["aggIndex"], dtype=int)[med_all_diss[best]] - 1,
+            "medoids": medoids_original,
+            "medoids_agg": medoids_agg,
             "clustering": disagclust,
             "evol_diss": evol_diss,
             "iter_objective": objective,
@@ -412,11 +470,11 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
             "ari08": ari08,
             "jc08": jc08,
             "R": R,
-            "k": k
+            "k": k_value
         }
 
         if method == "representativeness":
-            refseq = [list(range(len(agseqdata))), bestcluster["medoids"].tolist()]
+            refseq = [list(range(len(agseqdata))), medoids_agg.tolist()]
             with open(os.devnull, "w") as fnull:
                 with redirect_stdout(fnull):
                     states = np.arange(1, len(seqdata.states) + 1).tolist()
@@ -425,13 +483,27 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
                     dist_args["refseq"] = refseq
                     diss2 = get_distance_matrix(opts=dist_args)
                     del dist_args["refseq"]
-            bestcluster["representativeness"] = 1.0 - diss2.to_numpy() / max_dist
+            diss2 = diss2.to_numpy(dtype=float)
+            if np.any(~np.isfinite(diss2)) or np.any(diss2 < 0):
+                raise ValueError("[!] Representative distances must be finite and non-negative.")
+            observed_ref_max = float(np.max(diss2)) if diss2.size else 0.0
+            if observed_ref_max > max_dist and not np.isclose(
+                observed_ref_max,
+                max_dist,
+                rtol=1e-12,
+                atol=1e-12,
+            ):
+                raise ValueError(
+                    "[!] max.dist must be at least the maximum distance to selected representatives."
+                )
+            bestcluster["representativeness"] = np.clip(1.0 - diss2 / max_dist, 0.0, 1.0)
             disagclust = bestcluster["representativeness"][np.asarray(ac["disaggIndex"], dtype=int) - 1, :]
             bestcluster["clustering"] = disagclust
 
         # Store computed cluster quality
         kresult = {
-            "k": k+2,
+            "k": k_value,
+            "k_index": k_index,
             "criteria": criteria,
             "stats": [bestcluster["avg_dist"], bestcluster["pbm"], bestcluster["db"], bestcluster["xb"],
                       bestcluster["ams"], bestcluster["ari08"], bestcluster["jc08"], best],
@@ -441,7 +513,12 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         kret.append(kresult)
 
     def claraObj(kretlines, method, kvals, kret, seqdata):
-        clustering = np.full((seqdata.seqdata.shape[0], len(kvals)), -1)
+        matrix_valued = method in ("fuzzy", "noise", "representativeness")
+        if matrix_valued:
+            clustering = np.empty((seqdata.seqdata.shape[0], len(kvals)), dtype=object)
+            clustering.fill(None)
+        else:
+            clustering = np.full((seqdata.seqdata.shape[0], len(kvals)), -1, dtype=float)
         clustering = pd.DataFrame(clustering)
         clustering.columns = [f"Cluster {val}" for val in kvals]
         clustering.index = seqdata.ids
@@ -454,11 +531,15 @@ def clara(seqdata, R=100, kvals=None, sample_size=None, method="crisp", dist_arg
         }
 
         for i in kretlines:
-            k = kret[i]['k'] - 2    # start from 0, not 2
+            k = kret[i].get('k_index', kret[i]['k'] - 2)
             ret['stats'][k, :] = np.array(kret[i]['stats'])
             ret['clara'][k] = kret[i]['bestcluster']
 
-            ret['clustering'].iloc[:, k] = kret[i]['bestcluster']['clustering']
+            best_clustering = kret[i]['bestcluster']['clustering']
+            if matrix_valued:
+                ret['clustering'].iloc[:, k] = list(np.asarray(best_clustering))
+            else:
+                ret['clustering'].iloc[:, k] = best_clustering
 
         ret['stats'] = pd.DataFrame(ret['stats'],
                                     columns=["Avg dist", "PBM", "DB", "XB", "AMS", "ARI>0.8", "JC>0.8", "Best iter"])

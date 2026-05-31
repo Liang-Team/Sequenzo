@@ -87,6 +87,38 @@ def test_clustassoc_table_matches_r(r_reference):
         )
 
 
+def test_clustassoc_numeric_bic_counts_lm_scale_parameter_like_r():
+    from sequenzo.clustering.validation.cluster_covariate_association import _model_bic
+
+    y = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
+    cluster_labels = np.array([1, 1, 2, 2, 3, 3])
+
+    # R: BIC(lm(y ~ factor(cluster_labels))) == 15.8765259326743
+    assert _model_bic(y, cluster_labels, weights=None) == pytest.approx(15.87652599270401)
+
+
+def test_clustassoc_numeric_bic_handles_zero_weights_like_r_lm():
+    from sequenzo.clustering.validation.cluster_covariate_association import _model_bic
+
+    y = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 4.0])
+    cluster_labels = np.array([1, 1, 2, 2, 3, 3])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 0.0, 0.0])
+
+    # R: BIC(lm(y ~ factor(cluster_labels), weights = weights)) == 9.96521424622637
+    assert _model_bic(y, cluster_labels, weights=weights) == pytest.approx(9.96521424622637)
+
+
+def test_clustassoc_categorical_bic_counts_zero_weight_factor_levels_like_r_multinom():
+    from sequenzo.clustering.validation.cluster_covariate_association import _model_bic
+
+    y = np.array(["a", "b", "a", "b", "a", "b"])
+    cluster_labels = np.array([1, 1, 2, 2, 3, 3])
+    weights = np.array([1.0, 1.0, 1.0, 1.0, 0.0, 0.0])
+
+    # R: BIC(nnet::multinom(y ~ factor(cluster_labels), weights = weights)) == 9.70406052783923
+    assert _model_bic(y, cluster_labels, weights=weights) == pytest.approx(9.70406052783923)
+
+
 def test_clustrange_cqi_matches_r(r_reference):
     clustrange = hierarchical_cluster_range(r_reference["diss"], maxcluster=10, method="ward.d")
     ref = r_reference["clustrange_stats"]

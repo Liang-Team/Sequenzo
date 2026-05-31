@@ -27,29 +27,91 @@ _STAT_YLABELS = {
 }
 
 
+def _cluster_design_matrix(cluster_labels: np.ndarray) -> np.ndarray:
+    if np.all(cluster_labels == 0):
+        return np.ones((len(cluster_labels), 1), dtype=np.float64)
+
+    dummies = pd.get_dummies(pd.Series(cluster_labels), drop_first=True).astype(np.float64)
+    if dummies.shape[1] == 0:
+        return np.ones((len(cluster_labels), 1), dtype=np.float64)
+    return np.asarray(sm.add_constant(dummies, has_constant="add"), dtype=np.float64)
+
+
+def _case_weights(n_observations: int, weights: Optional[np.ndarray]) -> np.ndarray:
+    if weights is None:
+        case_weights = np.ones(n_observations, dtype=np.float64)
+    else:
+        case_weights = np.asarray(weights, dtype=np.float64).reshape(-1)
+        if case_weights.shape[0] != n_observations:
+            raise ValueError("weights must have one value per observation.")
+        if np.any(~np.isfinite(case_weights)) or np.any(case_weights < 0):
+            raise ValueError("weights must be finite and non-negative.")
+
+    if float(case_weights.sum()) <= 0:
+        raise ValueError("weights must contain positive total mass.")
+    return case_weights
+
+
+def _linear_bic_like_r_lm(y: np.ndarray, x: np.ndarray, weights: Optional[np.ndarray]) -> float:
+    case_weights = _case_weights(len(y), weights)
+    positive = case_weights > 0
+    y_pos = y[positive]
+    x_pos = x[positive]
+    w_pos = case_weights[positive]
+    n_positive = len(y_pos)
+
+    sqrt_w = np.sqrt(w_pos)
+    x_weighted = x_pos * sqrt_w[:, None]
+    y_weighted = y_pos * sqrt_w
+    coef, _, rank, _ = np.linalg.lstsq(x_weighted, y_weighted, rcond=None)
+    residuals = y_pos - x_pos @ coef
+    rss = float(np.sum(w_pos * residuals**2))
+
+    if rss <= 0:
+        return float("-inf")
+
+    log_likelihood = 0.5 * (
+        float(np.sum(np.log(w_pos)))
+        - n_positive * (np.log(2.0 * np.pi) + 1.0 + np.log(rss / n_positive))
+    )
+    return float(-2.0 * log_likelihood + np.log(n_positive) * (int(rank) + 1))
+
+
+def _categorical_bic(
+    covar: np.ndarray,
+    cluster_labels: np.ndarray,
+    weights: Optional[np.ndarray],
+) -> float:
+    y = pd.Categorical(covar).codes
+    if np.any(y < 0):
+        raise ValueError("covar contains missing categorical values.")
+
+    case_weights = _case_weights(len(y), weights)
+    total_weight = float(case_weights.sum())
+
+    log_likelihood = 0.0
+    n_categories = int(y.max()) + 1
+    for cluster in pd.unique(cluster_labels):
+        mask = cluster_labels == cluster
+        group_weight = float(case_weights[mask].sum())
+        if group_weight <= 0:
+            continue
+
+        counts = np.bincount(y[mask], weights=case_weights[mask], minlength=n_categories)
+        positive = counts > 0
+        log_likelihood += float(np.sum(counts[positive] * np.log(counts[positive] / group_weight)))
+
+    n_parameters = len(pd.unique(cluster_labels)) * (n_categories - 1)
+    return float(-2.0 * log_likelihood + np.log(total_weight) * n_parameters)
+
+
 def _model_bic(covar: np.ndarray, cluster_labels: np.ndarray, weights: Optional[np.ndarray]) -> float:
     if np.issubdtype(np.asarray(covar).dtype, np.number):
+        x = _cluster_design_matrix(cluster_labels)
         y = np.asarray(covar, dtype=np.float64)
-        if np.all(cluster_labels == 0):
-            x = np.ones((len(y), 1), dtype=np.float64)
-        else:
-            x = sm.add_constant(
-                pd.get_dummies(pd.Series(cluster_labels), drop_first=False).astype(np.float64)
-            )
-        if weights is None:
-            model = sm.OLS(y, x).fit()
-        else:
-            model = sm.WLS(y, x, weights=weights).fit()
-        return float(model.bic)
+        return _linear_bic_like_r_lm(y, x, weights)
 
-    y = pd.Categorical(covar)
-    if np.all(cluster_labels == 0):
-        x = np.ones((len(y), 1), dtype=np.float64)
-        model = sm.MNLogit(y.codes, x).fit(disp=0, weights=weights)
-        return float(model.bic)
-    x = sm.add_constant(pd.get_dummies(pd.Series(cluster_labels), drop_first=False).astype(np.float64))
-    model = sm.MNLogit(y.codes, x).fit(disp=0, weights=weights)
-    return float(model.bic)
+    return _categorical_bic(covar, cluster_labels, weights)
 
 
 def cluster_association(
@@ -60,6 +122,11 @@ def cluster_association(
 ) -> pd.DataFrame:
     """
     Relate clustering solutions to a covariate (WeightedCluster ``clustassoc``).
+
+    Numeric covariates use an R ``lm``-style BIC, while string/object/categorical
+    covariates use a multinomial-style categorical BIC. Cast integer-coded
+    categories to a non-numeric dtype before calling when they should be treated
+    as categorical levels rather than continuous scores.
 
     Returns a table with columns ``Unaccounted``, ``Remaining``, ``BIC``, and
     ``numcluster``, plus a baseline row ``No Clustering``.

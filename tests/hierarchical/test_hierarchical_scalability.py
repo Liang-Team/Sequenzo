@@ -1,6 +1,9 @@
 """Scalable modes, CLARA wrapper, compression, and structural sampling."""
 
+from types import SimpleNamespace
+
 import numpy as np
+import pandas as pd
 import pytest
 
 from sequenzo.hierarchical import (
@@ -281,8 +284,6 @@ def test_sampled_mode_structural_decomposition():
 
 
 def test_clara_medoid_indices_zero_based():
-    import pandas as pd
-
     rows = []
     for ri, region in enumerate(["R1", "R2", "R3"]):
         for ci, cpc in enumerate(["C1", "C2", "C3"]):
@@ -314,6 +315,320 @@ def test_clara_medoid_indices_zero_based():
     assert len(result.unit_ids) == seq.n_pairs
     comp = result.cluster_composition()
     assert "level_1_id" in comp.columns
+
+
+def test_clara_public_api_expands_compressed_fuzzy_membership(monkeypatch):
+    import sequenzo.hierarchical.clustering.clara as clara_module
+
+    rows = []
+    pair_sequences = [
+        ("R1", "C1", [0, 0, 0]),
+        ("R1", "C2", [1, 1, 1]),
+        ("R2", "C1", [0, 0, 0]),
+        ("R2", "C2", [2, 2, 2]),
+        ("R3", "C1", [1, 1, 1]),
+    ]
+    for region, cpc, seq_values in pair_sequences:
+        for t, state in enumerate(seq_values):
+            rows.append({
+                "region_id": region,
+                "cpc_id": cpc,
+                "year": 2000 + t,
+                "state": state,
+            })
+    seq = make_relational_sequences(
+        pd.DataFrame(rows), "region_id", "cpc_id", "year", "state", validate=False
+    )
+
+    compressed_membership = np.array(
+        [
+            [0.9, 0.1],
+            [0.2, 0.8],
+            [0.4, 0.6],
+        ],
+        dtype=float,
+    )
+    compressed_distances = np.array(
+        [
+            [0.0, 4.0],
+            [3.0, 0.0],
+            [2.0, 1.0],
+        ],
+        dtype=float,
+    )
+
+    def fake_clara(seqdata, R, kvals, sample_size, method, dist_args, criteria, stability, max_dist):
+        assert len(seqdata.ids) == 3
+        assert method == "fuzzy"
+        return {
+            "clara": {
+                0: {
+                    "medoids": np.array([0, 1], dtype=int),
+                    "objective": 0.0,
+                    "arimatrix": np.nan,
+                    "evol_diss": np.array([0.0]),
+                }
+            },
+            "clustering": pd.DataFrame({"Cluster 2": list(compressed_membership)}),
+            "stats": pd.DataFrame({
+                "Avg dist": [0.0],
+                "PBM": [0.0],
+                "DB": [0.0],
+                "XB": [0.0],
+                "AMS": [0.0],
+                "ARI>0.8": [0.0],
+                "JC>0.8": [0.0],
+                "Best iter": [0.0],
+            }),
+        }
+
+    monkeypatch.setattr(clara_module, "clara", fake_clara)
+    monkeypatch.setattr(
+        clara_module,
+        "_distances_to_medoids",
+        lambda seqdata, medoid_rows, dist_args: compressed_distances,
+    )
+
+    result = cluster_pair_typology_clara(
+        seq,
+        k=2,
+        n_iterations=1,
+        sample_size=5,
+        clara_method="fuzzy",
+        aggregate_identical=True,
+        verbose=False,
+    )
+
+    np.testing.assert_array_equal(result.unit_ids, seq.pair_ids)
+    np.testing.assert_allclose(
+        result.membership,
+        [
+            compressed_membership[0],
+            compressed_membership[1],
+            compressed_membership[0],
+            compressed_membership[2],
+            compressed_membership[1],
+        ],
+    )
+    np.testing.assert_allclose(
+        result.distance_to_medoids,
+        [
+            compressed_distances[0],
+            compressed_distances[1],
+            compressed_distances[0],
+            compressed_distances[2],
+            compressed_distances[1],
+        ],
+    )
+    np.testing.assert_array_equal(result.medoid_ids, np.array(["R1__C1", "R1__C2"], dtype=object))
+    np.testing.assert_array_equal(result.medoid_indices, np.array([0, 1]))
+    assert result.details["compressed_medoid_ids"].tolist() == ["pattern_000001", "pattern_000002"]
+
+
+def test_clara_representativeness_is_not_exposed_as_membership():
+    from sequenzo.hierarchical.clustering.clara import _clara_output_to_typology
+
+    rep = np.array([[1.0, 0.25], [0.4, 0.9]], dtype=float)
+    clara_result = {
+        "clara": {
+            0: {
+                "medoids": np.array([0, 1], dtype=int),
+                "objective": 0.0,
+                "arimatrix": np.nan,
+                "evol_diss": np.array([0.0]),
+            }
+        },
+        "clustering": pd.DataFrame({"Cluster 2": [rep[0], rep[1]]}),
+        "stats": pd.DataFrame({
+            "Avg dist": [0.0],
+            "PBM": [0.0],
+            "DB": [0.0],
+            "XB": [0.0],
+            "AMS": [0.0],
+            "ARI>0.8": [0.0],
+            "JC>0.8": [0.0],
+            "Best iter": [0.0],
+        }),
+    }
+    pair_ids = np.array(["p1", "p2"], dtype=object)
+    seqdata = SimpleNamespace(ids=pair_ids)
+    original_sequence_data = SimpleNamespace(
+        pair_ids=pair_ids,
+        level_1_ids=np.array(["a", "a"], dtype=object),
+        level_2_ids=np.array(["b", "c"], dtype=object),
+    )
+
+    result = _clara_output_to_typology(
+        clara_result,
+        k=2,
+        seqdata=seqdata,
+        dist_args={},
+        clara_method="representativeness",
+        sample_size=2,
+        n_iterations=1,
+        level_1_ids=original_sequence_data.level_1_ids,
+        level_2_ids=original_sequence_data.level_2_ids,
+        weights=None,
+        compression=None,
+        original_sequence_data=original_sequence_data,
+    )
+
+    assert result.membership is None
+    np.testing.assert_allclose(result.representativeness, rep)
+    assert not np.allclose(rep.sum(axis=1), 1.0)
+
+
+@pytest.mark.parametrize("clara_method", ["fuzzy", "noise"])
+def test_clara_matrix_membership_expands_to_original_pairs_under_compression(monkeypatch, clara_method):
+    import sequenzo.hierarchical.clustering.clara as clara_module
+
+    membership = np.array([[0.8, 0.2], [0.1, 0.9]], dtype=float)
+    compressed_distances = np.array([[0.0, 5.0], [3.0, 0.0]], dtype=float)
+    clara_result = {
+        "clara": {
+            0: {
+                "medoids": np.array([0, 1], dtype=int),
+                "objective": 0.0,
+                "arimatrix": np.nan,
+                "evol_diss": np.array([0.0]),
+            }
+        },
+        "clustering": pd.DataFrame({"Cluster 2": [membership[0], membership[1]]}),
+        "stats": pd.DataFrame({
+            "Avg dist": [0.0],
+            "PBM": [0.0],
+            "DB": [0.0],
+            "XB": [0.0],
+            "AMS": [0.0],
+            "ARI>0.8": [0.0],
+            "JC>0.8": [0.0],
+            "Best iter": [0.0],
+        }),
+    }
+    compressed_records = [
+        SimpleNamespace(pair_id="pattern_000001", sequence=[0, 0]),
+        SimpleNamespace(pair_id="pattern_000002", sequence=[1, 1]),
+    ]
+    original_records = [
+        SimpleNamespace(pair_id="p1", sequence=[0, 0]),
+        SimpleNamespace(pair_id="p2", sequence=[1, 1]),
+        SimpleNamespace(pair_id="p3", sequence=[0, 0]),
+    ]
+    compression = SimpleNamespace(
+        compressed_data=SimpleNamespace(records=compressed_records),
+        details={"n_unique_patterns": 2},
+        pattern_id_to_representative_pair={
+            "pattern_000001": "p1",
+            "pattern_000002": "p2",
+        },
+    )
+    seqdata = SimpleNamespace(ids=np.array(["pattern_000001", "pattern_000002"], dtype=object))
+    original_sequence_data = SimpleNamespace(
+        pair_ids=np.array(["p1", "p2", "p3"], dtype=object),
+        level_1_ids=np.array(["a", "a", "b"], dtype=object),
+        level_2_ids=np.array(["x", "y", "z"], dtype=object),
+        records=original_records,
+    )
+    monkeypatch.setattr(
+        clara_module,
+        "_distances_to_medoids",
+        lambda seqdata, medoid_rows, dist_args: compressed_distances,
+    )
+
+    result = clara_module._clara_output_to_typology(
+        clara_result,
+        k=2,
+        seqdata=seqdata,
+        dist_args={},
+        clara_method=clara_method,
+        sample_size=2,
+        n_iterations=1,
+        level_1_ids=original_sequence_data.level_1_ids,
+        level_2_ids=original_sequence_data.level_2_ids,
+        weights=np.array([2.0, 1.0]),
+        compression=compression,
+        original_sequence_data=original_sequence_data,
+    )
+
+    np.testing.assert_allclose(result.membership, [membership[0], membership[1], membership[0]])
+    np.testing.assert_allclose(
+        result.distance_to_medoids,
+        [compressed_distances[0], compressed_distances[1], compressed_distances[0]],
+    )
+    np.testing.assert_array_equal(result.medoid_indices, np.array([0, 1]))
+    np.testing.assert_array_equal(result.medoid_ids, np.array(["p1", "p2"], dtype=object))
+
+
+def test_clara_representativeness_distance_contract_under_compression():
+    from sequenzo.hierarchical.clustering.clara import _clara_output_to_typology
+
+    rep = np.array([[1.0, 0.25], [0.4, 0.9]], dtype=float)
+    clara_result = {
+        "clara": {
+            0: {
+                "medoids": np.array([0, 1], dtype=int),
+                "objective": 0.0,
+                "arimatrix": np.nan,
+                "evol_diss": np.array([0.0]),
+            }
+        },
+        "clustering": pd.DataFrame({"Cluster 2": [rep[0], rep[1]]}),
+        "stats": pd.DataFrame({
+            "Avg dist": [0.0],
+            "PBM": [0.0],
+            "DB": [0.0],
+            "XB": [0.0],
+            "AMS": [0.0],
+            "ARI>0.8": [0.0],
+            "JC>0.8": [0.0],
+            "Best iter": [0.0],
+        }),
+    }
+    compressed_records = [
+        SimpleNamespace(pair_id="pattern_000001", sequence=[0, 0]),
+        SimpleNamespace(pair_id="pattern_000002", sequence=[1, 1]),
+    ]
+    original_records = [
+        SimpleNamespace(pair_id="p1", sequence=[0, 0]),
+        SimpleNamespace(pair_id="p2", sequence=[1, 1]),
+        SimpleNamespace(pair_id="p3", sequence=[0, 0]),
+    ]
+    compression = SimpleNamespace(
+        compressed_data=SimpleNamespace(records=compressed_records),
+        details={"n_unique_patterns": 2},
+        pattern_id_to_representative_pair={
+            "pattern_000001": "p1",
+            "pattern_000002": "p2",
+        },
+    )
+    original_sequence_data = SimpleNamespace(
+        pair_ids=np.array(["p1", "p2", "p3"], dtype=object),
+        level_1_ids=np.array(["a", "a", "b"], dtype=object),
+        level_2_ids=np.array(["x", "y", "z"], dtype=object),
+        records=original_records,
+    )
+
+    result = _clara_output_to_typology(
+        clara_result,
+        k=2,
+        seqdata=SimpleNamespace(ids=np.array(["pattern_000001", "pattern_000002"], dtype=object)),
+        dist_args={},
+        clara_method="representativeness",
+        sample_size=2,
+        n_iterations=1,
+        level_1_ids=original_sequence_data.level_1_ids,
+        level_2_ids=original_sequence_data.level_2_ids,
+        weights=np.array([2.0, 1.0]),
+        compression=compression,
+        original_sequence_data=original_sequence_data,
+        representativeness_max_dist=10.0,
+    )
+
+    expected_rep = np.array([rep[0], rep[1], rep[0]], dtype=float)
+    np.testing.assert_allclose(result.representativeness, expected_rep)
+    np.testing.assert_allclose(result.distance_to_medoids, (1.0 - expected_rep) * 10.0)
+    np.testing.assert_array_equal(result.medoid_indices, np.array([0, 1]))
+    np.testing.assert_array_equal(result.medoid_ids, np.array(["p1", "p2"], dtype=object))
 
 
 def test_pair_typology_global_state_colors_consistent():

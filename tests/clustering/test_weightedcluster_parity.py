@@ -1,3 +1,7 @@
+import subprocess
+import sys
+import types
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -17,6 +21,81 @@ _DISS_5 = np.array(
     ],
     dtype=float,
 )
+
+
+def test_package_imports_keep_callables_after_submodule_imports():
+    import sequenzo.clustering.k_medoids_range  # noqa: F401
+    import sequenzo.dissimilarity_measures.get_distance_matrix  # noqa: F401
+
+    from sequenzo.clustering import k_medoids_range as imported_k_medoids_range
+    from sequenzo.dissimilarity_measures import get_distance_matrix
+
+    assert callable(imported_k_medoids_range)
+    assert callable(get_distance_matrix)
+
+
+def test_fresh_package_imports_keep_callables_after_submodule_imports():
+    code = """
+import sequenzo.clustering.k_medoids_range
+import sequenzo.dissimilarity_measures.get_distance_matrix
+from sequenzo.clustering import k_medoids_range
+from sequenzo.dissimilarity_measures import get_distance_matrix
+assert callable(k_medoids_range), type(k_medoids_range)
+assert callable(get_distance_matrix), type(get_distance_matrix)
+"""
+    result = subprocess.run([sys.executable, "-c", code], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_same_named_submodules_remain_importable_with_importlib():
+    import importlib
+
+    clustering_module = importlib.import_module("sequenzo.clustering.k_medoids_range")
+    distance_module = importlib.import_module("sequenzo.dissimilarity_measures.get_distance_matrix")
+
+    assert isinstance(clustering_module, types.ModuleType)
+    assert isinstance(distance_module, types.ModuleType)
+
+
+def test_same_named_submodules_remain_modules_with_dotted_imports():
+    import sequenzo.clustering.k_medoids_range as clustering_module
+    import sequenzo.dissimilarity_measures.get_distance_matrix as distance_module
+
+    assert isinstance(clustering_module, types.ModuleType)
+    assert isinstance(distance_module, types.ModuleType)
+
+
+def test_fresh_dotted_submodule_imports_remain_modules():
+    code = """
+import types
+import sequenzo.clustering.k_medoids_range as clustering_module
+import sequenzo.dissimilarity_measures.get_distance_matrix as distance_module
+assert isinstance(clustering_module, types.ModuleType), type(clustering_module)
+assert isinstance(distance_module, types.ModuleType), type(distance_module)
+"""
+    result = subprocess.run([sys.executable, "-c", code], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_plain_dotted_imports_keep_submodule_attribute_chains():
+    code = """
+import sequenzo.clustering
+import sequenzo.clustering.k_medoids_range
+import sequenzo.clustering.compare_cluster_methods
+import sequenzo.clustering.property_based_clustering
+import sequenzo.dissimilarity_measures
+import sequenzo.dissimilarity_measures.get_distance_matrix
+import sequenzo.dissimilarity_measures.get_substitution_cost_matrix
+assert callable(sequenzo.clustering.k_medoids_range)
+assert callable(sequenzo.clustering.k_medoids_range.k_medoids_range)
+assert callable(sequenzo.clustering.compare_cluster_methods.compare_cluster_methods)
+assert callable(sequenzo.clustering.property_based_clustering.property_based_clustering)
+assert callable(sequenzo.dissimilarity_measures.get_distance_matrix)
+assert callable(sequenzo.dissimilarity_measures.get_distance_matrix.get_distance_matrix)
+assert callable(sequenzo.dissimilarity_measures.get_substitution_cost_matrix.get_substitution_cost_matrix)
+"""
+    result = subprocess.run([sys.executable, "-c", code], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_aggregate_cases_matches_weightedcluster_reference():

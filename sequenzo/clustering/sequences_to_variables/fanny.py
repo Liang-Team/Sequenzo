@@ -1,9 +1,12 @@
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺；Yapeng Wei 卫亚鹏
 @File    : fanny.py
 @Time    : 02/03/2026 09:52
 @Desc    :
-Fuzzy Analysis Clustering (FANNY), port of R package ``cluster::fanny``.
+Fuzzy Analysis Clustering (FANNY), derived from R ``cluster::fanny``.
+Parity is targeted for tested multi-cluster distance-matrix cases. Degenerate
+multi-cluster inputs that cannot produce row-stochastic memberships are rejected
+instead of passing invalid memberships downstream.
 
 Reference: Kaufman & Rousseeuw (1990), chapter 4; R ``cluster`` src/fanny.c.
 """
@@ -15,7 +18,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from .helpers import validate_diss_matrix
+from .helpers import _validate_positive_integer, validate_diss_matrix
 
 
 def _import_fanny_cpp():
@@ -136,6 +139,41 @@ class FannyResult:
     k_crisp: int
     partition_coefficient: float
     normalized_coefficient: float
+    r_parity: bool = True
+
+
+def _r_fanny_coefficients(membership: np.ndarray, k: int) -> Tuple[float, float]:
+    """Return R ``cluster::fanny`` Dunn and normalized coefficients."""
+    membership = np.asarray(membership, dtype=float)
+    dunn_coeff = float(np.sum(membership ** 2) / membership.shape[0])
+    normalized = (k * dunn_coeff - 1.0) / (k - 1.0) if k > 1 else 1.0
+    return dunn_coeff, float(normalized)
+
+
+def _validate_nonnegative_integer(value, name):
+    if not isinstance(value, (int, np.integer)) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    value = int(value)
+    if value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return value
+
+
+def _validate_finite_float(value, name, *, lower_bound=None, strict_lower=False):
+    try:
+        if isinstance(value, bool):
+            raise TypeError
+        value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be a finite number")
+    if lower_bound is not None:
+        if strict_lower and value <= lower_bound:
+            raise ValueError(f"{name} must be a finite number > {lower_bound}")
+        if not strict_lower and value < lower_bound:
+            raise ValueError(f"{name} must be a finite number >= {lower_bound}")
+    return value
 
 
 def fanny(
@@ -155,9 +193,10 @@ def fanny(
     diss : np.ndarray
         Square ``(n, n)`` distance matrix.
     k : int
-        Number of clusters. Must satisfy ``1 <= k <= n // 2 - 1`` (R ``cluster::fanny``
-        convention, not a general fuzzy-clustering bound). For small ``n`` this is tight;
-        e.g. ``n = 4`` allows at most ``k = 1``.
+        Number of clusters. For ``k >= 2``, must satisfy ``k <= n // 2 - 1``
+        (R ``cluster::fanny`` convention, not a general fuzzy-clustering
+        bound). For ``k=1``, Sequenzo returns a deterministic one-cluster
+        membership shortcut; this edge case is not an R iterative-parity claim.
     memb_exp : float, default 2.0
         Fuzziness exponent ``m`` (must be > 1). Helske et al. (2024) use 1.4.
     max_iter : int, default 500
@@ -179,20 +218,52 @@ def fanny(
     if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
         raise ValueError("diss must be a square matrix")
     n = diss.shape[0]
-    if k < 1:
-        raise ValueError("k must be at least 1")
-    if memb_exp <= 1.0 or not np.isfinite(memb_exp):
-        raise ValueError("memb_exp must be a finite number > 1")
-    if max_iter < 0:
-        raise ValueError("max_iter must be non-negative")
+    k = _validate_positive_integer(k, "k")
+    memb_exp = _validate_finite_float(memb_exp, "memb_exp", lower_bound=1.0, strict_lower=True)
+    max_iter = _validate_nonnegative_integer(max_iter, "max_iter")
+    tol = _validate_finite_float(tol, "tol", lower_bound=0.0, strict_lower=False)
     _validate_diss_matrix(diss)
+
+    ini_mem = None
+    if ini_mem_p is not None:
+        ini_mem = np.asarray(ini_mem_p, dtype=float)
+        if ini_mem.shape != (n, k):
+            raise ValueError("ini_mem_p must have shape (n, k)")
+        if np.any(ini_mem < 0):
+            raise ValueError("ini_mem_p must be nonnegative")
+        row_sums = ini_mem.sum(axis=1)
+        if not np.allclose(row_sums, 1.0):
+            raise ValueError("ini_mem_p rows must sum to 1")
+
+    if k == 1:
+        # R cluster::fanny is fragile for some one-cluster edge cases; a single
+        # cluster has deterministic membership and no iterative ambiguity.
+        membership = np.ones((n, 1), dtype=float)
+        return FannyResult(
+            membership=membership,
+            clustering=np.zeros(n, dtype=int),
+            memb_exp=float(memb_exp),
+            objective=0.0,
+            converged=True,
+            iterations=1,
+            k_crisp=1,
+            partition_coefficient=1.0,
+            normalized_coefficient=1.0,
+            r_parity=False,
+        )
+
+    if np.max(diss) <= 0.0:
+        raise ValueError(
+            "FANNY with k >= 2 requires at least one positive distance; "
+            "all-zero distances cannot define multiple fuzzy clusters."
+        )
 
     if k > n // 2 - 1:
         raise ValueError(f"k must be at most n//2 - 1; got k={k}, n={n}")
 
     cpp = _get_fanny_cpp()
     if cpp is not None:
-        ini_arg = None if ini_mem_p is None else np.asarray(ini_mem_p, dtype=float, order="C")
+        ini_arg = None if ini_mem is None else np.asarray(ini_mem, dtype=float, order="C")
         raw = cpp.fanny_from_diss(
             np.asarray(diss, dtype=np.float64, order="C"),
             int(k),
@@ -210,13 +281,10 @@ def fanny(
                 stacklevel=2,
             )
         r = float(memb_exp)
-        pc = float(raw["partition_coefficient"])
-        if r == 2.0:
-            npc = (k * pc - 1.0) / (k - 1.0)
-        else:
-            npc = float(raw["normalized_coefficient"])
+        membership = np.asarray(raw["membership"], dtype=float)
+        pc, npc = _r_fanny_coefficients(membership, k)
         return FannyResult(
-            membership=np.asarray(raw["membership"], dtype=float),
+            membership=membership,
             clustering=np.asarray(raw["clustering"], dtype=int),
             memb_exp=r,
             objective=float(raw["objective"]),
@@ -248,15 +316,7 @@ def fanny(
                 else:
                     nd += ndk
     else:
-        ini_mem_p = np.asarray(ini_mem_p, dtype=float)
-        if ini_mem_p.shape != (n, k):
-            raise ValueError("ini_mem_p must have shape (n, k)")
-        if np.any(ini_mem_p < 0):
-            raise ValueError("ini_mem_p must be nonnegative")
-        row_sums = ini_mem_p.sum(axis=1)
-        if not np.allclose(row_sums, 1.0):
-            raise ValueError("ini_mem_p rows must sum to 1")
-        p[:] = ini_mem_p
+        p[:] = ini_mem
 
     p **= r
 
@@ -325,20 +385,12 @@ def fanny(
     inv_r = 1.0 / r
     p **= inv_r
 
-    esp_sum = esp.sum() / n
-    if r == 2.0:
-        pc = esp_sum
-        npc = (k * pc - 1.0) / (k - 1.0)
-    else:
-        pc = float(np.sum(p ** 2) / n)
-        xx = k ** (r - 1.0)
-        npc = (xx * pc - 1.0) / (xx - 1.0)
-
     if reorder_columns:
         p, clustering, k_crisp = _caddy(p)
     else:
         clustering = np.argmax(p, axis=1)
         k_crisp = len(np.unique(clustering))
+    pc, npc = _r_fanny_coefficients(p, k)
 
     return FannyResult(
         membership=p,
@@ -372,6 +424,7 @@ def fanny_membership(
     max_iter: int = 500,
     tol: float = 1e-15,
     ini_mem_p: Optional[np.ndarray] = None,
+    weights: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     FANNY membership matrix (Helske et al. 2024 soft / pseudoclass step).
@@ -391,6 +444,10 @@ def fanny_membership(
     ini_mem_p : np.ndarray, optional
         Initial membership matrix ``(n, k)``. FANNY initialization is deterministic
         when this is ``None`` (same as R ``cluster::fanny``).
+    weights : np.ndarray, optional
+        Accepted for CLARA/weighted fuzzy-clustering seed compatibility. Exact
+        FANNY membership is computed from ``diss`` and does not apply weights
+        directly; weighted refinement is handled by the caller.
 
     Returns
     -------
@@ -400,6 +457,14 @@ def fanny_membership(
         Row index of the observation with highest membership in each cluster
         column. Not PAM medoids — do not pass to :func:`representativeness_matrix`.
     """
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float)
+        n = np.asarray(diss).shape[0]
+        if weights.shape != (n,):
+            raise ValueError("weights must have shape (n,)")
+        if np.any(~np.isfinite(weights)) or np.any(weights < 0):
+            raise ValueError("weights must be finite and nonnegative")
+
     result = fanny(
         diss,
         k=k,
@@ -427,6 +492,14 @@ def medoid_membership_approximation(
 
     For Helske et al. (2024) soft classification, use :func:`fanny_membership`.
     """
+    diss = np.asarray(diss, dtype=float)
+    validate_diss_matrix(diss)
+    k = _validate_positive_integer(k, "k")
+    if k > 1 and np.max(diss) <= 0.0:
+        raise ValueError(
+            "medoid_membership_approximation with k >= 2 requires at least one "
+            "positive distance; all-zero distances cannot define multiple medoids."
+        )
     if m <= 1.0 or not np.isfinite(m):
         raise ValueError("m must be a finite number > 1")
     from ..k_medoids import KMedoids
@@ -437,6 +510,11 @@ def medoid_membership_approximation(
         weights = np.ones(n, dtype=float)
     labels_pam = KMedoids(diss, k=k, weights=weights, method="PAMonce", verbose=False)
     medoid_indices = medoid_indices_from_kmedoids_result(labels_pam)
+    if medoid_indices.size != k:
+        raise ValueError(
+            f"KMedoids returned {medoid_indices.size} unique medoids for k={k}; "
+            "cannot build a k-column membership approximation."
+        )
     d = diss[:, medoid_indices]
     eps = np.finfo(float).eps * (1 + np.max(d))
     d = np.maximum(d, eps)

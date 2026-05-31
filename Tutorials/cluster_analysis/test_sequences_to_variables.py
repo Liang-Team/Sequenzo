@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-@Author  : Yuqi Liang 梁彧祺
+@Author  : Yuqi Liang 梁彧祺; Yapeng Wei 卫亚鹏
 @File    : seqs2vars_utils.py
 @Time    : 01/03/2026 01:30
 @Desc    :
@@ -131,9 +131,10 @@ def test_phase2(diss_small, kmed, k):
 
 def test_phase3(diss_small, k):
     """Phase 3: fanny_membership and soft_classification_variables."""
-    U, medoids = fanny_membership(diss_small, k=k, m=1.4)
+    U, highest_membership_indices = fanny_membership(diss_small, k=k, m=1.4)
     n_use = diss_small.shape[0]
     assert U.shape == (n_use, k)
+    assert highest_membership_indices.shape == (k,)
     np.testing.assert_allclose(U.sum(axis=1), 1.0, rtol=1e-5)
     assert np.all(U >= 0) and np.all(U <= 1)
 
@@ -154,9 +155,10 @@ def test_phase4(U, n_use):
     y = np.random.randn(n_use) * 2 + 1
     out = pseudoclass_regression(y, U, X_fixed=None, M=5, reference=0, random_state=42)
     assert "beta_combined" in out and "se_combined" in out
-    # Design matrix has K-1 dummy columns (reference omitted)
-    assert len(out["beta_combined"]) == U.shape[1] - 1
-    assert len(out["se_combined"]) == U.shape[1] - 1
+    expected_terms = ["const"] + [f"C_{j + 1}" for j in range(U.shape[1]) if j != 0]
+    assert out["param_names"] == expected_terms
+    assert len(out["beta_combined"]) == len(expected_terms)
+    assert len(out["se_combined"]) == len(expected_terms)
     print("  [OK] pseudoclass_regression(y, U, M=5)")
     return
 

@@ -1,5 +1,5 @@
 """
-@Author  : 梁彧祺 Yuqi Liang
+@Author  : 梁彧祺 Yuqi Liang, 卫亚鹏 Yapeng Wei
 @File    : clara.py
 @Time    : 02/05/2026 09:12
 @Desc    :
@@ -226,6 +226,9 @@ def cluster_pair_typology_clara(
         weights=compression.weights if compression is not None else None,
         compression=compression,
         original_sequence_data=sequence_data,
+        representativeness_max_dist=(
+            float(max_dist) if clara_method.lower() == "representativeness" else None
+        ),
     )
     return typology
 
@@ -244,7 +247,20 @@ def _clara_output_to_typology(
     weights: Optional[np.ndarray],
     compression: Optional[CompressedRelationalSequences],
     original_sequence_data: RelationalSequenceData,
+    representativeness_max_dist: Optional[float] = None,
 ) -> PairTypologyResult:
+    def _matrix_from_public_cells(values: np.ndarray) -> np.ndarray:
+        values = np.asarray(values, dtype=object)
+        if values.ndim == 1:
+            rows = [np.asarray(value, dtype=float).reshape(-1) for value in values]
+            if not rows:
+                return np.empty((0, 0), dtype=float)
+            width = rows[0].size
+            if any(row.size != width for row in rows):
+                raise ValueError("CLARA matrix-valued output has inconsistent row widths")
+            return np.vstack(rows)
+        return np.asarray(values, dtype=float)
+
     k_idx = 0
     best = clara_result["clara"][k_idx]
     stats_row = clara_result["stats"].iloc[k_idx]
@@ -253,12 +269,12 @@ def _clara_output_to_typology(
     pair_ids = np.asarray(seqdata.ids, dtype=object)
 
     if clara_method in ("fuzzy", "noise"):
-        membership = np.asarray(raw_labels, dtype=float)
+        membership = _matrix_from_public_cells(raw_labels)
         cluster_labels = np.argmax(membership, axis=1)
         representativeness = None
     elif clara_method == "representativeness":
-        representativeness = np.asarray(raw_labels, dtype=float)
-        membership = representativeness
+        representativeness = _matrix_from_public_cells(raw_labels)
+        membership = None
         cluster_labels = np.argmax(representativeness, axis=1)
     else:
         cluster_labels = np.asarray(raw_labels, dtype=int) - 1
@@ -269,11 +285,14 @@ def _clara_output_to_typology(
     medoid_rows = np.asarray(best["medoids"], dtype=int).reshape(-1)
     medoid_rows = np.clip(medoid_rows, 0, max(len(pair_ids) - 1, 0))
     medoid_ids = pair_ids[medoid_rows]
+    compressed_medoid_rows = medoid_rows.copy() if compression is not None else None
+    compressed_medoid_ids = medoid_ids.copy() if compression is not None else None
 
     if representativeness is None or not hasattr(representativeness, "ndim") or representativeness.ndim != 2:
         distance_to_medoids = _distances_to_medoids(seqdata, medoid_rows, dist_args)
     else:
-        distance_to_medoids = 1.0 - representativeness
+        rep_scale = 1.0 if representativeness_max_dist is None else float(representativeness_max_dist)
+        distance_to_medoids = (1.0 - representativeness) * rep_scale
 
     quality = {
         "avg_dist": float(stats_row["Avg dist"]),
@@ -318,6 +337,20 @@ def _clara_output_to_typology(
             representativeness = expand_rows_to_original_pairs(
                 representativeness, compression, original_sequence_data
             )
+        if membership is not None and membership.ndim == 2:
+            membership = expand_rows_to_original_pairs(
+                membership, compression, original_sequence_data
+            )
+        representative_lookup = compression.pattern_id_to_representative_pair
+        medoid_ids = np.asarray(
+            [representative_lookup.get(str(pattern_id), pattern_id) for pattern_id in medoid_ids],
+            dtype=object,
+        )
+        original_index = {pair_id: idx for idx, pair_id in enumerate(full_unit_ids)}
+        try:
+            medoid_rows = np.asarray([original_index[pair_id] for pair_id in medoid_ids], dtype=int)
+        except KeyError as exc:
+            raise ValueError("Compressed CLARA medoid IDs must map to original pair IDs") from exc
 
     return PairTypologyResult(
         level="pair",
@@ -330,7 +363,7 @@ def _clara_output_to_typology(
         method="CLARA",
         quality=quality,
         stability=stability,
-        membership=membership if clara_method in ("fuzzy", "noise", "representativeness") else None,
+        membership=membership if clara_method in ("fuzzy", "noise") else None,
         representativeness=representativeness,
         weights=weights,
         level_1_ids=full_l1,
@@ -344,6 +377,9 @@ def _clara_output_to_typology(
                 if compression is not None
                 else None
             ),
+            "compressed_medoid_indices": compressed_medoid_rows,
+            "compressed_medoid_ids": compressed_medoid_ids,
+            "representativeness_max_dist": representativeness_max_dist,
             "evol_diss": best.get("evol_diss"),
         },
     )
