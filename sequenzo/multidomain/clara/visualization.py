@@ -8,7 +8,7 @@ Visualization helpers for multidomain CLARA results.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,9 +16,6 @@ import pandas as pd
 import seaborn as sns
 
 from sequenzo.big_data.clara.visualization import plot_scores_from_dataframe
-from sequenzo.define_sequence_data import SequenceData
-
-from ._utils import subset_sequence_data
 from .results import MDClaraResult
 
 
@@ -187,61 +184,102 @@ def plot_md_clara_memory(
     plt.show()
 
 
-def plot_md_cluster_by_domain(
-    domains: List[SequenceData],
-    labels: Union[np.ndarray, pd.Series],
-    k: int,
+def plot_cross_strategy_agreement(
+    agreement: pd.DataFrame,
     *,
-    max_ids_per_cluster: int = 40,
+    metric: str = "ari",
+    title: str = "Cross-strategy partition agreement",
+    figsize: tuple[float, float] = (5.0, 4.0),
     save_as: Optional[str] = None,
 ) -> None:
-    """
-    Plot state-sequence heatmaps with rows = domains and columns = clusters.
+    """Heatmap of pairwise strategy agreement (ARI or Jaccard)."""
+    if metric not in {"ari", "jaccard"}:
+        raise ValueError("metric must be 'ari' or 'jaccard'.")
+    if agreement.empty:
+        raise ValueError("agreement table is empty.")
 
-    The same sequence order is used across domains within each cluster column.
-    """
-    labels = np.asarray(labels).reshape(-1)
-    if len(labels) != len(domains[0].data):
-        raise ValueError(
-            "labels length must match the number of cases in each domain."
-        )
-
-    unique_clusters = sorted(np.unique(labels[labels >= 0]))
-    if len(unique_clusters) == 0:
-        raise ValueError("No non-negative cluster labels available for plotting.")
-
-    n_domains = len(domains)
-    n_clusters = len(unique_clusters)
-
-    fig, axes = plt.subplots(
-        n_domains,
-        n_clusters,
-        figsize=(3.5 * n_clusters, 2.2 * n_domains),
-        squeeze=False,
+    strategies = sorted(
+        set(agreement["strategy_left"]).union(agreement["strategy_right"])
     )
+    matrix = pd.DataFrame(np.nan, index=strategies, columns=strategies)
+    np.fill_diagonal(matrix.values, 1.0)
 
-    for col_idx, cluster_id in enumerate(unique_clusters):
-        mask = labels == cluster_id
-        order = np.where(mask)[0][:max_ids_per_cluster]
-        for row_idx, domain in enumerate(domains):
-            ax = axes[row_idx, col_idx]
-            if order.size == 0:
-                ax.axis("off")
-                continue
-            sub_seq = subset_sequence_data(domain, order)
-            ax.imshow(sub_seq.values, aspect="auto", interpolation="nearest")
-            ax.set_title(
-                f"D{row_idx + 1} | C{int(cluster_id)}",
-                fontsize=9,
-            )
-            ax.set_xlabel("Time")
-            if col_idx == 0:
-                ax.set_ylabel("Sequences")
+    for row in agreement.itertuples(index=False):
+        value = getattr(row, metric)
+        matrix.loc[row.strategy_left, row.strategy_right] = value
+        matrix.loc[row.strategy_right, row.strategy_left] = value
 
-    fig.suptitle(f"Multidomain typology (k={k})", fontsize=13, fontweight="bold")
-    fig.tight_layout()
+    plt.figure(figsize=figsize)
+    sns.heatmap(matrix, annot=True, fmt=".2f", vmin=0, vmax=1, cmap="viridis")
+    plt.title(title, fontweight="bold")
     if save_as:
-        fig.savefig(save_as, dpi=200, bbox_inches="tight")
+        plt.savefig(save_as, dpi=200, bbox_inches="tight")
+    plt.show()
+
+
+def plot_dat_domain_contributions(
+    contributions: pd.DataFrame,
+    *,
+    cluster: Union[int, str] = "all",
+    title: Optional[str] = None,
+    figsize: tuple[float, float] = (6.0, 4.0),
+    save_as: Optional[str] = None,
+) -> None:
+    """Bar chart of DAT domain contribution shares."""
+    subset = contributions[contributions["cluster"] == cluster]
+    if subset.empty:
+        raise ValueError(f"No domain contributions for cluster={cluster!r}.")
+
+    plot_title = title or f"DAT domain contributions (cluster={cluster})"
+    plt.figure(figsize=figsize)
+    sns.barplot(
+        data=subset,
+        x="domain",
+        y="contribution_share",
+        color="steelblue",
+    )
+    plt.ylabel("Contribution share")
+    plt.xlabel("Domain")
+    plt.ylim(0, 1)
+    plt.title(plot_title, fontweight="bold")
+    plt.tight_layout()
+    if save_as:
+        plt.savefig(save_as, dpi=200, bbox_inches="tight")
+    plt.show()
+
+
+def plot_leave_one_domain_out_sensitivity(
+    sensitivity: pd.DataFrame,
+    *,
+    metric: str = "ari_vs_all_domains",
+    title: str = "Leave-one-domain-out sensitivity",
+    figsize: tuple[float, float] = (6.0, 4.0),
+    save_as: Optional[str] = None,
+) -> None:
+    """Bar chart of agreement with the full-domain model when one domain is omitted."""
+    if metric not in sensitivity.columns:
+        raise ValueError(
+            f"Unknown metric {metric!r}. "
+            f"Available columns: {list(sensitivity.columns)}"
+        )
+    if sensitivity.empty:
+        raise ValueError("sensitivity table is empty.")
+
+    plt.figure(figsize=figsize)
+    sns.barplot(
+        data=sensitivity,
+        x="omitted_domain",
+        y=metric,
+        color="coral",
+    )
+    plt.ylabel(metric.replace("_", " "))
+    plt.xlabel("Omitted domain")
+    plt.ylim(0, 1)
+    plt.title(title, fontweight="bold")
+    plt.xticks(rotation=30, ha="right")
+    plt.tight_layout()
+    if save_as:
+        plt.savefig(save_as, dpi=200, bbox_inches="tight")
     plt.show()
 
 
@@ -250,5 +288,7 @@ __all__ = [
     "plot_md_clara_stability",
     "plot_md_clara_runtime",
     "plot_md_clara_memory",
-    "plot_md_cluster_by_domain",
+    "plot_cross_strategy_agreement",
+    "plot_dat_domain_contributions",
+    "plot_leave_one_domain_out_sensitivity",
 ]

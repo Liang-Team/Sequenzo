@@ -11,6 +11,7 @@ from .combt import get_interactive_combined_typology, merge_sparse_combt_types
 from .association_between_domains import get_association_between_domains
 from .linked_polyad import linked_polyadic_sequence_analysis
 from .clara import md_clara, MDClaraResult
+from .plot_multidomain_sequence_index import plot_multidomain_sequence_index_by_cluster
 
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "linked_polyadic_sequence_analysis",
     "md_clara",
     "MDClaraResult",
+    "plot_multidomain_sequence_index_by_cluster",
 ]

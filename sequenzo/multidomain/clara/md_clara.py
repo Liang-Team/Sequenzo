@@ -17,29 +17,45 @@ from sequenzo.big_data.clara.utils.aggregatecases import DataFrameAggregator
 from sequenzo.define_sequence_data import SequenceData
 
 from .clara_engine import clara_from_distance_provider
-from .distance_providers import make_distance_provider
+from .diagnostics import (
+    dat_domain_contributions,
+    summarize_combined_state_space,
+    summarize_subsample_coverage,
+)
+from .distance_providers import DATDistanceProvider, make_distance_provider
 from .results import MDClaraResult
 from ._utils import (
     aggregate_domains,
     build_multidomain_profile_frame,
     validate_domain_weights,
+    validate_kvals,
     validate_multidomain_domains,
+    warn_nested_parallelism,
 )
 
 _VALID_CRITERIA = frozenset({"distance"})
 
+_OM12 = {"method": "OM", "sm": "CONSTANT", "indel": 1, "norm": "none"}
 
-def _validate_kvals(kvals: Sequence[int]) -> List[int]:
-    if not kvals:
-        raise ValueError("kvals must contain at least one value.")
-    if any(not isinstance(k, (int, np.integer)) for k in kvals):
-        raise TypeError("Every value in kvals must be an integer.")
-    normalized = [int(k) for k in kvals]
-    if any(k < 2 for k in normalized):
-        raise ValueError("Every value in kvals must be at least 2.")
-    if len(set(normalized)) != len(normalized):
-        raise ValueError("kvals must not contain duplicate values.")
-    return normalized
+
+def _default_distance_params(strategy: str, n_domains: int) -> Dict[str, Any]:
+    """Classical OM(1,2) defaults aligned with the paper's main experiments."""
+    strategy = strategy.lower()
+    if strategy == "idcd":
+        return dict(_OM12)
+    if strategy == "cat":
+        return {
+            "method": "OM",
+            "sm": ["CONSTANT"] * n_domains,
+            "indel": 1,
+            "norm": "none",
+        }
+    if strategy == "dat":
+        return {
+            "method_params": [dict(_OM12) for _ in range(n_domains)],
+            "link": "sum",
+        }
+    raise ValueError("strategy must be one of: 'idcd', 'cat', 'dat'")
 
 
 def _normalize_criteria(criteria: Sequence[str]) -> Tuple[str, ...]:
@@ -98,9 +114,20 @@ def md_clara(
     random_state: Optional[int] = None,
     n_jobs: int = -1,
     verbose: bool = True,
+    subsample_diagnostics: bool = False,
+    rare_profile_threshold: int = 5,
+    combined_state_space: bool = False,
+    dat_domain_contribution: bool = False,
+    use_medoid_cache: bool = False,
+    condensed_subsample: bool = True,
 ) -> MDClaraResult:
     """
     Scalable multidomain CLARA with IDCD, CAT, or DAT dissimilarity.
+
+    When ``distance_params`` is omitted, distances use classical OM(1,2):
+    ``method='OM'``, ``sm='CONSTANT'``, ``indel=1``, ``norm='none'`` (CAT/DAT
+    replicate this per domain). Cluster labels in ``result.clustering`` are
+    one-based integers (``1``, ``2``, ...); medoid indices remain zero-based.
 
     First stable release: ``method='crisp'`` and a single entry in ``criteria``.
 
@@ -111,7 +138,27 @@ def md_clara(
 
     For large datasets, consider a conservative ``n_jobs`` value because parallel
     CLARA iterations may increase peak memory use.
+
+    Set ``combined_state_space=True`` to attach an IDCD/CAT state-space summary.
+
+    Optimization ablation (within-subsample distances only; all-to-medoid
+    matrices are always ``N* x K``):
+
+    - ``condensed_subsample=False``: square ``b x b`` subsample matrices (DAT
+      holds one square matrix per domain before combining).
+    - ``condensed_subsample=True``: condensed subsample vectors (DAT combines
+      condensed domain vectors).
+    - ``use_medoid_cache=True``: reuse medoid columns across ``kvals`` within
+      each repetition (may increase peak memory).
+
+    Typical ablation grid::
+
+        condensed_subsample=False, use_medoid_cache=False
+        condensed_subsample=True,  use_medoid_cache=False
+        condensed_subsample=True,  use_medoid_cache=True
     """
+    if n_jobs == 0:
+        raise ValueError("n_jobs must not be 0.")
     if R < 1:
         raise ValueError("R must be at least 1.")
     if stability and R < 2:
@@ -128,10 +175,7 @@ def md_clara(
 
     criteria_tuple = _normalize_criteria(criteria)
 
-    if kvals is None:
-        kvals = list(range(2, 11))
-    else:
-        kvals = _validate_kvals(kvals)
+    kvals = validate_kvals(kvals)
 
     reference = domains[0]
     reference_weights = validate_domain_weights(domains)
@@ -149,10 +193,21 @@ def md_clara(
         n_unique_profiles=n_unique_profiles,
     )
 
+    params = (
+        dict(distance_params)
+        if distance_params is not None
+        else _default_distance_params(strategy, len(domains))
+    )
+    n_jobs_domains = int(params.get("n_jobs_domains", 1))
+    if strategy == "dat":
+        if n_jobs_domains == 0:
+            raise ValueError("distance_params['n_jobs_domains'] must not be 0.")
+        warn_nested_parallelism(n_jobs=n_jobs, n_jobs_domains=n_jobs_domains)
+
     provider = make_distance_provider(
         agg_domains,
         strategy=strategy,
-        distance_params=distance_params,
+        distance_params=params,
     )
     if len(ac["aggWeights"]) != provider.n_sequences():
         raise ValueError(
@@ -173,20 +228,61 @@ def md_clara(
         random_state=random_state,
         n_jobs=n_jobs,
         verbose=verbose,
+        subsample_diagnostics=subsample_diagnostics,
+        rare_profile_threshold=rare_profile_threshold,
+        use_medoid_cache=use_medoid_cache,
+        condensed_subsample=condensed_subsample,
     )
 
     raw["requested_sample_size"] = requested_sample_size
     raw["effective_sample_size"] = effective_sample_size
     raw["n_unique_profiles"] = n_unique_profiles
 
+    state_space_summary = None
+    if combined_state_space and strategy in {"idcd", "cat"}:
+        ch_sep = params.get("ch_sep", "+")
+        state_space_summary = summarize_combined_state_space(
+            domains,
+            ch_sep=ch_sep,
+        )
+
+    route_diagnostics: Dict[str, Any] = {}
+    if raw.get("medoid_cache_stats"):
+        route_diagnostics["medoid_cache"] = raw["medoid_cache_stats"]
+
+    subsample_table = raw.get("subsample_diagnostics")
+    if subsample_table is not None and not subsample_table.empty:
+        route_diagnostics["subsample_coverage_summary"] = summarize_subsample_coverage(
+            subsample_table
+        )
+
+    domain_contributions = None
+    if dat_domain_contribution and strategy == "dat" and isinstance(provider, DATDistanceProvider):
+        profile_weights = np.asarray(ac["aggWeights"], dtype=float)
+        domain_contributions = {}
+        for k in kvals:
+            cluster_info = raw["clara"][k]
+            domain_contributions[k] = dat_domain_contributions(
+                provider,
+                medoids=cluster_info["medoids_agg"],
+                clustering=cluster_info["profile_clustering"],
+                profile_weights=profile_weights,
+            )
+        route_diagnostics["dat_domain_contributions"] = domain_contributions
+
     return _to_md_clara_result(
         raw,
         strategy=strategy,
         method=method,
         kvals=kvals,
-        distance_params=distance_params,
+        distance_params=params,
         R=R,
         stability_requested=stability,
+        combined_state_space=state_space_summary,
+        subsample_diagnostics=subsample_table,
+        route_diagnostics=route_diagnostics or None,
+        condensed_subsample=condensed_subsample,
+        use_medoid_cache=use_medoid_cache,
     )
 
 
@@ -199,6 +295,11 @@ def _to_md_clara_result(
     distance_params: Optional[Dict[str, Any]],
     R: int,
     stability_requested: bool,
+    combined_state_space: Optional[Dict[str, Any]] = None,
+    subsample_diagnostics: Optional[Any] = None,
+    route_diagnostics: Optional[Dict[str, Any]] = None,
+    condensed_subsample: bool = True,
+    use_medoid_cache: bool = False,
 ) -> MDClaraResult:
     """Convert engine output into :class:`MDClaraResult`."""
     if "clustering" not in raw:
@@ -238,7 +339,13 @@ def _to_md_clara_result(
         "n_unique_profiles": raw.get("n_unique_profiles"),
         "criteria": [criterion],
         "stability": stability_requested,
+        "subsample_diagnostics": subsample_diagnostics is not None,
+        "combined_state_space": combined_state_space is not None,
+        "condensed_subsample": raw.get("condensed_subsample", condensed_subsample),
+        "use_medoid_cache": raw.get("use_medoid_cache", use_medoid_cache),
     }
+    if combined_state_space is not None:
+        settings["combined_state_space_summary"] = combined_state_space
 
     return MDClaraResult(
         strategy=strategy,
@@ -251,6 +358,9 @@ def _to_md_clara_result(
         settings=settings,
         stability=stability_out if stability_out else None,
         membership=None,
+        combined_state_space=combined_state_space,
+        subsample_diagnostics=subsample_diagnostics,
+        route_diagnostics=route_diagnostics,
     )
 
 

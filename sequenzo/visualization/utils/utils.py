@@ -11,7 +11,7 @@ from matplotlib.axes import Axes
 
 from io import BytesIO
 from PIL import Image
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Tuple, Optional, List, Dict, Any, Union
 
 from sequenzo import SequenceData
 
@@ -151,9 +151,18 @@ def create_standalone_legend(
     return buffer
 
 
+def _coerce_pil_image(source: Union[BytesIO, Image.Image]) -> Image.Image:
+    """Accept a PNG buffer or an existing PIL image (e.g. chained legend merges)."""
+    if isinstance(source, Image.Image):
+        return source
+    if hasattr(source, "seek"):
+        source.seek(0)
+    return Image.open(source)
+
+
 def combine_plot_with_legend(
-        main_image_buffer: BytesIO,
-        legend_buffer: BytesIO,
+        main_image_buffer: Union[BytesIO, Image.Image],
+        legend_buffer: Union[BytesIO, Image.Image],
         output_path: Optional[str] = None,
         dpi: int = 200,
         padding: int = 10
@@ -164,8 +173,8 @@ def combine_plot_with_legend(
     which is different from the function `save_and_show_results` as that is responsible for visualizations that do not require cropping.
 
     Parameters:
-        main_image_buffer: Buffer containing the main plot image
-        legend_buffer: Buffer containing the legend image
+        main_image_buffer: Buffer or PIL image for the main plot
+        legend_buffer: Buffer or PIL image for the legend
         output_path: Optional path to save the combined image
         dpi: Resolution for the saved image
         padding: Padding between main image and legend in pixels
@@ -173,9 +182,8 @@ def combine_plot_with_legend(
     Returns:
         PIL.Image: The combined image
     """
-    # Open images from buffers
-    main_img = Image.open(main_image_buffer)
-    legend_img = Image.open(legend_buffer)
+    main_img = _coerce_pil_image(main_image_buffer)
+    legend_img = _coerce_pil_image(legend_buffer)
 
     # Calculate dimensions for combined image
     combined_width = max(main_img.width, legend_img.width)

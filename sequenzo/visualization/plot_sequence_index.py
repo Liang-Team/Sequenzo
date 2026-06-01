@@ -347,7 +347,8 @@ def plot_sequence_index(seqdata: SequenceData,
                         proportional_scaling=False,
                         hide_y_axis=False,
                         sequence_gap=0,
-                        sequence_rows=1
+                        sequence_rows=1,
+                        show=True,
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -962,7 +963,8 @@ def plot_sequence_index(seqdata: SequenceData,
         plt.figure(figsize=(actual_figsize[0] * ncols, actual_figsize[1] * nrows + 1))
         plt.imshow(combined_img)
         plt.axis('off')
-        plt.show()
+        if show:
+            plt.show()
         plt.close()
     else:
         # Display plot without legend
@@ -977,7 +979,8 @@ def plot_sequence_index(seqdata: SequenceData,
         
         if save_as:
             plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
-        plt.show()
+        if show:
+            plt.show()
         plt.close()
     
     # Return sorted IDs if requested
