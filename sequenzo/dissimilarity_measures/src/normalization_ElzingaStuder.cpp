@@ -6,7 +6,7 @@
  * @brief Reference-based normalization according to Elzinga & Studer (2019)
  * 
  * Implements equation (9) from the paper:
- * D_r(x,y) = d(x,y) / ((d(x,y) + d(x,r) + d(y,r)) / 2)
+ * D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r))
  * 
  * This normalization projects all objects onto a unit sphere centered at reference r.
  * Reference: Elzinga, C. H., & Studer, M. (2019). Normalization of Distance and 
@@ -31,12 +31,11 @@ namespace py = pybind11;
  * @param reference_index Index of the reference object (0-based)
  * @return Normalized distance matrix (n x n)
  * 
- * Formula: D_r(x,y) = d(x,y) / ((d(x,y) + d(x,r) + d(y,r)) / 2)
+ * Formula: D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r))
  * 
- * Properties:
- * - D_r(x,x) = 0 for all x
- * - D_r(x,r) = 1 for all x != r
- * - 0 < D_r(x,y) <= 1 for all x != y
+ * For metric input d, the output satisfies D_r(x,x)=0 and D_r(x,r)=1 when d(x,r)>0.
+ * Averaging asymmetric inputs restores symmetry only; it does not guarantee the
+ * triangle inequality for non-metric inputs.
  */
 py::array_t<double> normalize_distance_matrix_ElzingaStuder(
     py::array_t<double> distance_matrix,
@@ -73,7 +72,7 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
     }
     
     // Compute normalized distances using equation (9)
-    // D_r(x,y) = d(x,y) / ((d(x,y) + d(x,r) + d(y,r)) / 2)
+    // D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r))
     const double DISTANCE_TOLERANCE = 1e-10;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -111,8 +110,7 @@ py::array_t<double> normalize_distance_matrix_ElzingaStuder(
         }
     }
     
-    // If input matrix was not symmetric, enforce symmetry by averaging symmetric positions
-    // This ensures the output satisfies distance axioms even if input had minor asymmetries
+    // If input was not symmetric, average (i,j) and (j,i) so the output matrix is symmetric.
     if (!is_symmetric) {
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
