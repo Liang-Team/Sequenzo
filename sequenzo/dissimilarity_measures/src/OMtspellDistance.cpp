@@ -6,9 +6,10 @@
  *   Sub same state:             lambda * omega(a) * |d_i - d_j|
  *   Sub different state:        sigma(i,j) + lambda * (omega(i)*(d_i-1) + omega(j)*(d_j-1))
  *
- * Normalization (optional): structural upper bound (same as OMspell / OMspellRS)
+ * Normalization (optional): structural reference cost (same as OMspell / OMspellRS)
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
- * ml/nl: sum of c_indel over spells (structural scale; no token/duration terms).
+ * Not a strict upper bound on raw distance when duration-expansion terms are positive.
+ * ml/nl for YujianBo: sum of c_indel + timecost*tok*(d-1) per spell (distance to empty).
  *
  * Optimizations vs original:
  *   [OPT-1] Removed pseudo-SIMD (same rationale as OMspell).
@@ -168,17 +169,21 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += ptr_indel(ptr_seq(is, spell_i));
+                const int state = ptr_seq(is, spell_i);
+                ml += ptr_indel(state)
+                    + timecost * ptr_tok(state) * (ptr_dur(is, spell_i) - 1.0);
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += ptr_indel(ptr_seq(js, spell_j));
+                const int state = ptr_seq(js, spell_j);
+                nl += ptr_indel(state)
+                    + timecost * ptr_tok(state) * (ptr_dur(js, spell_j) - 1.0);
             }
-            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf - 1], structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in OMtspell compute_distance: ", e.what());
             throw;

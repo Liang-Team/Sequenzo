@@ -7,11 +7,11 @@
  *   Sub different state:            sigma(i,j) + lambda * (d_i + d_j - 2)
  * Duration d_k = 1 contributes no expansion cost (minimum spell unit).
  *
- * Normalization (optional): structural upper bound (no duration term in maxdist)
+ * Normalization (optional): structural reference cost for maxdist (no duration term)
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * using spell counts n_s, m_s, maxindel from indellist, maxscost from sm.
- * ml/nl for maxlength, gmean, YujianBo: sum of state-specific c_indel over spells
- * (not time-expanded sequence length).
+ * ml/nl for maxlength, gmean, YujianBo: sum of per-spell indel costs including
+ * lambda*(d_k-1) (distance to empty sequence; not time-expanded length).
  *
  * Optimizations vs original:
  *   [OPT-1] Removed pseudo-SIMD. xsimd batch loaded B cells for del/sub but insertion
@@ -202,17 +202,17 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += indel_ptr[seq_i[spell_i]];
+                ml += indel_i_cost_row[spell_i];
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += indel_ptr[seq_j[spell_j]];
+                nl += indel_j_cost_row[spell_j];
             }
-            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf - 1], structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance: ", e.what());
             throw;
@@ -273,18 +273,18 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += indel_ptr[seq_i[spell_i]];
+                ml += indel_i_cost_row[spell_i];
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += indel_ptr[seq_j[spell_j]];
+                nl += indel_j_cost_row[spell_j];
             }
             return normalize_distance(fmat[(mSuf - 1) + static_cast<ptrdiff_t>(nSuf - 1) * fmatsize],
-                                      maxpossiblecost, ml, nl, norm);
+                                      structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_full_fmat: ", e.what());
             throw;
@@ -341,17 +341,17 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += indel_ptr[seq_i[spell_i]];
+                ml += indel_i_cost_row[spell_i];
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += indel_ptr[seq_j[spell_j]];
+                nl += indel_j_cost_row[spell_j];
             }
-            return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[mSuf - 1], structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling: ", e.what());
             throw;
@@ -403,17 +403,17 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += indel_ptr[seq_i[spell_i]];
+                ml += indel_i_cost_row[spell_i];
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += indel_ptr[seq_j[spell_j]];
+                nl += indel_j_cost_row[spell_j];
             }
-            return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[mSuf - 1], structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling_dominated: ", e.what());
             throw;
@@ -462,17 +462,17 @@ public:
             }
 
             const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += indel_ptr[seq_i[spell_i]];
+                ml += indel_i_cost_row[spell_i];
             }
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += indel_ptr[seq_j[spell_j]];
+                nl += indel_j_cost_row[spell_j];
             }
-            return normalize_distance(prev[mSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[mSuf - 1], structural_reference_cost, ml, nl, norm);
         } catch (const std::exception& e) {
             py::print("Error in compute_distance_column_rolling_dominated_low_state: ", e.what());
             throw;

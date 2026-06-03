@@ -268,8 +268,9 @@ PYBIND11_MODULE(c_code, m) {
             .def("compute_refseq_distances", &TWEDdistance::compute_refseq_distances);
     
     // Reference-based normalization functions (Elzinga & Studer 2019)
-    // We apply a theoretical normalization following Elzinga & Studer (2019),
-    // dividing distances by their theoretical maxima to ensure comparability across measures.
+    // Apply the Elzinga--Studer (2019) reference-based transformation:
+    // D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r)).
+    // This is not division by a theoretical maximum.
     m.def("normalize_distance_matrix_ElzingaStuder", 
           &normalize_distance_matrix_ElzingaStuder,
           "Normalize distance matrix using reference-based normalization (equation 9)",

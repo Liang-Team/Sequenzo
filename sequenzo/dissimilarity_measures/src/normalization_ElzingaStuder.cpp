@@ -12,8 +12,9 @@
  * Reference: Elzinga, C. H., & Studer, M. (2019). Normalization of Distance and 
  * Similarity in Sequence Analysis. Sociological Methods & Research, 48(4), 877-904.
  * 
- * We apply a theoretical normalization following Elzinga & Studer (2019),
- * dividing distances by their theoretical maxima to ensure comparability across measures.
+ * Apply the Elzinga--Studer (2019) reference-based transformation:
+ * D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r)).
+ * This is not division by a theoretical maximum.
  */
 
 #include <pybind11/pybind11.h>

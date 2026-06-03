@@ -28,8 +28,9 @@
                                 3) "maxdist" when method is one of "LCPspell", "RLCPspell", "LCPmst", "RLCPmst",
                                 4) "none" when method is one of "LCPprod", "RLCPprod" (raw distance; normalized LCPprod may be unstable),
                                 5) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellRS", "OMtspell", "OMstran", "TWED".
-                            (3)"ElzingaStuder" applies a theoretical normalization following Elzinga & Studer (2019),
-                                dividing distances by their theoretical maxima to ensure comparability across measures.
+                            (3)"ElzingaStuder" applies the Elzinga--Studer (2019) reference-based transformation:
+                                D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r)).
+                                This is not division by a theoretical maximum.
                                 Requires a reference object (see normalization_reference_index parameter for details).
                                 Default: uses refseq if provided as single sequence index, otherwise uses index 0.
                             See developer/NORM_GUIDE.md for formulas and pitfalls (e.g. LCPspell/RLCPspell must use maxdist, not gmean).
@@ -1050,8 +1051,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             indel_type = "vector"
         elif indel_type == "vector":
             indellist = np.asarray(indel, dtype=np.float64)
-            if len(indellist) != nstates + 1:
-                indellist = np.resize(indellist, nstates + 1)
+            if len(indellist) == nstates:
+                indellist = np.insert(indellist, 0, 0.0)
+            elif len(indellist) != nstates + 1:
+                raise ValueError(
+                    f"[!] For OMspell, state-specific indel must have length "
+                    f"nstates ({nstates}) or nstates + 1 ({nstates + 1})."
+                )
         indel = np.max(indellist)
         # OMtspell: token-dependent coefficients (TraMineR: same length as indel vector = nstates).
         if method == "OMtspell":
@@ -1677,9 +1683,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     elif full_matrix == False and refseq == None:
         dist_matrix = np.asarray(_dist2condensed, dtype=np.float64)
 
-    # Apply ElzingaStuder normalization if requested (post-processing step)
-    # We apply a theoretical normalization following Elzinga & Studer (2019),
-    # dividing distances by their theoretical maxima to ensure comparability across measures.
+    # Apply ElzingaStuder normalization if requested (post-processing step).
+    # Elzinga & Studer (2019): D_r(x,y) = d(x,y) / ((d(x,y)+d(x,r)+d(y,r))/2).
+    # This is reference-based rescaling, not division by a theoretical maximum.
     if norm == "ElzingaStuder":
         from .__init__ import _import_c_code
         c_code = _import_c_code()

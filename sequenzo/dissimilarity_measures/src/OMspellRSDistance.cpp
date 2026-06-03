@@ -10,11 +10,10 @@
  *   Sub same state:           lambda * |d_i - d_j| / tau
  *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j - 2) / tau
  *
- * Normalization (optional, separate from reference-scaled costs): structural upper bound
+ * Normalization (optional, separate from reference-scaled costs): structural reference cost
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
- * using maxindel from indellist and maxscost from sm. Duration expansion is not added
- * (OMspell minimum-cost alignment; unlike LCPspell).
- * ml/nl: sum of state-specific c_indel over spells (same convention as OMspell/OMtspell).
+ * using maxindel from indellist and maxscost from sm. Not a strict upper bound when lambda>0.
+ * ml/nl for YujianBo: sum of c_indel(a)+lambda*(d_k-1)/tau over spells (distance to empty).
  *
  * Parameter timecost (Python expcost) is the linear duration_weight, not exponential.
  * @Author  : Yuqi Liang 梁彧祺
@@ -191,21 +190,24 @@
                  std::swap(prev, curr);
              }
  
-             // Structural upper bound: |n_s-m_s|*max(c_indel) + max(n_s,m_s)*max(sigma); no duration term.
              const int max_nm = (mm > nn) ? mm : nn;
-            double maxpossiblecost =
+            double structural_reference_cost =
                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
 
             double ml = 0.0;
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                ml += ptr_indel(ptr_seq(is, spell_i));
+                const int state = ptr_seq(is, spell_i);
+                ml += ptr_indel(state)
+                    + timecost * ((ptr_dur(is, spell_i) - 1.0) * dur_scale);
             }
 
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                nl += ptr_indel(ptr_seq(js, spell_j));
+                const int state = ptr_seq(js, spell_j);
+                nl += ptr_indel(state)
+                    + timecost * ((ptr_dur(js, spell_j) - 1.0) * dur_scale);
             }
-            return normalize_distance(prev[nSuf - 1], maxpossiblecost, ml, nl, norm);
+            return normalize_distance(prev[nSuf - 1], structural_reference_cost, ml, nl, norm);
          } catch (const std::exception& e) {
              py::print("Error in OMspellRSDistance::compute_distance: ", e.what());
              throw;
