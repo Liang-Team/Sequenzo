@@ -1,21 +1,28 @@
 /*
  * OMspellRSDistance: Reference-scaled Optimal Matching on spells.
  *
- * Same DP as OMspell. Duration terms are divided by a fixed reference scale tau
- * (duration_ref, passed from Python) before multiplying by timecost (lambda / expcost).
- * tau is fixed before distance computation (not dataset- or pair-dependent).
+ * Same spell-level dynamic-programming alignment as OMspell, but with a
+ * redefined duration component. Spell durations are expressed relative to a
+ * fixed reference period tau (duration_ref, passed from Python).
+ * tau is fixed before distance computation and is not dataset- or pair-dependent.
  *
- * Spell-level costs (timecost = lambda), corrected OMspell then scaled by tau:
- *   Indel/del of (a_k, d_k):  c_indel(a_k) + lambda * (d_k - 1) / tau
+ * Spell-level costs (timecost = lambda):
+ *   Indel/del of (a_k, d_k):  c_indel(a_k) + lambda * d_k / tau
  *   Sub same state:           lambda * |d_i - d_j| / tau
- *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j - 2) / tau
+ *   Sub different state:      sigma(i,j) + lambda * (d_i + d_j) / tau
+ *
+ * Unlike original OMspell, OMspellRS does not subtract a one-unit base spell.
+ * The full spell duration enters the duration component so that duration costs
+ * are invariant when the same trajectories are recoded in different temporal units.
  *
  * Normalization (optional, separate from reference-scaled costs): structural reference cost
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * using maxindel from indellist and maxscost from sm. Not a strict upper bound when lambda>0.
- * ml/nl for YujianBo: sum of c_indel(a)+lambda*(d_k-1)/tau over spells (distance to empty).
+ * ml/nl: sum of c_indel(a)+lambda*d_k/tau over spells (distance to empty).
+ * YujianBo normalization (norm==4) uses ml+nl inside normalize_distance().
  *
- * Parameter timecost (Python expcost) is the linear duration_weight, not exponential.
+ * Parameter timecost (Python expcost) is a relative-duration weight, not an
+ * expansion cost per additional raw time unit and not an exponential parameter.
  * @Author  : Yuqi Liang 梁彧祺
  * @File    : OMspellRSDistance.cpp
  * @Time    : 2026/1/31 22:12
@@ -46,8 +53,14 @@
          py::print("[>] Starting Optimal Matching with spell (OMspellRS, reference-scaled duration)...");
          std::cout << std::flush;
  
-         if (duration_ref <= 0.0) {
-             throw std::invalid_argument("duration_ref must be positive for OMspellRS.");
+         if (!std::isfinite(duration_ref) || duration_ref <= 0.0) {
+             throw std::invalid_argument(
+                 "duration_ref must be a finite positive number for OMspellRS.");
+         }
+
+         if (!std::isfinite(timecost) || timecost < 0.0) {
+             throw std::invalid_argument(
+                 "timecost must be a finite non-negative number for OMspellRS.");
          }
  
          try {
@@ -125,7 +138,7 @@
  
              for (int jj = 1; jj < nSuf; jj++) {
                  int bj = ptr_seq(js, jj - 1);
-                 double ins_cost = ptr_indel(bj) + timecost * ((ptr_dur(js, jj - 1) - 1.0) * dur_scale);
+                 double ins_cost = ptr_indel(bj) + timecost * (ptr_dur(js, jj - 1) * dur_scale);
                  prev[jj] = prev[jj - 1] + ins_cost;
              }
  
@@ -135,7 +148,7 @@
              for (int i = 1; i < mSuf; i++) {
                  int i_state = ptr_seq(is, i - 1);
                  double dur_i = ptr_dur(is, i - 1);
-                 double del_cost_i = ptr_indel(i_state) + timecost * ((dur_i - 1.0) * dur_scale);
+                 double del_cost_i = ptr_indel(i_state) + timecost * (dur_i * dur_scale);
  
                  curr[0] = prev[0] + del_cost_i;
  
@@ -155,9 +168,9 @@
                          if (i_state == bj) {
                              subs[b] = timecost * std::fabs(dur_i - dur_j) * dur_scale;
                          } else {
-                            subs[b] = ptr_sm(i_state, bj) + timecost * (dur_i + dur_j - 2.0) * dur_scale;
+                            subs[b] = ptr_sm(i_state, bj) + timecost * (dur_i + dur_j) * dur_scale;
                         }
-                        ins[b] = ptr_indel(bj) + timecost * ((dur_j - 1.0) * dur_scale);
+                        ins[b] = ptr_indel(bj) + timecost * (dur_j * dur_scale);
                      }
  
                      batch_t sub_batch = batch_t::load_unaligned(subs);
@@ -178,11 +191,11 @@
                      int j_state = ptr_seq(js, j - 1);
                      double dur_j = ptr_dur(js, j - 1);
                      double minimum = prev[j] + del_cost_i;
-                    double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * ((dur_j - 1.0) * dur_scale));
+                    double j_indel = curr[j - 1] + (ptr_indel(j_state) + timecost * (dur_j * dur_scale));
                     double sub = prev[j - 1] + (
                         (i_state == j_state)
                         ? (timecost * std::fabs(dur_i - dur_j) * dur_scale)
-                        : (ptr_sm(i_state, j_state) + timecost * (dur_i + dur_j - 2.0) * dur_scale)
+                        : (ptr_sm(i_state, j_state) + timecost * (dur_i + dur_j) * dur_scale)
                     );
                      curr[j] = std::min({ minimum, j_indel, sub });
                  }
@@ -198,16 +211,21 @@
             for (int spell_i = 0; spell_i < mm; ++spell_i) {
                 const int state = ptr_seq(is, spell_i);
                 ml += ptr_indel(state)
-                    + timecost * ((ptr_dur(is, spell_i) - 1.0) * dur_scale);
+                    + timecost * (ptr_dur(is, spell_i) * dur_scale);
             }
 
             double nl = 0.0;
             for (int spell_j = 0; spell_j < nn; ++spell_j) {
                 const int state = ptr_seq(js, spell_j);
                 nl += ptr_indel(state)
-                    + timecost * ((ptr_dur(js, spell_j) - 1.0) * dur_scale);
+                    + timecost * (ptr_dur(js, spell_j) * dur_scale);
             }
-            return normalize_distance(prev[nSuf - 1], structural_reference_cost, ml, nl, norm);
+            return normalize_distance(
+                prev[nSuf - 1],
+                structural_reference_cost,
+                ml,
+                nl,
+                norm);
          } catch (const std::exception& e) {
              py::print("Error in OMspellRSDistance::compute_distance: ", e.what());
              throw;

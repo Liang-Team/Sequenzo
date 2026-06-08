@@ -9,8 +9,9 @@ Labels:
 Common settings: c_indel = 1, sigma(E,U) = 2, lambda = 1 (expcost), tau = 6 for
 reference-scaled measures. State codes: E = 1, U = 2.
 
-Sequenzo implements Studer & Ritschard (2016) OMspell expansion (d-1), (d_i+d_j-2);
-these tests are the regression target (not TraMineR seqdist parity).
+Original OMspell uses Studer & Ritschard (2016) expansion (d-1), (d_i+d_j-2).
+OMspellRS uses full reference-scaled duration (d/tau, (d_i+d_j)/tau).
+These tests are the regression target (not TraMineR seqdist parity).
 """
 from __future__ import annotations
 
@@ -163,19 +164,6 @@ class TestAppendixSequences9And10:
             duration_ref=_TAU,
         ) == pytest.approx(2.0 / 3.0)
 
-    def test_omspell_unit_free_maxdist_norm_is_one_ninth(
-        self, appendix_seqdata_9_10, om_substitution_matrix
-    ):
-        assert _pair_distance(
-            appendix_seqdata_9_10,
-            "OMspellRS",
-            norm="maxdist",
-            sm=om_substitution_matrix,
-            indel=1.0,
-            expcost=1.0,
-            duration_ref=_TAU,
-        ) == pytest.approx(1.0 / 9.0)
-
     def test_omspell_unit_free_auto_norm_uses_yujian_bo(
         self, appendix_seqdata_9_10, om_substitution_matrix
     ):
@@ -198,7 +186,7 @@ class TestAppendixSequences9And10:
             duration_ref=_TAU,
         )
         assert d_auto == pytest.approx(d_yb)
-        assert d_auto == pytest.approx(0.2)
+        assert d_auto == pytest.approx(2.0 / 13.0)
 
 
 class TestAppendixSequences1And2:
@@ -246,10 +234,10 @@ class TestAppendixSequences1And2:
             expcost=1.0,
         ) == pytest.approx(12.0)
 
-    def test_omspell_unit_free_expcost_one_raw_is_eleven_thirds(
+    def test_omspell_unit_free_expcost_one_raw_is_4(
         self, appendix_seqdata_1_2, om_substitution_matrix
     ):
-        """sigma + lambda(d_a+d_b-2)/tau = 2 + 10/6 = 11/3."""
+        """sigma + lambda(d_a+d_b)/tau = 2 + 12/6 = 4."""
         assert _pair_distance(
             appendix_seqdata_1_2,
             "OMspellRS",
@@ -257,4 +245,4 @@ class TestAppendixSequences1And2:
             indel=1.0,
             expcost=1.0,
             duration_ref=_TAU,
-        ) == pytest.approx(11.0 / 3.0)
+        ) == pytest.approx(4.0)

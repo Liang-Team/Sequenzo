@@ -65,25 +65,39 @@
                             - "lower": show only the lower triangle (including diagonal); masked cells are shown as empty for a cleaner view.
                             When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN"). The underlying distances are unchanged.
             tpow           : Default: 1.0.
-                            The exponential weight of spell length when method is one of "OMspell", "OMspellRS", "NMSMST", or "SVRspell".
-            expcost        : Default: 0.5. The cost of spell length transformation when method = "OMloc", "OMspell", "OMspellRS", "LCPspell", or "RLCPspell".
-                            It must be non-negative. For OMspell, OMspellRS, LCPspell, and RLCPspell, expcost=0 removes duration-related terms.
+                            The exponential weight of spell length when method is one of "OMspell", "OMtspell",
+                            "NMSMST", or "SVRspell". Must be 1.0 for OMspellRS, LCPspell, and RLCPspell.
+            expcost        : Default: 0.5. Controls the influence of duration-related terms.
+                            Its exact interpretation is method-specific.
+                            In original OMspell, expcost is the expansion cost assigned to each
+                            additional raw time unit beyond the one-unit base spell.
+                            In OMspellRS, expcost is a relative-duration weight applied to spell
+                            duration expressed as a proportion of duration_ref.
+                            In LCPspell and RLCPspell, it weights reference-scaled duration
+                            differences among matched prefix or suffix spells.
+                            It must be non-negative. Setting expcost=0 removes duration-related terms.
                             Method-specific restrictions may apply (e.g. OMloc requires expcost >= 0 with additional constraints).
-                            The exact interpretation is distance-dependent.
             duration_ref   : Reference duration scale tau (OMspellRS, LCPspell, RLCPspell). Default:
                             None -> total observation window T (number of time positions in seqdata).
                             Must be positive and fixed before distance computation.
-                            duration_ref fixes the scale on which duration differences are expressed;
-                            expcost fixes how strongly those scaled differences contribute to the distance.
-                            Under the default, |d_i-d_j|/duration_ref is the duration difference as a proportion
-                            of the full observation period (e.g. 5/20 = 0.25 for a five-year difference in a
-                            20-year window). Smaller duration_ref increases the relative duration contribution;
-                            larger values reduce it. duration_ref is a design-based reference scale, not a
-                            substantive tuning parameter like expcost. Do not set it to the empirical maximum
-                            spell duration in the dataset, because that makes distances depend on which other
-                            sequences are included. OMspellRS uses (d-1)/tau, |d_i-d_j|/tau, and
-                            (d_i+d_j-2)/tau on the same temporal grid as spell durations. LCPspell/RLCPspell
-                            use |d_i-d_j|/tau on matched prefix/suffix spells.
+
+                            duration_ref fixes the scale on which relative duration is expressed;
+                            expcost fixes how strongly relative duration contributes to the distance.
+                            Under the default, d_i / duration_ref is the duration of a spell as a
+                            proportion of the full observation period. For example, a five-year spell
+                            in a 20-year observation window contributes 5 / 20 = 0.25 under yearly
+                            coding and 60 / 240 = 0.25 under monthly coding.
+
+                            duration_ref is a design-based reference scale, not a substantive tuning
+                            parameter like expcost. Do not set it to the empirical maximum spell
+                            duration in the dataset, because that would make distances depend on
+                            which other sequences are included.
+
+                            OMspellRS uses d_i / tau for insertion or deletion,
+                            |d_i - d_j| / tau for same-state substitution, and
+                            (d_i + d_j) / tau for different-state substitution.
+                            LCPspell and RLCPspell use |d_i - d_j| / tau on matched
+                            prefix or suffix spells.
             weighted       : Default: TRUE. When method is "CHI2" or when sm is a string (method),
                             should the distributions of the states account for the sequence weights in seqdata?
             check.max.size : Logical. Should seqdist stop when maximum allowed number of unique sequences is exceeded?
@@ -248,6 +262,36 @@ def _validate_twed_indel_costs(indel):
     return float(np.max(values))
 
 
+def _validate_user_substitution_cost_matrix(sm, nstates):
+    """Finite, non-negative checks on a user-provided state substitution-cost matrix."""
+    state_sm = np.asarray(sm, dtype=np.float64)
+    if state_sm.ndim != 2 or state_sm.shape[0] != state_sm.shape[1]:
+        raise ValueError("[x] 'sm' must be a square substitution-cost matrix.")
+    if state_sm.shape[0] == nstates:
+        pass
+    elif state_sm.shape[0] == nstates + 1:
+        state_sm = state_sm[1:, 1:]
+    else:
+        return
+
+    if not np.all(np.isfinite(state_sm)):
+        raise ValueError("[x] 'sm' must contain only finite substitution costs.")
+    if np.any(state_sm < 0):
+        raise ValueError("[x] 'sm' must contain only non-negative substitution costs.")
+    if not np.allclose(state_sm, state_sm.T):
+        warnings.warn(
+            "[!] The substitution-cost matrix is not symmetric. "
+            "The resulting dissimilarity may not be a metric.",
+            stacklevel=3,
+        )
+    if not np.allclose(np.diag(state_sm), 0.0):
+        warnings.warn(
+            "[!] The diagonal of the substitution-cost matrix is not zero. "
+            "The resulting dissimilarity may not satisfy identity of indiscernibles.",
+            stacklevel=3,
+        )
+
+
 def _default_duration_ref(seqdata):
     """
     Design-implied observation window T: number of time positions in seqdata.
@@ -359,6 +403,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method not in methods:
         raise ValueError(f"[!] Invalid 'method': {method}. Expected one of {methods}")
 
+    if not _is_scalar_number(expcost) or not np.isfinite(float(expcost)):
+        raise ValueError("[x] 'expcost' must be a finite numeric value.")
+    expcost = float(expcost)
+
+    if not _is_scalar_number(tpow) or not np.isfinite(float(tpow)):
+        raise ValueError("[x] 'tpow' must be a finite numeric value.")
+    tpow = float(tpow)
+
     # check refseq
     if refseq is not None:
         # if list of two sets of indexes, we will compute pairwise distances between the two sets
@@ -420,6 +472,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # must be after including missing values as an additional state (nstates)
     # all but NMS, NMSMST, SVRspell
     if _is_scalar_number(indel):
+        indel = float(indel)
+        if not np.isfinite(indel) or indel < 0:
+            raise ValueError("[x] 'indel' must be a finite non-negative number.")
         indel_type = "number"
     elif isinstance(indel, (np.ndarray, list, tuple)):
         indel_arr = np.asarray(indel)
@@ -428,6 +483,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if len(indel_arr) != nstates:
             raise ValueError("[!] When a vector, 'indel' must contain a cost for each state.")
         indel = indel_arr.astype(np.float64, copy=False)
+        if not np.all(np.isfinite(indel)) or np.any(indel < 0):
+            raise ValueError("[x] All state-specific 'indel' costs must be finite and non-negative.")
         indel_type = "vector"
     elif indel == "auto":
         indel_type = "auto"
@@ -502,7 +559,9 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # OMtspell: switch from OMspell when tokdep_coeff is provided (TraMineR: opt.args[["tokdep.coeff"]]).
     tokdep_coeff = None
     if method == "OMspell":
-        tokdep_coeff = (opts or {}).get("tokdep_coeff") or kwargs.get("tokdep_coeff")
+        tokdep_coeff = (opts or {}).get("tokdep_coeff", None)
+        if tokdep_coeff is None:
+            tokdep_coeff = kwargs.get("tokdep_coeff", None)
         if tokdep_coeff is not None:
             method = "OMtspell"
     if method in ["LCPspell", "RLCPspell"] and expcost < 0:
@@ -518,6 +577,22 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 "[x] 'duration_ref' must be a finite positive number for "
                 "OMspellRS, LCPspell, or RLCPspell."
             )
+
+    if method in ["OMspellRS", "LCPspell", "RLCPspell"] and not np.isclose(tpow, 1.0):
+        raise ValueError(
+            "[x] 'tpow' must be 1.0 for OMspellRS, LCPspell, and RLCPspell. "
+            "These reference-scaled methods interpret duration linearly as a "
+            "proportion of duration_ref."
+        )
+
+    if method in ["OMspell", "OMspellRS", "OMtspell"] and norm == "maxdist" and expcost > 0:
+        warnings.warn(
+            "[!] For OMspell-type distances with expcost > 0, norm='maxdist' uses "
+            "a base-cost reference value that omits duration-related terms. "
+            "It is not generally a strict upper bound. Prefer norm='YujianBo', "
+            "norm='auto', or norm='none'.",
+            stacklevel=2,
+        )
 
     # 4. DHD
     if method == "DHD":
@@ -740,6 +815,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in om_methods + ["OMloc", "HAM", "DHD", "TWED"]:
         if sm_type == "matrix":
             if method in om_methods + ["OMloc", "TWED"]:
+                _validate_user_substitution_cost_matrix(sm, nstates)
                 # TODO : checkcost()
                 if sm.shape[0] == len(seqdata.states):
                     # Add a NaN column at the beginning and a NaN row at the top
@@ -755,6 +831,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                         "[!] The dimension of the provided `sm` matrix does not match the number of states.")
 
             elif method == "HAM":
+                _validate_user_substitution_cost_matrix(sm, nstates)
                 # TODO : checkcost()
                 if sm.shape[0] == len(seqdata.states):
                     nan_col = np.full((sm.shape[0], 1), np.nan)
@@ -1147,7 +1224,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Redefined dseqs.num
     elif method in ["OMspell", "OMspellRS", "OMtspell", "LCPspell", "RLCPspell",
                     "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
-        dseqs_dur = seqdur(seqdata) ** tpow  # Do not use dseqs.num
+        raw_dseqs_dur = seqdur(seqdata)  # Do not use dseqs.num
 
         # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
         conc1 = seqconc(data=dseqs_num)
@@ -1157,7 +1234,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
-        # Spell durations passed to C++ are raw lengths d_k; OMspell expansion (d_k - 1) is in C++.
+        # Spell durations passed to C++ are raw lengths d_k.
+        # Original OMspell and OMtspell apply their one-unit-base expansion terms in C++.
+        # OMspellRS instead applies full reference-scaled duration terms d_k / duration_ref.
+        # LCPspell and RLCPspell use matched-spell duration differences divided by duration_ref.
+        if method in ["OMspellRS", "LCPspell", "RLCPspell"]:
+            dseqs_dur = raw_dseqs_dur
+        else:
+            dseqs_dur = raw_dseqs_dur ** tpow
         dseqs_dur = dseqs_dur[dseqs_oidxs, :]
 
         # Get DSS

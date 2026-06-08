@@ -20,8 +20,13 @@ static inline double normalize_distance(double rawdist, double maxdist, double l
             return 1.0 - ((maxdist - rawdist) / (2.0 * std::sqrt(l1) * std::sqrt(l2)));
         case 3:
             return std::fabs(maxdist) < EPS ? 1.0 : rawdist / maxdist;
-        case 4:
-            return std::fabs(maxdist) < EPS ? 1.0 : (2.0 * rawdist) / (rawdist + maxdist);
+        case 4: {
+            const double delete_all_sum = l1 + l2;
+            if (std::fabs(delete_all_sum) < EPS) {
+                return std::fabs(rawdist) < EPS ? 0.0 : 1.0;
+            }
+            return (2.0 * rawdist) / (rawdist + delete_all_sum);
+        }
         default:
             return rawdist;
     }
