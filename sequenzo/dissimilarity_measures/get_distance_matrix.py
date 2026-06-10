@@ -66,7 +66,8 @@
                             When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN"). The underlying distances are unchanged.
             tpow           : Default: 1.0.
                             The exponential weight of spell length when method is one of "OMspell", "OMtspell",
-                            "NMSMST", or "SVRspell". Must be 1.0 for OMspellRS, LCPspell, and RLCPspell.
+                            "NMSMST", or "SVRspell". Must be 1.0 for OMspellRS, LCPspell, RLCPspell,
+                            LCPmst, RLCPmst, LCPprod, and RLCPprod.
             expcost        : Default: 0.5. Controls the influence of duration-related terms.
                             Its exact interpretation is method-specific.
                             In original OMspell, expcost is the expansion cost assigned to each
@@ -646,6 +647,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             "proportion of duration_ref."
         )
 
+    if method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"] and not np.isclose(tpow, 1.0):
+        raise ValueError(
+            "[x] 'tpow' is not defined for LCPmst/RLCPmst/LCPprod/RLCPprod. "
+            "Use tpow=1.0."
+        )
+
     if method in ["OMspell", "OMspellRS", "OMtspell"] and norm == "maxdist" and expcost > 0:
         warnings.warn(
             "[!] For OMspell-type distances with expcost > 0, norm='maxdist' uses "
@@ -706,14 +713,24 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # For CHI2/EUCLID: norm "auto" => True, "none" => False (TraMineR norm.chi2euclid)
     norm_chi2euclid = (norm == "auto") if method in ["CHI2", "EUCLID"] else None
 
-    if method in ["LCPspell", "RLCPspell"] and norm == "gmean":
-        print("[!] Warning: norm='gmean' for LCPspell/RLCPspell can yield distances outside [0, 1]. Prefer norm='maxdist' or norm='none'. See developer/NORM_GUIDE.md.")
+    if method in ["LCPmst", "RLCPmst"] and norm == "maxlength":
+        raise ValueError(
+            "[x] LCPmst/RLCPmst do not support norm='maxlength'. "
+            "Use norm='none', 'gmean', 'maxdist', 'YujianBo', or norm='auto'."
+        )
 
-    if method in ["LCPmst", "RLCPmst"] and norm == "gmean":
-        print("[!] Warning: norm='gmean' for LCPmst/RLCPmst can yield distances outside [0, 1] when Tx != Ty. Prefer norm='maxdist' (auto default) or norm='none'.")
+    if method in ["LCPspell", "RLCPspell"] and norm not in ["none", "maxdist", "auto"]:
+        raise ValueError(
+            "[x] LCPspell/RLCPspell support only norm='none', norm='maxdist', or norm='auto'. "
+            "Bounded normalization uses the method-specific maxdist upper bound. "
+            "See developer/NORM_GUIDE.md."
+        )
 
-    if method in ["LCPprod", "RLCPprod"] and norm != "none":
-        print("[!] Warning: norm != 'none' for LCPprod/RLCPprod: product-based raw distance may be negative; normalized values are clamped to [0, 1] and may hide instability. Prefer norm='none' (auto default).")
+    if method in ["LCPprod", "RLCPprod"] and norm not in ["none", "auto"]:
+        raise ValueError(
+            "[x] LCPprod/RLCPprod support only norm='none' or norm='auto'. "
+            "Their raw values may be negative, so normalized output is not well-defined."
+        )
 
     # =========================================
     # CHI2 / EUCLID (C++ or Python implementation)
@@ -1351,8 +1368,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         # Spell durations passed to C++ are raw lengths d_k.
         # Original OMspell and OMtspell apply their one-unit-base expansion terms in C++.
         # OMspellRS instead applies full reference-scaled duration terms d_k / duration_ref.
-        # LCPspell and RLCPspell use matched-spell duration differences divided by duration_ref.
-        if method in ["OMspellRS", "LCPspell", "RLCPspell"]:
+        # LCPspell/RLCPspell and Elzinga LCP variants use raw spell durations (no tpow).
+        if method in [
+            "OMspellRS", "LCPspell", "RLCPspell",
+            "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
+        ]:
             dseqs_dur = raw_dseqs_dur
         else:
             dseqs_dur = raw_dseqs_dur ** tpow
@@ -1379,16 +1399,28 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     if row_max > max_obs_dur:
                         max_obs_dur = row_max
             if max_obs_dur > duration_ref:
+                if norm == "maxdist":
+                    raise ValueError(
+                        "[x] For normalized LCPspell/RLCPspell, duration_ref must be at least "
+                        "the largest observed spell duration so that maxdist remains a valid bound. "
+                        "Use norm='none' or increase duration_ref."
+                    )
                 warnings.warn(
                     "[!] duration_ref is smaller than an observed spell duration. "
-                    "Normalized LCPspell/RLCPspell distances may exceed the stated bound. "
-                    "Set duration_ref to the study-design observation window (or another upper bound on spell length).",
+                    "Raw LCPspell/RLCPspell distances are still defined, but maxdist normalization "
+                    "would exceed the stated bound. Set duration_ref to the study-design observation "
+                    "window (or another upper bound on spell length).",
                     stacklevel=2,
                 )
         if method in ["LCPspell", "LCPmst", "LCPprod"]:
             sign = 1
         elif method in ["RLCPspell", "RLCPmst", "RLCPprod"]:
             sign = -1
+
+        dseqs_dur = np.ascontiguousarray(dseqs_dur, dtype=np.float64)
+        _seqlength = np.ascontiguousarray(_seqlength, dtype=np.int32)
+        if method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+            _totaldur = np.ascontiguousarray(_totaldur, dtype=np.float64)
 
         del dseqs_oidxs
         del seqdata_dss
@@ -1475,6 +1507,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Some numpy operations (np.unique, np.hstack, np.vstack) may return read-only arrays
     if not dseqs_num.flags.writeable:
         dseqs_num = np.array(dseqs_num, copy=True)
+    if method in ["LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+        dseqs_num = np.ascontiguousarray(dseqs_num, dtype=np.int32)
     if isinstance(sm, np.ndarray) and not sm.flags.writeable:
         sm = np.array(sm, copy=True)
 

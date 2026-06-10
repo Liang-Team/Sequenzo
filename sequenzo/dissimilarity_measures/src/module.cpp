@@ -175,7 +175,8 @@ PYBIND11_MODULE(c_code, m) {
           py::arg("nunique"));
 
     py::class_<LCPdistance>(m, "LCPdistance")
-            .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())
+            .def(py::init<py::array_t<int, py::array::c_style | py::array::forcecast>, int, int, py::array_t<int>>())
+            .def("compute_distance", &LCPdistance::compute_distance)
             .def("compute_all_distances", &LCPdistance::compute_all_distances)
             .def("compute_condensed_distances", &LCPdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPdistance::compute_refseq_distances);
@@ -196,18 +197,21 @@ PYBIND11_MODULE(c_code, m) {
 
     py::class_<LCPspellDistance>(m, "LCPspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double, double>())
+            .def("compute_distance", &LCPspellDistance::compute_distance)
             .def("compute_all_distances", &LCPspellDistance::compute_all_distances)
             .def("compute_condensed_distances", &LCPspellDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPspellDistance::compute_refseq_distances);
 
     py::class_<LCPmstDistance>(m, "LCPmstDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, int, py::array_t<int>>())
+            .def("compute_distance", &LCPmstDistance::compute_distance)
             .def("compute_all_distances", &LCPmstDistance::compute_all_distances)
             .def("compute_condensed_distances", &LCPmstDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPmstDistance::compute_refseq_distances);
 
     py::class_<LCPprodDistance>(m, "LCPprodDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, int, py::array_t<int>>())
+            .def("compute_distance", &LCPprodDistance::compute_distance)
             .def("compute_all_distances", &LCPprodDistance::compute_all_distances)
             .def("compute_condensed_distances", &LCPprodDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPprodDistance::compute_refseq_distances);

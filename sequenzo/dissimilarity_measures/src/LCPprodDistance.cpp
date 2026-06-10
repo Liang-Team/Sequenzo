@@ -1,52 +1,22 @@
 /*
  * LCPprodDistance: DSS-based LCP with Product Duration (duration-aware).
  *
- * Python supplies DSS spell sequences and spell durations (same layout as LCPmst).
- * Element index t refers to the t-th spell-state in the DSS prefix/suffix.
- *
- * Forward (sign > 0): A_prod = sum_{t=0}^{k-1} d_x(t) * d_y(t)
- * Reverse (sign < 0): suffix match from the last spell backward.
- *
- * Raw distance: raw_d = T_x + T_y - 2 * A_prod
- * where T_x, T_y are total spell durations per sequence.
- *
- * Note: raw_d_prod can be negative. When norm != "none", clamp to [0, 1].
- *
- * Usage (Python):
- *   d = get_distance_matrix(seqdata, method="LCPprod", norm="gmean")
- *   d = get_distance_matrix(seqdata, method="RLCPprod", norm="gmean")
- *
- * Source:
- *   Elzinga, C. H. (2007). Sequence analysis: Metric representations of
- *   categorical time series. Manuscript, Dept of Social Science Research
- *   Methods, Vrije Universiteit, Amsterdam.
- *
- * @File    : LCPprodDistance.cpp
- * @Author  : Yuqi Liang 梁彧祺
- * @Desc    : Duration-aware LCP using product of durations. Supports LCPprod and RLCPprod.
+ * Note: raw_d_prod can be negative. Normalization is not supported.
  */
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
 #include "utils.h"
 #include "dp_utils.h"
+#include "lcp_input_validation.h"
 
 namespace py = pybind11;
 
 class LCPprodDistance {
 public:
-    /*
-     * Constructor.
-     * - sequences: DSS spell-state matrix, shape (nseq, max_spells).
-     * - durations: spell durations, shape (nseq, max_spells).
-     * - seqlength: number of spells per sequence, shape (nseq,).
-     * - totaldur: precomputed total duration per sequence, shape (nseq,); T_i = sum_t durations[i,t].
-     * - norm: normalization index (0=none, 1=maxlength, 2=gmean, 3=maxdist, 4=YujianBo).
-     * - sign: 1 = forward (LCPprod), -1 = reverse from end (RLCPprod).
-     * - refseqS: reference sequence indices [rseq1, rseq2).
-     */
     LCPprodDistance(py::array_t<int> sequences,
                     py::array_t<double> durations,
                     py::array_t<int> seqlength,
@@ -59,144 +29,104 @@ public:
                           : "[>] Starting RLCPprod (DSS-based LCP with product duration)...");
         std::cout << std::flush;
 
-        try {
-            this->sequences = sequences;
-            this->durations = durations;
-            this->seqlength = seqlength;
-            this->totaldur = totaldur;
+        lcp_input::require_lcpprod_norm(norm);
+        lcp_input::validate_spell_distance_inputs(sequences, durations, seqlength, true);
+        lcp_input::require_sign(sign);
 
-            auto seq_shape = sequences.shape();
-            nseq = static_cast<int>(seq_shape[0]);
-            ncols = static_cast<int>(seq_shape[1]);
+        this->sequences = sequences;
+        this->durations = durations;
+        this->seqlength = seqlength;
+        this->totaldur = totaldur;
 
-            // Reference sequence range (same convention as LCPdistance / LCPspell).
-            nans = nseq;
-            rseq1 = refseqS.at(0);
-            rseq2 = refseqS.at(1);
-            if (rseq1 < rseq2) {
-                nseq = rseq1;
-                nans = nseq * (rseq2 - rseq1);
-            } else {
-                rseq1 = rseq1 - 1;
-            }
-        } catch (const std::exception& e) {
-            py::print("Error in LCPprodDistance constructor: ", e.what());
-            throw;
-        }
+        auto seq_shape = sequences.shape();
+        original_nseq_ = static_cast<int>(seq_shape[0]);
+        ncols = static_cast<int>(seq_shape[1]);
+
+        lcp_input::validate_totaldur(totaldur, durations, seqlength, original_nseq_);
+
+        const auto refseq_cfg = lcp_input::parse_refseq(refseqS, original_nseq_);
+        has_refseq = refseq_cfg.has_refseq;
+        nseq = refseq_cfg.nseq;
+        rseq1 = refseq_cfg.rseq1;
+        rseq2 = refseq_cfg.rseq2;
     }
 
-    /*
-     * Compute LCPprod distance between sequence i and sequence j.
-     *
-     * Forward (sign > 0): common prefix from start.
-     * Reverse (sign < 0): common suffix from end (RLCPprod).
-     */
     double compute_distance(int i, int j) {
-        try {
-            auto ptr_seq = sequences.unchecked<2>();
-            auto ptr_dur = durations.unchecked<2>();
-            auto ptr_len = seqlength.unchecked<1>();
-            auto ptr_total = totaldur.unchecked<1>();
-
-            int len_i = ptr_len(i);
-            int len_j = ptr_len(j);
-            int minlen = std::min(len_i, len_j);
-
-            double Tx = ptr_total(i);
-            double Ty = ptr_total(j);
-
-            // Edge case: empty sequence
-            if (len_i == 0 || len_j == 0) {
-                double raw = Tx + Ty;
-                if (norm == 0) return raw;
-                double denom = (norm == 1) ? std::max(Tx, Ty) : (norm == 2) ? std::sqrt(Tx * Ty) : (Tx + Ty);
-                if (denom == 0.0) return (raw == 0.0) ? 0.0 : 1.0;
-                double d = normalize_distance(raw, Tx + Ty, Tx, Ty, norm);
-                return std::max(0.0, std::min(1.0, d));
-            }
-
-            // Step 1: find match length k (prefix if forward, suffix if reverse)
-            int k = 0;
-            if (sign > 0) {
-                while (k < minlen && ptr_seq(i, k) == ptr_seq(j, k)) {
-                    k++;
-                }
-            } else {
-                while (k < minlen && ptr_seq(i, len_i - 1 - k) == ptr_seq(j, len_j - 1 - k)) {
-                    k++;
-                }
-            }
-
-            // Step 2: accumulate A_prod over matched positions
-            double A = 0.0;
-            if (sign > 0) {
-                for (int t = 0; t < k; t++) {
-                    A += ptr_dur(i, t) * ptr_dur(j, t);
-                }
-            } else {
-                for (int t = 0; t < k; t++) {
-                    A += ptr_dur(i, len_i - 1 - t) * ptr_dur(j, len_j - 1 - t);
-                }
-            }
-
-            // Step 3: raw distance (can be negative or exceed T_x+T_y)
-            double raw = Tx + Ty - 2.0 * A;
-
-            if (norm == 0) return raw;
-
-            // Step 4: normalize and clamp to [0, 1] (Option 1 per requirements)
-            double maxdist = Tx + Ty;
-            double d = normalize_distance(raw, maxdist, Tx, Ty, norm);
-            return std::max(0.0, std::min(1.0, d));
-        } catch (const std::exception& e) {
-            py::print("Error in LCPprodDistance::compute_distance: ", e.what());
-            throw;
-        }
+        lcp_input::require_pair_indices(i, j, original_nseq_);
+        return compute_distance_unchecked(i, j);
     }
 
     py::array_t<double> compute_all_distances() {
-        try {
-            auto dist_matrix = py::array_t<double>({nseq, nseq});
-            return dp_utils::compute_all_distances_simple(
-                    nseq,
-                    dist_matrix,
-                    [this](int i, int j) { return this->compute_distance(i, j); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in LCPprodDistance::compute_all_distances: ", e.what());
-            throw;
-        }
+        auto dist_matrix = py::array_t<double>({nseq, nseq});
+        return dp_utils::compute_all_distances_simple(
+                nseq,
+                dist_matrix,
+                [this](int i, int j) { return this->compute_distance_unchecked(i, j); }
+        );
     }
 
     py::array_t<double> compute_condensed_distances() {
-        try {
-            return dp_utils::compute_condensed_distances_simple(
-                    nseq,
-                    [this](int i, int j) { return this->compute_distance(i, j); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in LCPprodDistance::compute_condensed_distances: ", e.what());
-            throw;
-        }
+        return dp_utils::compute_condensed_distances_simple(
+                nseq,
+                [this](int i, int j) { return this->compute_distance_unchecked(i, j); }
+        );
     }
 
     py::array_t<double> compute_refseq_distances() {
-        try {
-            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
-            return dp_utils::compute_refseq_distances_simple(
-                    nseq,
-                    rseq1,
-                    rseq2,
-                    refdist_matrix,
-                    [this](int is, int rseq) { return this->compute_distance(is, rseq); }
-            );
-        } catch (const std::exception& e) {
-            py::print("Error in LCPprodDistance::compute_refseq_distances: ", e.what());
-            throw;
-        }
+        lcp_input::require_refseq_for_compute({has_refseq, nseq, rseq1, rseq2});
+        auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
+        return dp_utils::compute_refseq_distances_simple(
+                nseq,
+                rseq1,
+                rseq2,
+                refdist_matrix,
+                [this](int is, int rseq) { return this->compute_distance_unchecked(is, rseq); }
+        );
     }
 
 private:
+    double compute_distance_unchecked(int i, int j) {
+        auto ptr_seq = sequences.unchecked<2>();
+        auto ptr_dur = durations.unchecked<2>();
+        auto ptr_len = seqlength.unchecked<1>();
+        auto ptr_total = totaldur.unchecked<1>();
+
+        int len_i = ptr_len(i);
+        int len_j = ptr_len(j);
+        int minlen = std::min(len_i, len_j);
+
+        double Tx = ptr_total(i);
+        double Ty = ptr_total(j);
+
+        if (len_i == 0 || len_j == 0) {
+            return Tx + Ty;
+        }
+
+        int k = 0;
+        if (sign > 0) {
+            while (k < minlen && ptr_seq(i, k) == ptr_seq(j, k)) {
+                k++;
+            }
+        } else {
+            while (k < minlen && ptr_seq(i, len_i - 1 - k) == ptr_seq(j, len_j - 1 - k)) {
+                k++;
+            }
+        }
+
+        double A = 0.0;
+        if (sign > 0) {
+            for (int t = 0; t < k; t++) {
+                A += ptr_dur(i, t) * ptr_dur(j, t);
+            }
+        } else {
+            for (int t = 0; t < k; t++) {
+                A += ptr_dur(i, len_i - 1 - t) * ptr_dur(j, len_j - 1 - t);
+            }
+        }
+
+        return Tx + Ty - 2.0 * A;
+    }
+
     py::array_t<int> sequences;
     py::array_t<double> durations;
     py::array_t<int> seqlength;
@@ -204,9 +134,10 @@ private:
     int norm;
     int sign;
     int nseq;
+    int original_nseq_;
     int ncols;
 
-    int nans;
+    bool has_refseq = false;
     int rseq1;
     int rseq2;
 };
