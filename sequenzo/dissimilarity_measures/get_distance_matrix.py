@@ -719,10 +719,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             "Use norm='none', 'gmean', 'maxdist', 'YujianBo', or norm='auto'."
         )
 
-    if method in ["LCPspell", "RLCPspell"] and norm not in ["none", "maxdist", "auto"]:
+    if method in ["LCPspell", "RLCPspell"] and norm not in [
+        "none",
+        "maxdist",
+        "auto",
+        "ElzingaStuder",
+    ]:
         raise ValueError(
-            "[x] LCPspell/RLCPspell support only norm='none', norm='maxdist', or norm='auto'. "
-            "Bounded normalization uses the method-specific maxdist upper bound. "
+            "[x] LCPspell/RLCPspell support only norm='none', norm='maxdist', "
+            "norm='auto', or norm='ElzingaStuder'. "
+            "Bounded normalization uses the method-specific maxdist upper bound; "
+            "ElzingaStuder is applied as reference-based post-processing on raw distances. "
             "See developer/NORM_GUIDE.md."
         )
 
