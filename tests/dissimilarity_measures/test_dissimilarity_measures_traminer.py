@@ -767,6 +767,23 @@ def test_attribute_svrspell_matches_traminer(seqdata_subset_attribute, ref_dir_a
     _align_and_compare(D, D_ref, atol=1e-5, rtol=1e-5)
 
 
+def test_attribute_svrspell_condensed_matches_traminer(seqdata_subset_attribute, ref_dir_attribute):
+    """SVRspell condensed output matches TraMineR's upper triangle."""
+    D_ref = _load_ref_matrix(ref_dir_attribute, "svrspell")
+    if D_ref is None:
+        pytest.skip("ref_svrspell.csv not found")
+    ids = list(seqdata_subset_attribute.ids)
+    ref_aligned = D_ref.reindex(index=ids, columns=ids)
+    expected = ref_aligned.to_numpy(dtype=np.float64)[np.triu_indices(len(ids), k=1)]
+    D = get_distance_matrix(
+        seqdata_subset_attribute,
+        method="SVRspell",
+        norm="none",
+        full_matrix=False,
+    )
+    np.testing.assert_allclose(D, expected, atol=1e-5, rtol=1e-5)
+
+
 # ----- Part 2b: Attribute-based parameter configs (vs TraMineR) -----
 
 def test_attribute_lcs_norm_gmean_matches_traminer(seqdata_subset_attribute, ref_dir_attribute):

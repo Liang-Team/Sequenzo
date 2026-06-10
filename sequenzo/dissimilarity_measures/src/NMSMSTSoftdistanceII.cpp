@@ -29,6 +29,12 @@ namespace py = pybind11;
 
 class NMSMSTSoftdistanceII {
 public:
+    struct Workspace {
+        std::vector<double> e1;
+        std::vector<double> e;
+        std::vector<double> kvect;
+    };
+
     /*
      * Constructor.
      * - sequences: state sequences, shape (nseq, maxlen); only positions 0..seqlength(i)-1 valid.
@@ -62,21 +68,32 @@ public:
             int kw_len = static_cast<int>(kweights.shape()[0]);
             kweights_len = (kw_len < maxlen) ? kw_len : maxlen;
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
-
             rowsize = maxlen + 1;
-            size_t matsize = static_cast<size_t>(rowsize) * static_cast<size_t>(rowsize);
-            e1.resize(matsize, 0.0);
-            e.resize(matsize, 0.0);
-
             selfmatvect.resize(static_cast<size_t>(nseq) * static_cast<size_t>(maxlen), 0.0);
-            kvect_work.resize(static_cast<size_t>(maxlen), 0.0);
+            std::exception_ptr first_exception;
+            std::atomic<bool> has_exception(false);
 
-            for (int is = 0; is < nseq; is++) {
-                reset_kvect();
-                computeattr(is, is);
-                for (int k = 0; k < maxlen; k++)
-                    selfmatvect[static_cast<size_t>(is) * static_cast<size_t>(maxlen) + static_cast<size_t>(k)] = kvect_work[static_cast<size_t>(k)];
+            #pragma omp parallel
+            {
+                Workspace workspace;
+                prepare_workspace(workspace);
+
+                #pragma omp for schedule(dynamic, 16)
+                for (int is = 0; is < nseq; is++) {
+                    if (has_exception.load()) continue;
+                    try {
+                        reset_kvect(workspace);
+                        computeattr(is, is, workspace);
+                        for (int k = 0; k < maxlen; k++)
+                            selfmatvect[static_cast<size_t>(is) * static_cast<size_t>(maxlen) + static_cast<size_t>(k)] = workspace.kvect[static_cast<size_t>(k)];
+                    } catch (...) {
+                        dp_utils::record_first_exception(first_exception, has_exception);
+                    }
+                }
+            }
+
+            if (first_exception) {
+                std::rethrow_exception(first_exception);
             }
 
             nans = nseq;
@@ -88,22 +105,29 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in NMSMSTSoftdistanceII constructor: ", e.what());
             throw;
         }
     }
 
-    void reset_kvect() {
-        for (size_t k = 0; k < kvect_work.size(); k++) kvect_work[k] = 0.0;
+    void prepare_workspace(Workspace& workspace) const {
+        const size_t matsize = static_cast<size_t>(rowsize) * static_cast<size_t>(rowsize);
+        const size_t vecsize = static_cast<size_t>(maxlen);
+        if (workspace.e1.size() != matsize) workspace.e1.resize(matsize, 0.0);
+        if (workspace.e.size() != matsize) workspace.e.resize(matsize, 0.0);
+        if (workspace.kvect.size() != vecsize) workspace.kvect.resize(vecsize, 0.0);
+    }
+
+    void reset_kvect(Workspace& workspace) const {
+        for (size_t k = 0; k < workspace.kvect.size(); k++) workspace.kvect[k] = 0.0;
     }
 
     /*
      * NMSMSTSoftdistanceII::computeattr(is, js): e1[i,j] = softmatch[seqi, seqj], e[i,j] = same.
      * kvect[0] = s + 1 (TraMineR convention). Then iterate with cumulative sums; kvect[k] = phi_k.
      */
-    void computeattr(int is, int js) {
+    void computeattr(int is, int js, Workspace& workspace) {
         auto ptr_seq = sequences.unchecked<2>();
         auto ptr_len = seqlength.unchecked<1>();
         auto ptr_sm = softmatch.unchecked<2>();
@@ -123,8 +147,8 @@ public:
                 int seqj = ptr_seq(js, j);
                 // State codes are 1-based (1..alphasize); softmatch is 0-based indexed
                 double sf = ptr_sm(seqi - 1, seqj - 1);
-                e1[ij] = sf;
-                e[ij] = sf;
+                workspace.e1[ij] = sf;
+                workspace.e[ij] = sf;
                 s += sf;
                 if (s >= std::numeric_limits<double>::max())
                     throw std::runtime_error("[!] Number of subsequences is getting too big");
@@ -133,15 +157,15 @@ public:
 
         for (int i = 0; i < m; i++) {
             int ij = IDX(i, ncols - 1, rowsize);
-            e1[ij] = e[ij] = 0.0;
+            workspace.e1[ij] = workspace.e[ij] = 0.0;
         }
         for (int j = 0; j < ncols; j++) {
             int ij = IDX(mrows - 1, j, rowsize);
-            e1[ij] = e[ij] = 0.0;
+            workspace.e1[ij] = workspace.e[ij] = 0.0;
         }
 
         int k = 0;
-        this->kvect_work[static_cast<size_t>(k)] = s + 1.0;  // TraMineR: kvect[k] = s + 1
+        workspace.kvect[static_cast<size_t>(k)] = s + 1.0;  // TraMineR: kvect[k] = s + 1
         if (s == 0.0) return;
 
         while (mrows != 0 && ncols != 0) {
@@ -153,8 +177,8 @@ public:
                 for (int jcol = ncols - 1; jcol >= 0; jcol--) {
                     int ij = IDX(irow, jcol, rowsize);
                     double t = s;
-                    s += e[ij];
-                    e[ij] = t;
+                    s += workspace.e[ij];
+                    workspace.e[ij] = t;
                 }
             }
 
@@ -163,14 +187,14 @@ public:
                 for (int irow = mrows - 1; irow >= 0; irow--) {
                     int ij = IDX(irow, jcol, rowsize);
                     double t = s;
-                    s += e[ij];
-                    e[ij] = t * e1[ij];
-                    phi_k += e[ij];
+                    s += workspace.e[ij];
+                    workspace.e[ij] = t * workspace.e1[ij];
+                    phi_k += workspace.e[ij];
                 }
             }
 
             if (phi_k == 0.0) return;
-            if (k < maxlen) kvect_work[static_cast<size_t>(k)] = phi_k;
+            if (k < maxlen) workspace.kvect[static_cast<size_t>(k)] = phi_k;
             if (phi_k >= std::numeric_limits<double>::max())
                 throw std::runtime_error("[!] Number of subsequences is getting too big");
             mrows--;
@@ -181,13 +205,15 @@ public:
     double compute_distance(int is, int js) {
         try {
             auto ptr_kw = kweights.unchecked<1>();
-            reset_kvect();
-            computeattr(is, js);
+            thread_local Workspace workspace;
+            prepare_workspace(workspace);
+            reset_kvect(workspace);
+            computeattr(is, js, workspace);
 
             double Aval = 0.0, Ival = 0.0, Jval = 0.0;
             for (int i = 0; i < maxlen; i++) {
                 if (i < kweights_len && ptr_kw(i) != 0.0) {
-                    Aval += ptr_kw(i) * kvect_work[static_cast<size_t>(i)];
+                    Aval += ptr_kw(i) * workspace.kvect[static_cast<size_t>(i)];
                     Ival += ptr_kw(i) * selfmatvect[static_cast<size_t>(is) * static_cast<size_t>(maxlen) + static_cast<size_t>(i)];
                     Jval += ptr_kw(i) * selfmatvect[static_cast<size_t>(js) * static_cast<size_t>(maxlen) + static_cast<size_t>(i)];
                 }
@@ -196,8 +222,6 @@ public:
             double dist = Ival + Jval - 2.0 * Aval;
             double maxdist = Ival + Jval;
             if (dist < 0.0) dist = 0.0;
-            if (norm == 4)
-                return normalize_distance(std::sqrt(dist), (maxdist > 0.0 ? std::sqrt(maxdist) : 0.0), Ival, Jval, norm);
             return normalize_distance(dist, maxdist, Ival, Jval, norm);
         } catch (const std::exception& e) {
             py::print("Error in NMSMSTSoftdistanceII::compute_distance: ", e.what());
@@ -207,6 +231,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances_simple(
                     nseq, dist_matrix,
                     [this](int i, int j) { return this->compute_distance(i, j); });
@@ -216,8 +241,20 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances_simple(
+                    nseq,
+                    [this](int i, int j) { return this->compute_distance(i, j); });
+        } catch (const std::exception& e) {
+            py::print("Error in NMSMSTSoftdistanceII::compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             return dp_utils::compute_refseq_distances_simple(
                     nseq, rseq1, rseq2, refdist_matrix,
                     [this](int is, int rseq) { return this->compute_distance(is, rseq); });
@@ -238,13 +275,8 @@ private:
     int alphasize;
     int rowsize;
     int kweights_len;
-    std::vector<double> e1;
-    std::vector<double> e;
     std::vector<double> selfmatvect;
-    std::vector<double> kvect_work;
-    py::array_t<double> dist_matrix;
     int nans;
     int rseq1;
     int rseq2;
-    py::array_t<double> refdist_matrix;
 };

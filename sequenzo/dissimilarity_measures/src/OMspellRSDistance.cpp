@@ -28,27 +28,27 @@
  * @Time    : 2026/1/31 22:12
  */
 
- #include <pybind11/pybind11.h>
- #include <pybind11/numpy.h>
- #include <vector>
- #include <cmath>
- #include <iostream>
- #include <stdexcept>
- #include "utils.h"
- #include "dp_utils.h"
- #ifdef _OPENMP
-     #include <omp.h>
- #endif
- #include <xsimd/xsimd.hpp>
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <algorithm>
+#include <vector>
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
+#include "utils.h"
+#include "dp_utils.h"
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
  
- namespace py = pybind11;
+namespace py = pybind11;
  
- class OMspellRSDistance {
- public:
-     OMspellRSDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
-                               double timecost, double duration_ref, py::array_t<double> seqdur, py::array_t<double> indellist,
-                               py::array_t<int> seqlength)
-             : indel(indel), norm(norm), timecost(timecost), duration_ref(duration_ref) {
+class OMspellRSDistance {
+public:
+    OMspellRSDistance(py::array_t<int> sequences, py::array_t<double> sm, double indel, int norm, py::array_t<int> refseqS,
+                              double timecost, double duration_ref, py::array_t<double> seqdur, py::array_t<double> indellist,
+                              py::array_t<int> seqlength)
+            : indel(indel), norm(norm), timecost(timecost), duration_ref(duration_ref) {
  
          py::print("[>] Starting Optimal Matching with spell (OMspellRS, reference-scaled duration)...");
          std::cout << std::flush;
@@ -74,7 +74,6 @@
              nseq = static_cast<int>(seq_shape[0]);
              len = static_cast<int>(seq_shape[1]);
  
-             dist_matrix = py::array_t<double>({nseq, nseq});
              fmatsize = len + 1;
  
              auto sm_shape = sm.shape();
@@ -111,7 +110,6 @@
              } else {
                  rseq1 = rseq1 - 1;
              }
-             refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
          } catch (const std::exception& e) {
              py::print("Error in OMspellRSDistance constructor: ", e.what());
              throw;
@@ -141,10 +139,6 @@
                  double ins_cost = ptr_indel(bj) + timecost * (ptr_dur(js, jj - 1) * dur_scale);
                  prev[jj] = prev[jj - 1] + ins_cost;
              }
- 
-             using batch_t = xsimd::batch<double>;
-             constexpr std::size_t B = batch_t::size;
- 
              for (int i = 1; i < mSuf; i++) {
                  int i_state = ptr_seq(is, i - 1);
                  double dur_i = ptr_dur(is, i - 1);
@@ -153,38 +147,28 @@
                  curr[0] = prev[0] + del_cost_i;
  
                  int j = 1;
-                 for (; j + (int)B <= nSuf; j += (int)B) {
-                     const double* prev_ptr = prev + j;
-                     const double* prevm1_ptr = prev + (j - 1);
-                     batch_t prevj = batch_t::load_unaligned(prev_ptr);
-                     batch_t prevjm1 = batch_t::load_unaligned(prevm1_ptr);
+                 for (; j + 2 <= nSuf; j += 2) {
+                     int bj0 = ptr_seq(js, j - 1);
+                     int bj1 = ptr_seq(js, j);
+                     double dur_j0 = ptr_dur(js, j - 1);
+                     double dur_j1 = ptr_dur(js, j);
  
-                     alignas(64) double subs[B];
-                     alignas(64) double ins[B];
-                     for (std::size_t b = 0; b < B; ++b) {
-                         int jj_idx = j + (int)b - 1;
-                         int bj = ptr_seq(js, jj_idx);
-                         double dur_j = ptr_dur(js, jj_idx);
-                         if (i_state == bj) {
-                             subs[b] = timecost * std::fabs(dur_i - dur_j) * dur_scale;
-                         } else {
-                            subs[b] = ptr_sm(i_state, bj) + timecost * (dur_i + dur_j) * dur_scale;
-                        }
-                        ins[b] = ptr_indel(bj) + timecost * (dur_j * dur_scale);
-                     }
+                     double sub0 = (i_state == bj0)
+                         ? (timecost * std::fabs(dur_i - dur_j0) * dur_scale)
+                         : (ptr_sm(i_state, bj0) + timecost * (dur_i + dur_j0) * dur_scale);
+                     double sub1 = (i_state == bj1)
+                         ? (timecost * std::fabs(dur_i - dur_j1) * dur_scale)
+                         : (ptr_sm(i_state, bj1) + timecost * (dur_i + dur_j1) * dur_scale);
+                     double ins0 = ptr_indel(bj0) + timecost * (dur_j0 * dur_scale);
+                     double ins1 = ptr_indel(bj1) + timecost * (dur_j1 * dur_scale);
  
-                     batch_t sub_batch = batch_t::load_unaligned(subs);
-                     batch_t cand_del = prevj + batch_t(del_cost_i);
-                     batch_t cand_sub = prevjm1 + sub_batch;
-                     batch_t vert = xsimd::min(cand_del, cand_sub);
+                     double vert0 = std::min(prev[j]     + del_cost_i, prev[j - 1] + sub0);
+                     double vert1 = std::min(prev[j + 1] + del_cost_i, prev[j]     + sub1);
  
-                     double running = curr[j - 1] + ins[0];
-                     for (std::size_t b = 0; b < B; ++b) {
-                         double v = vert.get(b);
-                         double c = std::min(v, running);
-                         curr[j + (int)b] = c;
-                         if (b + 1 < B) running = c + ins[b + 1];
-                     }
+                     double c0 = std::min(vert0, curr[j - 1] + ins0);
+                     curr[j] = c0;
+                     double c1 = std::min(vert1, c0 + ins1);
+                     curr[j + 1] = c1;
                  }
  
                  for (; j < nSuf; ++j) {
@@ -204,28 +188,28 @@
              }
  
              const int max_nm = (mm > nn) ? mm : nn;
-            double structural_reference_cost =
-                std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
+             double structural_reference_cost =
+                 std::abs(nn - mm) * maxindel + static_cast<double>(max_nm) * maxscost;
 
-            double ml = 0.0;
-            for (int spell_i = 0; spell_i < mm; ++spell_i) {
-                const int state = ptr_seq(is, spell_i);
-                ml += ptr_indel(state)
-                    + timecost * (ptr_dur(is, spell_i) * dur_scale);
-            }
+             double ml = 0.0;
+             for (int spell_i = 0; spell_i < mm; ++spell_i) {
+                 const int state = ptr_seq(is, spell_i);
+                 ml += ptr_indel(state)
+                     + timecost * (ptr_dur(is, spell_i) * dur_scale);
+             }
 
-            double nl = 0.0;
-            for (int spell_j = 0; spell_j < nn; ++spell_j) {
-                const int state = ptr_seq(js, spell_j);
-                nl += ptr_indel(state)
-                    + timecost * (ptr_dur(js, spell_j) * dur_scale);
-            }
-            return normalize_distance(
-                prev[nSuf - 1],
-                structural_reference_cost,
-                ml,
-                nl,
-                norm);
+             double nl = 0.0;
+             for (int spell_j = 0; spell_j < nn; ++spell_j) {
+                 const int state = ptr_seq(js, spell_j);
+                 nl += ptr_indel(state)
+                     + timecost * (ptr_dur(js, spell_j) * dur_scale);
+             }
+             return normalize_distance(
+                 prev[nSuf - 1],
+                 structural_reference_cost,
+                 ml,
+                 nl,
+                 norm);
          } catch (const std::exception& e) {
              py::print("Error in OMspellRSDistance::compute_distance: ", e.what());
              throw;
@@ -234,6 +218,7 @@
  
      py::array_t<double> compute_all_distances() {
          try {
+             auto dist_matrix = py::array_t<double>({nseq, nseq});
              return dp_utils::compute_all_distances(
                  nseq,
                  fmatsize,
@@ -248,8 +233,24 @@
          }
      }
  
+     py::array_t<double> compute_condensed_distances() {
+         try {
+             return dp_utils::compute_condensed_distances(
+                 nseq,
+                 fmatsize,
+                 [this](int i, int j, double* prev, double* curr) {
+                     return this->compute_distance(i, j, prev, curr);
+                 }
+             );
+         } catch (const std::exception& e) {
+             py::print("Error in OMspellRSDistance::compute_condensed_distances: ", e.what());
+             throw;
+         }
+     }
+
      py::array_t<double> compute_refseq_distances() {
          try {
+             auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
              auto buffer = refdist_matrix.mutable_unchecked<2>();
  #pragma omp parallel
              {
@@ -281,7 +282,6 @@
      int len;
      int alphasize;
      int fmatsize;
-     py::array_t<double> dist_matrix;
      double maxscost;
      double maxindel;
      double timecost;
@@ -291,5 +291,4 @@
      int nans;
      int rseq1;
      int rseq2;
-     py::array_t<double> refdist_matrix;
  };

@@ -27,8 +27,6 @@ public:
             nseq = seq_shape[0];
             len = seq_shape[1];
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
-
             // about reference sequences :
             nans = nseq;
 
@@ -40,7 +38,6 @@ public:
             }else{
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2-rseq1)});
         } catch (const std::exception& e){
             py::print("Error in constructor: ", e.what());
             throw ;
@@ -90,7 +87,13 @@ public:
                 alignas(32) double tmp[simd_width];
                 int bound = std::min(simd_width, minimum - i);
                 for(int j = 0; j < simd_width; j++) {
-                    tmp[j] = (j < bound) ? ptr_sm(i + j, ptr_seq(is, i + j), ptr_seq(js, i + j)) : 0.0;
+                    if(j < bound) {
+                        const int seq_is = ptr_seq(is, i + j);
+                        const int seq_js = ptr_seq(js, i + j);
+                        tmp[j] = (seq_is == seq_js) ? 0.0 : ptr_sm(i + j, seq_is, seq_js);
+                    } else {
+                        tmp[j] = 0.0;
+                    }
                 }
                 xsimd::batch<double> costs = xsimd::load_unaligned(tmp);
                 cost += xsimd::reduce_add(costs);
@@ -105,6 +108,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances_simple(
                 nseq,
                 dist_matrix,
@@ -116,8 +120,21 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances_simple(
+                nseq,
+                [this](int i, int j){ return this->compute_distance(i, j); }
+            );
+        } catch (const std::exception& e) {
+            py::print("Error in compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             return dp_utils::compute_refseq_distances_simple(
                 nseq,
                 rseq1,
@@ -137,12 +154,10 @@ private:
     int norm;
     int nseq;
     int len;
-    py::array_t<double> dist_matrix;
     double maxdist;
 
     py::array_t<int> refseqS;
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

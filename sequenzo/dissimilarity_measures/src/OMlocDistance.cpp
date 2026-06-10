@@ -1,17 +1,6 @@
 /*
  * OMlocDistance: Optimal Matching with localized indel costs (context-dependent).
  *
- * Optimizations vs original:
- *   [OPT-1] Inlined getIndel into compute_distance hot loop. Original created new
- *           unchecked<>() accessors per getIndel call (~O(m*n + m²) calls per pair).
- *           Now uses lambda capturing accessors created once at function entry.
- *   [OPT-2] curr[0] incremental accumulation: O(m²) → O(m).
- *           Original: for each row i, recomputed sum from k=0..i-1.
- *           Key insight: context (prev_jstate, j_state) stabilizes after i=1's j-loop
- *           to (seq_j[n-1], seq_j[n-1]). So i=1 uses initial context (1 call),
- *           i=2 recomputes 2 terms with stable context, i≥3 increments by 1 term.
- *   [OPT-3] Manual 3-way min replaces std::min({a,b,c}).
- *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : OMlocDistance.cpp
  */
@@ -55,7 +44,6 @@ public:
             if (use_indellist)
                 this->indellist = indellist;
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
             fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
 
             auto ptr = sm.mutable_unchecked<2>();
@@ -82,7 +70,6 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in constructor: ", e.what());
             throw;
@@ -125,7 +112,6 @@ public:
                 return normalize_distance(cost, maxpossiblecost, double(m) * indel, 0.0, norm);
             }
 
-            // [OPT-1] Inline getIndel: pre-extract indellist data pointer for 1D case.
             const double* indel_data = use_indellist ? static_cast<const double*>(indellist.data()) : nullptr;
 
             auto indel_fn = [&](int state, int prev_s, int next_s) -> double {
@@ -164,13 +150,6 @@ public:
             prev_jstate = ptr_seq(js, prefix);
             j_state = ptr_seq(js, firststate);
 
-            // =====================================================================
-            // [OPT-2] Main DP loop with incremental curr[0].
-            //
-            // Context (prev_jstate, j_state) used for curr[0]:
-            //   i=1: initial context (seq_j[0], seq_j[0])
-            //   i≥2: stable context (seq_j[n-1], seq_j[n-1]) — set after i=1's j-loop
-            // =====================================================================
             double cum_indel_stable = 0.0;
             int stable_prev_j = 0, stable_j = 0;
 
@@ -178,15 +157,12 @@ public:
                 int i_state_curr = ptr_seq(is, i - 1);
 
                 if (i == 1) {
-                    // i=1: 1 term, initial context
                     curr[0] = indel_fn(ptr_seq(is, 0), prev_jstate, j_state);
                 } else if (i == 2) {
-                    // i=2: recompute 2 terms with stable context
                     cum_indel_stable = indel_fn(ptr_seq(is, 0), stable_prev_j, stable_j)
                                      + indel_fn(ptr_seq(is, 1), stable_prev_j, stable_j);
                     curr[0] = cum_indel_stable;
                 } else {
-                    // i≥3: add 1 term
                     cum_indel_stable += indel_fn(ptr_seq(is, i - 1), stable_prev_j, stable_j);
                     curr[0] = cum_indel_stable;
                 }
@@ -199,7 +175,6 @@ public:
                     double sub_cost = (i_state_curr == j_state_curr)
                         ? prev[j - 1] : prev[j - 1] + ptr_sm(i_state_curr, j_state_curr);
 
-                    // [OPT-3] Manual 3-way min.
                     double best = del_cost;
                     if (ins_cost < best) best = ins_cost;
                     if (sub_cost < best) best = sub_cost;
@@ -234,6 +209,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances(
                 nseq, fmatsize, dist_matrix,
                 [this](int i, int j, double* prev, double* curr) {
@@ -245,8 +221,22 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances(
+                nseq, fmatsize,
+                [this](int i, int j, double* prev, double* curr) {
+                    return this->compute_distance(i, j, prev, curr);
+                });
+        } catch (const std::exception& e) {
+            py::print("Error in compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             #pragma omp parallel
             {
@@ -282,12 +272,10 @@ private:
     int alphasize;
     int fmatsize;
     py::array_t<int> seqlength;
-    py::array_t<double> dist_matrix;
     double maxscost = 0.0;
     double timecost;
     double localcost;
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

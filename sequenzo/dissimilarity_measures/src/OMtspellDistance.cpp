@@ -10,12 +10,6 @@
  *   |n_s - m_s| * max(c_indel) + max(n_s, m_s) * max(sigma)
  * Not a strict upper bound on raw distance when duration-expansion terms are positive.
  * ml/nl for YujianBo: sum of c_indel + timecost*tok*(d-1) per spell (distance to empty).
- *
- * Optimizations vs original:
- *   [OPT-1] Removed pseudo-SIMD (same rationale as OMspell).
- *   [OPT-2] Manual 3-way min replaces std::min({a,b,c}).
- *   [OPT-3] Cache dur_j, tok_j once per j-iteration.
- *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : OMtspellDistance.cpp
  */
@@ -54,7 +48,6 @@ public:
             nseq = seq_shape[0];
             len = seq_shape[1];
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
             fmatsize = len + 1;
 
             auto sm_shape = sm.shape();
@@ -89,7 +82,6 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in OMtspell constructor: ", e.what());
             throw;
@@ -137,7 +129,6 @@ public:
                 prev[jj] = prev[jj - 1] + (ptr_indel(bj) + timecost * ptr_tok(bj) * (ptr_dur(js, jj - 1) - 1.0));
             }
 
-            // [OPT-1] Pure scalar DP — pseudo-SIMD removed.
             for (int i = 1; i < mSuf; i++) {
                 int i_state = ptr_seq(is, i - 1);
                 double dur_i = ptr_dur(is, i - 1);
@@ -148,9 +139,8 @@ public:
 
                 for (int j = 1; j < nSuf; j++) {
                     int j_state = ptr_seq(js, j - 1);
-                    double dur_j = ptr_dur(js, j - 1);   // [OPT-3]
-                    double tok_j = ptr_tok(j_state);      // [OPT-3]
-
+                    double dur_j = ptr_dur(js, j - 1);
+                    double tok_j = ptr_tok(j_state);
                     double del_cost = prev[j] + del_cost_i;
                     double ins_cost = curr[j - 1] + (ptr_indel(j_state) + timecost * tok_j * (dur_j - 1.0));
                     double sub_cost = prev[j - 1] + (
@@ -159,7 +149,6 @@ public:
                         : (ptr_sm(i_state, j_state) + (tok_i * (dur_i - 1.0) + tok_j * (dur_j - 1.0)) * timecost)
                     );
 
-                    // [OPT-2] Manual 3-way min.
                     double best = del_cost;
                     if (ins_cost < best) best = ins_cost;
                     if (sub_cost < best) best = sub_cost;
@@ -192,6 +181,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances(
                 nseq, fmatsize, dist_matrix,
                 [this](int i, int j, double* prev, double* curr) {
@@ -203,8 +193,22 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances(
+                nseq, fmatsize,
+                [this](int i, int j, double* prev, double* curr) {
+                    return this->compute_distance(i, j, prev, curr);
+                });
+        } catch (const std::exception& e) {
+            py::print("Error in OMtspell compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             #pragma omp parallel
             {
@@ -237,7 +241,6 @@ private:
     int len;
     int alphasize;
     int fmatsize;
-    py::array_t<double> dist_matrix;
     double maxscost = 0.0;
     double maxindel = 0.0;
     double timecost;
@@ -247,5 +250,4 @@ private:
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

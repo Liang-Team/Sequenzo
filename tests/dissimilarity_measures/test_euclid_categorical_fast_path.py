@@ -78,6 +78,68 @@ def test_euclid_categorical_fast_path_matches_dense_when_full_matrix_is_false():
     )
 
 
+@pytest.mark.parametrize("norm", ["none", "auto"])
+@pytest.mark.parametrize("refseq", [0, 2])
+def test_euclid_categorical_refseq_index_matches_dense(norm, refseq):
+    seqdata = _seqdata()
+
+    dense = get_distance_matrix(
+        seqdata,
+        method="EUCLID",
+        norm=norm,
+        refseq=refseq,
+        euclid_backend="dense",
+    )
+    fast = get_distance_matrix(
+        seqdata,
+        method="EUCLID",
+        norm=norm,
+        refseq=refseq,
+        euclid_backend="categorical",
+    )
+
+    assert isinstance(fast, pd.Series)
+    assert list(fast.index) == list(seqdata.ids)
+    np.testing.assert_allclose(
+        fast.to_numpy(dtype=np.float64),
+        dense.to_numpy(dtype=np.float64),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+    assert fast.iloc[refseq] == 0.0
+
+
+@pytest.mark.parametrize("norm", ["none", "auto"])
+@pytest.mark.parametrize("refseq", [[[0, 3], [1, 2]], [[1, 2], [0, 3]]])
+def test_euclid_categorical_refseq_sets_matches_dense(norm, refseq):
+    seqdata = _seqdata()
+
+    dense = get_distance_matrix(
+        seqdata,
+        method="EUCLID",
+        norm=norm,
+        refseq=refseq,
+        euclid_backend="dense",
+    )
+    fast = get_distance_matrix(
+        seqdata,
+        method="EUCLID",
+        norm=norm,
+        refseq=refseq,
+        euclid_backend="categorical",
+    )
+
+    assert isinstance(fast, pd.DataFrame)
+    assert list(fast.index) == list(seqdata.ids[refseq[0]])
+    assert list(fast.columns) == list(seqdata.ids[refseq[1]])
+    np.testing.assert_allclose(
+        fast.to_numpy(dtype=np.float64),
+        dense.to_numpy(dtype=np.float64),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+
+
 def test_euclid_categorical_fast_path_rejects_unsupported_options():
     seqdata = _seqdata()
 

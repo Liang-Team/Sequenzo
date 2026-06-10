@@ -26,11 +26,8 @@ public:
         nseq = seq_shape[0];
         len = seq_shape[1];
 
-        // [OPT] Cache raw pointer once. Original created unchecked<2>() per
-        // compute_distance call (~36M calls for n=8501 unique sequences).
+        // Cache the row-major buffer once for the distance loop.
         seq_ptr = sequences.data();
-
-        dist_matrix = py::array_t<double>({nseq, nseq});
 
         nans = nseq;
         rseq1 = refseqS.at(0);
@@ -41,7 +38,6 @@ public:
         }else{
             rseq1 = rseq1 - 1;
         }
-        refdist_matrix = py::array_t<double>({nseq, (rseq2-rseq1)});
     }
 
     double compute_distance(int is, int js) {
@@ -71,6 +67,7 @@ public:
     }
 
     py::array_t<double> compute_all_distances() {
+        auto dist_matrix = py::array_t<double>({nseq, nseq});
         return dp_utils::compute_all_distances_simple(
             nseq,
             dist_matrix,
@@ -78,7 +75,15 @@ public:
         );
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        return dp_utils::compute_condensed_distances_simple(
+            nseq,
+            [this](int i, int j){ return this->compute_distance(i, j); }
+        );
+    }
+
     py::array_t<double> compute_refseq_distances() {
+        auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         return dp_utils::compute_refseq_distances_simple(
             nseq,
             rseq1,
@@ -95,10 +100,8 @@ private:
     int len;
     int sign;
     const int* seq_ptr = nullptr;
-    py::array_t<double> dist_matrix;
 
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

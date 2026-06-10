@@ -36,7 +36,7 @@ public:
         if (use_indellist)
             this->indellist = indellist;
 
-        // [OPT-1] Cache raw pointers. Original creates pybind11 unchecked<>() accessors
+        // Cache raw pointers. Original creates pybind11 unchecked<>() accessors
         // inside compute_distance, which is called ~n^2/2 times. Each accessor has overhead
         // from bounds-check setup and stride computation. Raw pointers eliminate this.
         seq_ptr = sequences.data();
@@ -44,17 +44,13 @@ public:
         if (use_indellist)
             indel_ptr = indellist.data();
 
-        // [OPT-2] Copy SM with zeroed diagonal. Eliminates the branch
-        // (ai == bj) ? 0.0 : sm[ai][bj] in the innermost loop. When ai == bj,
-        // sm_local[ai * alphasize + ai] == 0.0 by construction, giving correct result
-        // without a branch. Branch misprediction costs ~15 cycles on modern CPUs.
+        // Keep diagonal substitution costs at zero for direct table lookup.
         sm_buf.resize(alphasize * alphasize);
         std::memcpy(sm_buf.data(), sm.data(), alphasize * alphasize * sizeof(double));
         for (int i = 0; i < alphasize; ++i)
             sm_buf[i * alphasize + i] = 0.0;
         sm_local = sm_buf.data();
 
-        dist_matrix = py::array_t<double>({nseq, nseq});
         fmatsize = use_indellist ? (seqlen + 2) : (seqlen + 1);
 
         if (norm == 4) {
@@ -75,10 +71,8 @@ public:
         } else {
             rseq1 = rseq1 - 1;
         }
-        refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
     }
 
-    // [OPT-3] Cached raw pointer lookup replaces indellist.unchecked<1>()(idx) per call.
     inline double get_indel_fast(int state) const {
         if (use_indellist) {
             int idx = indellist_0based ? (state - 1) : state;
@@ -93,17 +87,11 @@ public:
         int mSuf = m_full + 1, nSuf = n_full + 1;
         int prefix = 0;
 
-        // [OPT-1] Raw pointer row access: seq_ptr + row * stride.
-        // Uses ptrdiff_t cast to avoid int overflow when is * seqlen > INT_MAX.
         const int* seq_i = seq_ptr + static_cast<ptrdiff_t>(is) * seqlen;
         const int* seq_j = seq_ptr + static_cast<ptrdiff_t>(js) * seqlen;
 
         // Prefix/suffix trimming. Disabled for vector indel per TraMineR OMVIdistance.
         if (!use_indellist) {
-            // [OPT-4] Early first-element check. For random sequences with ~20 states,
-            // P(first elements match) = 1/20 = 5%. 95% of pairs skip the entire prefix scan.
-            // CORRECTNESS: guard m_full > 0 && n_full > 0 prevents out-of-bounds access.
-            // Original code guarded implicitly via `ii < mSuf` where mSuf = m_full + 1.
             if (m_full > 0 && n_full > 0 && seq_i[0] == seq_j[0]) {
                 prefix = 1;
                 const int lim = std::min(m_full, n_full);
@@ -146,22 +134,6 @@ public:
             prev[x] = prev[x - 1] + get_indel_fast(seq_j[prefix + x - 1]);
 
         if (!use_indellist) {
-            // ===== SCALAR INDEL PATH (most common case) =====
-            //
-            // [OPT-5] Removed fake SIMD. Original loaded xsimd batch<double> for 4 cells,
-            // computed deletion and substitution candidates in parallel, then had to
-            // sequentially fix up insertion costs because curr[j] depends on curr[j-1].
-            // The SIMD load/store + sequential fixup was SLOWER than pure scalar.
-            //
-            // [OPT-6] SM row pointer pre-fetched per i-row. Original called ptr_sm(ai, bj)
-            // which resolves base + ai * stride + bj per j-iteration. Now one pointer add
-            // per i-row, then sm_row[bj] in the inner loop.
-            //
-            // [OPT-2] Branch-free SM lookup: sm_row[seg_j[j-1]] returns 0.0 when ai == seg_j[j-1]
-            // because we zeroed the diagonal. No branch needed.
-            //
-            // [OPT-7] Manual 3-way min replaces std::min({a,b,c}) which constructs an
-            // initializer_list (heap-touching) on every call.
             const int* seg_j = seq_j + prefix;
             const double indel_val = indel;
 
@@ -183,12 +155,6 @@ public:
                 std::swap(prev, curr);
             }
         } else {
-            // ===== VECTOR INDEL PATH =====
-            //
-            // [OPT-8] Incremental curr[0]. Original code:
-            //   curr[0] = 0; for (k=0; k<i; k++) curr[0] += get_indel(...)
-            // This recomputes the entire prefix sum each row: O(m^2) total.
-            // Now: running accumulator, O(1) per row, O(m) total.
             double cum_indel_i = 0;
             for (int i = 1; i <= m; ++i) {
                 const int ai = seq_i[prefix + i - 1];
@@ -217,6 +183,7 @@ public:
 
 
     py::array_t<double> compute_all_distances() {
+        auto dist_matrix = py::array_t<double>({nseq, nseq});
         return dp_utils::compute_all_distances(
             nseq,
             fmatsize,
@@ -227,7 +194,18 @@ public:
         );
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        return dp_utils::compute_condensed_distances(
+            nseq,
+            fmatsize,
+            [this](int i, int j, double* prev, double* curr) {
+                return this->compute_distance(i, j, prev, curr);
+            }
+        );
+    }
+
     py::array_t<double> compute_refseq_distances() {
+        auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         auto buffer = refdist_matrix.mutable_unchecked<2>();
 
         #pragma omp parallel
@@ -262,7 +240,6 @@ private:
     int alphasize;
     int fmatsize;
     py::array_t<int> seqlength;
-    py::array_t<double> dist_matrix;
     double maxscost = 0.0;
 
     const int* seq_ptr = nullptr;
@@ -274,5 +251,4 @@ private:
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

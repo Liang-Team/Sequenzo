@@ -8,7 +8,7 @@
 namespace py = pybind11;
 
 /*
- * [OPT-11] C++ preprocessing replaces the Python pipeline:
+ * C++ preprocessing replaces the Python pipeline:
  *
  *   np.unique(seqdata_num, axis=0)       O(n*L*log n) sort
  *   seqconc(seqdata_num)                 O(n*L) Python string construction
@@ -48,8 +48,8 @@ struct RowEqual {
 
 } // anonymous namespace
 
-static std::tuple<py::array_t<int>, py::array_t<int>, py::array_t<int>>
-find_unique_sequences(py::array_t<int, py::array::c_style | py::array::forcecast> sequences) {
+static std::tuple<py::array_t<int>, py::array_t<int>, py::array_t<int>, py::array_t<int>>
+find_unique_sequences_impl(py::array_t<int, py::array::c_style | py::array::forcecast> sequences) {
     const int nseq = static_cast<int>(sequences.shape(0));
     const int ncols = static_cast<int>(sequences.shape(1));
     const int* data = sequences.data();
@@ -101,5 +101,28 @@ find_unique_sequences(py::array_t<int, py::array::c_style | py::array::forcecast
         lbuf[i] = len;
     }
 
-    return std::make_tuple(std::move(unique_seqs), std::move(didxs_arr), std::move(lengths));
+    py::array_t<int> first_indices(nunique);
+    std::memcpy(first_indices.mutable_data(), unique_row_indices.data(), nunique * sizeof(int));
+
+    return std::make_tuple(
+        std::move(unique_seqs),
+        std::move(didxs_arr),
+        std::move(lengths),
+        std::move(first_indices)
+    );
+}
+
+static std::tuple<py::array_t<int>, py::array_t<int>, py::array_t<int>>
+find_unique_sequences(py::array_t<int, py::array::c_style | py::array::forcecast> sequences) {
+    auto result = find_unique_sequences_impl(sequences);
+    return std::make_tuple(
+        std::move(std::get<0>(result)),
+        std::move(std::get<1>(result)),
+        std::move(std::get<2>(result))
+    );
+}
+
+static std::tuple<py::array_t<int>, py::array_t<int>, py::array_t<int>, py::array_t<int>>
+find_unique_sequences_with_indices(py::array_t<int, py::array::c_style | py::array::forcecast> sequences) {
+    return find_unique_sequences_impl(sequences);
 }

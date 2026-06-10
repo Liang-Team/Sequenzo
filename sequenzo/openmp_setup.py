@@ -44,6 +44,8 @@ _MACOS_HOMEBREW_LIBOMP_PATHS = (
     "/usr/local/lib/libomp.dylib",
 )
 
+_WINDOWS_DLL_DIRECTORY_HANDLES = []
+
 
 def _get_conda_prefix() -> str | None:
     """Return the active Conda environment prefix, if any."""
@@ -267,7 +269,8 @@ def _register_windows_dll_directory(path: Path) -> None:
     if not hasattr(os, "add_dll_directory"):
         return
     try:
-        os.add_dll_directory(str(path))
+        handle = os.add_dll_directory(str(path))
+        _WINDOWS_DLL_DIRECTORY_HANDLES.append(handle)
     except OSError:
         pass
 

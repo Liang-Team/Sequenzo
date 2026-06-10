@@ -49,6 +49,10 @@ inline aligned_double_ptr make_aligned_double_buffer(size_t size) {
     return aligned_double_ptr(aligned_alloc_double(size));
 }
 
+inline int pairwise_row_chunk(int nseq) {
+    return nseq >= 2000 ? 4 : 16;
+}
+
 inline void record_first_exception(std::exception_ptr& first_exception, std::atomic<bool>& has_exception) {
     if (!has_exception.exchange(true)) {
         #pragma omp critical(dp_utils_exception)
@@ -76,6 +80,7 @@ inline pybind11::array_t<double> compute_all_distances(
     auto buffer = dist_matrix.mutable_unchecked<2>();
     std::exception_ptr first_exception;
     std::atomic<bool> has_exception(false);
+    const int row_chunk = pairwise_row_chunk(nseq);
 
     #pragma omp parallel
     {
@@ -91,7 +96,7 @@ inline pybind11::array_t<double> compute_all_distances(
             record_first_exception(first_exception, has_exception);
         }
 
-        #pragma omp for schedule(dynamic, 16)
+        #pragma omp for schedule(dynamic, row_chunk)
         for (int i = 0; i < nseq; i++) {
             if (!ready || has_exception.load()) continue;
             buffer(i, i) = 0.0;
@@ -141,6 +146,7 @@ inline pybind11::array_t<double> compute_condensed_distances(
     auto buffer = condensed.mutable_unchecked<1>();
     std::exception_ptr first_exception;
     std::atomic<bool> has_exception(false);
+    const int row_chunk = pairwise_row_chunk(nseq);
 
     #pragma omp parallel
     {
@@ -156,7 +162,7 @@ inline pybind11::array_t<double> compute_condensed_distances(
             record_first_exception(first_exception, has_exception);
         }
 
-        #pragma omp for schedule(dynamic, 16)
+        #pragma omp for schedule(dynamic, row_chunk)
         for (int i = 0; i < nseq - 1; i++) {
             if (!ready || has_exception.load()) continue;
             for (int j = i + 1; j < nseq; j++) {
@@ -185,16 +191,29 @@ inline pybind11::array_t<double> compute_all_distances_simple(
     ComputeFn&& compute_fn
 ) {
     auto buffer = dist_matrix.mutable_unchecked<2>();
+    const int row_chunk = pairwise_row_chunk(nseq);
+    std::exception_ptr first_exception;
+    std::atomic<bool> has_exception(false);
 
     #pragma omp parallel
     {
-        #pragma omp for schedule(dynamic, 16)
+        #pragma omp for schedule(dynamic, row_chunk)
         for (int i = 0; i < nseq; i++) {
+            if (has_exception.load()) continue;
             buffer(i, i) = 0.0;
             for (int j = i + 1; j < nseq; j++) {
-                buffer(i, j) = compute_fn(i, j);
+                if (has_exception.load()) continue;
+                try {
+                    buffer(i, j) = compute_fn(i, j);
+                } catch (...) {
+                    record_first_exception(first_exception, has_exception);
+                }
             }
         }
+    }
+
+    if (first_exception) {
+        std::rethrow_exception(first_exception);
     }
 
     #pragma omp parallel for schedule(static)
@@ -208,6 +227,43 @@ inline pybind11::array_t<double> compute_all_distances_simple(
 }
 
 template <typename ComputeFn>
+inline pybind11::array_t<double> compute_condensed_distances_simple(
+    int nseq,
+    ComputeFn&& compute_fn
+) {
+    const long long condensed_len = static_cast<long long>(nseq) * (nseq - 1) / 2;
+    pybind11::array_t<double> condensed(
+        std::array<pybind11::ssize_t, 1>{static_cast<pybind11::ssize_t>(condensed_len)}
+    );
+    auto buffer = condensed.mutable_unchecked<1>();
+    const int row_chunk = pairwise_row_chunk(nseq);
+    std::exception_ptr first_exception;
+    std::atomic<bool> has_exception(false);
+
+    #pragma omp parallel
+    {
+        #pragma omp for schedule(dynamic, row_chunk)
+        for (int i = 0; i < nseq - 1; i++) {
+            if (has_exception.load()) continue;
+            for (int j = i + 1; j < nseq; j++) {
+                if (has_exception.load()) continue;
+                try {
+                    buffer(condensed_index(nseq, i, j)) = compute_fn(i, j);
+                } catch (...) {
+                    record_first_exception(first_exception, has_exception);
+                }
+            }
+        }
+    }
+
+    if (first_exception) {
+        std::rethrow_exception(first_exception);
+    }
+
+    return condensed;
+}
+
+template <typename ComputeFn>
 inline pybind11::array_t<double> compute_refseq_distances_simple(
     int nseq,
     int rseq1,
@@ -216,15 +272,29 @@ inline pybind11::array_t<double> compute_refseq_distances_simple(
     ComputeFn&& compute_fn
 ) {
     auto buffer = refdist_matrix.mutable_unchecked<2>();
+    std::exception_ptr first_exception;
+    std::atomic<bool> has_exception(false);
 
     #pragma omp parallel
     {
         #pragma omp for schedule(dynamic, 4)
         for (int rseq = rseq1; rseq < rseq2; rseq++) {
+            if (has_exception.load()) continue;
             for (int is = 0; is < nseq; is++) {
-                buffer(is, rseq - rseq1) = (is == rseq) ? 0.0 : compute_fn(is, rseq);
+                if (has_exception.load()) continue;
+                try {
+                    buffer(is, rseq - rseq1) = (is == rseq)
+                        ? 0.0
+                        : (is < rseq ? compute_fn(is, rseq) : compute_fn(rseq, is));
+                } catch (...) {
+                    record_first_exception(first_exception, has_exception);
+                }
             }
         }
+    }
+
+    if (first_exception) {
+        std::rethrow_exception(first_exception);
     }
 
     return refdist_matrix;
@@ -270,7 +340,9 @@ inline pybind11::array_t<double> compute_refseq_distances_buffered(
                 continue;
             }
             try {
-                buffer(is, col) = compute_fn(is, rseq, prev.get(), curr.get());
+                buffer(is, col) = (is < rseq)
+                    ? compute_fn(is, rseq, prev.get(), curr.get())
+                    : compute_fn(rseq, is, prev.get(), curr.get());
             } catch (...) {
                 record_first_exception(first_exception, has_exception);
             }

@@ -12,13 +12,6 @@
  * using spell counts n_s, m_s, maxindel from indellist, maxscost from sm.
  * ml/nl for maxlength, gmean, YujianBo: sum of per-spell indel costs including
  * lambda*(d_k-1) (distance to empty sequence; not time-expanded length).
- *
- * Optimizations vs original:
- *   [OPT-1] Removed pseudo-SIMD. xsimd batch loaded B cells for del/sub but insertion
- *           depends on curr[j-1] → sequential fixup negated SIMD benefit.
- *   [OPT-2] Manual 3-way min replaces std::min({a,b,c}) (avoids initializer_list heap alloc).
- *   [OPT-3] Cache dur_j once per j-iteration (original tail loop called ptr_dur(js,j-1) twice).
- *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : OMspellDistance.cpp
  */
@@ -57,7 +50,6 @@ public:
             seq_ptr = sequences.data();
             seq_cols = static_cast<int>(sequences.shape(1));
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
             fmatsize = len + 1;
 
             auto sm_shape = sm.shape();
@@ -128,7 +120,6 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in constructor: ", e.what());
             throw;
@@ -170,7 +161,6 @@ public:
                 prev[jj] = prev[jj - 1] + indel_j_cost_row[jj - 1];
             }
 
-            // [OPT-1] Pure scalar DP — pseudo-SIMD removed.
             for (int i = 1; i < mSuf; i++) {
                 int i_state = seq_i[i - 1];
                 double dur_i_cost = dur_i_cost_row[i - 1];
@@ -181,12 +171,11 @@ public:
 
                 for (int j = 1; j < nSuf; j++) {
                     int j_state = seq_j[j - 1];
-                    double dur_j_cost = dur_j_cost_row[j - 1];  // [OPT-3] cached once
+                    double dur_j_cost = dur_j_cost_row[j - 1];
 
                     double del_cost = prev[j] + del_cost_i;
                     double ins_cost = curr[j - 1] + indel_j_cost_row[j - 1];
 
-                    // [OPT-2] Manual 3-way min.
                     double best = del_cost;
                     if (ins_cost < best) best = ins_cost;
                     if (i_state == j_state) {
@@ -481,6 +470,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             if (mismatch_sub_dominated) {
                 return dp_utils::compute_all_distances(
                     nseq, fmatsize, dist_matrix,
@@ -499,8 +489,29 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            if (mismatch_sub_dominated) {
+                return dp_utils::compute_condensed_distances(
+                    nseq, fmatsize,
+                    [this](int i, int j, double* prev, double* curr) {
+                        return this->compute_distance_column_rolling_dominated(i, j, prev, curr);
+                    });
+            }
+            return dp_utils::compute_condensed_distances(
+                nseq, fmatsize,
+                [this](int i, int j, double* prev, double* curr) {
+                    return this->compute_distance_column_rolling(i, j, prev, curr);
+                });
+        } catch (const std::exception& e) {
+            py::print("Error in compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_all_distances_single_thread() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             auto buffer = dist_matrix.mutable_unchecked<2>();
             double* prev = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
             double* curr = dp_utils::aligned_alloc_double(static_cast<size_t>(fmatsize));
@@ -730,6 +741,7 @@ public:
 
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             #pragma omp parallel
             {
@@ -767,7 +779,6 @@ private:
     int len;
     int alphasize;
     int fmatsize;
-    py::array_t<double> dist_matrix;
     double maxscost = 0.0;
     double maxindel = 0.0;
     const int* seq_ptr = nullptr;
@@ -792,5 +803,4 @@ private:
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

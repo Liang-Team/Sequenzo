@@ -1,14 +1,6 @@
 /*
  * CHI2distance: Chi-square / Euclidean sequence distance.
  *
- * Optimizations vs original:
- * 1. Raw pointer cache (eliminates pybind11 unchecked<>() accessor per compute_distance call)
- * 2. Pre-computed 1/pdotj array (replaces division with multiplication in inner loop;
- *    division ~20 cycles vs multiplication ~4 cycles)
- * 3. OpenMP parallelization (original compute_all_distances was fully sequential;
- *    for EUCLID n=10000 L=30 this is ~50M pairs x 900 columns = 45B ops)
- * 4. Removed try/catch from hot path
- *
  * Note: EUCLID uses this same class. The Python layer builds allmat/pdotj differently
  * for EUCLID (uniform marginals) vs CHI2 (data-dependent marginals), but the C++
  * distance computation is identical.
@@ -40,10 +32,8 @@ public:
         rseq1_ = refseq_id.at(0);
         rseq2_ = refseq_id.at(1);
 
-        // [OPT-1] Cache raw pointer for allmat
         am_ptr_ = allmat.data();
 
-        // [OPT-2] Pre-compute reciprocals: replace d*d/pdotj[c] with d*d*inv[c]
         const double* pj = pdotj.data();
         inv_pdotj_.resize(n_cols_);
         for (int c = 0; c < n_cols_; c++) {
@@ -66,9 +56,6 @@ public:
         return std::sqrt(sum);
     }
 
-    // [OPT-3] Added OpenMP. Original was fully sequential loop.
-    // For EUCLID n=10000 L=30: 50M pairs, ~900 columns each = ~45B operations.
-    // Single-thread ~40s. With 8 cores: ~5-8s.
     py::array_t<double> compute_all_distances() {
         py::array_t<double> out({n_, n_});
         auto buf = out.mutable_unchecked<2>();
@@ -81,6 +68,25 @@ public:
                 double d = compute_distance(i, j) * nf;
                 buf(i, j) = d;
                 buf(j, i) = d;
+            }
+        }
+
+        return out;
+    }
+
+    py::array_t<double> compute_condensed_distances() {
+        const long long condensed_len = static_cast<long long>(n_) * (n_ - 1) / 2;
+        py::array_t<double> out(
+            std::array<py::ssize_t, 1>{static_cast<py::ssize_t>(condensed_len)}
+        );
+        auto buf = out.mutable_unchecked<1>();
+        const double nf = norm_factor_;
+
+        #pragma omp parallel for schedule(dynamic, 16)
+        for (int i = 0; i < n_ - 1; i++) {
+            const long long row_start = static_cast<long long>(i) * (2 * n_ - i - 1) / 2;
+            for (int j = i + 1; j < n_; j++) {
+                buf(row_start + (j - i - 1)) = compute_distance(i, j) * nf;
             }
         }
 

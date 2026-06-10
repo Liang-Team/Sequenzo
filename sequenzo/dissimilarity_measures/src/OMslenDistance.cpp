@@ -1,14 +1,6 @@
 /*
  * OMslenDistance: Optimal Matching with spell-length sensitivity.
  *
- * Optimizations vs original:
- *   [OPT-1] Removed pseudo-SIMD (same rationale as OMspell).
- *   [OPT-2] Manual 3-way min replaces std::min({a,b,c}).
- *   [OPT-3] Inlined getIndel/getSubCost into compute_distance hot loop.
- *           Original created new unchecked<>() accessors per call (~O(m*n) calls
- *           in inner loop, each constructing proxy objects). Now reuses accessors
- *           created once at top of compute_distance.
- *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : OMslenDistance.cpp
  */
@@ -48,7 +40,6 @@ public:
             seqlen = seq_shape[1];
             alphasize = sm.shape()[0];
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
             fmatsize = seqlen + 1;
 
             auto ptr = sm.mutable_unchecked<2>();
@@ -71,7 +62,6 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in constructor: ", e.what());
             throw;
@@ -108,7 +98,6 @@ public:
             auto ptr_dur = seqdur.unchecked<2>();
             auto ptr_indel = indellist.unchecked<1>();
 
-            // [OPT-3] Inline helpers using the accessors above.
             auto indel_cost = [&](int seq_idx, int position, int state) -> double {
                 return ptr_indel(state) * ptr_dur(seq_idx, position);
             };
@@ -155,7 +144,6 @@ public:
             for (int j = prefix; j < n_full; j++)
                 prev[j - prefix + 1] = prev[j - prefix] + indel_cost(js, j, ptr_seq(js, j));
 
-            // [OPT-1] Pure scalar DP — pseudo-SIMD removed.
             for (int i = prefix; i < m_full; i++) {
                 int i_state = ptr_seq(is, i);
                 double del_cost_i = indel_cost(is, i, i_state);
@@ -170,7 +158,6 @@ public:
                     double inscost = curr[j - 1 - prefix] + indel_cost(js, jj_idx, j_state);
                     double subcost = prev[j - 1 - prefix] + sub_cost_fn(i_state, j_state, is, i, js, jj_idx);
 
-                    // [OPT-2] Manual 3-way min.
                     double best = delcost;
                     if (inscost < best) best = inscost;
                     if (subcost < best) best = subcost;
@@ -204,6 +191,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances(
                 nseq, fmatsize, dist_matrix,
                 [this](int i, int j, double* prev, double* curr) {
@@ -215,8 +203,22 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances(
+                nseq, fmatsize,
+                [this](int i, int j, double* prev, double* curr) {
+                    return this->compute_distance(i, j, prev, curr);
+                });
+        } catch (const std::exception& e) {
+            py::print("Error in compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             auto buffer = refdist_matrix.mutable_unchecked<2>();
             #pragma omp parallel
             {
@@ -249,7 +251,6 @@ private:
     int alphasize;
     int fmatsize;
     py::array_t<int> seqlength;
-    py::array_t<double> dist_matrix;
     double maxscost = 0.0;
     py::array_t<double> seqdur;
     py::array_t<double> indellist;
@@ -257,5 +258,4 @@ private:
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
-    py::array_t<double> refdist_matrix;
 };

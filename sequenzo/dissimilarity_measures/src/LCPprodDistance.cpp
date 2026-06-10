@@ -69,8 +69,6 @@ public:
             nseq = static_cast<int>(seq_shape[0]);
             ncols = static_cast<int>(seq_shape[1]);
 
-            dist_matrix = py::array_t<double>({nseq, nseq});
-
             // Reference sequence range (same convention as LCPdistance / LCPspell).
             nans = nseq;
             rseq1 = refseqS.at(0);
@@ -81,7 +79,6 @@ public:
             } else {
                 rseq1 = rseq1 - 1;
             }
-            refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
         } catch (const std::exception& e) {
             py::print("Error in LCPprodDistance constructor: ", e.what());
             throw;
@@ -159,6 +156,7 @@ public:
 
     py::array_t<double> compute_all_distances() {
         try {
+            auto dist_matrix = py::array_t<double>({nseq, nseq});
             return dp_utils::compute_all_distances_simple(
                     nseq,
                     dist_matrix,
@@ -170,8 +168,21 @@ public:
         }
     }
 
+    py::array_t<double> compute_condensed_distances() {
+        try {
+            return dp_utils::compute_condensed_distances_simple(
+                    nseq,
+                    [this](int i, int j) { return this->compute_distance(i, j); }
+            );
+        } catch (const std::exception& e) {
+            py::print("Error in LCPprodDistance::compute_condensed_distances: ", e.what());
+            throw;
+        }
+    }
+
     py::array_t<double> compute_refseq_distances() {
         try {
+            auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             return dp_utils::compute_refseq_distances_simple(
                     nseq,
                     rseq1,
@@ -194,10 +205,8 @@ private:
     int sign;
     int nseq;
     int ncols;
-    py::array_t<double> dist_matrix;
 
     int nans;
     int rseq1;
     int rseq2;
-    py::array_t<double> refdist_matrix;
 };

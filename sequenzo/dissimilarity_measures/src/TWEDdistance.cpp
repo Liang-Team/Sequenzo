@@ -1,12 +1,6 @@
 /*
  * TWEDdistance: Time Warp Edit Distance (TraMineR-aligned).
  *
- * Optimizations vs original:
- *   - Use 2-row rolling DP buffers instead of a full fmat[m+1][n+1].
- *     TWED recurrence depends only on fmat[i-1][j-1], fmat[i-1][j],
- *     and fmat[i][j-1].
- *   - Use a manual 3-way minimum in the inner loop.
- *
  * @Author  : Yuqi Liang 梁彧祺, Yapeng Wei 卫亚鹏
  * @File    : TWEDdistance.cpp
  */
@@ -26,6 +20,14 @@
 #endif
 
 namespace py = pybind11;
+
+static inline double normalize_twed_distance(double rawdist, double maxdist, double l1, double l2, int norm) {
+    if (norm == 4) {
+        if (std::fabs(rawdist) < EPS) return 0.0;
+        return std::fabs(maxdist) < EPS ? 1.0 : (2.0 * rawdist) / (rawdist + maxdist);
+    }
+    return normalize_distance(rawdist, maxdist, l1, l2, norm);
+}
 
 class TWEDdistance {
 public:
@@ -88,16 +90,16 @@ public:
         int n = ptr_len(js);
 
         if (m == 0 && n == 0)
-            return normalize_distance(0.0, 0.0, 0.0, 0.0, norm_);
+            return normalize_twed_distance(0.0, 0.0, 0.0, 0.0, norm_);
         if (m == 0) {
             double cost = n * indel_;
             double maxcost = std::abs(n - m) * (nu_ + lambda_ + maxscost_) + 2.0 * (maxscost_ + nu_) * std::min(m, n);
-            return normalize_distance(cost, maxcost, 0.0, n * indel_, norm_);
+            return normalize_twed_distance(cost, maxcost, 0.0, n * indel_, norm_);
         }
         if (n == 0) {
             double cost = m * indel_;
             double maxcost = std::abs(n - m) * (nu_ + lambda_ + maxscost_) + 2.0 * (maxscost_ + nu_) * std::min(m, n);
-            return normalize_distance(cost, maxcost, m * indel_, 0.0, norm_);
+            return normalize_twed_distance(cost, maxcost, m * indel_, 0.0, norm_);
         }
 
         auto ptr_seq = sequences_.unchecked<2>();
@@ -144,7 +146,6 @@ public:
                     sub = inf;
                 }
 
-                // Manual 3-way minimum avoids initializer-list overhead.
                 double best = sub;
                 if (i_warp < best) best = i_warp;
                 if (j_warp < best) best = j_warp;
@@ -157,7 +158,7 @@ public:
         double maxpossiblecost = std::abs(n - m) * (nu_ + lambda_ + maxscost_) + 2.0 * (maxscost_ + nu_) * std::min(static_cast<double>(m), static_cast<double>(n));
         double ml = m * indel_;
         double nl = n * indel_;
-        return normalize_distance(raw, maxpossiblecost, ml, nl, norm_);
+        return normalize_twed_distance(raw, maxpossiblecost, ml, nl, norm_);
     }
 
     // Allocate 2 rows instead of fmatsize_² per worker thread.

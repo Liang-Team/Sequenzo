@@ -61,8 +61,6 @@
              nseq = static_cast<int>(seq_shape[0]);
              max_spells = static_cast<int>(seq_shape[1]);
  
-             dist_matrix = py::array_t<double>({nseq, nseq});
- 
              double obs_max_dur = 0.0;
              auto ptr_dur = seqdur.unchecked<2>();
              auto ptr_len = seqlength.unchecked<1>();
@@ -87,7 +85,6 @@
              } else {
                  rseq1 = rseq1 - 1;
              }
-             refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
          } catch (const std::exception& e) {
              py::print("Error in LCPspellDistance constructor: ", e.what());
              throw;
@@ -139,6 +136,7 @@
  
      py::array_t<double> compute_all_distances() {
          try {
+             auto dist_matrix = py::array_t<double>({nseq, nseq});
              return dp_utils::compute_all_distances_simple(
                      nseq,
                      dist_matrix,
@@ -150,8 +148,21 @@
          }
      }
  
+     py::array_t<double> compute_condensed_distances() {
+         try {
+             return dp_utils::compute_condensed_distances_simple(
+                     nseq,
+                     [this](int i, int j) { return this->compute_distance(i, j); }
+             );
+         } catch (const std::exception& e) {
+             py::print("Error in LCPspellDistance::compute_condensed_distances: ", e.what());
+             throw;
+         }
+     }
+
      py::array_t<double> compute_refseq_distances() {
          try {
+             auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
              return dp_utils::compute_refseq_distances_simple(
                      nseq,
                      rseq1,
@@ -175,10 +186,8 @@
      double duration_ref;
      int nseq;
      int max_spells;
-     py::array_t<double> dist_matrix;
  
      int nans;
      int rseq1;
      int rseq2;
-     py::array_t<double> refdist_matrix;
  };

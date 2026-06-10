@@ -8,6 +8,7 @@
 #include "OMslenDistance.cpp"
 #include "dist2matrix.cpp"
 #include "DHDdistance.cpp"
+#include "HAMdistance.cpp"
 #include "EUCLIDCategoricalDistance.cpp"
 #include "CHI2distance.cpp"
 #include "LCPdistance.cpp"
@@ -165,40 +166,63 @@ PYBIND11_MODULE(c_code, m) {
             .def("padding_matrix", &dist2matrix::padding_matrix)
             .def("padding_condensed", &dist2matrix::padding_condensed);
 
+    m.def("_unique_condensed_to_condensed",
+          &unique_condensed_to_condensed,
+          "Expand unique-sequence condensed distances to original-row condensed order.",
+          py::arg("nseq"),
+          py::arg("seqdata_didxs"),
+          py::arg("unique_condensed"),
+          py::arg("nunique"));
+
     py::class_<LCPdistance>(m, "LCPdistance")
             .def(py::init<py::array_t<int>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPdistance::compute_all_distances)
+            .def("compute_condensed_distances", &LCPdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPdistance::compute_refseq_distances);
 
     py::class_<CHI2distance>(m, "CHI2distance")
             .def(py::init<py::array_t<double>, py::array_t<double>, double, py::array_t<int>>())
             .def("compute_all_distances", &CHI2distance::compute_all_distances)
+            .def("compute_condensed_distances", &CHI2distance::compute_condensed_distances)
             .def("compute_refseq_distances", &CHI2distance::compute_refseq_distances);
 
     py::class_<LCSdistance>(m, "LCSdistance")
-            .def(py::init<py::array_t<int>, py::array_t<int>, int, py::array_t<int>>())
+            .def(py::init<py::array_t<int>, py::array_t<int>, int, py::array_t<int>, double>(),
+                 py::arg("sequences"), py::arg("seqlength"), py::arg("norm"), py::arg("refseqS"),
+                 py::arg("distance_scale") = 1.0)
             .def("compute_all_distances", &LCSdistance::compute_all_distances)
+            .def("compute_condensed_distances", &LCSdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCSdistance::compute_refseq_distances);
 
     py::class_<LCPspellDistance>(m, "LCPspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, int, int, py::array_t<int>, double, double>())
             .def("compute_all_distances", &LCPspellDistance::compute_all_distances)
+            .def("compute_condensed_distances", &LCPspellDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPspellDistance::compute_refseq_distances);
 
     py::class_<LCPmstDistance>(m, "LCPmstDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPmstDistance::compute_all_distances)
+            .def("compute_condensed_distances", &LCPmstDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPmstDistance::compute_refseq_distances);
 
     py::class_<LCPprodDistance>(m, "LCPprodDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, int, py::array_t<int>>())
             .def("compute_all_distances", &LCPprodDistance::compute_all_distances)
+            .def("compute_condensed_distances", &LCPprodDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &LCPprodDistance::compute_refseq_distances);
 
     py::class_<DHDdistance>(m, "DHDdistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, int, double, py::array_t<int>>())
             .def("compute_all_distances", &DHDdistance::compute_all_distances)
+            .def("compute_condensed_distances", &DHDdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &DHDdistance::compute_refseq_distances);
+
+    py::class_<HAMdistance>(m, "HAMdistance")
+            .def(py::init<py::array_t<int>, py::array_t<double>, int, double, py::array_t<int>>())
+            .def("compute_all_distances", &HAMdistance::compute_all_distances)
+            .def("compute_condensed_distances", &HAMdistance::compute_condensed_distances)
+            .def("compute_refseq_distances", &HAMdistance::compute_refseq_distances);
 
     py::class_<EUCLIDCategoricalDistance>(m, "EUCLIDCategoricalDistance")
             .def(py::init<py::array_t<int>, bool, py::array_t<int>>())
@@ -209,21 +233,25 @@ PYBIND11_MODULE(c_code, m) {
     py::class_<OMspellDistance>(m, "OMspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, py::array_t<double>, py::array_t<double>, py::array_t<int>>())
             .def("compute_all_distances", &OMspellDistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMspellDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMspellDistance::compute_refseq_distances);
 
     py::class_<OMtspellDistance>(m, "OMtspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, py::array_t<double>, py::array_t<double>, py::array_t<int>, py::array_t<double>>())
             .def("compute_all_distances", &OMtspellDistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMtspellDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMtspellDistance::compute_refseq_distances);
 
     py::class_<OMspellRSDistance>(m, "OMspellRSDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, double, double, py::array_t<double>, py::array_t<double>, py::array_t<int>>())
             .def("compute_all_distances", &OMspellRSDistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMspellRSDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMspellRSDistance::compute_refseq_distances);
 
     py::class_<OMslenDistance>(m, "OMslenDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, double, int, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &OMslenDistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMslenDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMslenDistance::compute_refseq_distances);
 
     py::class_<OMdistance>(m, "OMdistance")
@@ -231,6 +259,7 @@ PYBIND11_MODULE(c_code, m) {
                  py::arg("sequences"), py::arg("sm"), py::arg("indel"), py::arg("norm"), py::arg("seqlength"), py::arg("refseqS"),
                  py::arg("indellist") = py::array_t<double>())
             .def("compute_all_distances", &OMdistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMdistance::compute_refseq_distances);
 
     py::class_<OMlocDistance>(m, "OMlocDistance")
@@ -239,26 +268,31 @@ PYBIND11_MODULE(c_code, m) {
                  py::arg("expcost"), py::arg("context"),
                  py::arg("indellist") = py::array_t<double>())
             .def("compute_all_distances", &OMlocDistance::compute_all_distances)
+            .def("compute_condensed_distances", &OMlocDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &OMlocDistance::compute_refseq_distances);
 
     py::class_<SVRspellDistance>(m, "SVRspellDistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &SVRspellDistance::compute_all_distances)
+            .def("compute_condensed_distances", &SVRspellDistance::compute_condensed_distances)
             .def("compute_refseq_distances", &SVRspellDistance::compute_refseq_distances);
 
     py::class_<NMSdistance>(m, "NMSdistance")
             .def(py::init<py::array_t<int>, py::array_t<int>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &NMSdistance::compute_all_distances)
+            .def("compute_condensed_distances", &NMSdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &NMSdistance::compute_refseq_distances);
 
     py::class_<NMSMSTdistance>(m, "NMSMSTdistance")
             .def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &NMSMSTdistance::compute_all_distances)
+            .def("compute_condensed_distances", &NMSMSTdistance::compute_condensed_distances)
             .def("compute_refseq_distances", &NMSMSTdistance::compute_refseq_distances);
 
     py::class_<NMSMSTSoftdistanceII>(m, "NMSMSTSoftdistanceII")
             .def(py::init<py::array_t<int>, py::array_t<int>, py::array_t<double>, py::array_t<double>, int, py::array_t<int>>())
             .def("compute_all_distances", &NMSMSTSoftdistanceII::compute_all_distances)
+            .def("compute_condensed_distances", &NMSMSTSoftdistanceII::compute_condensed_distances)
             .def("compute_refseq_distances", &NMSMSTSoftdistanceII::compute_refseq_distances);
 
     py::class_<TWEDdistance>(m, "TWEDdistance")
@@ -285,5 +319,10 @@ PYBIND11_MODULE(c_code, m) {
     m.def("find_unique_sequences",
           &find_unique_sequences,
           "Find unique sequences and build index mapping",
+          py::arg("sequences"));
+
+    m.def("find_unique_sequences_with_indices",
+          &find_unique_sequences_with_indices,
+          "Find unique sequences, original-row mapping, lengths, and first original row indices",
           py::arg("sequences"));
 }

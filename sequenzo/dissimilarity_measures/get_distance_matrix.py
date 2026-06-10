@@ -170,6 +170,23 @@ def _unique_condensed_to_condensed(nseqs, seqdata_didxs, unique_condensed, nuniq
     if nunique is None:
         nunique = int(idxs.max()) + 1 if idxs.size else 0
 
+    try:
+        from .__init__ import _import_c_code
+        c_code = _import_c_code()
+    except Exception:
+        c_code = None
+
+    if c_code is not None and hasattr(c_code, "_unique_condensed_to_condensed"):
+        return np.asarray(
+            c_code._unique_condensed_to_condensed(
+                int(nseqs),
+                np.ascontiguousarray(idxs, dtype=np.int32),
+                np.ascontiguousarray(unique, dtype=np.float64),
+                int(nunique),
+            ),
+            dtype=np.float64,
+        )
+
     condensed_len = nseqs * (nseqs - 1) // 2
     condensed = np.empty(condensed_len, dtype=np.float64)
 
@@ -237,22 +254,62 @@ def _normalize_condensed_elzinga_studer(condensed, nseqs, reference_index):
 
 def _validate_twed_sm_state_costs(sm, nstates):
     arr = np.asarray(sm, dtype=np.float64)
-    if arr.ndim != 2 or arr.shape[0] != arr.shape[1]:
-        raise ValueError("[!] TWED 'sm' must be a square substitution-cost matrix.")
+    state_costs = _state_cost_block(arr, nstates, "TWED 'sm'")
 
+    if np.any(state_costs < 0):
+        raise ValueError("[!] TWED substitution-cost matrix must contain only non-negative state-to-state costs.")
+    _require_symmetric_state_costs(state_costs, "TWED substitution-cost matrix")
+
+    return arr, state_costs
+
+
+def _state_cost_block(arr, nstates, name):
+    arr = np.asarray(arr, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[0] != arr.shape[1]:
+        raise ValueError(f"[!] {name} must be a square substitution-cost matrix.")
     if arr.shape[0] == nstates:
         state_costs = arr
     elif arr.shape[0] == nstates + 1:
         state_costs = arr[1:, 1:]
     else:
         raise ValueError("[!] The dimension of the provided `sm` matrix does not match the number of states.")
-
     if not np.all(np.isfinite(state_costs)):
-        raise ValueError("[!] TWED substitution-cost matrix must contain only finite state-to-state costs.")
-    if np.any(state_costs < 0):
-        raise ValueError("[!] TWED substitution-cost matrix must contain only non-negative state-to-state costs.")
+        raise ValueError(f"[!] {name} must contain only finite state-to-state costs.")
+    return state_costs
 
-    return arr, state_costs
+
+def _require_symmetric_state_costs(state_costs, name):
+    if not np.allclose(state_costs, state_costs.T, rtol=1e-12, atol=1e-12):
+        raise ValueError(f"[!] {name} must be symmetric.")
+
+
+def _validate_symmetric_sm(sm, nstates, method):
+    arr = np.asarray(sm, dtype=np.float64)
+    state_costs = _state_cost_block(arr, nstates, f"{method} 'sm'")
+    _require_symmetric_state_costs(state_costs, f"{method} substitution-cost matrix")
+    return arr
+
+
+def _validate_symmetric_time_varying_sm(sm, nstates, method, required_length=None):
+    arr = np.asarray(sm, dtype=np.float64)
+    if arr.ndim != 3 or arr.shape[1] != arr.shape[2]:
+        raise ValueError(f"[!] {method} 'sm' must be a square time-varying substitution-cost array.")
+    if arr.shape[1] == nstates:
+        state_costs = arr
+        padded = np.full((arr.shape[0], nstates + 1, nstates + 1), np.nan, dtype=np.float64)
+        padded[:, 1:, 1:] = arr
+        arr = padded
+    elif arr.shape[1] == nstates + 1:
+        state_costs = arr[:, 1:, 1:]
+    else:
+        raise ValueError("[!] The dimension of the provided `sm` array does not match the number of states.")
+    if required_length is not None and arr.shape[0] < int(required_length):
+        raise ValueError(f"[!] {method} 'sm' must have at least one substitution-cost matrix per time point.")
+    if not np.all(np.isfinite(state_costs)):
+        raise ValueError(f"[!] {method} 'sm' must contain only finite state-to-state costs.")
+    if not np.allclose(state_costs, np.swapaxes(state_costs, 1, 2), rtol=1e-12, atol=1e-12):
+        raise ValueError(f"[!] {method} substitution-cost array must be symmetric at every time point.")
+    return arr
 
 
 def _validate_twed_indel_costs(indel):
@@ -275,9 +332,9 @@ def _validate_user_substitution_cost_matrix(sm, nstates):
         return
 
     if not np.all(np.isfinite(state_sm)):
-        raise ValueError("[x] 'sm' must contain only finite substitution costs.")
+        raise ValueError("[x] 'sm' must contain only finite state-to-state costs.")
     if np.any(state_sm < 0):
-        raise ValueError("[x] 'sm' must contain only non-negative substitution costs.")
+        raise ValueError("[x] 'sm' must contain only non-negative state-to-state costs.")
     if not np.allclose(state_sm, state_sm.T):
         warnings.warn(
             "[!] The substitution-cost matrix is not symmetric. "
@@ -471,10 +528,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # indel_type: "number", "vector", "auto"
     # must be after including missing values as an additional state (nstates)
     # all but NMS, NMSMST, SVRspell
+    def _validate_indel_values(values):
+        values = np.asarray(values, dtype=np.float64)
+        if not np.all(np.isfinite(values)) or np.any(values < 0):
+            raise ValueError("[!] 'indel' costs must be finite and non-negative.")
+        return values
+
     if _is_scalar_number(indel):
-        indel = float(indel)
-        if not np.isfinite(indel) or indel < 0:
-            raise ValueError("[x] 'indel' must be a finite non-negative number.")
+        indel = float(_validate_indel_values([indel])[0])
         indel_type = "number"
     elif isinstance(indel, (np.ndarray, list, tuple)):
         indel_arr = np.asarray(indel)
@@ -482,9 +543,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             raise ValueError("[!] indel")
         if len(indel_arr) != nstates:
             raise ValueError("[!] When a vector, 'indel' must contain a cost for each state.")
-        indel = indel_arr.astype(np.float64, copy=False)
-        if not np.all(np.isfinite(indel)) or np.any(indel < 0):
-            raise ValueError("[x] All state-specific 'indel' costs must be finite and non-negative.")
+        indel = _validate_indel_values(indel_arr)
         indel_type = "vector"
     elif indel == "auto":
         indel_type = "auto"
@@ -496,14 +555,15 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Add here new seqcost() method names
     # sm.type:
     #   "none" :
-    #   "matrix" : "OM", "OMloc", "OMslen", "OMspell", "OMstran", "HAM", "DHD" or "TWED".
+    #   "matrix" : 2D substitution-cost matrix for OM, OMloc, OMslen, OMspell, OMstran, HAM, or TWED.
+    #   "array"  : DHD time-varying substitution-cost array.
     #   "method" : "TRATE", "CONSTANT", "INDELS", "INDELSLOG", "FUTURE", "FEATURES"
     sm_methods = ["TRATE", "CONSTANT", "INDELS", "INDELSLOG", "FUTURE", "FEATURES"]
 
     if sm is not None:
-        if isinstance(sm, np.ndarray) and (sm.ndim == 2 or sm.ndim == 3):
+        if isinstance(sm, np.ndarray) and sm.ndim == 2:
             sm_type = "matrix"
-        elif isinstance(sm, np.ndarray) and sm.ndim == 1:
+        elif isinstance(sm, np.ndarray) and sm.ndim in (1, 3):
             sm_type = "array"
         elif isinstance(sm, str):
             sm = sm.upper()
@@ -558,12 +618,13 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         raise ValueError("[x] 'expcost' must be non-negative for OMspell/OMspellRS/OMtspell (use 0 to ignore duration).")
     # OMtspell: switch from OMspell when tokdep_coeff is provided (TraMineR: opt.args[["tokdep.coeff"]]).
     tokdep_coeff = None
-    if method == "OMspell":
-        tokdep_coeff = (opts or {}).get("tokdep_coeff", None)
-        if tokdep_coeff is None:
-            tokdep_coeff = kwargs.get("tokdep_coeff", None)
-        if tokdep_coeff is not None:
+    if method in ["OMspell", "OMtspell"]:
+        opts_tokdep = (opts or {}).get("tokdep_coeff", None)
+        tokdep_coeff = kwargs.get("tokdep_coeff") if opts_tokdep is None else opts_tokdep
+        if method == "OMspell" and tokdep_coeff is not None:
             method = "OMtspell"
+        elif method == "OMtspell" and tokdep_coeff is None:
+            raise ValueError("[!] tokdep_coeff is required when method='OMtspell'.")
     if method in ["LCPspell", "RLCPspell"] and expcost < 0:
         raise ValueError("[x] 'expcost' must be non-negative for LCPspell/RLCPspell (use 0 to ignore duration).")
 
@@ -674,7 +735,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             and step == 1
             and breaks is None
             and not overlap
-            and refseq_type == "none"
+            and refseq_type in {"none", "index", "sets"}
             and seqs_dlens.shape[0] == 1
             and np.all(seqdata_mat > 0)
         )
@@ -687,7 +748,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if method == "EUCLID" and euclid_backend == "categorical" and not categorical_euclid_conditions:
             raise ValueError(
                 "[!] euclid_backend='categorical' is only valid for complete categorical EUCLID "
-                "with step=1, no custom breaks, no overlap, no missing values, and no refseq."
+                "with step=1, no custom breaks, no overlap, and no missing values."
             )
         if method == "EUCLID" and euclid_backend == "categorical" and not has_cpp_euclid_fast_path:
             raise RuntimeError(
@@ -696,26 +757,55 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             )
         if categorical_euclid_conditions and has_cpp_euclid_fast_path:
             print("[>] Using categorical EUCLID fast path via mismatch-count C++ kernel.")
-            dseqs_num, seqdata_didxs, _ = c_code.find_unique_sequences(
-                np.ascontiguousarray(seqdata_mat, dtype=np.int32)
-            )
-            refseq_id = np.array([-1, -1], dtype=np.int32)
-            euclid = c_code.EUCLIDCategoricalDistance(
-                dseqs_num,
-                bool(norm_chi2euclid),
-                refseq_id,
-            )
-
-            if full_matrix == False:
-                dist_matrix = np.asarray(
-                    euclid.compute_original_condensed_distances(seqdata_didxs),
-                    dtype=np.float64,
+            if refseq_type == "sets":
+                dseqs_num1, seqdata_didxs1, _ = c_code.find_unique_sequences(
+                    np.ascontiguousarray(seqdata_mat[refseq[0], :], dtype=np.int32)
+                )
+                dseqs_num2, seqdata_didxs2, _ = c_code.find_unique_sequences(
+                    np.ascontiguousarray(seqdata_mat[refseq[1], :], dtype=np.int32)
+                )
+                dseqs_num = np.vstack((dseqs_num1, dseqs_num2)).astype(np.int32, copy=False)
+                nunique1 = int(dseqs_num1.shape[0])
+                refseq_id = np.array([nunique1, nunique1 + int(dseqs_num2.shape[0])], dtype=np.int32)
+                euclid = c_code.EUCLIDCategoricalDistance(
+                    np.ascontiguousarray(dseqs_num, dtype=np.int32),
+                    bool(norm_chi2euclid),
+                    refseq_id,
+                )
+                values = np.asarray(euclid.compute_refseq_distances(), dtype=np.float64)
+                dist_matrix = pd.DataFrame(
+                    values[np.asarray(seqdata_didxs1, dtype=np.intp), :][:, np.asarray(seqdata_didxs2, dtype=np.intp)],
+                    index=seqdata.ids[refseq[0]],
+                    columns=seqdata.ids[refseq[1]],
                 )
             else:
-                unique_dist = euclid.compute_all_distances()
-                matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
-                result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
-                dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
+                dseqs_num, seqdata_didxs, _ = c_code.find_unique_sequences(
+                    np.ascontiguousarray(seqdata_mat, dtype=np.int32)
+                )
+                if refseq_type == "index":
+                    refseq_unique_idx = int(seqdata_didxs[refseq])
+                    refseq_id = np.array([refseq_unique_idx + 1, refseq_unique_idx + 1], dtype=np.int32)
+                else:
+                    refseq_id = np.array([-1, -1], dtype=np.int32)
+                euclid = c_code.EUCLIDCategoricalDistance(
+                    dseqs_num,
+                    bool(norm_chi2euclid),
+                    refseq_id,
+                )
+
+                if refseq_type == "index":
+                    values = np.asarray(euclid.compute_refseq_distances(), dtype=np.float64).reshape(-1)
+                    dist_matrix = pd.Series(values[np.asarray(seqdata_didxs, dtype=np.intp)], index=seqdata.ids)
+                elif full_matrix == False:
+                    dist_matrix = np.asarray(
+                        euclid.compute_original_condensed_distances(seqdata_didxs),
+                        dtype=np.float64,
+                    )
+                else:
+                    unique_dist = euclid.compute_all_distances()
+                    matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
+                    result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
+                    dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
 
             print("[>] Computed Successfully.")
             return dist_matrix
@@ -762,6 +852,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if use_cpp:
             chi2 = c_code.CHI2distance(allmat, pdotj, float(norm_factor), refseq_id)
             if refseq_type_b == "none":
+                if full_matrix == False and hasattr(chi2, "compute_condensed_distances"):
+                    result = chi2.compute_condensed_distances()
+                    print("[>] Computed Successfully.")
+                    return np.asarray(result, dtype=np.float64)
                 result = chi2.compute_all_distances()
             else:
                 result = chi2.compute_refseq_distances()
@@ -803,12 +897,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Configure sm and indel
     # ======================
 
-    if indel_type == "auto" and sm_type == "matrix":
+    if indel_type == "auto" and (sm_type == "matrix" or (method == "DHD" and sm_type == "array")):
         if method == "TWED":
             sm, twed_state_costs = _validate_twed_sm_state_costs(sm, nstates)
             indel = 2.0 * float(np.max(twed_state_costs)) + float(nu) + float(h_twed)
         else:
-            indel = np.max(sm) / 2
+            indel = np.nanmax(sm) / 2
         indel_type = "number"
 
     # OM, OMloc, OMspell, HAM, DHD, TWED
@@ -936,6 +1030,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     elif method not in ["CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMS", "NMSMST", "SVRspell"]:
         raise ValueError(f"[x] No known 'sm' preparation for {method}.")
 
+    if indel_type == "number":
+        indel = float(_validate_indel_values([indel])[0])
+    elif indel_type == "vector":
+        indel = _validate_indel_values(indel)
+
     # TWED: set dummy row/col (state 0) for recurrence (TraMineR TWED uses 0 as "no previous")
     if method == "TWED":
         sm, _ = _validate_twed_sm_state_costs(sm, nstates)
@@ -996,6 +1095,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             sm = sm[1:, 1:]  # Remove first row and column (null state)
         elif sm.shape[0] == len(seqdata.states) + 1:
             sm = sm[1:, 1:]  # Remove first row and column (null state)
+        sm = _validate_symmetric_sm(sm, len(seqdata.states), "OMstran")
         
         # Create transition sequences
         newseqdata_df, void_code = create_transition_sequences(seqdata, previous=previous, add_column=add_column)
@@ -1046,8 +1146,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         if norm == "auto":
             norm = "YujianBo"
 
+    if method in om_methods + ["OMloc", "HAM", "TWED"]:
+        sm = _validate_symmetric_sm(sm, nstates, method)
+    elif method == "DHD":
+        sm = _validate_symmetric_time_varying_sm(sm, nstates, method, required_length=int(np.max(seqs_dlens)))
+
     seqdata_num = seqdata.values   # it's numpy
     _cpp_lengths = None
+    unique_row_indices = None
 
     if refseq_type == "sets":
         dseqs_num1 = np.unique(seqdata_num[refseq[0], :], axis=0)
@@ -1060,9 +1166,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     else:
         try:
             # C++ fast path: single O(nL) hash-based dedup
-            dseqs_num, seqdata_didxs, _cpp_lengths = c_code.find_unique_sequences(
-                seqdata_num.astype(np.int32, copy=False)
-            )
+            if hasattr(c_code, "find_unique_sequences_with_indices"):
+                dseqs_num, seqdata_didxs, _cpp_lengths, unique_row_indices = c_code.find_unique_sequences_with_indices(
+                    seqdata_num.astype(np.int32, copy=False)
+                )
+            else:
+                dseqs_num, seqdata_didxs, _cpp_lengths = c_code.find_unique_sequences(
+                    seqdata_num.astype(np.int32, copy=False)
+                )
         except (AttributeError, TypeError):
             # Fallback if C++ extension not available
             dseqs_num = np.unique(seqdata_num, axis=0)
@@ -1226,11 +1337,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
         raw_dseqs_dur = seqdur(seqdata)  # Do not use dseqs.num
 
-        # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
-        conc1 = seqconc(data=dseqs_num)
-        conc2 = seqconc(data=seqdata_num)
-        index_map = {value: idx for idx, value in enumerate(conc2)}
-        dseqs_oidxs = np.array([index_map[element] for element in conc1])
+        if unique_row_indices is not None:
+            dseqs_oidxs = np.asarray(unique_row_indices, dtype=np.intp)
+        else:
+            # The position of the first occurrence of the deduplicated data (conc1) in the original data (conc2)
+            conc1 = seqconc(data=dseqs_num)
+            conc2 = seqconc(data=seqdata_num)
+            index_map = {value: idx for idx, value in enumerate(conc2)}
+            dseqs_oidxs = np.array([index_map[element] for element in conc1])
 
         # Can't sort! Otherwise, the actual sequence compared will not be the expected sequence
 
@@ -1250,7 +1364,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         if method in ["OMspell", "OMspellRS", "OMtspell", "LCPspell", "RLCPspell",
                       "LCPmst", "RLCPmst", "LCPprod", "RLCPprod", "NMSMST", "SVRspell"]:
-            _seqlength = seqlength(dseqs_num)
+            _seqlength = seqlength(dseqs_num).astype(np.int32, copy=False)
         if method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             _totaldur = np.empty(dseqs_num.shape[0], dtype=np.float64)
             for i in range(dseqs_num.shape[0]):
@@ -1281,14 +1395,17 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     # HAM, DHD
     elif method in ["HAM", "DHD"]:
+        sm = np.ascontiguousarray(np.asarray(sm, dtype=np.float64))
         if method == "HAM":
-            # sm_type = "array"  # Not used. Should be here if it changes.
-            sm = adaptSmForHAM(sm, nstates, seqdata.seqdata.shape[1])
-
-        # Maximum possible cost of the Hamming distance
-        max_cost = 0
-        for i in range(np.max(seqs_dlens)):  # seqs_dlens has here only one value
-            max_cost += np.max(sm[i, :, :])
+            if sm.shape[0] == nstates:
+                padded_sm = np.zeros((nstates + 1, nstates + 1), dtype=np.float64)
+                padded_sm[1:, 1:] = sm
+                sm = padded_sm
+            max_cost = float(np.nanmax(sm[1:, 1:])) * int(np.max(seqs_dlens))
+        else:
+            max_cost = 0.0
+            for i in range(np.max(seqs_dlens)):  # seqs_dlens has here only one value
+                max_cost += float(np.nanmax(sm[i, 1:, 1:]))
 
     # LCP
     elif method == "LCP":
@@ -1322,10 +1439,37 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if isinstance(sm, pd.DataFrame):
         sm = sm.values
 
-    def _lcs_as_om_sm():
-        lcs_sm = np.full((nstates + 1, nstates + 1), 2.0, dtype=np.float64)
-        np.fill_diagonal(lcs_sm, 0.0)
-        return lcs_sm
+    def _om_lcs_fast_scale():
+        if method != "OM" or om_indellist is not None:
+            return None
+        try:
+            indel_value = float(indel)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(indel_value) or indel_value <= 0:
+            return None
+        if not isinstance(sm, np.ndarray):
+            return None
+
+        sm_array = np.asarray(sm, dtype=np.float64)
+        if sm_array.ndim != 2 or sm_array.shape[0] != sm_array.shape[1]:
+            return None
+        if not np.all(np.isfinite(sm_array)):
+            return None
+
+        if sm_array.shape[0] == nstates + 1:
+            state_costs = sm_array[1:, 1:]
+        elif sm_array.shape[0] == nstates:
+            state_costs = sm_array
+        else:
+            return None
+
+        if state_costs.shape[0] <= 1:
+            return indel_value
+        offdiag = state_costs[~np.eye(state_costs.shape[0], dtype=bool)]
+        if np.all(offdiag >= 2.0 * indel_value):
+            return indel_value
+        return None
     
     # Ensure arrays are writable for C++ code (fixes issue on Windows Intel)
     # Some numpy operations (np.unique, np.hstack, np.vstack) may return read-only arrays
@@ -1349,6 +1493,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             prox = np.eye(nstates, dtype=np.float64)
         else:
             prox = np.asarray(prox, dtype=np.float64)
+        if prox.ndim != 2 or prox.shape != (nstates, nstates):
+            raise ValueError(
+                f"SVRspell prox must have shape ({nstates}, {nstates}); got {prox.shape}."
+            )
+        if not np.all(np.isfinite(prox)):
+            raise ValueError("SVRspell prox must contain only finite values.")
+        if not np.allclose(prox, prox.T, rtol=1e-12, atol=1e-12):
+            raise ValueError("SVRspell prox must be symmetric.")
         kweights_svr = kwargs.get("kweights", None)
         if kweights_svr is None:
             kweights_svr = np.ones(dseqs_num.shape[1], dtype=np.float64)
@@ -1376,26 +1528,40 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         prox_nms = kwargs.get("prox", None)
         if prox_nms is not None:
             prox_nms = np.asarray(prox_nms, dtype=np.float64)
+            if prox_nms.ndim != 2 or prox_nms.shape != (nstates, nstates):
+                raise ValueError(
+                    f"NMS prox must have shape ({nstates}, {nstates}); got {prox_nms.shape}."
+                )
+            if not np.all(np.isfinite(prox_nms)):
+                raise ValueError("NMS prox must contain only finite values.")
+            if not np.allclose(prox_nms, prox_nms.T, rtol=1e-12, atol=1e-12):
+                raise ValueError("NMS prox must be symmetric.")
 
-    # C++ already guarantees that invalid values will not be accessed
+    # Padding cells can contain NaN sentinels for state code 0; validated public
+    # paths only pass positive state codes to the C++ distance kernels.
     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
 
     if refseq_type != "none":
         if len(refseq_id) == 1:
             refseq_id = [refseq_id, refseq_id]
 
-        refseq_id = np.array(refseq_id, dtype=int)
+        refseq_id = np.array(refseq_id, dtype=np.int32)
 
         if method == "OM":
-            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
-            om = c_code.OMdistance(dseqs_num,
-                                    sm,
-                                    indel,
-                                    norm_num,
-                                    lengths,
-                                    refseq_id,
-                                    indellist_arg)
-            dist_matrix = om.compute_refseq_distances()
+            lcs_scale = _om_lcs_fast_scale()
+            if lcs_scale is not None:
+                lcs = c_code.LCSdistance(dseqs_num, lengths, norm_num, refseq_id, lcs_scale)
+                dist_matrix = lcs.compute_refseq_distances()
+            else:
+                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+                om = c_code.OMdistance(dseqs_num,
+                                        sm,
+                                        indel,
+                                        norm_num,
+                                        lengths,
+                                        refseq_id,
+                                        indellist_arg)
+                dist_matrix = om.compute_refseq_distances()
 
         elif method == "TWED":
             nu = kwargs.get("nu")
@@ -1467,7 +1633,15 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                        lengths)
             dist_matrix = om.compute_refseq_distances()
 
-        elif method == "HAM" or method == "DHD":
+        elif method == "HAM":
+            HAM = c_code.HAMdistance(dseqs_num,
+                                     sm,
+                                     norm_num,
+                                     max_cost,
+                                     refseq_id)
+            dist_matrix = HAM.compute_refseq_distances()
+
+        elif method == "DHD":
             DHD = c_code.DHDdistance(dseqs_num,
                                       sm,
                                       norm_num,
@@ -1476,14 +1650,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = DHD.compute_refseq_distances()
 
         elif method == "LCS":
-            om = c_code.OMdistance(dseqs_num,
-                                    _lcs_as_om_sm(),
-                                    1.0,
-                                    norm_num,
-                                    lengths,
-                                    refseq_id,
-                                    np.array([], dtype=np.float64))
-            dist_matrix = om.compute_refseq_distances()
+            lcs = c_code.LCSdistance(dseqs_num, lengths, norm_num, refseq_id)
+            dist_matrix = lcs.compute_refseq_distances()
 
         elif method == "SVRspell":
             SVRspell = c_code.SVRspellDistance(dseqs_num,
@@ -1526,7 +1694,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                      norm_num,
                                      sign,
                                      refseq_id)
-            dist_matrix = LCP.compute_all_distances()
+            dist_matrix = LCP.compute_refseq_distances()
 
         elif method == "LCPspell" or method == "RLCPspell":
             LCPspell = c_code.LCPspellDistance(dseqs_num,
@@ -1564,34 +1732,48 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             dist_matrix = pd.Series(dist_values[seqdata_didxs], index=seqdata.ids, name=seqdata.ids[refseq])
 
     else:
-        refseq_id = np.array([-1, -1])
+        refseq_id = np.array([-1, -1], dtype=np.int32)
         _dist2condensed = None
 
+        def _set_pairwise_result(distance_obj, post_transform=None):
+            nonlocal _dist2condensed, dist_matrix
+            if full_matrix == False and refseq is None and hasattr(distance_obj, "compute_condensed_distances"):
+                unique_condensed = distance_obj.compute_condensed_distances()
+                if post_transform is not None:
+                    unique_condensed = post_transform(unique_condensed)
+                if dseqs_num.shape[0] == nseqs and np.array_equal(seqdata_didxs, np.arange(nseqs)):
+                    _dist2condensed = np.asarray(unique_condensed, dtype=np.float64)
+                else:
+                    _dist2condensed = _unique_condensed_to_condensed(
+                        nseqs,
+                        seqdata_didxs,
+                        unique_condensed,
+                        nunique=dseqs_num.shape[0],
+                    )
+            else:
+                dist_matrix = distance_obj.compute_all_distances()
+
         if method == "OM":
-            indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
-            om = c_code.OMdistance(dseqs_num,
-                                    sm,
-                                    indel,
-                                    norm_num,
-                                    lengths,
-                                    refseq_id,
-                                    indellist_arg)
-            dist_matrix = om.compute_all_distances()
+            lcs_scale = _om_lcs_fast_scale()
+            if lcs_scale is not None:
+                lcs = c_code.LCSdistance(dseqs_num, lengths, norm_num, refseq_id, lcs_scale)
+                _set_pairwise_result(lcs)
+            else:
+                indellist_arg = om_indellist if om_indellist is not None else np.array([], dtype=np.float64)
+                om = c_code.OMdistance(dseqs_num,
+                                        sm,
+                                        indel,
+                                        norm_num,
+                                        lengths,
+                                        refseq_id,
+                                        indellist_arg)
+                _set_pairwise_result(om)
 
         elif method == "TWED":
             nu = kwargs.get("nu")
             h_twed = kwargs.get("h", 0.5)
             twed = c_code.TWEDdistance(dseqs_num, sm, float(indel), norm_num, float(nu), float(h_twed), lengths, refseq_id)
-            if full_matrix == False and refseq is None:
-                unique_condensed = twed.compute_condensed_distances()
-                _dist2condensed = _unique_condensed_to_condensed(
-                    nseqs,
-                    seqdata_didxs,
-                    unique_condensed,
-                    nunique=dseqs_num.shape[0],
-                )
-            else:
-                dist_matrix = twed.compute_all_distances()
+            _set_pairwise_result(twed)
 
         elif method == "OMloc":
             context = kwargs.get("context", 1.0 - 2.0 * expcost)
@@ -1605,7 +1787,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                       expcost,
                                       context,
                                       omloc_indellist_arg)
-            dist_matrix = om.compute_all_distances()
+            _set_pairwise_result(om)
 
         elif method == "OMspell":
             om = c_code.OMspellDistance(dseqs_num,
@@ -1617,7 +1799,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          dseqs_dur,
                                          indellist,
                                          _seqlength)
-            dist_matrix = om.compute_all_distances()
+            _set_pairwise_result(om)
 
         elif method == "OMspellRS":
             om = c_code.OMspellRSDistance(dseqs_num,
@@ -1630,7 +1812,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                             dseqs_dur,
                                             indellist,
                                             _seqlength)
-            dist_matrix = om.compute_all_distances()
+            _set_pairwise_result(om)
 
         elif method == "OMtspell":
             om = c_code.OMtspellDistance(dseqs_num,
@@ -1643,7 +1825,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                          indellist,
                                          _seqlength,
                                          tokdeplist)
-            dist_matrix = om.compute_all_distances()
+            _set_pairwise_result(om)
 
         elif method == "OMslen":
             om = c_code.OMslenDistance(dseqs_num,
@@ -1655,25 +1837,27 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                        indellist.astype(np.float64),
                                        sublink,
                                        lengths)
-            dist_matrix = om.compute_all_distances()
+            _set_pairwise_result(om)
 
-        elif method == "HAM" or method == "DHD":
+        elif method == "HAM":
+            HAM = c_code.HAMdistance(dseqs_num,
+                                     sm,
+                                     norm_num,
+                                     max_cost,
+                                     refseq_id)
+            _set_pairwise_result(HAM)
+
+        elif method == "DHD":
             DHD = c_code.DHDdistance(dseqs_num,
                                       sm,
                                       norm_num,
                                       max_cost,
                                       refseq_id)
-            dist_matrix = DHD.compute_all_distances()
+            _set_pairwise_result(DHD)
 
         elif method == "LCS":
-            om = c_code.OMdistance(dseqs_num,
-                                    _lcs_as_om_sm(),
-                                    1.0,
-                                    norm_num,
-                                    lengths,
-                                    refseq_id,
-                                    np.array([], dtype=np.float64))
-            dist_matrix = om.compute_all_distances()
+            lcs = c_code.LCSdistance(dseqs_num, lengths, norm_num, refseq_id)
+            _set_pairwise_result(lcs)
 
         elif method == "SVRspell":
             SVRspell = c_code.SVRspellDistance(dseqs_num,
@@ -1683,7 +1867,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                kweights_svr,
                                                norm_num,
                                                refseq_id)
-            dist_matrix = SVRspell.compute_all_distances()
+            _set_pairwise_result(SVRspell, lambda values: np.sqrt(np.maximum(values, 0.0)))
 
         elif method == "NMS":
             if prox_nms is not None:
@@ -1693,14 +1877,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                       kweights_nms,
                                                       norm_num,
                                                       refseq_id)
-                dist_matrix = NMSprox.compute_all_distances()
+                _set_pairwise_result(NMSprox, lambda values: np.sqrt(np.maximum(values, 0.0)))
             else:
                 NMS = c_code.NMSdistance(dseqs_num,
                                          lengths,
                                          kweights_nms,
                                          norm_num,
                                          refseq_id)
-                dist_matrix = NMS.compute_all_distances()
+                _set_pairwise_result(NMS, lambda values: np.sqrt(np.maximum(values, 0.0)))
 
         elif method == "NMSMST":
             NMSMST = c_code.NMSMSTdistance(dseqs_num,
@@ -1709,14 +1893,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                             kweights_nms,
                                             norm_num,
                                             refseq_id)
-            dist_matrix = NMSMST.compute_all_distances()
+            _set_pairwise_result(NMSMST, lambda values: np.sqrt(np.maximum(values, 0.0)))
 
         elif method == "LCP" or method == "RLCP":
             LCP = c_code.LCPdistance(dseqs_num,
                                      norm_num,
                                      sign,
                                      refseq_id)
-            dist_matrix = LCP.compute_all_distances()
+            _set_pairwise_result(LCP)
 
         elif method == "LCPspell" or method == "RLCPspell":
             LCPspell = c_code.LCPspellDistance(dseqs_num,
@@ -1727,7 +1911,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                refseq_id,
                                                expcost,
                                                duration_ref)
-            dist_matrix = LCPspell.compute_all_distances()
+            _set_pairwise_result(LCPspell)
 
         elif method in ["LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
             if method in ["LCPmst", "RLCPmst"]:
@@ -1736,15 +1920,16 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             else:
                 LCPdur = c_code.LCPprodDistance(
                     dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
-            dist_matrix = LCPdur.compute_all_distances()
+            _set_pairwise_result(LCPdur)
 
         # TraMineR applies sqrt to NMS, NMSMST, SVRspell output
-        if method in ["NMS", "NMSMST", "SVRspell"]:
+        if method in ["NMS", "NMSMST", "SVRspell"] and _dist2condensed is None:
             dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
 
         if _dist2condensed is None:
             if full_matrix == False and refseq is None:
-                _dist2condensed = _unique_distance_to_condensed(nseqs, seqdata_didxs, dist_matrix)
+                _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+                _dist2condensed = _matrix.padding_condensed()
             else:
                 _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
                 _dist2matrix = _matrix.padding_matrix()

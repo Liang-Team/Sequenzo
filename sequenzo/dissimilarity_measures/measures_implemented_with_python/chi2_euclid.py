@@ -182,7 +182,7 @@ def build_chi2_allmat_pdotj(
         weights = np.ones(n, dtype=np.float64)
 
     if not euclid and global_pdotj is not None:
-        if global_pdotj == "obs":
+        if isinstance(global_pdotj, str) and global_pdotj == "obs":
             global_pdotj = _seqmeant_proportions(seqdata_mat, weights, alphabet)
         else:
             global_pdotj = np.asarray(global_pdotj, dtype=np.float64)
@@ -285,7 +285,7 @@ def chi2_euclid_distances(
 
     # Resolve global_pdotj for CHI2
     if not euclid and global_pdotj is not None:
-        if global_pdotj == "obs":
+        if isinstance(global_pdotj, str) and global_pdotj == "obs":
             global_pdotj = _seqmeant_proportions(seqdata_mat, weights, alphabet)
         else:
             global_pdotj = np.asarray(global_pdotj, dtype=np.float64)
