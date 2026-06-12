@@ -1,7 +1,15 @@
 /*
- * LCPprodDistance: DSS-based LCP with Product Duration (duration-aware).
+ * LCPprodDistance: DSS-based LCP with product-duration weighting.
  *
- * Note: raw_d_prod can be negative. Normalization is not supported.
+ * The raw dissimilarity is constructed from prefix-duration vectors:
+ *
+ *   d(x, y) = A(x, x) + A(y, y) - 2 A(x, y),
+ *
+ * where A(x, y) is the sum of duration products over the common
+ * DSS prefix or suffix. The resulting raw value is non-negative
+ * up to floating-point tolerance.
+ *
+ * Normalization is currently not supported.
  */
 
 #include <pybind11/pybind11.h>
@@ -9,6 +17,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 #include "utils.h"
 #include "dp_utils.h"
 #include "lcp_input_validation.h"
@@ -89,17 +98,25 @@ private:
         auto ptr_seq = sequences.unchecked<2>();
         auto ptr_dur = durations.unchecked<2>();
         auto ptr_len = seqlength.unchecked<1>();
-        auto ptr_total = totaldur.unchecked<1>();
 
         int len_i = ptr_len(i);
         int len_j = ptr_len(j);
         int minlen = std::min(len_i, len_j);
 
-        double Tx = ptr_total(i);
-        double Ty = ptr_total(j);
+        double self_i = 0.0;
+        for (int t = 0; t < len_i; t++) {
+            const double d = ptr_dur(i, t);
+            self_i += d * d;
+        }
+
+        double self_j = 0.0;
+        for (int t = 0; t < len_j; t++) {
+            const double d = ptr_dur(j, t);
+            self_j += d * d;
+        }
 
         if (len_i == 0 || len_j == 0) {
-            return Tx + Ty;
+            return self_i + self_j;
         }
 
         int k = 0;
@@ -108,23 +125,40 @@ private:
                 k++;
             }
         } else {
-            while (k < minlen && ptr_seq(i, len_i - 1 - k) == ptr_seq(j, len_j - 1 - k)) {
+            while (
+                k < minlen &&
+                ptr_seq(i, len_i - 1 - k) == ptr_seq(j, len_j - 1 - k)
+            ) {
                 k++;
             }
         }
 
-        double A = 0.0;
+        double shared = 0.0;
         if (sign > 0) {
             for (int t = 0; t < k; t++) {
-                A += ptr_dur(i, t) * ptr_dur(j, t);
+                shared += ptr_dur(i, t) * ptr_dur(j, t);
             }
         } else {
             for (int t = 0; t < k; t++) {
-                A += ptr_dur(i, len_i - 1 - t) * ptr_dur(j, len_j - 1 - t);
+                shared +=
+                    ptr_dur(i, len_i - 1 - t) *
+                    ptr_dur(j, len_j - 1 - t);
             }
         }
 
-        return Tx + Ty - 2.0 * A;
+        double raw = self_i + self_j - 2.0 * shared;
+
+        if (raw < 0.0 && raw > -1e-12) {
+            raw = 0.0;
+        }
+
+        if (raw < 0.0) {
+            throw std::runtime_error(
+                "LCPprod distance became negative beyond numerical tolerance."
+            );
+        }
+
+        return raw;
     }
 
     py::array_t<int> sequences;

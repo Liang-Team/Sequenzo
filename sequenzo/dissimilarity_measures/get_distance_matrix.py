@@ -14,9 +14,8 @@
                             "CHI2", "EUCLID", "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell",
                             "NMS", "NMSMST", "SVRspell", or "TWED".
             refseq         : Default: NULL. The baseline sequence to compute the distances from.
-                            (1)When an integer, the index of a sequence in seqdata or 0 for the most frequent sequence.
-                            (2)When a state sequence object, it must contain a single sequence and have the same alphabet as seqdata.
-                            (3)When a list, it must be a list of two sets of indexes of seqdata rows.
+                            (1)When an integer, the zero-based index of a sequence in seqdata.
+                            (2)When a list, it must be a list of two sets of indexes of seqdata rows.
             norm           : Default: "none". The normalization to use when method is one of
                             {"OM", "OMloc", "OMslen", "OMspell", "OMspellRS", "OMstran", "TWED", "HAM", "DHD",
                             "LCS", "LCP", "RLCP", "LCPspell", "RLCPspell", "CHI2", "EUCLID"}.
@@ -26,7 +25,7 @@
                                 1) "maxlength" when method is one of "OM", "HAM", or "DHD",
                                 2) "gmean" when method is one of "LCS", "LCP", "RLCP",
                                 3) "maxdist" when method is one of "LCPspell", "RLCPspell", "LCPmst", "RLCPmst",
-                                4) "none" when method is one of "LCPprod", "RLCPprod" (raw distance; normalized LCPprod may be unstable),
+                                4) "none" when method is one of "LCPprod", "RLCPprod" (raw squared-duration dissimilarity; no method-specific upper bound),
                                 5) YujianBo when method is one of "OMloc", "OMslen", "OMspell", "OMspellRS", "OMtspell", "OMstran", "TWED".
                             (3)"ElzingaStuder" applies the Elzinga--Studer (2019) reference-based transformation:
                                 D_r(x,y) = 2*d(x,y) / (d(x,y) + d(x,r) + d(y,r)).
@@ -63,7 +62,8 @@
                             - "full": show entire matrix (default).
                             - "upper": show only the upper triangle (including diagonal); masked cells are shown as empty for a cleaner view.
                             - "lower": show only the lower triangle (including diagonal); masked cells are shown as empty for a cleaner view.
-                            When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN"). The underlying distances are unchanged.
+                            When "upper" or "lower", masked cells are stored as empty string so they display blank (not "NaN").
+                            Display masking is applied after all numeric computation, including ElzingaStuder normalization.
             tpow           : Default: 1.0.
                             The exponential weight of spell length when method is one of "OMspell", "OMtspell",
                             "NMSMST", or "SVRspell". Must be 1.0 for OMspellRS, LCPspell, RLCPspell,
@@ -212,6 +212,17 @@ def _condensed_value(condensed, nseqs, i, j):
         return 0.0
     u, v = (i, j) if i < j else (j, i)
     return condensed[_condensed_index(nseqs, u, v)]
+
+
+def _apply_matrix_display(dist_matrix, matrix_display):
+    """Mask a symmetric distance DataFrame for display only (after numeric work)."""
+    if matrix_display == "upper":
+        mask = np.triu(np.ones_like(dist_matrix, dtype=bool))
+        return dist_matrix.where(mask).fillna("")
+    if matrix_display == "lower":
+        mask = np.tril(np.ones_like(dist_matrix, dtype=bool))
+        return dist_matrix.where(mask).fillna("")
+    return dist_matrix
 
 
 def _normalize_condensed_elzinga_studer(condensed, nseqs, reference_index):
@@ -695,7 +706,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             # DSS-based MST: raw in [0, Tx+Ty]; maxdist = (Tx+Ty-2*A_mst)/(Tx+Ty) stays in [0, 1].
             norm = "maxdist"
         elif method in ["LCPprod", "RLCPprod"]:
-            # Product duration can make raw distance negative; prefer raw (none) over normalized.
+            # Product-duration raw dissimilarity has no method-specific upper bound.
             norm = "none"
         elif method in ["NMS", "NMSMST", "SVRspell"]:
             norm = "YujianBo"
@@ -736,7 +747,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     if method in ["LCPprod", "RLCPprod"] and norm not in ["none", "auto"]:
         raise ValueError(
             "[x] LCPprod/RLCPprod support only norm='none' or norm='auto'. "
-            "Their raw values may be negative, so normalized output is not well-defined."
+            "Their raw squared-duration dissimilarity has no method-specific upper bound."
         )
 
     # =========================================
@@ -1202,16 +1213,20 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             # Fallback if C++ extension not available
             dseqs_num = np.unique(seqdata_num, axis=0)
 
-    # Check that dseqs_num does not exceed the max allowed number
-    # if check_max_size:
-    #     max_allowed_seq = np.floor(np.sqrt(np.iinfo(np.int32).max)) if refseq_type == "none" else np.iinfo(np.int32).max - 1
-    #
-    #     if refseq_type == "sets":
-    #         if (np.sqrt(nunique1) * np.sqrt(nunique2)) > max_allowed_seq:
-    #             raise ValueError(f"[!] Number of {nunique1} and {nunique2} unique sequences too large for max allowed distances {max_allowed_seq}.")
-    #     else:
-    #         if len(dseqs_num) > max_allowed_seq:
-    #             raise ValueError(f"[!] {len(dseqs_num)} unique sequences exceeds max allowed of {max_allowed_seq}.")
+    if check_max_size:
+        if refseq_type == "sets":
+            max_allowed_seq = np.iinfo(np.int32).max - 1
+            if (np.sqrt(nunique1) * np.sqrt(nunique2)) > max_allowed_seq:
+                raise ValueError(
+                    f"[!] Number of {nunique1} and {nunique2} unique sequences too large "
+                    f"for max allowed distances {max_allowed_seq}."
+                )
+        else:
+            max_allowed_seq = np.floor(np.sqrt(np.iinfo(np.int32).max))
+            if len(dseqs_num) > max_allowed_seq:
+                raise ValueError(
+                    f"[!] {len(dseqs_num)} unique sequences exceeds max allowed of {max_allowed_seq}."
+                )
 
     # =========================
     # Handle Reference Sequence
@@ -1514,7 +1529,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Some numpy operations (np.unique, np.hstack, np.vstack) may return read-only arrays
     if not dseqs_num.flags.writeable:
         dseqs_num = np.array(dseqs_num, copy=True)
-    if method in ["LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod"]:
+    if method in [
+        "LCP", "RLCP", "LCPspell", "RLCPspell", "LCPmst", "RLCPmst", "LCPprod", "RLCPprod",
+        "OMspell", "OMspellRS", "OMtspell",
+    ]:
         dseqs_num = np.ascontiguousarray(dseqs_num, dtype=np.int32)
     if isinstance(sm, np.ndarray) and not sm.flags.writeable:
         sm = np.array(sm, copy=True)
@@ -1977,15 +1995,6 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     if full_matrix == True and refseq == None:
         dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
-        # Optional: show only upper or lower triangle for a cleaner display (distances unchanged)
-        if matrix_display == "upper":
-            # Upper triangle: keep row <= col (including diagonal); mask lower part, show as empty
-            mask = np.triu(np.ones_like(dist_matrix, dtype=bool))
-            dist_matrix = dist_matrix.where(mask).fillna("")
-        elif matrix_display == "lower":
-            # Lower triangle: keep row >= col (including diagonal); mask upper part, show as empty
-            mask = np.tril(np.ones_like(dist_matrix, dtype=bool))
-            dist_matrix = dist_matrix.where(mask).fillna("")
 
     elif full_matrix == False and refseq != None:
         print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None. This is same as TraMineR.")
@@ -2036,6 +2045,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     "[!] norm='ElzingaStuder' with refseq requires full_matrix=True "
                     "when normalization_reference_index differs from refseq."
                 )
+            warnings.warn(
+                "[!] norm='ElzingaStuder' with a single refseq collapses all non-zero "
+                "distances to 1. Use it primarily for full pairwise distance matrices "
+                "with an independently fixed reference object.",
+                stacklevel=2,
+            )
             values = dist_matrix.to_numpy(dtype=np.float64, copy=True)
             normalized_values = np.where(np.abs(values) < 1e-10, 0.0, 1.0)
             dist_matrix = pd.Series(normalized_values, index=dist_matrix.index, name=dist_matrix.name)
@@ -2057,6 +2072,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 dist_matrix = squareform(normalized_array)
             else:
                 dist_matrix = normalized_array
+
+    if (
+        full_matrix
+        and refseq is None
+        and matrix_display in ("upper", "lower")
+        and isinstance(dist_matrix, pd.DataFrame)
+    ):
+        dist_matrix = _apply_matrix_display(dist_matrix, matrix_display)
 
     print("[>] Computed Successfully.")
     return dist_matrix

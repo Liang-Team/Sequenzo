@@ -102,7 +102,7 @@ def test_lcpprod_rejects_normalization(method, norm):
 def test_lcpprod_auto_norm_still_allowed():
     seqdata = _appendix_sequences_9_10()
     dist = get_distance_matrix(seqdata, method="LCPprod", norm="auto")
-    assert float(dist.values[0, 1]) == pytest.approx(-8.0)
+    assert float(dist.values[0, 1]) == pytest.approx(8.0)
 
 
 def test_lcpspell_maxdist_rejects_duration_ref_below_observed_spell_max():

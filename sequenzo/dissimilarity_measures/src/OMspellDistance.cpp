@@ -18,10 +18,13 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 #include "utils.h"
 #include "dp_utils.h"
+#include "lcp_input_validation.h"
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -65,12 +68,19 @@ public:
             dur_cost_buf.resize(static_cast<size_t>(nseq) * static_cast<size_t>(cost_cols));
             indel_dur_cost_buf.resize(static_cast<size_t>(nseq) * static_cast<size_t>(cost_cols));
             for (int row = 0; row < nseq; row++) {
+                const int active_len = len_ptr[row];
                 const int* seq_row = seq_ptr + static_cast<ptrdiff_t>(row) * seq_cols;
                 const double* dur_row = dur_ptr + static_cast<ptrdiff_t>(row) * dur_cols;
                 double* dur_cost_row = dur_cost_buf.data() + static_cast<ptrdiff_t>(row) * cost_cols;
                 double* indel_dur_cost_row = indel_dur_cost_buf.data() + static_cast<ptrdiff_t>(row) * cost_cols;
-                for (int col = 0; col < cost_cols; col++) {
+                std::fill(dur_cost_row, dur_cost_row + cost_cols, 0.0);
+                std::fill(indel_dur_cost_row, indel_dur_cost_row + cost_cols, 0.0);
+                for (int col = 0; col < active_len; col++) {
                     const int state = seq_row[col];
+                    if (state <= 0 || state >= alphasize) {
+                        throw std::invalid_argument(
+                            "active spell state code is outside the valid range");
+                    }
                     const double dur_cost = timecost * (dur_row[col] - 1.0);
                     dur_cost_row[col] = dur_cost;
                     indel_dur_cost_row[col] = indel_ptr[state] + dur_cost;
@@ -111,15 +121,13 @@ public:
                 maxscost = std::min(maxscost, 2 * maxindel);
             }
 
-            nans = nseq;
-            rseq1 = refseqS.at(0);
-            rseq2 = refseqS.at(1);
-            if (rseq1 < rseq2) {
-                nseq = rseq1;
-                nans = nseq * (rseq2 - rseq1);
-            } else {
-                rseq1 = rseq1 - 1;
-            }
+            original_nseq_ = static_cast<int>(nseq);
+            const auto refseq_cfg = lcp_input::parse_refseq(refseqS, original_nseq_);
+            has_refseq_ = refseq_cfg.has_refseq;
+            nseq = refseq_cfg.nseq;
+            rseq1 = refseq_cfg.rseq1;
+            rseq2 = refseq_cfg.rseq2;
+            nans = has_refseq_ ? nseq * (rseq2 - rseq1) : original_nseq_;
         } catch (const std::exception& e) {
             py::print("Error in constructor: ", e.what());
             throw;
@@ -740,6 +748,12 @@ public:
     }
 
     py::array_t<double> compute_refseq_distances() {
+        lcp_input::RefseqConfig refseq_cfg;
+        refseq_cfg.has_refseq = has_refseq_;
+        refseq_cfg.nseq = nseq;
+        refseq_cfg.rseq1 = rseq1;
+        refseq_cfg.rseq2 = rseq2;
+        lcp_input::require_refseq_for_compute(refseq_cfg);
         try {
             auto refdist_matrix = py::array_t<double>({nseq, (rseq2 - rseq1)});
             auto buffer = refdist_matrix.mutable_unchecked<2>();
@@ -803,4 +817,6 @@ private:
     int nans = -1;
     int rseq1 = -1;
     int rseq2 = -1;
+    int original_nseq_ = 0;
+    bool has_refseq_ = false;
 };

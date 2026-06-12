@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-static constexpr double EPS = 1e-10;
+static constexpr double EPS = 1e-12;
 
 static inline double normalize_distance(double rawdist, double maxdist, double l1, double l2, int norm){
     if (std::fabs(rawdist) < EPS) return 0.0;

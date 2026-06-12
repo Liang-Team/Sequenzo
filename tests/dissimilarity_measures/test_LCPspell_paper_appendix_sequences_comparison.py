@@ -105,8 +105,8 @@ class TestAppendixSequences9And10:
     def test_lcpmst_dss_raw_is_4(self, appendix_seqdata_9_10):
         assert _pair_distance(appendix_seqdata_9_10, "LCPmst") == pytest.approx(4.0)
 
-    def test_lcpprod_dss_raw_is_negative_8(self, appendix_seqdata_9_10):
-        assert _pair_distance(appendix_seqdata_9_10, "LCPprod") == pytest.approx(-8.0)
+    def test_lcpprod_dss_raw_is_8(self, appendix_seqdata_9_10):
+        assert _pair_distance(appendix_seqdata_9_10, "LCPprod") == pytest.approx(8.0)
 
     def test_lcpspell_expcost_zero_raw_is_0(self, appendix_seqdata_9_10):
         assert _pair_distance(
@@ -206,8 +206,8 @@ class TestAppendixSequences1And2:
     def test_lcpmst_dss_raw_is_12(self, appendix_seqdata_1_2):
         assert _pair_distance(appendix_seqdata_1_2, "LCPmst") == pytest.approx(12.0)
 
-    def test_lcpprod_dss_raw_is_12(self, appendix_seqdata_1_2):
-        assert _pair_distance(appendix_seqdata_1_2, "LCPprod") == pytest.approx(12.0)
+    def test_lcpprod_dss_raw_is_72(self, appendix_seqdata_1_2):
+        assert _pair_distance(appendix_seqdata_1_2, "LCPprod") == pytest.approx(72.0)
 
     def test_lcpspell_raw_is_2(self, appendix_seqdata_1_2):
         """L=0 spell prefix; n+m-2L = 2 (duration term zero with no matched spells)."""

@@ -73,8 +73,9 @@ Invalid codes (`< 0` or `> 4`) are rejected in C++ constructors.
 ### LCPprod / RLCPprod
 
 - **Raw only:** `norm=none` (C++ and Python wrapper).
-- Product-weighted raw values may be negative; normalized dissimilarities are
-  not defined.
+- Product-duration weighting yields a squared-duration raw dissimilarity.
+  No method-specific upper bound is defined, so normalized dissimilarities are
+  not supported.
 
 ## `refseqS` conventions (C++ kernel)
 
