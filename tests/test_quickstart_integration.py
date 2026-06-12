@@ -64,8 +64,9 @@ def test_visualizations_no_save():
     # Index plot
     plot_sequence_index(sequence_data)
     
-    # Legend plot
+    # Legend plot (default vertical style and index-plot style)
     sequence_data.plot_legend()
+    sequence_data.plot_legend(style="horizontal")
     
     # Most frequent sequences
     plot_most_frequent_sequences(sequence_data, top_n=5)

@@ -19,7 +19,8 @@ from sequenzo.visualization.utils import (
     combine_plot_with_legend,
     save_and_show_results,
     determine_layout,
-    show_plot_title
+    show_plot_title,
+    legend_ncol,
 )
 
 
@@ -941,7 +942,7 @@ def plot_sequence_index(seqdata: SequenceData,
         legend_buffer = create_standalone_legend(
             colors=colors,
             labels=seqdata.labels,
-            ncol=min(5, len(seqdata.states)),
+            ncol=legend_ncol(len(seqdata.states)),
             figsize=(actual_figsize[0] * ncols, 1),
             fontsize=fontsize-2,
             dpi=dpi

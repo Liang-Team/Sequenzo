@@ -1075,27 +1075,144 @@ class SequenceData:
         """Returns the processed sequence dataset as a DataFrame."""
         return self.seqdata
 
-    def plot_legend(self, save_as=None, dpi=200):
-        """Displays the saved legend for sequence state colors."""
-        # Ensure legend handles exist even if get_legend() wasn't called
+    def plot_legend(
+        self,
+        save_as=None,
+        dpi=200,
+        *,
+        style: str = "vertical",
+        ncol: int | None = None,
+        fontsize: int | None = None,
+        show_border: bool | None = None,
+    ):
+        """
+        Display a standalone legend for sequence state colors.
+
+        Parameters
+        ----------
+        save_as
+            Optional path to save the legend image.
+        dpi
+            Output resolution.
+        style
+            ``"vertical"`` (default): compact vertical legend with title
+            ``"States"``.
+            ``"horizontal"``: multi-column horizontal legend matching grouped
+            :func:`~sequenzo.visualization.plot_sequence_index` / clustering
+            index plots.
+        ncol
+            Number of columns when ``style="horizontal"``. Defaults to
+            ``min(5, number of states)``.
+        fontsize
+            Legend font size. Defaults to ``10`` for both styles.
+        show_border
+            Whether to draw a border around the legend. Defaults to ``True``
+            for ``style="vertical"`` and ``False`` for ``style="horizontal"``.
+        """
+        style_key = style.lower().replace("-", "_")
+        if style_key == "vertical":
+            if show_border is None:
+                show_border = True
+            self._plot_legend_vertical(
+                save_as=save_as,
+                dpi=dpi,
+                fontsize=fontsize or 10,
+                show_border=show_border,
+            )
+        elif style_key == "horizontal":
+            if show_border is None:
+                show_border = False
+            self._plot_legend_horizontal(
+                save_as=save_as,
+                dpi=dpi,
+                ncol=ncol,
+                fontsize=fontsize or 10,
+                show_border=show_border,
+            )
+        else:
+            raise ValueError(
+                f"Unknown legend style {style!r}. "
+                "Choose 'vertical' or 'horizontal'."
+            )
+
+    def _plot_legend_vertical(
+        self,
+        *,
+        save_as=None,
+        dpi=200,
+        fontsize: int = 10,
+        show_border: bool = True,
+    ):
+        """Vertical legend with title (original ``plot_legend`` style)."""
         legend_handles = getattr(self, "legend_handles", None)
         if not legend_handles:
-            legend_handles = [
-                plt.Rectangle((0, 0), 1, 1, color=self.color_map[i + 1], label=self.labels[i]
-                              ) for i in range(len(self.states))
-            ]
-            self.legend_handles = legend_handles
+            legend_handles, _ = self.get_legend()
 
-        fig, ax = plt.subplots(figsize=(2, 2))
-        ax.legend(handles=legend_handles, loc='center', title="States", fontsize=10)
-        ax.axis('off')
+        n_labels = len(self.labels)
+        max_label_len = max((len(label) for label in self.labels), default=10)
+        fig_w = max(3.0, min(14.0, max_label_len * 0.11 + 1.5))
+        fig_h = max(2.0, 0.34 * n_labels + 0.9)
 
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        ax.legend(
+            handles=legend_handles,
+            loc="center",
+            title="States",
+            fontsize=fontsize,
+            frameon=show_border,
+        )
+        ax.axis("off")
+
+        pad_inches = 0.08 if show_border else 0.02
         if save_as:
-            plt.savefig(save_as, dpi=dpi)
+            fig.savefig(save_as, dpi=dpi, bbox_inches="tight", pad_inches=pad_inches)
             plt.show()
         else:
-            plt.tight_layout()
+            fig.tight_layout()
             plt.show()
+        plt.close(fig)
+
+    def _plot_legend_horizontal(
+        self,
+        *,
+        save_as=None,
+        dpi=200,
+        ncol: int | None = None,
+        fontsize: int = 10,
+        show_border: bool = False,
+    ):
+        """Horizontal legend matching grouped sequence index plots."""
+        from sequenzo.visualization.utils.utils import legend_ncol
+
+        n_labels = len(self.labels)
+        ncol = legend_ncol(n_labels, max_ncol=5, ncol=ncol)
+        nrows = max(1, (n_labels + ncol - 1) // ncol)
+        figsize = (max(4.0, ncol * 1.5), max(0.6, 0.5 * nrows))
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.axis("off")
+
+        handles = [
+            plt.Rectangle((0, 0), 1, 1, color=self.color_map_by_label.get(label, "gray"))
+            for label in self.labels
+        ]
+        ax.legend(
+            handles,
+            self.labels,
+            loc="center",
+            ncol=min(ncol, n_labels),
+            frameon=show_border,
+            fontsize=fontsize,
+        )
+
+        pad_inches = 0.08 if show_border else 0.02
+        if save_as:
+            fig.savefig(save_as, dpi=dpi, bbox_inches="tight", pad_inches=pad_inches)
+            plt.show()
+        else:
+            fig.tight_layout()
+            plt.show()
+        plt.close(fig)
 
     # ------------------------------
     # The following are for multidomain sequence analysis, especially for seqdomassoc()

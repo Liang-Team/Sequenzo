@@ -96,54 +96,75 @@ def set_up_time_labels_for_x_axis(seqdata: SequenceData,
     ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color=color)
 
 
+def legend_ncol(n_labels: int, max_ncol: int = 5, ncol: int | None = None) -> int:
+    """
+    Choose column count for a horizontal legend.
+
+    When the default wrap would create exactly two rows and the second row
+    would contain only one or two items, use a single row instead.
+    """
+    if ncol is not None:
+        return min(ncol, n_labels)
+    ncol = min(max_ncol, n_labels)
+    if ncol < n_labels:
+        remainder = n_labels % ncol
+        nrow = (n_labels + ncol - 1) // ncol
+        if nrow == 2 and remainder in (1, 2):
+            return n_labels
+    return ncol
+
+
 def create_standalone_legend(
         colors: Dict[str, str],
         labels: List[str],
         ncol: int = 5,
-        figsize: Tuple[int, int] = (8, 1),
+        figsize: Tuple[int, int] | None = None,
         fontsize: int = 10,
-        dpi: int = 200
+        dpi: int = 200,
+        show_border: bool = False,
         ) -> BytesIO:
     """
-    Creates a standalone legend image without borders.
+    Creates a standalone legend image.
 
     Parameters:
         colors: Dictionary mapping labels to color values
         labels: List of state labels to include in the legend
         ncol: Number of columns in the legend
-        figsize: Size of the figure (width, height)
+        figsize: Size of the figure (width, height). Auto-sized when omitted.
         fontsize: Font size for legend text
         dpi: Resolution of the output image
+        show_border: Whether to draw a border around the legend
 
     Returns:
         BytesIO: In-memory buffer containing the legend image
     """
-    # Create a new figure for the legend
+    ncol = min(ncol, len(labels))
+    nrows = max(1, (len(labels) + ncol - 1) // ncol)
+    if figsize is None:
+        figsize = (max(4.0, ncol * 1.5), max(0.6, 0.5 * nrows))
+
     legend_fig = plt.figure(figsize=figsize)
     ax = legend_fig.add_subplot(111)
-    ax.axis('off')  # Hide the axes
+    ax.axis("off")
 
-    # Create handles for the legend
     handles = [plt.Rectangle((0, 0), 1, 1, color=colors.get(s, "gray")) for s in labels]
 
-    # Create the legend without a frame
-    legend = ax.legend(
+    ax.legend(
         handles,
         labels,
-        loc='center',
-        ncol=min(ncol, len(labels)),
-        frameon=False,  # No border around legend
-        fontsize=fontsize
+        loc="center",
+        ncol=ncol,
+        frameon=show_border,
+        fontsize=fontsize,
     )
 
-    # Save to memory buffer
     buffer = BytesIO()
     legend_fig.savefig(
         buffer,
-        format='png',
+        format="png",
         dpi=dpi,
-        bbox_inches='tight',
-        pad_inches=0  # Remove padding
+        bbox_inches="tight",
+        pad_inches=0.08 if show_border else 0.02,
     )
     plt.close(legend_fig)
     buffer.seek(0)
