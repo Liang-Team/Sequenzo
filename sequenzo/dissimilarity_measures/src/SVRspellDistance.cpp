@@ -115,6 +115,29 @@ class SVRspellDistance {
             bit_tj.assign(static_cast<size_t>(ncols) + 1, 0.0);
             bit_tij.assign(static_cast<size_t>(ncols) + 1, 0.0);
         }
+
+        void prepare_total(size_t count, int ncols) {
+            match_i.clear();
+            match_j.clear();
+            match_ti.clear();
+            match_tj.clear();
+            cur_e.clear();
+            cur_ti.clear();
+            cur_tj.clear();
+            cur_tij.clear();
+            match_i.reserve(count);
+            match_j.reserve(count);
+            match_ti.reserve(count);
+            match_tj.reserve(count);
+            cur_e.reserve(count);
+            cur_ti.reserve(count);
+            cur_tj.reserve(count);
+            cur_tij.reserve(count);
+            bit_e.assign(static_cast<size_t>(ncols) + 1, 0.0);
+            bit_ti.assign(static_cast<size_t>(ncols) + 1, 0.0);
+            bit_tj.assign(static_cast<size_t>(ncols) + 1, 0.0);
+            bit_tij.assign(static_cast<size_t>(ncols) + 1, 0.0);
+        }
     };
 
 public:
@@ -155,9 +178,14 @@ public:
             // kweights length; use at most maxlen
             int kw_len = static_cast<int>(kweights.shape()[0]);
             kweights_len = (kw_len < maxlen) ? kw_len : maxlen;
+            kweights_all_one = are_kweights_all_one();
 
-            // Precompute self-terms: for each sequence is, computeattr(is, is) and store kvect in selfmatvect
-            selfmatvect.resize(static_cast<size_t>(nseq) * static_cast<size_t>(maxlen), 0.0);
+            // Precompute self-terms for normalization.
+            if (use_identity_total_kernel()) {
+                selfsumvect.resize(static_cast<size_t>(nseq), 0.0);
+            } else {
+                selfmatvect.resize(static_cast<size_t>(nseq) * static_cast<size_t>(maxlen), 0.0);
+            }
             std::exception_ptr first_exception;
             std::atomic<bool> has_exception(false);
             const int row_chunk = row_schedule_chunk();
@@ -170,9 +198,13 @@ public:
                 for (int is = 0; is < nseq; is++) {
                     if (has_exception.load()) continue;
                     try {
-                        computeattr(is, is, workspace);
-                        for (int k = 0; k < maxlen; k++) {
-                            selfmatvect[static_cast<size_t>(is) * static_cast<size_t>(maxlen) + static_cast<size_t>(k)] = workspace.kvect[static_cast<size_t>(k)];
+                        if (use_identity_total_kernel()) {
+                            selfsumvect[static_cast<size_t>(is)] = computeattr_identity_total(is, is, workspace);
+                        } else {
+                            computeattr(is, is, workspace);
+                            for (int k = 0; k < maxlen; k++) {
+                                selfmatvect[static_cast<size_t>(is) * static_cast<size_t>(maxlen) + static_cast<size_t>(k)] = workspace.kvect[static_cast<size_t>(k)];
+                            }
                         }
                     } catch (...) {
                         dp_utils::record_first_exception(first_exception, has_exception);
@@ -210,7 +242,11 @@ public:
         int m = ptr_len(is);
         int n = ptr_len(js);
         if (prox_is_identity) {
-            computeattr_identity_sparse(is, js, work);
+            if (alphasize <= 4) {
+                computeattr_identity_dense(is, js, work);
+            } else {
+                computeattr_identity_sparse(is, js, work);
+            }
             return;
         }
         work.reset(maxlen);
@@ -325,6 +361,16 @@ public:
      */
     double compute_distance(int is, int js, Workspace& work) {
         try {
+            if (use_identity_total_kernel()) {
+                const double Aval = computeattr_identity_total(is, js, work);
+                const double Ival = selfsumvect[static_cast<size_t>(is)];
+                const double Jval = selfsumvect[static_cast<size_t>(js)];
+                double dist = Ival + Jval - 2.0 * Aval;
+                double maxdist = Ival + Jval;
+                if (dist < 0.0) dist = 0.0;
+                return normalize_distance(dist, maxdist, Ival, Jval, norm);
+            }
+
             auto ptr_kw = kweights.unchecked<1>();
             computeattr(is, js, work);
 
@@ -503,6 +549,205 @@ private:
         return total - bit_prefix(bit, index);
     }
 
+    double computeattr_identity_total(int is, int js, Workspace& work) {
+        auto ptr_seq = sequences.unchecked<2>();
+        auto ptr_dur = seqdur.unchecked<2>();
+        auto ptr_len = seqlength.unchecked<1>();
+        int m = ptr_len(is);
+        int n = ptr_len(js);
+        if (m == 0 || n == 0) return 0.0;
+
+        const size_t reserve_count = static_cast<size_t>(m) * static_cast<size_t>(n) / static_cast<size_t>(std::max(1, alphasize)) + 1;
+        work.prepare_total(reserve_count, n);
+
+        for (int i = 0; i < m; i++) {
+            const int seqi = ptr_seq(is, i);
+            const double ti = ptr_dur(is, i);
+            for (int j = 0; j < n; j++) {
+                if (seqi != ptr_seq(js, j)) continue;
+                work.match_i.push_back(i);
+                work.match_j.push_back(j);
+                work.match_ti.push_back(ti);
+                work.match_tj.push_back(ptr_dur(js, j));
+            }
+        }
+
+        const size_t match_count = work.match_i.size();
+        if (match_count == 0) return 0.0;
+        work.cur_e.resize(match_count);
+        work.cur_ti.resize(match_count);
+        work.cur_tj.resize(match_count);
+        work.cur_tij.resize(match_count);
+
+        double total_value = 0.0;
+        double total_e = 0.0;
+        double total_ti = 0.0;
+        double total_tj = 0.0;
+        double total_tij = 0.0;
+        int pos = static_cast<int>(match_count) - 1;
+        while (pos >= 0) {
+            const int current_i = work.match_i[static_cast<size_t>(pos)];
+            int group_start = pos;
+            while (group_start >= 0 && work.match_i[static_cast<size_t>(group_start)] == current_i) {
+                group_start--;
+            }
+
+            for (int idx = group_start + 1; idx <= pos; idx++) {
+                const size_t sidx = static_cast<size_t>(idx);
+                const int j = work.match_j[sidx];
+                const double e_sum = bit_suffix_gt(work.bit_e, j, total_e);
+                const double ti_sum = bit_suffix_gt(work.bit_ti, j, total_ti);
+                const double tj_sum = bit_suffix_gt(work.bit_tj, j, total_tj);
+                const double tij_sum = bit_suffix_gt(work.bit_tij, j, total_tij);
+                const double ti = work.match_ti[sidx];
+                const double tj = work.match_tj[sidx];
+
+                work.cur_e[sidx] = 1.0 + e_sum;
+                work.cur_ti[sidx] = ti + ti_sum + ti * e_sum;
+                work.cur_tj[sidx] = tj + tj_sum + tj * e_sum;
+                work.cur_tij[sidx] = ti * tj + tij_sum + ti * tj_sum + tj * ti_sum + ti * tj * e_sum;
+                total_value += work.cur_tij[sidx];
+                if (total_value >= std::numeric_limits<double>::max()) {
+                    throw std::runtime_error("[!] Number of subsequences is getting too big");
+                }
+            }
+
+            for (int idx = group_start + 1; idx <= pos; idx++) {
+                const size_t sidx = static_cast<size_t>(idx);
+                const int j = work.match_j[sidx];
+                const double e = work.cur_e[sidx];
+                const double ti = work.cur_ti[sidx];
+                const double tj = work.cur_tj[sidx];
+                const double tij = work.cur_tij[sidx];
+                bit_add(work.bit_e, j, e);
+                total_e += e;
+                bit_add(work.bit_ti, j, ti);
+                total_ti += ti;
+                bit_add(work.bit_tj, j, tj);
+                total_tj += tj;
+                bit_add(work.bit_tij, j, tij);
+                total_tij += tij;
+            }
+
+            pos = group_start;
+        }
+
+        return total_value;
+    }
+
+    void computeattr_identity_dense(int is, int js, Workspace& work) {
+        auto ptr_seq = sequences.unchecked<2>();
+        auto ptr_dur = seqdur.unchecked<2>();
+        auto ptr_len = seqlength.unchecked<1>();
+        int m = ptr_len(is);
+        int n = ptr_len(js);
+        work.reset(maxlen);
+        if (m == 0 || n == 0) return;
+
+        int mrows = m + 1;
+        int ncols = n + 1;
+        int rowsize = maxlen + 1;
+        auto& e1 = work.e1;
+        auto& e = work.e;
+        auto& t_i = work.t_i;
+        auto& t_j = work.t_j;
+        auto& t_ij = work.t_ij;
+
+        double tot_t_ij = 0.0;
+        for (int i = 0; i < m; i++) {
+            int seqi = ptr_seq(is, i);
+            double ti = ptr_dur(is, i);
+            for (int j = 0; j < n; j++) {
+                if (seqi != ptr_seq(js, j)) continue;
+                int ij = IDX(i, j, rowsize);
+                double tj = ptr_dur(js, j);
+                e1[ij] = 1.0;
+                e[ij] = 1.0;
+                t_i[ij] = ti;
+                t_j[ij] = tj;
+                t_ij[ij] = ti * tj;
+                tot_t_ij += t_ij[ij];
+                if (tot_t_ij >= std::numeric_limits<double>::max()) {
+                    throw std::runtime_error("[!] Number of subsequences is getting too big");
+                }
+            }
+        }
+
+        for (int i = 0; i < m; i++) {
+            int ij = IDX(i, ncols - 1, rowsize);
+            e1[ij] = e[ij] = t_i[ij] = t_j[ij] = t_ij[ij] = 0.0;
+        }
+        for (int j = 0; j < ncols; j++) {
+            int ij = IDX(mrows - 1, j, rowsize);
+            e1[ij] = e[ij] = t_i[ij] = t_j[ij] = t_ij[ij] = 0.0;
+        }
+
+        work.kvect[0] = tot_t_ij;
+        if (tot_t_ij == 0.0) return;
+
+        int k = 0;
+        while (mrows != 0 && ncols != 0) {
+            k++;
+            double sum_e, sum_t_i, sum_t_j, sum_t_ij;
+            double temp_e, temp_t_i, temp_t_j, temp_t_ij;
+
+            for (int irow = 0; irow < mrows; irow++) {
+                sum_e = sum_t_i = sum_t_j = sum_t_ij = 0.0;
+                for (int jcol = ncols - 1; jcol >= 0; jcol--) {
+                    int ij = IDX(irow, jcol, rowsize);
+                    temp_e = sum_e; sum_e += e[ij]; e[ij] = temp_e;
+                    temp_t_i = sum_t_i; sum_t_i += t_i[ij]; t_i[ij] = temp_t_i;
+                    temp_t_j = sum_t_j; sum_t_j += t_j[ij]; t_j[ij] = temp_t_j;
+                    temp_t_ij = sum_t_ij; sum_t_ij += t_ij[ij]; t_ij[ij] = temp_t_ij;
+                }
+            }
+
+            double tot_e = 0.0;
+            for (int jcol = 0; jcol < ncols; jcol++) {
+                sum_e = sum_t_i = sum_t_j = sum_t_ij = 0.0;
+                for (int irow = mrows - 1; irow >= 0; irow--) {
+                    int ij = IDX(irow, jcol, rowsize);
+                    temp_e = sum_e; sum_e += e[ij]; e[ij] = temp_e;
+                    temp_t_i = sum_t_i; sum_t_i += t_i[ij]; t_i[ij] = temp_t_i;
+                    temp_t_j = sum_t_j; sum_t_j += t_j[ij]; t_j[ij] = temp_t_j;
+                    temp_t_ij = sum_t_ij; sum_t_ij += t_ij[ij]; t_ij[ij] = temp_t_ij;
+                    tot_e += e[ij];
+                }
+            }
+
+            if (tot_e == 0.0) return;
+
+            tot_t_ij = 0.0;
+            for (int irow = 0; irow < mrows; irow++) {
+                double ti = (irow < m) ? ptr_dur(is, irow) : 0.0;
+                for (int jcol = 0; jcol < ncols; jcol++) {
+                    int ij = IDX(irow, jcol, rowsize);
+                    if (e1[ij] == 0.0) {
+                        e[ij] = t_i[ij] = t_j[ij] = t_ij[ij] = 0.0;
+                        continue;
+                    }
+                    double tj = (jcol < n) ? ptr_dur(js, jcol) : 0.0;
+                    double e_sum = e[ij];
+                    double ti_sum = t_i[ij];
+                    double tj_sum = t_j[ij];
+                    double tij_sum = t_ij[ij];
+                    e[ij] = e_sum;
+                    t_ij[ij] = tij_sum + ti * tj_sum + tj * ti_sum + e_sum * ti * tj;
+                    t_i[ij] = ti_sum + ti * e_sum;
+                    t_j[ij] = tj_sum + tj * e_sum;
+                    tot_t_ij += t_ij[ij];
+                }
+            }
+
+            if (k < maxlen) work.kvect[static_cast<size_t>(k)] = tot_t_ij;
+            if (tot_t_ij >= std::numeric_limits<double>::max()) {
+                throw std::runtime_error("[!] Number of subsequences is getting too big");
+            }
+            mrows--;
+            ncols--;
+        }
+    }
+
     void computeattr_identity_sparse(int is, int js, Workspace& work) {
         auto ptr_seq = sequences.unchecked<2>();
         auto ptr_dur = seqdur.unchecked<2>();
@@ -640,6 +885,19 @@ private:
         return true;
     }
 
+    bool are_kweights_all_one() const {
+        if (kweights_len != maxlen) return false;
+        auto ptr_kw = kweights.unchecked<1>();
+        for (int i = 0; i < kweights_len; i++) {
+            if (ptr_kw(i) != 1.0) return false;
+        }
+        return true;
+    }
+
+    bool use_identity_total_kernel() const {
+        return prox_is_identity && kweights_all_one;
+    }
+
     int row_schedule_chunk() const {
         return nseq >= 2000 ? 4 : 16;
     }
@@ -655,7 +913,9 @@ private:
     int alphasize;
     int kweights_len;
     bool prox_is_identity;
+    bool kweights_all_one;
     std::vector<double> selfmatvect;
+    std::vector<double> selfsumvect;
 
     int nans;
     int rseq1;
