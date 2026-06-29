@@ -9,7 +9,9 @@
  * DSS prefix or suffix. The resulting raw value is non-negative
  * up to floating-point tolerance.
  *
- * Normalization is currently not supported.
+ * Only norm="none" is supported. This is intentional as LCPprod/RLCPprod
+ * are returned on their raw squared-duration scale, and automatic
+ * normalization is not defined for this measure.
  */
 
 #include <pybind11/pybind11.h>

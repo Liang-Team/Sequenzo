@@ -23,7 +23,6 @@
  *
  * Parameter timecost (Python expcost) is a relative-duration weight, not an
  * expansion cost per additional raw time unit and not an exponential parameter.
- * @Author  : Yuqi Liang 梁彧祺
  * @File    : OMspellRSDistance.cpp
  * @Time    : 2026/1/31 22:12
  */
