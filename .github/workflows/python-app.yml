@@ -285,14 +285,12 @@ jobs:
       # would break the minos guarantee of macosx_10_15 / macosx_11_0 wheels).
       #
       # Previously this caused "symbol not found in flat namespace
-      # '___kmpc_dispatch_deinit'" at import time.  Root cause: that symbol is
-      # an Intel-private OpenMP extension emitted by clang's -fopenmp when
-      # dynamic/guided schedules are used, but the LLVM openmp *runtime* we build
-      # from source deliberately omits it (it was removed in LLVM 13).
-      # Fix: pass -fno-openmp-extensions at compile time so clang never emits a
-      # reference to __kmpc_dispatch_deinit (or any other Intel-private symbol).
-      # The resulting .so is pure OpenMP-standard and links cleanly against our
-      # self-built libomp whose minos == the wheel deployment target.
+      # '___kmpc_dispatch_deinit'" at import time.  Root cause: Apple Clang emits
+      # calls to __kmpc_dispatch_deinit for schedule(dynamic/guided) loops, but the
+      # LLVM openmp runtime we build from source omits it (removed in LLVM 13).
+      # -fno-openmp-extensions does NOT suppress this symbol on modern Apple Clang.
+      # Fix: inject a no-op __kmpc_dispatch_deinit stub into the CI libomp build
+      # (see build_macos_ci_libomp.sh) so bundled libomp satisfies the reference.
       - name: Cache CI libomp (macOS)
         if: runner.os == 'macOS'
         uses: actions/cache@v4
@@ -613,10 +611,9 @@ jobs:
           #
           # Previously this command pre-loaded Homebrew libomp via DYLD_LIBRARY_PATH,
           # which masked a "symbol not found in flat namespace '___kmpc_dispatch_deinit'"
-          # bug: delocate bundles the LLVM-source libomp (no dispatch_deinit), but
-          # clang emits a call to dispatch_deinit unless -fno-openmp-extensions is used.
-          # The pre-load caused CI tests to pass while users hit the error locally.
-          # Fix: test without any system-libomp fallback so the CI gate is honest.
+          # bug: delocate bundles the LLVM-source libomp unless our dispatch_deinit stub
+          # is present.  The pre-load caused CI tests to pass while users hit the error
+          # locally.  Fix: test without any system-libomp fallback so the CI gate is honest.
           CIBW_TEST_COMMAND_MACOS: |
             echo "=== Testing macOS wheel (bundled libomp only — no DYLD_LIBRARY_PATH fallback) ==="
             echo "Architecture: $(uname -m)"
@@ -653,10 +650,9 @@ jobs:
                 print(f'[ERROR] Failed to import sequenzo: {e}')
                 sys.exit(1)
 
-            # clustering_c_code uses OpenMP — this is the module that previously
-            # triggered "symbol not found in flat namespace '___kmpc_dispatch_deinit'".
-            # If -fno-openmp-extensions was not applied at compile time, this will fail
-            # even with the bundled libomp.
+            # clustering_c_code uses OpenMP dynamic schedules — this module previously
+            # triggered "symbol not found in flat namespace '___kmpc_dispatch_deinit'"
+            # when bundled libomp lacked the dispatch_deinit compatibility stub.
             try:
                 import sequenzo.clustering.clustering_c_code
                 print('[OK] clustering_c_code loaded (bundled libomp sufficient)')
@@ -664,7 +660,7 @@ jobs:
                 print(f'[ERROR] clustering_c_code failed to load: {e}')
                 if 'kmpc_dispatch_deinit' in str(e):
                     print('[ERROR] ___kmpc_dispatch_deinit missing from bundled libomp.')
-                    print('[ERROR] Ensure -fno-openmp-extensions is passed at compile time.')
+                    print('[ERROR] Ensure build_macos_ci_libomp.sh injects the dispatch_deinit stub.')
                 sys.exit(1)
 
             try:
@@ -813,39 +809,65 @@ jobs:
         run: ls -lah dist/
         shell: bash
 
-      # Verify that macOS .so files do NOT reference ___kmpc_dispatch_deinit.
-      # If this symbol appears as an undefined reference it means -fno-openmp-extensions
-      # was not applied correctly; the bundled LLVM libomp built from source never exports
-      # it (removed in LLVM 13), so any user who installs the wheel would hit a dlopen
-      # "symbol not found in flat namespace" error at runtime.
-      - name: Verify no Intel-private OpenMP symbols in macOS .so files
+      # Verify macOS wheels can resolve ___kmpc_dispatch_deinit at load time.
+      # Apple Clang emits calls to __kmpc_dispatch_deinit for schedule(dynamic/guided)
+      # loops; -fno-openmp-extensions does NOT suppress this on modern Apple Clang.
+      # nm -u on a linked .so lists the symbol as undefined (U) because it is resolved
+      # from bundled libomp at dlopen time — that is expected and OK when libomp exports it.
+      - name: Verify OpenMP dispatch_deinit resolvable in macOS wheels
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          echo "=== Checking for ___kmpc_dispatch_deinit in built .so files ==="
+          echo "=== Checking ___kmpc_dispatch_deinit resolution in macOS wheels ==="
           FOUND_BAD=0
           for whl in dist/*.whl; do
             echo "Inspecting: $whl"
             TMPDIR_WHL=$(mktemp -d)
             unzip -q "$whl" -d "$TMPDIR_WHL"
+
+            LIBOMP=""
+            while IFS= read -r -d '' dylib; do
+              case "$(basename "$dylib")" in
+                libomp*.dylib) LIBOMP="$dylib"; break ;;
+              esac
+            done < <(find "$TMPDIR_WHL" -path '*/.dylibs/*.dylib' -print0)
+
+            if [ -z "$LIBOMP" ]; then
+              echo "[ERROR] No bundled libomp.dylib found in $whl"
+              FOUND_BAD=1
+              rm -rf "$TMPDIR_WHL"
+              continue
+            fi
+
+            if nm -g "$LIBOMP" 2>/dev/null | grep -q '__kmpc_dispatch_deinit'; then
+              echo "[OK] Bundled libomp exports __kmpc_dispatch_deinit: $LIBOMP"
+              LIBOMP_HAS_DEINIT=1
+            else
+              echo "[ERROR] Bundled libomp missing __kmpc_dispatch_deinit stub: $LIBOMP"
+              LIBOMP_HAS_DEINIT=0
+              FOUND_BAD=1
+            fi
+
             while IFS= read -r -d '' so_file; do
               if nm -u "$so_file" 2>/dev/null | grep -q '___kmpc_dispatch_deinit'; then
-                echo "[ERROR] ___kmpc_dispatch_deinit found as undefined in: $so_file"
-                echo "        This means -fno-openmp-extensions was not applied."
-                echo "        Users will see 'symbol not found in flat namespace' at import time."
-                FOUND_BAD=1
+                if [ "$LIBOMP_HAS_DEINIT" -eq 1 ]; then
+                  echo "[OK] $so_file references dispatch_deinit; bundled libomp provides it"
+                else
+                  echo "[ERROR] $so_file references dispatch_deinit but libomp lacks stub"
+                  FOUND_BAD=1
+                fi
               else
-                echo "[OK] $so_file — no Intel-private OMP symbols"
+                echo "[OK] $so_file — no dispatch_deinit reference (static OpenMP schedules)"
               fi
             done < <(find "$TMPDIR_WHL" -name "*.so" -print0)
             rm -rf "$TMPDIR_WHL"
           done
           if [ "$FOUND_BAD" -eq 1 ]; then
-            echo "[FATAL] One or more .so files reference ___kmpc_dispatch_deinit."
-            echo "        Ensure -fno-openmp-extensions is passed at compile time."
+            echo "[FATAL] macOS wheel OpenMP symbol check failed."
+            echo "        Ensure build_macos_ci_libomp.sh injects the dispatch_deinit stub."
             exit 1
           fi
-          echo "=== All macOS .so files are clean ==="
+          echo "=== All macOS wheels pass OpenMP symbol verification ==="
         shell: bash
 
       - name: Check wheels
