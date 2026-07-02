@@ -47,19 +47,29 @@ _libomp_deploy_ok() {
 }
 
 _libomp_symbol_ok() {
-  # LLVM-built libomp may not export dispatch_deinit, but always exports kmpc/omp APIs.
-  # NOTE: Avoid piping `nm` output directly into `grep -E` with `set -o pipefail`.
-  # On macOS, `grep -Eq` exits as soon as the first match is found, which causes
-  # `nm` to get a broken-pipe signal (SIGPIPE). Under pipefail, that non-zero exit
-  # from `nm` propagates and kills the script even though the symbols *were* found.
-  # Fix: dump symbols to a temp file first, then grep — no pipe, no broken-pipe risk.
+  # Verify libomp exports standard OpenMP runtime symbols AND __kmpc_dispatch_deinit.
+  #
+  # __kmpc_dispatch_deinit is an Intel-private OpenMP symbol removed from the LLVM
+  # runtime in LLVM 13, but Apple Clang's OpenMP codegen still emits calls to it for
+  # loops with dynamic/guided scheduling.  Without it, dlopen fails at wheel-install
+  # time with "symbol not found in flat namespace '___kmpc_dispatch_deinit'".
+  # We inject a no-op stub at build time (see below) so the bundled libomp always
+  # satisfies this symbol — matching what Apple Clang's codegen expects.
+  #
+  # NOTE: dump to a temp file before grepping to avoid SIGPIPE under set -o pipefail:
+  # grep -E exits on first match, which sends SIGPIPE to nm; pipefail promotes that
+  # to a non-zero exit even though the symbols were found.
   local _sym_tmp
   _sym_tmp="$(mktemp)"
   nm -g "$LIBOMP" 2>/dev/null > "$_sym_tmp" || true
-  grep -Eq '__kmpc_|omp_get_max_threads' "$_sym_tmp"
-  local _rc=$?
+  # Both conditions must hold:
+  #   1. Standard kmpc/omp symbols present (libomp is functional)
+  #   2. __kmpc_dispatch_deinit present (stub was injected successfully)
+  local _has_kmpc _has_deinit
+  grep -Eq '__kmpc_|omp_get_max_threads' "$_sym_tmp" && _has_kmpc=1 || _has_kmpc=0
+  grep -q '__kmpc_dispatch_deinit'       "$_sym_tmp" && _has_deinit=1 || _has_deinit=0
   rm -f "$_sym_tmp"
-  return $_rc
+  [[ "$_has_kmpc" -eq 1 && "$_has_deinit" -eq 1 ]]
 }
 
 if [[ -f "$LIBOMP" ]] && _libomp_arch_ok && _libomp_deploy_ok && _libomp_symbol_ok; then
@@ -103,6 +113,43 @@ for required_path in \
     exit 1
   fi
 done
+
+# Inject a no-op __kmpc_dispatch_deinit stub into the LLVM openmp runtime build.
+#
+# Background: Apple Clang's OpenMP codegen emits a call to __kmpc_dispatch_deinit
+# at the end of every loop that uses schedule(dynamic) or schedule(guided).  This
+# was an Intel-private runtime ABI extension; the LLVM OpenMP runtime REMOVED the
+# function in LLVM 13 (it became a no-op internally and was later elided).  Building
+# libomp from LLVM 13+ therefore produces a dylib that lacks the symbol, causing
+# dlopen to fail at wheel-install time:
+#   "symbol not found in flat namespace '___kmpc_dispatch_deinit'"
+#
+# Fix: append a cmake snippet to the END of runtime/src/CMakeLists.txt.  At that
+# point the `omp` target is already defined, so target_sources() works correctly.
+# The stub compiles to a single tiny object (< 1 kB) with a no-op implementation,
+# matching what the original function did once LLVM decided to phase it out.
+RUNTIME_CMAKELISTS="$OPENMP_SRC/runtime/src/CMakeLists.txt"
+if [[ ! -f "$RUNTIME_CMAKELISTS" ]]; then
+  echo "[ERROR] Expected LLVM openmp runtime CMakeLists.txt not found: $RUNTIME_CMAKELISTS" >&2
+  exit 1
+fi
+
+cat >> "$RUNTIME_CMAKELISTS" << 'CMAKE_STUB_EOF'
+
+# ---------------------------------------------------------------------------
+# Sequenzo CI: compatibility stub for __kmpc_dispatch_deinit
+# Removed from LLVM 13+ runtime but Apple Clang still emits calls to it.
+# ---------------------------------------------------------------------------
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/kmp_dispatch_deinit_stub.cpp"
+  "/* no-op stub: __kmpc_dispatch_deinit removed in LLVM 13 but still\n"
+  "   emitted by Apple Clang for dynamic/guided OpenMP schedule loops. */\n"
+  "extern \"C\" { void __kmpc_dispatch_deinit(void*, int) {} }\n"
+)
+target_sources(omp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/kmp_dispatch_deinit_stub.cpp")
+# ---------------------------------------------------------------------------
+CMAKE_STUB_EOF
+
+echo "[INFO] Injected __kmpc_dispatch_deinit stub into LLVM openmp CMakeLists.txt"
 
 BUILD="$WORK/build"
 mkdir -p "$BUILD" "$INSTALL_PREFIX"
