@@ -61,10 +61,11 @@ _libomp_symbol_ok() {
   # to a non-zero exit even though the symbols were found.
   local _sym_tmp
   _sym_tmp="$(mktemp)"
-  nm -g "$LIBOMP" 2>/dev/null > "$_sym_tmp" || true
+  # Use -gU so we require an exported definition (T), not merely a mention in nm output.
+  nm -gU "$LIBOMP" 2>/dev/null > "$_sym_tmp" || true
   # Both conditions must hold:
   #   1. Standard kmpc/omp symbols present (libomp is functional)
-  #   2. __kmpc_dispatch_deinit present (stub was injected successfully)
+  #   2. __kmpc_dispatch_deinit exported (stub was injected successfully)
   local _has_kmpc _has_deinit
   grep -Eq '__kmpc_|omp_get_max_threads' "$_sym_tmp" && _has_kmpc=1 || _has_kmpc=0
   grep -q '__kmpc_dispatch_deinit'       "$_sym_tmp" && _has_deinit=1 || _has_deinit=0
@@ -143,7 +144,8 @@ cat >> "$RUNTIME_CMAKELISTS" << 'CMAKE_STUB_EOF'
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/kmp_dispatch_deinit_stub.cpp"
   "/* no-op stub: __kmpc_dispatch_deinit removed in LLVM 13 but still\n"
   "   emitted by Apple Clang for dynamic/guided OpenMP schedule loops. */\n"
-  "extern \"C\" { void __kmpc_dispatch_deinit(void*, int) {} }\n"
+  "extern \"C\" __attribute__((visibility(\"default\")))\n"
+  "void __kmpc_dispatch_deinit(void*, int) {}\n"
 )
 target_sources(omp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/kmp_dispatch_deinit_stub.cpp")
 # ---------------------------------------------------------------------------

@@ -24,7 +24,9 @@ def test_macos_wheel_repair_fails_instead_of_copying_unrepaired_wheel():
     assert "cp {wheel} {dest_dir}/" not in source
     assert 'find . -name "*.c" -delete' not in source
     assert 'find . -name "*.so" -delete' not in source
-    assert "delocate-wheel --require-archs {delocate_archs}" in source
+    assert "delocate-wheel --require-archs {delocate_archs}" in source or "repair_macos_wheel.py" in source
+    assert 'CIBW_REPAIR_WHEEL_COMMAND_MACOS:' in source
+    assert (repo_root / "maintenance_scripts" / "repair_macos_wheel.py").is_file()
     assert 'CIBW_TARGET_OSX_x86_64: "10.15"' in source
     assert 'CIBW_TARGET_OSX_arm64: "11.0"' in source
     assert "build_macos_ci_libomp.sh" in source

@@ -229,7 +229,7 @@ def _libomp_exports_runtime_symbols(libomp_path):
         return True
     try:
         result = subprocess.run(
-            ['nm', '-g', libomp_path],
+            ['nm', '-gU', libomp_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -240,21 +240,13 @@ def _libomp_exports_runtime_symbols(libomp_path):
     if result.returncode != 0:
         return False
     text = result.stdout
-    markers = (
-        '___kmpc_dispatch_deinit',
-        '___kmpc_barrier',
-        '_omp_get_max_threads',
-        'omp_get_max_threads',
-        '__kmpc_',
-    )
-    return any(marker in text for marker in markers)
+    has_kmpc = ('__kmpc_' in text) or ('omp_get_max_threads' in text)
+    has_dispatch_deinit = '__kmpc_dispatch_deinit' in text
+    return has_kmpc and has_dispatch_deinit
 
 
 def _libomp_prefix_is_usable(prefix, libomp_path):
-    """Validate libomp prefix; trust CI-built runtimes from SEQUENZO_LIBOMP_PREFIX."""
-    ci_prefix = os.environ.get('SEQUENZO_LIBOMP_PREFIX', '').strip()
-    if ci_prefix and os.path.abspath(prefix) == os.path.abspath(ci_prefix):
-        return True
+    """Validate libomp prefix exports the OpenMP symbols required at wheel load time."""
     return _libomp_exports_runtime_symbols(libomp_path)
 
 def install_libomp_on_apple_silicon():

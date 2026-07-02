@@ -296,7 +296,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .local-libomp
-          key: macos-libomp-${{ matrix.macos-arch }}-${{ matrix.macos-arch == 'x86_64' && '10.15' || '11.0' }}-llvm18.1.8-${{ hashFiles('maintenance_scripts/build_macos_ci_libomp.sh') }}
+          key: macos-libomp-${{ matrix.macos-arch }}-${{ matrix.macos-arch == 'x86_64' && '10.15' || '11.0' }}-llvm18.1.8-stub-export-v2-${{ hashFiles('maintenance_scripts/build_macos_ci_libomp.sh', 'maintenance_scripts/repair_macos_wheel.py') }}
 
       - name: Install OpenMP (macOS)
         if: runner.os == 'macOS'
@@ -318,6 +318,12 @@ jobs:
           echo "CI libomp prefix: $LIBOMP_PREFIX"
           file "$LIBOMP_PREFIX/lib/libomp.dylib"
           otool -l "$LIBOMP_PREFIX/lib/libomp.dylib" | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX|minos|version/'
+          if nm -gU "$LIBOMP_PREFIX/lib/libomp.dylib" 2>/dev/null | grep -q '__kmpc_dispatch_deinit'; then
+            echo "[OK] CI libomp exports __kmpc_dispatch_deinit stub"
+          else
+            echo "[ERROR] CI libomp missing exported __kmpc_dispatch_deinit stub"
+            exit 1
+          fi
 
           {
             echo "CC=clang"
@@ -453,7 +459,7 @@ jobs:
 
           # 显式将 runner 级别的环境变量传入 cibuildwheel 的隔离 venv
           # 避免 $LIBOMP_PATH 因隐式继承失败而导致 delocate 找不到 libomp
-          CIBW_PASS_ENV: "LIBOMP_PATH LIBOMP_DLL_DIR SEQUENZO_LIBOMP_PREFIX SEQUENZO_ENABLE_OPENMP MACOSX_DEPLOYMENT_TARGET GITHUB_WORKSPACE"
+          CIBW_PASS_ENV: "LIBOMP_PATH LIBOMP_DLL_DIR SEQUENZO_LIBOMP_PREFIX SEQUENZO_ENABLE_OPENMP MACOSX_DEPLOYMENT_TARGET GITHUB_WORKSPACE REPAIR_LIBRARY_PATH"
 
           # macOS: Set OpenMP environment with proper library paths and rpath for bundling
           # REPAIR_LIBRARY_PATH 是 libomp 路径的副本，专用于在 repair 阶段
@@ -492,40 +498,11 @@ jobs:
               echo "[WARNING] libomp not found at $LIBOMP_PATH"
             fi
           
-          # macOS: Use delocate to bundle libomp into the wheel
-          # 修复关键点：
-          # 1. 在 repair 命令内部显式设置 DYLD_LIBRARY_PATH
-          #    macOS SIP 会在子进程启动时剥离 DYLD_LIBRARY_PATH，
-          #    所以必须在 shell 命令内临时设置，delocate 才能找到 libomp.dylib。
-          # 2. 添加 --require-archs {delocate_archs} 确保打包的 dylib 架构
-          #    与 .so 文件一致（防止 arm64/x86_64 混淆导致用户端 crash）。
-          # 3. wheel repair 失败时必须让 CI 失败，不能发布未打包 libomp 的 macOS wheel。
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
-            echo "=== Repairing macOS wheel ==="
-            echo "Current architecture: $(uname -m)"
-            echo "Wheel: {wheel}"
-            echo "REPAIR_LIBRARY_PATH: ${REPAIR_LIBRARY_PATH}"
-
-            # 在 repair 命令内部设置 DYLD_LIBRARY_PATH，绕过 macOS SIP 的剥离
-            DYLD_LIBRARY_PATH="${REPAIR_LIBRARY_PATH}:${DYLD_LIBRARY_PATH:-}" \
-              delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel} || {
-                echo "[ERROR] delocate failed; refusing to publish an unrepaired macOS wheel."
-                exit 1
-            }
-
-            # 验证修复结果：确认 libomp 是否真的打包进去了
-            if ls {dest_dir}/*.whl 1> /dev/null 2>&1; then
-              REPAIRED_WHEEL=$(ls {dest_dir}/*.whl | head -1)
-              echo "Repaired wheel: $REPAIRED_WHEEL"
-              echo "=== Bundled dependencies ==="
-              delocate-listdeps --all "$REPAIRED_WHEEL" 2>&1 || echo "Dependency listing failed"
-              if delocate-listdeps --all "$REPAIRED_WHEEL" 2>&1 | grep -q "libomp"; then
-                echo "[OK] libomp successfully bundled into wheel"
-              else
-                echo "[ERROR] libomp is not bundled into the macOS wheel."
-                exit 1
-              fi
-            fi
+          # macOS: bundle CI libomp (with dispatch_deinit stub) via repair_macos_wheel.py.
+          # delocate alone may pick a system libomp without the stub on Intel runners.
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
+            python maintenance_scripts/repair_macos_wheel.py
+            "{dest_dir}" "{wheel}" "{delocate_archs}"
 
 
           # Linux: minimal build dependencies (skip R/rpy2 - they're optional)
@@ -839,11 +816,11 @@ jobs:
               continue
             fi
 
-            if nm -g "$LIBOMP" 2>/dev/null | grep -q '__kmpc_dispatch_deinit'; then
+            if nm -gU "$LIBOMP" 2>/dev/null | grep -q '__kmpc_dispatch_deinit'; then
               echo "[OK] Bundled libomp exports __kmpc_dispatch_deinit: $LIBOMP"
               LIBOMP_HAS_DEINIT=1
             else
-              echo "[ERROR] Bundled libomp missing __kmpc_dispatch_deinit stub: $LIBOMP"
+              echo "[ERROR] Bundled libomp missing exported __kmpc_dispatch_deinit stub: $LIBOMP"
               LIBOMP_HAS_DEINIT=0
               FOUND_BAD=1
             fi
