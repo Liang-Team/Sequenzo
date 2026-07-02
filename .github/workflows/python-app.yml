@@ -694,7 +694,9 @@ jobs:
                     Z = linkage(dist_matrix, method=method)
                     assert Z.shape == (len(test_data) - 1, 4) and np.all(np.isfinite(Z))
                     print(f'[OK] linkage({method}) works')
-                Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                # linkage_vector only supports: single, ward, centroid, median
+                # 'complete' / 'average' are valid for linkage() but NOT linkage_vector()
+                Z_vec = linkage_vector(test_data, method='ward', metric='euclidean')
                 assert Z_vec.shape == (len(test_data) - 1, 4) and np.all(np.isfinite(Z_vec))
                 print('[OK] linkage_vector works')
             except ImportError as e:
@@ -786,8 +788,9 @@ jobs:
                         print(f'[WARNING] linkage({method}) failed: {e}')
                 
                 # Test linkage_vector
+                # linkage_vector only supports: single, ward, centroid, median
                 try:
-                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                    Z_vec = linkage_vector(test_data, method='ward', metric='euclidean')
                     assert Z_vec.shape == (len(test_data) - 1, 4)
                     assert np.all(np.isfinite(Z_vec))
                     print('[OK] linkage_vector works correctly')
