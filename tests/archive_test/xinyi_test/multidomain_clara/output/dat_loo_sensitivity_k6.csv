@@ -1,0 +1,3 @@
+omitted_domain,omitted_domain_index,strategy,k,ari_vs_all_domains,jaccard_vs_all_domains,full_requested_sample_size,full_effective_sample_size,full_n_unique_profiles,reduced_requested_sample_size,reduced_effective_sample_size,reduced_n_unique_profiles,reduced_model,domain
+domain_0,0,dat,6,0.4636140266399075,0.4412156252497125,1000,1000,7055,1000,1000,,clara_single_domain,occupation
+domain_1,1,dat,6,0.26733988674066905,0.34002134499520614,1000,1000,7055,1000,1000,,clara_single_domain,seniority

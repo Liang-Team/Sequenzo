@@ -606,181 +606,102 @@ jobs:
           # 永远不会执行（平台专用变体会覆盖通用变体），已移除死代码。
 
           # Test command: use heredoc to keep the entire script in one shell command (fix Linux quoting)
+          # macOS test: intentionally does NOT set DYLD_LIBRARY_PATH to any system
+          # libomp.  The wheel must be self-contained after delocate repair: the
+          # bundled .dylibs/libomp.dylib (built from LLVM source in CI) must satisfy
+          # all OpenMP symbols referenced by the .so files.
+          #
+          # Previously this command pre-loaded Homebrew libomp via DYLD_LIBRARY_PATH,
+          # which masked a "symbol not found in flat namespace '___kmpc_dispatch_deinit'"
+          # bug: delocate bundles the LLVM-source libomp (no dispatch_deinit), but
+          # clang emits a call to dispatch_deinit unless -fno-openmp-extensions is used.
+          # The pre-load caused CI tests to pass while users hit the error locally.
+          # Fix: test without any system-libomp fallback so the CI gate is honest.
           CIBW_TEST_COMMAND_MACOS: |
-            # 根据架构设置正确的库路径
-            CURRENT_ARCH=$(uname -m)
-            echo "=== Testing on $CURRENT_ARCH ==="
-            
-            # 检测架构并设置正确的 libomp 路径
-            if [ "$CURRENT_ARCH" == "x86_64" ]; then
-              # Intel macOS
-              EXPECTED_LIBOMP_PATH="/usr/local/opt/libomp/lib"
-            else
-              # Apple Silicon macOS  
-              EXPECTED_LIBOMP_PATH="/opt/homebrew/opt/libomp/lib"
-            fi
-            
-            # 如果预期路径存在，使用它；否则使用环境变量中的路径
-            if [ -d "$EXPECTED_LIBOMP_PATH" ]; then
-              ACTUAL_LIBOMP_PATH="$EXPECTED_LIBOMP_PATH"
-              echo "Using architecture-specific libomp path: $ACTUAL_LIBOMP_PATH"
-            else
-              ACTUAL_LIBOMP_PATH="$LIBOMP_PATH"
-              echo "Using environment LIBOMP_PATH: $ACTUAL_LIBOMP_PATH"
-            fi
-            
-            # 设置库路径
-            export DYLD_LIBRARY_PATH="$ACTUAL_LIBOMP_PATH:$DYLD_LIBRARY_PATH"
-            export DYLD_FALLBACK_LIBRARY_PATH="$ACTUAL_LIBOMP_PATH:$DYLD_FALLBACK_LIBRARY_PATH"
-            
+            echo "=== Testing macOS wheel (bundled libomp only — no DYLD_LIBRARY_PATH fallback) ==="
+            echo "Architecture: $(uname -m)"
             echo "Python version: $(python --version)"
-            echo "Final DYLD_LIBRARY_PATH: $DYLD_LIBRARY_PATH"
-            
-            # 验证 libomp 文件
-            if [ -d "$ACTUAL_LIBOMP_PATH" ]; then
-              echo "libomp directory contents:"
-              ls -la "$ACTUAL_LIBOMP_PATH" || echo "Cannot list libomp directory"
-              
-              if [ -f "$ACTUAL_LIBOMP_PATH/libomp.dylib" ]; then
-                echo "libomp.dylib architecture:"
-                file "$ACTUAL_LIBOMP_PATH/libomp.dylib" || echo "Cannot check libomp architecture"
-              else
-                echo "WARNING: libomp.dylib not found at $ACTUAL_LIBOMP_PATH/libomp.dylib"
-              fi
-            else
-              echo "ERROR: libomp directory not found: $ACTUAL_LIBOMP_PATH"
-            fi
-            
-            # Check test environment
-            echo "Test architecture: $(uname -m)"
-            echo "Python version: $(python --version)"
-            
-            # Find and inspect the installed wheel
-            echo ""
-            echo "=== Checking installed sequenzo package ==="
-            python -c "import sequenzo, os; print(f'Sequenzo location: {sequenzo.__file__}')" || true
-            
-            # Try to find bundled dylibs
-            python -c "
-            import sequenzo, os, glob
+
+            # Verify the wheel is self-contained: .dylibs must exist and contain libomp
+            python - <<'PY'
+            import sequenzo, os, glob, sys
+
             pkg_dir = os.path.dirname(sequenzo.__file__)
             dylibs_dir = os.path.join(pkg_dir, '.dylibs')
             if os.path.exists(dylibs_dir):
-                print(f'[OK] .dylibs directory found: {dylibs_dir}')
                 libs = glob.glob(os.path.join(dylibs_dir, '*.dylib'))
-                if libs:
-                    print(f'Bundled libraries: {libs}')
-                else:
-                    print('[WARNING] .dylibs directory is empty')
+                print(f'[OK] .dylibs found: {[os.path.basename(l) for l in libs]}')
+                if not any('libomp' in os.path.basename(l) for l in libs):
+                    print('[ERROR] libomp not bundled into wheel .dylibs/')
+                    sys.exit(1)
             else:
-                print('[WARNING] .dylibs directory not found - wheel may not be properly bundled')
-            " || true
-            
+                print('[ERROR] .dylibs directory missing — delocate repair may have failed')
+                sys.exit(1)
+            PY
+
             echo ""
             echo "=== Testing Sequenzo import ==="
             python - <<'PY'
             import importlib.util
             import sys
-            import os
             import numpy as np
 
-            # Try to import sequenzo
             try:
                 import sequenzo
-                print('[OK] Sequenzo import successful')
+                print('[OK] sequenzo import successful')
             except ImportError as e:
                 print(f'[ERROR] Failed to import sequenzo: {e}')
                 sys.exit(1)
 
-            # Check C++ clustering extensions (clustering)
-            mod = importlib.util.find_spec('sequenzo.clustering.clustering_c_code')
-            if mod:
-                print('[OK] Clustering C++ extensions module spec found')
-                try:
-                    import sequenzo.clustering.clustering_c_code
-                    print('[OK] Clustering C++ extensions loaded successfully')
-                except ImportError as e:
-                    print(f'[WARNING] Clustering C++ extensions found but failed to load: {e}')
-                    if 'kmpc' in str(e) or 'omp' in str(e):
-                        print('[INFO] This appears to be an OpenMP linking issue')
-                        print('[INFO] The wheel may need libomp to be installed on the system')
-            else:
-                print('[WARNING] Clustering C++ extensions not found')
+            # clustering_c_code uses OpenMP — this is the module that previously
+            # triggered "symbol not found in flat namespace '___kmpc_dispatch_deinit'".
+            # If -fno-openmp-extensions was not applied at compile time, this will fail
+            # even with the bundled libomp.
+            try:
+                import sequenzo.clustering.clustering_c_code
+                print('[OK] clustering_c_code loaded (bundled libomp sufficient)')
+            except ImportError as e:
+                print(f'[ERROR] clustering_c_code failed to load: {e}')
+                if 'kmpc_dispatch_deinit' in str(e):
+                    print('[ERROR] ___kmpc_dispatch_deinit missing from bundled libomp.')
+                    print('[ERROR] Ensure -fno-openmp-extensions is passed at compile time.')
+                sys.exit(1)
 
-            # Check dissimilarity measures
             try:
                 from sequenzo.dissimilarity_measures import c_code
-                print('[OK] Dissimilarity measures C++ extensions (c_code) loaded successfully')
-                
-                # Test specific C++ classes
-                for class_name in ['OMdistance', 'OMspellDistance', 'DHDdistance', 'LCPdistance', 'dist2matrix']:
-                    if hasattr(c_code, class_name):
-                        print(f'[OK] {class_name} class available')
-                    
+                print('[OK] dissimilarity_measures c_code loaded')
+                for cls in ['OMdistance', 'OMspellDistance', 'DHDdistance', 'LCPdistance', 'dist2matrix']:
+                    if hasattr(c_code, cls):
+                        print(f'[OK] {cls} available')
             except ImportError as e:
-                print(f'[WARNING] Dissimilarity measures C++ extensions (c_code) failed to load: {e}')
+                print(f'[WARNING] dissimilarity_measures c_code failed: {e}')
 
-            # Check Cython modules
-            cython_modules = [
-                'get_sm_trate_substitution_cost_matrix',
-                'seqconc', 
-                'seqdss',
-                'seqdur',
-                'seqlength'
-            ]
-            
-            for module_name in cython_modules:
+            for module_name in ['get_sm_trate_substitution_cost_matrix', 'seqconc', 'seqdss', 'seqdur', 'seqlength']:
                 try:
-                    module = __import__(f'sequenzo.dissimilarity_measures.utils.{module_name}', fromlist=[module_name])
-                    print(f'[OK] Cython module {module_name} loaded successfully')
+                    __import__(f'sequenzo.dissimilarity_measures.utils.{module_name}', fromlist=[module_name])
+                    print(f'[OK] Cython module {module_name} loaded')
                 except ImportError as e:
-                    print(f'[WARNING] Cython module {module_name} failed to load: {e}')
+                    print(f'[WARNING] Cython module {module_name} failed: {e}')
 
-            try:
-                from sequenzo.dissimilarity_measures.utils import (
-                    get_sm_trate_substitution_cost_matrix, seqconc, seqdss, seqdur, seqlength
-                )
-                print('[OK] All utility functions imported successfully')
-            except ImportError as e:
-                print(f'[WARNING] Utility functions failed to load: {e}')
-            
-            # Check sequenzo_fastcluster module
             print('')
             print('=== Testing sequenzo_fastcluster module ===')
             try:
-                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector, single, complete, average
-                print('[OK] sequenzo_fastcluster wrapper imported successfully')
-                
-                # Test linkage function with small dataset
+                from sequenzo.clustering.sequenzo_fastcluster.fastcluster import linkage, linkage_vector
                 from scipy.spatial.distance import pdist
                 test_data = np.array([[1, 2], [1, 4], [1, 0], [4, 2], [4, 4], [4, 0]])
                 dist_matrix = pdist(test_data)
-                
-                # Test different linkage methods
                 for method in ['single', 'complete', 'average']:
-                    try:
-                        Z = linkage(dist_matrix, method=method)
-                        assert Z.shape == (len(test_data) - 1, 4)
-                        assert np.all(np.isfinite(Z))
-                        print(f'[OK] linkage({method}) works correctly')
-                    except Exception as e:
-                        print(f'[WARNING] linkage({method}) failed: {e}')
-                
-                # Test linkage_vector
-                try:
-                    Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
-                    assert Z_vec.shape == (len(test_data) - 1, 4)
-                    assert np.all(np.isfinite(Z_vec))
-                    print('[OK] linkage_vector works correctly')
-                except Exception as e:
-                    print(f'[WARNING] linkage_vector failed: {e}')
-                
+                    Z = linkage(dist_matrix, method=method)
+                    assert Z.shape == (len(test_data) - 1, 4) and np.all(np.isfinite(Z))
+                    print(f'[OK] linkage({method}) works')
+                Z_vec = linkage_vector(test_data, method='complete', metric='euclidean')
+                assert Z_vec.shape == (len(test_data) - 1, 4) and np.all(np.isfinite(Z_vec))
+                print('[OK] linkage_vector works')
             except ImportError as e:
-                print(f'[WARNING] sequenzo_fastcluster module not available: {e}')
-                print('[INFO] This module provides optimized hierarchical clustering')
-            
+                print(f'[WARNING] sequenzo_fastcluster not available: {e}')
+
             print('')
-            print('[INFO] Test completed - some warnings are expected for optional dependencies')
+            print('[INFO] macOS wheel test completed')
             PY
           
           # Linux/other platforms test command (original)
@@ -887,6 +808,41 @@ jobs:
 
       - name: Show dist content
         run: ls -lah dist/
+        shell: bash
+
+      # Verify that macOS .so files do NOT reference ___kmpc_dispatch_deinit.
+      # If this symbol appears as an undefined reference it means -fno-openmp-extensions
+      # was not applied correctly; the bundled LLVM libomp built from source never exports
+      # it (removed in LLVM 13), so any user who installs the wheel would hit a dlopen
+      # "symbol not found in flat namespace" error at runtime.
+      - name: Verify no Intel-private OpenMP symbols in macOS .so files
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          echo "=== Checking for ___kmpc_dispatch_deinit in built .so files ==="
+          FOUND_BAD=0
+          for whl in dist/*.whl; do
+            echo "Inspecting: $whl"
+            TMPDIR_WHL=$(mktemp -d)
+            unzip -q "$whl" -d "$TMPDIR_WHL"
+            while IFS= read -r -d '' so_file; do
+              if nm -u "$so_file" 2>/dev/null | grep -q '___kmpc_dispatch_deinit'; then
+                echo "[ERROR] ___kmpc_dispatch_deinit found as undefined in: $so_file"
+                echo "        This means -fno-openmp-extensions was not applied."
+                echo "        Users will see 'symbol not found in flat namespace' at import time."
+                FOUND_BAD=1
+              else
+                echo "[OK] $so_file — no Intel-private OMP symbols"
+              fi
+            done < <(find "$TMPDIR_WHL" -name "*.so" -print0)
+            rm -rf "$TMPDIR_WHL"
+          done
+          if [ "$FOUND_BAD" -eq 1 ]; then
+            echo "[FATAL] One or more .so files reference ___kmpc_dispatch_deinit."
+            echo "        Ensure -fno-openmp-extensions is passed at compile time."
+            exit 1
+          fi
+          echo "=== All macOS .so files are clean ==="
         shell: bash
 
       - name: Check wheels
@@ -1319,3 +1275,17 @@ jobs:
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/
+
+  # 在所有 build matrix job 完成后，把所有分散的 wheels-* artifact 合并为一个
+  # all-wheels artifact，用户只需下载这一个 zip，pip 会自动挑选兼容的 wheel。
+  merge-wheels:
+    name: Merge all wheels into one artifact
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge wheel artifacts
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: all-wheels
+          pattern: wheels-*
+          delete-merged: false
