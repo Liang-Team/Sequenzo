@@ -803,37 +803,9 @@ class BuildExt(build_ext):
         else:
             super().build_extension(ext)
 
-        self._pin_macos_libomp_runtime(ext)
-
-    def _pin_macos_libomp_runtime(self, ext):
-        """Pin @rpath/libomp.dylib to the runtime that exports compiler-required symbols."""
-        if sys.platform != 'darwin':
-            return
-
-        ext_path = Path(self.get_ext_fullpath(ext.name))
-        if not ext_path.exists():
-            return
-
-        runtime = _find_libomp_runtime_library()
-        if runtime is None:
-            return
-
-        try:
-            linked = subprocess.run(
-                ["otool", "-L", str(ext_path)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if "@rpath/libomp.dylib" not in linked.stdout:
-                return
-            subprocess.run(
-                ["install_name_tool", "-change", "@rpath/libomp.dylib", runtime, str(ext_path)],
-                check=True,
-            )
-            print(f"[SETUP] Pinned libomp for {ext.name}: {runtime}")
-        except Exception as exc:
-            print(f"[SETUP] Warning: unable to pin libomp for {ext.name}: {exc}")
+        # Keep @rpath/libomp.dylib on extension binaries so delocate-wheel can
+        # copy CI libomp into .dylibs/.  Rewriting to an absolute path breaks
+        # delocate (SameFileError when -L points at the same libomp.dylib).
 
     @staticmethod
     def _sanitize_windows_path_and_fix_linker(compiler):

@@ -2,11 +2,11 @@
 """
 macOS wheel repair helper for cibuildwheel.
 
-1. Run delocate-wheel with explicit library search paths so the CI-built libomp
-   (with __kmpc_dispatch_deinit stub) is bundled instead of any system copy.
-2. Verify the bundled libomp exports __kmpc_dispatch_deinit.
-3. If delocate picked a libomp without the stub, replace it with the CI libomp
-   and rewrite the wheel RECORD.
+1. Normalize any absolute libomp.dylib install names back to @rpath/libomp.dylib
+   so delocate-wheel can bundle dependencies (absolute paths cause SameFileError).
+2. Run delocate-wheel with DYLD_LIBRARY_PATH pointed at the CI libomp directory.
+3. Verify the bundled libomp exports __kmpc_dispatch_deinit; replace with CI
+   libomp and rewrite RECORD if delocate picked a copy without the stub.
 
 Usage (called from CIBW_REPAIR_WHEEL_COMMAND_MACOS, cwd = project root):
     python maintenance_scripts/repair_macos_wheel.py <dest_dir> <wheel> [delocate_archs]
@@ -24,6 +24,7 @@ import zipfile
 from pathlib import Path
 
 DISPATCH_DEINIT_MARKER = "__kmpc_dispatch_deinit"
+RPATH_LIBOMP = "@rpath/libomp.dylib"
 
 
 def libomp_exports_dispatch_deinit(libomp_path: Path) -> bool:
@@ -73,6 +74,50 @@ def _repack_wheel(root: Path, wheel_path: Path) -> None:
     with zipfile.ZipFile(wheel_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for path in sorted(p for p in root.rglob("*") if p.is_file()):
             zf.write(path, path.relative_to(root).as_posix())
+
+
+def _normalize_libomp_install_names(root: Path) -> bool:
+    """Rewrite absolute libomp deps to @rpath/libomp.dylib for delocate compatibility."""
+    changed = False
+    for binary in sorted(set(root.rglob("*.so")) | set(root.rglob("*.dylib"))):
+        linked = subprocess.run(
+            ["otool", "-L", str(binary)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if linked.returncode != 0:
+            continue
+        for line in linked.stdout.splitlines()[1:]:
+            dep = line.strip().split(" (", 1)[0].strip()
+            if "libomp" not in dep.lower() or dep == RPATH_LIBOMP:
+                continue
+            subprocess.run(
+                ["install_name_tool", "-change", dep, RPATH_LIBOMP, str(binary)],
+                check=True,
+            )
+            print(
+                f"[repair-macos] Normalized libomp install name in "
+                f"{binary.relative_to(root)}: {dep} -> {RPATH_LIBOMP}"
+            )
+            changed = True
+    return changed
+
+
+def _prepare_wheel_for_delocate(wheel: Path, work_dir: Path) -> Path:
+    """Return a wheel whose binaries reference @rpath/libomp.dylib, not absolute paths."""
+    with tempfile.TemporaryDirectory(prefix="sequenzo-pre-delocate-", dir=work_dir) as tmp:
+        root = Path(tmp)
+        with zipfile.ZipFile(wheel, "r") as zf:
+            zf.extractall(root)
+
+        if not _normalize_libomp_install_names(root):
+            return wheel
+
+        prepared = work_dir / f".prepared-{wheel.name}"
+        _repack_wheel(root, prepared)
+        print(f"[repair-macos] Prepared wheel for delocate: {prepared}")
+        return prepared
 
 
 def _ensure_bundled_libomp(wheel_path: Path, ci_libomp: Path) -> None:
@@ -138,12 +183,14 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    print(f"[repair-macos] === Repairing macOS wheel ===")
+    print("[repair-macos] === Repairing macOS wheel ===")
     print(f"[repair-macos] Wheel: {wheel}")
     print(f"[repair-macos] REPAIR_LIBRARY_PATH: {repair_library_path}")
     print(f"[repair-macos] CI libomp: {ci_libomp}")
 
     dest_dir.mkdir(parents=True, exist_ok=True)
+
+    prepared_wheel = _prepare_wheel_for_delocate(wheel, dest_dir)
 
     env = os.environ.copy()
     env["DYLD_LIBRARY_PATH"] = f"{repair_library_path}:{env.get('DYLD_LIBRARY_PATH', '')}".rstrip(":")
@@ -153,9 +200,7 @@ def main(argv: list[str]) -> int:
         "-w",
         str(dest_dir),
         "-v",
-        str(wheel),
-        "-L",
-        repair_library_path,
+        str(prepared_wheel),
     ]
     if delocate_archs:
         delocate_cmd[1:1] = ["--require-archs", delocate_archs]
@@ -168,6 +213,9 @@ def main(argv: list[str]) -> int:
     if result.returncode != 0:
         print("[repair-macos] ERROR: delocate-wheel failed", file=sys.stderr)
         return result.returncode
+
+    if prepared_wheel != wheel and prepared_wheel.exists():
+        prepared_wheel.unlink(missing_ok=True)
 
     repaired_wheels = sorted(dest_dir.glob("*.whl"))
     if not repaired_wheels:
