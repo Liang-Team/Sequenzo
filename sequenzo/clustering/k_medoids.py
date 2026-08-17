@@ -6,14 +6,8 @@
 """
 
 import numpy as np
-from scipy.cluster.hierarchy import cut_tree
-from scipy.spatial.distance import squareform
 
-import importlib
-import sequenzo.clustering.clustering_c_code
-clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
-
-from sequenzo.clustering.utils.disscenter import disscentertrim
+import sequenzo.clustering.clustering_c_code as clustering_c_code
 
 
 def KMedoids(
@@ -38,6 +32,11 @@ def KMedoids(
     as WeightedCluster ``wcKMedoids``). For 0-based medoid indices or 0..K-1
     cluster ids, use :func:`~sequenzo.clustering.medoid_indices_from_kmedoids_result`
     or :func:`~sequenzo.clustering.cluster_labels_from_kmedoids_result`.
+
+    ``method="PAM"`` uses the canonical BUILD+SWAP scorer. ``method="PAMonce"``
+    accelerates the same swap decisions with verified FastPAM screening and
+    falls back to the canonical scorer whenever floating-point intervals overlap.
+    Both methods therefore use the same strict-improvement and tie-breaking rules.
     """
     # Lazily import the c_code module to avoid circular dependencies during installation
     # from .__init__ import _import_c_code
@@ -59,7 +58,7 @@ def KMedoids(
         method_name = method_names[method - 1]
         print(f"[>] Starting KMedoids clustering (method: {method_name}, k={k})...")
 
-    diss = np.asarray(diss)
+    diss = np.asarray(diss, dtype=np.float64, order="C")
     diss_condensed = None
     if diss.ndim == 1:
         diss_condensed = diss
@@ -81,13 +80,12 @@ def KMedoids(
             "(see scipy.spatial.distance.squareform)."
         )
 
-    if weights is None:
-        weights = np.ones(nelements, dtype=float)
-
-    if len(weights) != nelements:
+    unit_weights = weights is None
+    if not unit_weights and len(weights) != nelements:
         raise ValueError(f"[!] 'weights' should be a vector of length {nelements}.")
 
     needs_full_matrix = False
+    medoids_are_internal = initialclust is None
     if initialclust is None:
         if npass > 0:
             initialclust = np.arange(k, dtype=np.int32)
@@ -100,18 +98,25 @@ def KMedoids(
             if verbose:
                 print("[!] npass=0 without initialclust: using random initial medoids.")
     else:
-        needs_full_matrix = True
         if _validate_linkage_matrix(initialclust):
+            from scipy.cluster.hierarchy import cut_tree
+
             initialclust = cut_tree(initialclust, n_clusters=k).flatten() + 1
         if len(initialclust) == nelements:
+            needs_full_matrix = True
             if diss_condensed is not None:
+                from scipy.spatial.distance import squareform
+
                 diss = squareform(diss_condensed, checks=False)
+            from sequenzo.clustering.utils.disscenter import disscentertrim
+
             initialclust = disscentertrim(
                 diss=diss,
                 group=initialclust,
                 medoids_index="first",
                 weights=weights,
             )
+            medoids_are_internal = True
             if len(initialclust) != k:
                 raise ValueError(
                     f"[!] 'initialclust' should be a vector of cluster membership with k={k}."
@@ -123,7 +128,12 @@ def KMedoids(
 
     if isinstance(initialclust, list):
         initialclust = np.asarray(initialclust)
-    if len(initialclust) == k and initialclust.min() >= 1 and initialclust.max() <= nelements:
+    if (
+        not medoids_are_internal
+        and len(initialclust) == k
+        and initialclust.min() >= 1
+        and initialclust.max() <= nelements
+    ):
         initialclust = initialclust - 1
     if np.any((initialclust >= nelements) | (initialclust < 0)):
         raise ValueError(
@@ -141,10 +151,18 @@ def KMedoids(
         diss_cpp = np.ascontiguousarray(diss_condensed, dtype=np.float64)
     else:
         if diss.ndim == 1:
+            from scipy.spatial.distance import squareform
+
             diss = squareform(diss, checks=False)
         diss_cpp = np.ascontiguousarray(diss, dtype=np.float64)
-    weights_cpp = np.ascontiguousarray(weights, dtype=np.float64)
-    init_cpp = np.ascontiguousarray(initialclust, dtype=np.int32)
+    if unit_weights and method in {2, 3}:
+        # An empty array is the internal sentinel for PAM's unit-weight path.
+        weights_cpp = np.empty(0, dtype=np.float64)
+    elif unit_weights:
+        weights_cpp = np.ones(nelements, dtype=np.float64)
+    else:
+        weights_cpp = np.ascontiguousarray(weights, dtype=np.float64)
+    init_cpp = np.array(initialclust, dtype=np.int32, order="C", copy=True)
 
     if method == 1:   # KMedoid
         memb = clustering_c_code.KMedoid(nelements, diss_cpp, init_cpp,
@@ -156,7 +174,11 @@ def KMedoids(
         memb = clustering_c_code.PAMonce(nelements, diss_cpp, init_cpp,
                                          npass, weights_cpp)
 
-    memb_matrix = memb.runclusterloop() + 1
+    if method in {2, 3}:
+        memb_matrix = memb.runclusterloop_one_based()
+    else:
+        memb_matrix = memb.runclusterloop()
+        memb_matrix += 1
 
     if verbose:
         print("[>] Computed Successfully.")

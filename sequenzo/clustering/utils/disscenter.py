@@ -7,7 +7,6 @@
 """
 
 import numpy as np
-import pandas as pd
 
 from sequenzo.utils.core_distance_operations import weighted_inertia_contrib
 
@@ -35,23 +34,28 @@ def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weight
         elif medoids_index != "first":
             raise ValueError('\'medoids_index\' argument should be one of "First", "all" or None')
 
-    if weights is None:
-        weights = np.ones(len(diss), dtype=float)
-
     if squared:
         diss = np.square(diss)
+    diss_values = np.ascontiguousarray(diss, dtype=np.float64)
+
+    if weights is None:
+        weights_values = np.ones(len(diss_values), dtype=np.float64)
+    else:
+        weights_values = np.ascontiguousarray(weights, dtype=np.float64)
 
     if group is None:
-        group = np.ones(diss.shape[0], dtype=int)
+        group = np.ones(diss_values.shape[0], dtype=int)
 
-    ind = np.arange(diss.shape[0])
+    ind = np.arange(diss_values.shape[0], dtype=np.int32)
     grp = np.array(group)
     lgrp = np.unique(group)
 
     if allcenter:
-        ret = pd.DataFrame(np.zeros((diss.shape[0], 1)))
+        import pandas as pd
+
+        ret = pd.DataFrame(np.zeros((diss_values.shape[0], 1)))
     else:
-        ret = np.zeros(diss.shape[0])
+        ret = np.zeros(diss_values.shape[0])
 
     if retmedoids:
         if allmedoids:
@@ -69,11 +73,11 @@ def disscentertrim(diss, group=None, medoids_index=None, allcenter=False, weight
 
         else:
             dc = weighted_inertia_contrib(
-                diss.astype(np.float64),
-                grpindiv.astype(np.int32),
-                weights.astype(np.float64),
+                diss_values,
+                grpindiv,
+                weights_values,
             )
-            dc = dc - np.average(dc, weights=weights[cond]) / 2
+            dc = dc - np.average(dc, weights=weights_values[cond]) / 2
 
             if trim > 0:
                 # TODO : 以后再补充
@@ -118,4 +122,3 @@ if __name__ == '__main__':
                    parallel=True,
                    stability=True)
     result = result['allstat']
-

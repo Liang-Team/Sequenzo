@@ -646,8 +646,9 @@ def configure_cpp_extension():
         )
         print("  - Dissimilarity measures C++ extension configured successfully.")
 
-        # Clustering extension: three translation units with different -ffast-math settings.
+        # Clustering extension: translation units use different floating-point settings.
         #   module.cpp                   — compiled WITH  -ffast-math
+        #   pam_tu.cpp                   — compiled WITHOUT -ffast-math (canonical PAM order)
         #   distance_prep_tu.cpp         — compiled WITHOUT -ffast-math (IEEE NaN handling)
         #   fastcluster_linkage_tu.cpp   — compiled WITHOUT -ffast-math (Infinity handling)
         clustering_compile_args = get_compile_args_for_file("dummy.cpp", fast_math=True)
@@ -660,6 +661,7 @@ def configure_cpp_extension():
             'sequenzo.clustering.clustering_c_code',
             sources=[
                 'sequenzo/clustering/src/module.cpp',
+                'sequenzo/clustering/src/pam_tu.cpp',
                 'sequenzo/clustering/src/distance_prep_tu.cpp',
                 'sequenzo/clustering/src/fastcluster_linkage_tu.cpp',
                 'sequenzo/clustering/fuzzy_clustering/src/fanny.cpp',
@@ -667,6 +669,12 @@ def configure_cpp_extension():
             include_dirs=get_clustering_include_dirs(),
             extra_compile_args=clustering_compile_args,
             extra_link_args=link_args,
+            depends=[
+                'sequenzo/clustering/src/PAM.cpp',
+                'sequenzo/clustering/src/PAMonce.cpp',
+                'sequenzo/clustering/src/pam_bindings.h',
+                'sequenzo/clustering/src/pam_common.h',
+            ],
             language='c++',
             define_macros=[('VERSION_INFO', '"0.1.21"'),
                            ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
@@ -775,22 +783,27 @@ def configure_cython_extensions():
 class BuildExt(build_ext):
     """
     Custom build_ext class with enhanced architecture and OpenMP reporting.
-    Supports per-file compile flags: strips -ffast-math from distance_prep_tu.cpp
-    and fastcluster_linkage_tu.cpp (both need IEEE semantics for NaN/Inf), while
-    keeping it for module.cpp.
+    Supports per-file compile flags for numerical kernels that need IEEE semantics.
     """
 
     def build_extension(self, ext):
-        if ext.name == 'sequenzo.clustering.clustering_c_code' and sys.platform != 'win32':
+        if ext.name == 'sequenzo.clustering.clustering_c_code':
             original_compile = self.compiler._compile
 
             def _per_file_compile(obj, src, ext_str, cc_args, extra_postargs, pp_opts):
-                # distance_prep_tu, fastcluster_linkage_tu, and fanny.cpp need IEEE
-                # semantics: distance_prep uses std::isfinite, fastcluster
-                # uses std::numeric_limits::infinity(), and fanny validates
-                # finite fuzziness parameters. Strip -ffast-math.
-                if 'distance_prep_tu' in src or 'fastcluster_linkage_tu' in src or 'fanny.cpp' in src:
+                # PAM, distance preparation, fastcluster, and fanny need IEEE
+                # semantics. PAM additionally forbids contraction so the shared
+                # classic scorer has one canonical accumulation order.
+                if ('pam_tu.cpp' in src or 'distance_prep_tu' in src or
+                        'fastcluster_linkage_tu' in src or 'fanny.cpp' in src):
                     postargs = [a for a in extra_postargs if a != '-ffast-math']
+                    if 'pam_tu.cpp' in src:
+                        if sys.platform == 'win32':
+                            postargs = [a for a in postargs if a != '/fp:fast']
+                            if '/fp:strict' not in postargs:
+                                postargs.append('/fp:strict')
+                        elif '-ffp-contract=off' not in postargs:
+                            postargs.append('-ffp-contract=off')
                 else:
                     postargs = extra_postargs
                 return original_compile(obj, src, ext_str, cc_args, postargs, pp_opts)

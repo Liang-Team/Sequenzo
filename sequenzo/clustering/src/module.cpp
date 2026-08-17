@@ -1,6 +1,4 @@
-#include "PAM.cpp"
 #include "KMedoid.cpp"
-#include "PAMonce.cpp"
 #include "cluster_quality.cpp"
 #include "binding_common.cpp"
 #include "linkage_tree_utils.cpp"
@@ -11,6 +9,7 @@
 #include "cluster_core.cpp"
 #include "cluster_quality_pipeline.cpp"
 #include "fanny.h"
+#include "pam_bindings.h"
 
 #include <cstring>
 #include <limits>
@@ -26,17 +25,11 @@ PYBIND11_MODULE(clustering_c_code, m) {
     // Legacy clustering engines
     // =========================================================================
     auto register_legacy_engines = [&m]() {
-    py::class_<PAM>(m, "PAM")
-            .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
-            .def("runclusterloop", &PAM::runclusterloop);
+    register_pam_engines(m);
 
     py::class_<KMedoid>(m, "KMedoid")
             .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
             .def("runclusterloop", &KMedoid::runclusterloop);
-
-    py::class_<PAMonce>(m, "PAMonce")
-            .def(py::init<int, py::array_t<double>, py::array_t<int>, int, py::array_t<double>>())
-            .def("runclusterloop", &PAMonce::runclusterloop);
 
     };
     register_legacy_engines();
