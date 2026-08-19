@@ -16,7 +16,10 @@ import numpy as np
 import pandas as pd
 
 from sequenzo.define_sequence_data import SequenceData
-from sequenzo.dissimilarity_measures.get_distance_matrix import get_distance_matrix
+from sequenzo.dissimilarity_measures.get_distance_matrix import (
+    get_distance_matrix,
+    warm_unique_sequence_cache,
+)
 from sequenzo.multidomain.idcd import validate_multidomain_domains
 
 def validate_domain_weights(domains: List[SequenceData]) -> Optional[np.ndarray]:
@@ -419,22 +422,82 @@ def compute_distance_matrix(
     refseq: Optional[Union[int, List[List[int]]]] = None,
     full_matrix: bool = True,
 ) -> np.ndarray:
-    """Call get_distance_matrix with stdout suppressed and return a NumPy array."""
+    """Call get_distance_matrix and return a NumPy array."""
     opts = dict(dist_args)
     opts["seqdata"] = seqdata
     opts["full_matrix"] = full_matrix
+    opts["as_numpy"] = True
+    opts["quiet"] = True
     if refseq is not None:
         opts["refseq"] = refseq
 
     with open(os.devnull, "w") as devnull:
         with redirect_stdout(devnull):
             result = get_distance_matrix(opts=opts)
-
-    if isinstance(result, pd.DataFrame):
-        return result.to_numpy(dtype=float)
-    if isinstance(result, pd.Series):
-        return result.to_numpy(dtype=float).reshape(-1, 1)
     return np.asarray(result, dtype=float)
+
+
+def warm_distance_query_caches(seqdata: SequenceData) -> None:
+    """Precompute integer values, lengths, and unique sequences for CLARA queries."""
+    warm_unique_sequence_cache(seqdata)
+
+
+def _n_sequence_rows(seqdata: SequenceData) -> int:
+    values = getattr(seqdata, "seqdata", None)
+    if values is not None:
+        return int(np.asarray(values).shape[0])
+    return int(len(seqdata.data))
+
+
+def pairwise_distances_on_indices(
+    seqdata: SequenceData,
+    dist_args: Dict[str, Any],
+    sample_indices: Sequence[int],
+    *,
+    condensed: bool = False,
+) -> np.ndarray:
+    """
+    Within-sample distances without copying ``seqdata`` into a new SequenceData.
+
+    The full-object path is used when the sample is exactly ``0..N-1``, so a
+    complete pairwise matrix does not go through ``refseq=[all, all]`` (which
+    would duplicate unique sequences). Subsamples use ``refseq=[idx, idx]``
+    on the parent object, which unique-ifies only the requested rows.
+    Substitution costs must already be frozen on ``seqdata`` (see
+    ``freeze_seqdist_costs``); otherwise subsample and full-data metrics can
+    diverge.
+    """
+    idx = np.asarray(sample_indices, dtype=int).reshape(-1)
+    n_full = _n_sequence_rows(seqdata)
+    covers_all = idx.size == n_full and np.array_equal(idx, np.arange(n_full))
+
+    if covers_all:
+        matrix = compute_distance_matrix(
+            seqdata,
+            dist_args,
+            full_matrix=not condensed,
+        )
+        if condensed:
+            return assert_condensed_distance_shape(matrix, sample_indices)
+        return assert_sample_distance_shape(matrix, sample_indices)
+
+    matrix = compute_distance_matrix(
+        seqdata,
+        dist_args,
+        refseq=[idx, idx],
+        full_matrix=not condensed,
+    )
+    if condensed:
+        if matrix.ndim == 1:
+            return assert_condensed_distance_shape(matrix, sample_indices)
+        from scipy.spatial.distance import squareform
+
+        matrix = assert_sample_distance_shape(matrix, sample_indices)
+        return assert_condensed_distance_shape(
+            squareform(matrix, checks=False),
+            sample_indices,
+        )
+    return assert_sample_distance_shape(matrix, sample_indices)
 
 
 def warn_nested_parallelism(

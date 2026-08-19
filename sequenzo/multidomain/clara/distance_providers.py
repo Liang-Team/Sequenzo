@@ -29,9 +29,10 @@ from ._utils import (
     compute_distance_matrix,
     freeze_seqdist_costs,
     guard_on_demand_distance_params,
+    pairwise_distances_on_indices,
     parallel_map,
-    subset_sequence_data,
     warn_large_combined_state_space,
+    warm_distance_query_caches,
 )
 
 # Picklable workers for DAT domain-level parallelism (joblib processes).
@@ -41,21 +42,17 @@ _DATMedoidWork = Tuple[SequenceData, Dict[str, Any], int, Tuple[int, ...]]
 
 def _dat_sample_domain_distances(work: _DATSampleWork) -> np.ndarray:
     domain, params, sample_indices, condensed = work
-    subset = subset_sequence_data(domain, sample_indices)
-    dist_args = dict(params)
-    matrix = compute_distance_matrix(
-        subset,
-        dist_args,
-        full_matrix=not condensed,
+    return pairwise_distances_on_indices(
+        domain,
+        dict(params),
+        sample_indices,
+        condensed=condensed,
     )
-    if condensed:
-        return assert_condensed_distance_shape(matrix, sample_indices)
-    return assert_sample_distance_shape(matrix, sample_indices)
 
 
 def _dat_medoid_domain_matrix(work: _DATMedoidWork) -> np.ndarray:
     domain, params, n_sequences, medoids = work
-    refseq = [list(range(n_sequences)), list(medoids)]
+    refseq = [np.arange(n_sequences, dtype=np.intp), np.asarray(medoids, dtype=np.intp)]
     dist_args = dict(params)
     return np.asarray(
         compute_distance_matrix(domain, dist_args, refseq=refseq, full_matrix=True),
@@ -140,6 +137,7 @@ class IDCDDistanceProvider(DistanceProvider):
             self._md_seqdata,
             dict(seqdist_args),
         )
+        warm_distance_query_caches(self._md_seqdata)
 
     def n_sequences(self) -> int:
         return int(self._md_seqdata.seqdata.shape[0])
@@ -150,20 +148,17 @@ class IDCDDistanceProvider(DistanceProvider):
         *,
         condensed: bool = False,
     ) -> np.ndarray:
-        subset = subset_sequence_data(self._md_seqdata, sample_indices)
-        matrix = compute_distance_matrix(
-            subset,
+        return pairwise_distances_on_indices(
+            self._md_seqdata,
             self._dist_args,
-            full_matrix=not condensed,
+            sample_indices,
+            condensed=condensed,
         )
-        if condensed:
-            return assert_condensed_distance_shape(matrix, sample_indices)
-        return assert_sample_distance_shape(matrix, sample_indices)
 
     def distance_to_medoids(self, medoid_indices: Sequence[int]) -> np.ndarray:
         medoids = list(map(int, medoid_indices))
         n = self.n_sequences()
-        refseq = [list(range(n)), medoids]
+        refseq = [np.arange(n, dtype=np.intp), np.asarray(medoids, dtype=np.intp)]
         matrix = compute_distance_matrix(
             self._md_seqdata,
             self._dist_args,
@@ -265,6 +260,7 @@ class CATDistanceProvider(DistanceProvider):
             **extra_seqdist_args,
         }
         guard_on_demand_distance_params(self._dist_args)
+        warm_distance_query_caches(self._md_seqdata)
 
     def n_sequences(self) -> int:
         return int(self._md_seqdata.seqdata.shape[0])
@@ -275,20 +271,17 @@ class CATDistanceProvider(DistanceProvider):
         *,
         condensed: bool = False,
     ) -> np.ndarray:
-        subset = subset_sequence_data(self._md_seqdata, sample_indices)
-        matrix = compute_distance_matrix(
-            subset,
+        return pairwise_distances_on_indices(
+            self._md_seqdata,
             self._dist_args,
-            full_matrix=not condensed,
+            sample_indices,
+            condensed=condensed,
         )
-        if condensed:
-            return assert_condensed_distance_shape(matrix, sample_indices)
-        return assert_sample_distance_shape(matrix, sample_indices)
 
     def distance_to_medoids(self, medoid_indices: Sequence[int]) -> np.ndarray:
         medoids = list(map(int, medoid_indices))
         n = self.n_sequences()
-        refseq = [list(range(n)), medoids]
+        refseq = [np.arange(n, dtype=np.intp), np.asarray(medoids, dtype=np.intp)]
         matrix = compute_distance_matrix(
             self._md_seqdata,
             self._dist_args,
@@ -351,6 +344,8 @@ class DATDistanceProvider(DistanceProvider):
         self._n_jobs_domains = int(n_jobs_domains)
         if self._n_jobs_domains == 0:
             raise ValueError("n_jobs_domains must not be 0.")
+        for domain in self._domains:
+            warm_distance_query_caches(domain)
 
     def n_sequences(self) -> int:
         return int(self._domains[0].seqdata.shape[0])
@@ -371,12 +366,26 @@ class DATDistanceProvider(DistanceProvider):
         return self._link
 
     def _combine(self, arrays: List[np.ndarray]) -> np.ndarray:
-        total = np.zeros_like(arrays[0], dtype=float)
-        for array, weight in zip(arrays, self._weights):
-            total += weight * array
+        combined = np.asarray(arrays[0], dtype=float) * self._weights[0]
+        for array, weight in zip(arrays[1:], self._weights[1:]):
+            combined += weight * array
         if self._link == "mean":
-            total /= self._weight_sum
-        return total
+            combined /= self._weight_sum
+        return combined
+
+    def _accumulate_domain_distances(self, iterator) -> np.ndarray:
+        """Scale-and-add domain distances without retaining every matrix."""
+        combined = None
+        for array, weight in iterator:
+            if combined is None:
+                combined = np.asarray(array, dtype=float) * weight
+            else:
+                combined += weight * array
+        if combined is None:
+            raise ValueError("DAT requires at least one domain.")
+        if self._link == "mean":
+            combined /= self._weight_sum
+        return combined
 
     def _per_domain_sample_distances(
         self,
@@ -417,11 +426,24 @@ class DATDistanceProvider(DistanceProvider):
         *,
         condensed: bool = False,
     ) -> np.ndarray:
-        per_domain = self._per_domain_sample_distances(
-            sample_indices,
-            condensed=condensed,
-        )
-        combined = self._combine(per_domain)
+        if self._n_jobs_domains == 1:
+            combined = self._accumulate_domain_distances(
+                (
+                    _dat_sample_domain_distances(
+                        (domain, params, sample_indices, condensed)
+                    ),
+                    weight,
+                )
+                for domain, params, weight in zip(
+                    self._domains, self._method_params, self._weights
+                )
+            )
+        else:
+            per_domain = self._per_domain_sample_distances(
+                sample_indices,
+                condensed=condensed,
+            )
+            combined = self._combine(per_domain)
         if condensed:
             return assert_condensed_distance_shape(combined, sample_indices)
         return assert_sample_distance_shape(combined, sample_indices)
@@ -429,8 +451,19 @@ class DATDistanceProvider(DistanceProvider):
     def distance_to_medoids(self, medoid_indices: Sequence[int]) -> np.ndarray:
         medoids = list(map(int, medoid_indices))
         n = self.n_sequences()
-        per_domain = self._per_domain_medoid_matrices(medoids, n_sequences=n)
-        combined = self._combine(per_domain)
+        if self._n_jobs_domains == 1:
+            combined = self._accumulate_domain_distances(
+                (
+                    _dat_medoid_domain_matrix((domain, params, n, tuple(medoids))),
+                    weight,
+                )
+                for domain, params, weight in zip(
+                    self._domains, self._method_params, self._weights
+                )
+            )
+        else:
+            per_domain = self._per_domain_medoid_matrices(medoids, n_sequences=n)
+            combined = self._combine(per_domain)
         return assert_distance_to_medoids_shape(combined, n, medoids)
 
     def per_domain_distance_to_medoids(

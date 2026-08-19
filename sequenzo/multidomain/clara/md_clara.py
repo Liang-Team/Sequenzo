@@ -118,7 +118,7 @@ def md_clara(
     rare_profile_threshold: int = 5,
     combined_state_space: bool = False,
     dat_domain_contribution: bool = False,
-    use_medoid_cache: bool = False,
+    use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
 ) -> MDClaraResult:
     """
@@ -141,21 +141,19 @@ def md_clara(
 
     Set ``combined_state_space=True`` to attach an IDCD/CAT state-space summary.
 
-    Optimization ablation (within-subsample distances only; all-to-medoid
-    matrices are always ``N* x K``):
+    Two paper implementations (within-subsample distances; all-to-medoid
+    matrices remain ``N* x K``):
 
-    - ``condensed_subsample=False``: square ``b x b`` subsample matrices (DAT
-      holds one square matrix per domain before combining).
-    - ``condensed_subsample=True``: condensed subsample vectors (DAT combines
-      condensed domain vectors).
-    - ``use_medoid_cache=True``: reuse medoid columns across ``kvals`` within
-      each repetition (may increase peak memory).
+    - Unoptimized: ``condensed_subsample=False, use_medoid_cache=False``.
+      Square ``b x b`` subsample matrices; DAT holds one square matrix per
+      domain before combining; medoid columns are recomputed for each ``K``.
+    - Optimized (default): ``condensed_subsample=True, use_medoid_cache=True``.
+      Condensed subsample vectors (DAT combines condensed domain vectors,
+      then the engine expands once for PAM); medoid columns are reused across
+      ``kvals`` within each repetition.
 
-    Typical ablation grid::
-
-        condensed_subsample=False, use_medoid_cache=False
-        condensed_subsample=True,  use_medoid_cache=False
-        condensed_subsample=True,  use_medoid_cache=True
+    An intermediate condensed-only path (``use_medoid_cache=False``) is kept
+    for engineering ablation.
     """
     if n_jobs == 0:
         raise ValueError("n_jobs must not be 0.")
@@ -299,7 +297,7 @@ def _to_md_clara_result(
     subsample_diagnostics: Optional[Any] = None,
     route_diagnostics: Optional[Dict[str, Any]] = None,
     condensed_subsample: bool = True,
-    use_medoid_cache: bool = False,
+    use_medoid_cache: bool = True,
 ) -> MDClaraResult:
     """Convert engine output into :class:`MDClaraResult`."""
     if "clustering" not in raw:

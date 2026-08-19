@@ -146,6 +146,105 @@ def _is_scalar_number(value):
     return isinstance(value, numbers.Real) and not isinstance(value, bool)
 
 
+_SEQDATA_UNIQUE_CACHE_ATTR = "_sequenzo_unique_sequence_cache"
+_SEQDATA_VALUES_CACHE_ATTR = "_sequenzo_values_int32_cache"
+_SEQDATA_SEQLENGTH_CACHE_ATTR = "_sequenzo_seqlength_cache"
+
+
+def _try_cache_attr(obj, attr, value):
+    try:
+        setattr(obj, attr, value)
+    except (AttributeError, TypeError):
+        pass
+    return value
+
+
+def _seqdata_int32_values(seqdata):
+    cache = getattr(seqdata, _SEQDATA_VALUES_CACHE_ATTR, None)
+    if cache is not None:
+        return cache
+    cache = np.ascontiguousarray(seqdata.values, dtype=np.int32)
+    return _try_cache_attr(seqdata, _SEQDATA_VALUES_CACHE_ATTR, cache)
+
+
+def _cached_seqlength(seqdata):
+    cache = getattr(seqdata, _SEQDATA_SEQLENGTH_CACHE_ATTR, None)
+    if cache is not None:
+        return cache
+    values = _seqdata_int32_values(seqdata)
+    cache = np.sum(values > 0, axis=1).astype(np.int32, copy=False)
+    return _try_cache_attr(seqdata, _SEQDATA_SEQLENGTH_CACHE_ATTR, cache)
+
+
+def _as_row_index_array(ref, nseqs):
+    arr = np.asarray(ref)
+    if arr.ndim != 1:
+        arr = arr.reshape(-1)
+    if arr.size == 0:
+        return arr.astype(np.intp, copy=False)
+    if not np.issubdtype(arr.dtype, np.integer):
+        if any(not _is_scalar_integer(x) for x in arr):
+            raise ValueError(
+                "[x] When 'refseq' is a list, it must contain two sets of indexes "
+                "with positive integer values."
+            )
+        arr = np.asarray(arr, dtype=np.intp)
+    else:
+        arr = arr.astype(np.intp, copy=False)
+    if int(arr.min()) < 0 or int(arr.max()) >= int(nseqs):
+        if int(arr.min()) < 0:
+            raise ValueError(
+                "[x] When 'refseq' is a list, it must contain two sets of indexes "
+                "with positive integer values."
+            )
+        raise ValueError("[x] Some indexes in 'refseq' are out of range.")
+    return arr
+
+
+def warm_unique_sequence_cache(seqdata):
+    """Precompute unique sequences and integer values used by CLARA queries."""
+    from .__init__ import _import_c_code
+
+    c_code = _import_c_code()
+    values = _seqdata_int32_values(seqdata)
+    _cached_seqlength(seqdata)
+    _cached_full_unique_sequences(seqdata, values, c_code)
+
+
+def _find_unique_rows(rows, c_code):
+    """Dedup sequence rows; prefer the C++ hash path over np.unique + seqconc."""
+    rows = np.ascontiguousarray(rows, dtype=np.int32)
+    if rows.ndim != 2:
+        raise ValueError("sequence rows must be two-dimensional")
+    if c_code is not None and hasattr(c_code, "find_unique_sequences"):
+        unique, inverse, lengths = c_code.find_unique_sequences(rows)
+        return (
+            np.asarray(unique, dtype=np.int32),
+            np.asarray(inverse, dtype=np.int32).reshape(-1),
+            np.asarray(lengths, dtype=np.int32).reshape(-1),
+        )
+    unique, inverse = np.unique(rows, axis=0, return_inverse=True)
+    return (
+        np.asarray(unique, dtype=np.int32),
+        np.asarray(inverse, dtype=np.int32).reshape(-1),
+        None,
+    )
+
+
+def _is_full_row_cover(indices, n_rows):
+    idx = np.asarray(indices, dtype=np.intp).reshape(-1)
+    return idx.size == int(n_rows) and np.array_equal(idx, np.arange(n_rows, dtype=np.intp))
+
+
+def _cached_full_unique_sequences(seqdata, seqdata_num, c_code):
+    """Reuse full-object unique sequences across CLARA assignment queries."""
+    cache = getattr(seqdata, _SEQDATA_UNIQUE_CACHE_ATTR, None)
+    if cache is not None:
+        return cache
+    cache = _find_unique_rows(seqdata_num, c_code)
+    return _try_cache_attr(seqdata, _SEQDATA_UNIQUE_CACHE_ATTR, cache)
+
+
 def _unique_distance_to_condensed(nseqs, seqdata_didxs, unique_dist):
     idxs = np.asarray(seqdata_didxs, dtype=np.intp)
     unique = np.asarray(unique_dist, dtype=np.float64)
@@ -402,6 +501,12 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         matrix_display = opts.get('matrix_display', matrix_display)
         collect_garbage = opts.get('collect_garbage', opts.get('force_gc', collect_garbage))
 
+    as_numpy = bool(kwargs.pop("as_numpy", False))
+    quiet = bool(kwargs.pop("quiet", False))
+    if opts is not None:
+        as_numpy = bool(opts.get("as_numpy", as_numpy))
+        quiet = bool(opts.get("quiet", quiet))
+
     if collect_garbage:
         gc.collect()
 
@@ -463,7 +568,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
     nseqs = seqdata.seqdata.shape[0]
     nstates = len(seqdata.states)
-    seqs_dlens = np.unique(seqlength(seqdata))
+    seqs_length = _cached_seqlength(seqdata)
+    seqs_dlens = np.unique(seqs_length)
 
     # check method
     om_methods = ["OM", "OMloc", "OMslen", "OMspell", "OMspellRS", "OMstran", "OMtspell"]
@@ -487,14 +593,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             if len(refseq) > 2:
                 print("[!] Warning: Only first two elements of the 'refseq' list are used.\n")
 
-            for i, ref in enumerate(refseq[:2]):
-                if any(not _is_scalar_integer(x) or x < 0 for x in ref):
-                    raise ValueError(
-                        "[x] When 'refseq' is a list, it must contain two sets of indexes with positive integer values.")
-
-                if max(ref, default=-1) >= nseqs:
-                    raise ValueError("[x] Some indexes in 'refseq' are out of range.")
-
+            idx_sets = [
+                _as_row_index_array(refseq[0], nseqs),
+                _as_row_index_array(refseq[1], nseqs),
+            ]
+            refseq = idx_sets
             refseq_type = "sets"
 
         elif _is_scalar_integer(refseq):
@@ -510,8 +613,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         refseq_type = "none"
 
     # check for empty sequences
-    sdur = seqdur(seqdata)
-    emptyseq = np.where(np.isnan(sdur[:, 0]))[0]
+    emptyseq = np.where(seqs_length == 0)[0]
 
     if len(emptyseq) > 0:
         if method == "OMloc":
@@ -519,7 +621,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         else:
             print(f"[!] Warning: empty sequences {emptyseq}.\n")
 
-    print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
+    if not quiet:
+        print(f"[>] Processing {nseqs} sequences with {nstates} unique states.")
 
     # check norm
     norms = ["auto", "none", "maxlength", "gmean", "maxdist", "YujianBo", "ElzingaStuder"]
@@ -762,7 +865,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         breaks = kwargs.get("breaks", None)
         overlap = kwargs.get("overlap", False)
         global_pdotj = kwargs.get("global_pdotj", None)
-        seqdata_mat = seqdata.values
+        seqdata_mat = _seqdata_int32_values(seqdata)
 
         categorical_euclid_conditions = (
             method == "EUCLID"
@@ -1186,17 +1289,59 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     elif method == "DHD":
         sm = _validate_symmetric_time_varying_sm(sm, nstates, method, required_length=int(np.max(seqs_dlens)))
 
-    seqdata_num = seqdata.values   # it's numpy
+    seqdata_num = _seqdata_int32_values(seqdata)
     _cpp_lengths = None
     unique_row_indices = None
+    _subset_ids = None
 
     if refseq_type == "sets":
-        dseqs_num1 = np.unique(seqdata_num[refseq[0], :], axis=0)
-        nunique1 = len(dseqs_num1)
-        dseqs_num2 = np.unique(seqdata_num[refseq[1], :], axis=0)
-        nunique2 = len(dseqs_num2)
+        idx1 = np.asarray(refseq[0], dtype=np.intp).reshape(-1)
+        idx2 = np.asarray(refseq[1], dtype=np.intp).reshape(-1)
+        n_full = int(seqdata_num.shape[0])
+        same_sets = idx1.size == idx2.size and np.array_equal(idx1, idx2)
 
-        dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
+        if _is_full_row_cover(idx1, n_full):
+            dseqs_num1, seqdata_didxs1, len1 = _cached_full_unique_sequences(
+                seqdata, seqdata_num, c_code
+            )
+        else:
+            dseqs_num1, seqdata_didxs1, len1 = _find_unique_rows(
+                seqdata_num[idx1, :], c_code
+            )
+
+        if same_sets:
+            dseqs_num2, seqdata_didxs2, len2 = dseqs_num1, seqdata_didxs1, len1
+        elif _is_full_row_cover(idx2, n_full):
+            dseqs_num2, seqdata_didxs2, len2 = _cached_full_unique_sequences(
+                seqdata, seqdata_num, c_code
+            )
+        else:
+            dseqs_num2, seqdata_didxs2, len2 = _find_unique_rows(
+                seqdata_num[idx2, :], c_code
+            )
+
+        nunique1 = int(dseqs_num1.shape[0])
+        nunique2 = int(dseqs_num2.shape[0])
+        if same_sets:
+            # Square subsample: compute unique-by-unique pairwise once, then expand.
+            # The rectangular refseq path would vstack the same unique sequences twice.
+            dseqs_num = dseqs_num1
+            seqdata_didxs = seqdata_didxs1
+            if len1 is not None:
+                _cpp_lengths = np.asarray(len1, dtype=np.int32).reshape(-1)
+            nseqs = int(idx1.size)
+            _subset_ids = seqdata.ids[idx1]
+            refseq_type = "none"
+            refseq = None
+        else:
+            dseqs_num = np.vstack((dseqs_num1, dseqs_num2))
+            if len1 is not None and len2 is not None:
+                _cpp_lengths = np.concatenate(
+                    [
+                        np.asarray(len1, dtype=np.int32).reshape(-1),
+                        np.asarray(len2, dtype=np.int32).reshape(-1),
+                    ]
+                )
 
     else:
         try:
@@ -1232,19 +1377,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     # Handle Reference Sequence
     # =========================
     if refseq_type == "sets":
-        conc1 = seqconc(data=seqdata_num[refseq[0], :])
-        conc2 = seqconc(data=dseqs_num1)
-        # Find the position of each element in conc1 within conc2
-        index_map = {value: idx for idx, value in enumerate(conc2)}
-        seqdata_didxs1 = np.array([index_map[element] for element in conc1])
+        # Inverse maps already come from _find_unique_rows / the full-object cache.
+        pass
 
-        conc3 = seqconc(data=seqdata_num[refseq[1], :])
-        conc4 = seqconc(data=dseqs_num2)
-        # Find the position of each element in conc3 within conc4
-        index_map = {value: idx for idx, value in enumerate(conc4)}
-        seqdata_didxs2 = np.array([index_map[element] for element in conc3])
-
-    else:
+    elif refseq_type == "none" or refseq_type == "index":
         if _cpp_lengths is None:
             seqdata_series = seqconc(data=seqdata_num)
             dseqs_series = seqconc(data=dseqs_num)
@@ -1267,7 +1403,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
             raise ValueError(f"[!] Unknown refseq type: {refseq_type}.")
 
         if refseq_type == "sets":
-            print(f"[>] Pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}")
+            if not quiet:
+                print(f"[>] Pairwise measures between two subsets of sequences of sizes {len(refseq[0])} and {len(refseq[1])}")
 
     # ==============================
     # Compute Method-Specific Values
@@ -1480,7 +1617,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     ndn = dseqs_num.shape[0]
     incl_refseq = " (including refseq)" if refseq_type == "sequence" else ""
     seq_or_spell = "spell sequences" if method in ["OMspell", "OMspellRS", "OMtspell", "LCPspell", "RLCPspell"] else "sequences"
-    print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
+    if not quiet:
+        print(f"[>] Identified {ndn} unique {seq_or_spell}{incl_refseq}.")
     del ndn
     del seq_or_spell
 
@@ -1781,7 +1919,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         if refseq_type == "sets":
             dist_matrix = dist_matrix[seqdata_didxs1[:, None], seqdata_didxs2[None, :]]
-            dist_matrix = pd.DataFrame(dist_matrix, index=seqdata.ids[refseq[0]], columns=seqdata.ids[refseq[1]])
+            if as_numpy:
+                dist_matrix = np.asarray(dist_matrix, dtype=np.float64)
+            else:
+                dist_matrix = pd.DataFrame(
+                    dist_matrix,
+                    index=seqdata.ids[refseq[0]],
+                    columns=seqdata.ids[refseq[1]],
+                )
         elif refseq_type == "index":
             dist_values = np.asarray(dist_matrix, dtype=np.float64)
             if dist_values.ndim == 2 and dist_values.shape[1] == 1:
@@ -1994,7 +2139,11 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 _dist2matrix = _matrix.padding_matrix()
 
     if full_matrix == True and refseq == None:
-        dist_matrix = pd.DataFrame(_dist2matrix, index=seqdata.ids, columns=seqdata.ids)
+        if as_numpy:
+            dist_matrix = np.asarray(_dist2matrix, dtype=np.float64)
+        else:
+            ids = _subset_ids if _subset_ids is not None else seqdata.ids
+            dist_matrix = pd.DataFrame(_dist2matrix, index=ids, columns=ids)
 
     elif full_matrix == False and refseq != None:
         print("[!] Sequenzo returned a full distance matrix because 'refseq' is not None. This is same as TraMineR.")
@@ -2081,7 +2230,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
     ):
         dist_matrix = _apply_matrix_display(dist_matrix, matrix_display)
 
-    print("[>] Computed Successfully.")
+    if not quiet:
+        print("[>] Computed Successfully.")
     return dist_matrix
 
 

@@ -253,6 +253,56 @@ def test_refseq_sets_still_returns_requested_block():
     np.testing.assert_allclose(block.to_numpy(dtype=np.float64), expected.to_numpy(dtype=np.float64))
 
 
+def test_refseq_same_set_matches_full_submatrix():
+    seqdata = _seqdata_with_duplicate_reference()
+    kwargs = dict(method="OM", sm="CONSTANT", indel=1.0, norm="none")
+    idx = [0, 2, 3]
+
+    full = get_distance_matrix(seqdata, **kwargs)
+    block = get_distance_matrix(seqdata, refseq=[idx, idx], **kwargs)
+    as_numpy = get_distance_matrix(
+        seqdata,
+        refseq=[np.array(idx), np.array(idx)],
+        as_numpy=True,
+        quiet=True,
+        **kwargs,
+    )
+
+    expected = full.iloc[idx, idx].to_numpy(dtype=np.float64)
+    np.testing.assert_allclose(block.to_numpy(dtype=np.float64), expected)
+    np.testing.assert_allclose(np.asarray(as_numpy, dtype=np.float64), expected)
+
+
+def test_refseq_same_set_condensed_matches_square():
+    from scipy.spatial.distance import squareform
+
+    seqdata = _seqdata_with_duplicate_reference()
+    kwargs = dict(method="OM", sm="CONSTANT", indel=1.0, norm="none")
+    idx = [0, 2, 3]
+    square = get_distance_matrix(
+        seqdata,
+        refseq=[idx, idx],
+        full_matrix=True,
+        as_numpy=True,
+        quiet=True,
+        **kwargs,
+    )
+    condensed = get_distance_matrix(
+        seqdata,
+        refseq=[idx, idx],
+        full_matrix=False,
+        as_numpy=True,
+        quiet=True,
+        **kwargs,
+    )
+    np.testing.assert_allclose(
+        squareform(np.asarray(condensed, dtype=np.float64), checks=False),
+        np.asarray(square, dtype=np.float64),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+
+
 @pytest.mark.parametrize("method", ["LCP", "RLCP"])
 def test_lcp_refseq_index_uses_reference_path_and_matches_full(monkeypatch, method):
     import sequenzo.dissimilarity_measures.c_code as c_code

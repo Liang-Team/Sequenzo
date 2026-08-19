@@ -11,7 +11,6 @@ computation to a :class:`~sequenzo.multidomain.clara.distance_providers.Distance
 
 from __future__ import annotations
 
-import gc
 import warnings
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -133,13 +132,12 @@ def _quality_from_distances(
 
 
 def _weighted_condensed_for_linkage(
-    diss_condensed: np.ndarray,
+    diss_square: np.ndarray,
     sample_weights: np.ndarray,
 ) -> np.ndarray:
-    """Apply profile-frequency weights for Ward linkage initialization."""
-    diss_square = squareform(np.asarray(diss_condensed, dtype=float))
-    weighted_square = get_weighted_diss(diss_square.copy(), sample_weights)
-    return squareform(weighted_square)
+    """Apply profile-frequency weights on a square matrix and return condensed input."""
+    weighted_square = get_weighted_diss(np.array(diss_square, dtype=float, copy=True), sample_weights)
+    return squareform(weighted_square, checks=False)
 
 
 def _within_sample_distances_for_clustering(
@@ -152,21 +150,27 @@ def _within_sample_distances_for_clustering(
     """
     Build sample dissimilarities for KMedoids and weighted Ward linkage.
 
-    Returns ``(diss_for_kmedoids, linkage_input)`` where ``linkage_input`` is
-    condensed and ``diss_for_kmedoids`` is square or condensed per
-    ``condensed_subsample``.
+    ``condensed_subsample`` controls how the provider computes and combines
+    within-subsample distances (DAT can add condensed domain vectors). Ward
+    initialization needs a square matrix, so the engine expands at most once
+    and passes that unweighted square matrix to KMedoids. Previously the
+    condensed path expanded for weighting, condensed again, then expanded a
+    second time inside KMedoids.
+
+    Returns ``(diss_for_kmedoids, linkage_input)``: square unweighted distances
+    and condensed weighted distances for linkage.
     """
     if condensed_subsample:
         diss_condensed = provider.sample_distances(local_indices, condensed=True)
-        linkage_input = _weighted_condensed_for_linkage(diss_condensed, sample_weights)
-        return diss_condensed, linkage_input
-
-    diss_square = np.asarray(
-        provider.sample_distances(local_indices, condensed=False),
-        dtype=float,
-    )
-    weighted_square = get_weighted_diss(diss_square.copy(), sample_weights)
-    linkage_input = squareform(weighted_square)
+        diss_square = squareform(np.asarray(diss_condensed, dtype=float), checks=False)
+        del diss_condensed
+    else:
+        diss_square = np.asarray(
+            provider.sample_distances(local_indices, condensed=False),
+            dtype=float,
+            order="C",
+        )
+    linkage_input = _weighted_condensed_for_linkage(diss_square, sample_weights)
     return diss_square, linkage_input
 
 
@@ -241,7 +245,7 @@ def _run_single_iteration(
     repetition_index: int = 0,
     subsample_diagnostics: bool = False,
     rare_profile_threshold: int = 5,
-    use_medoid_cache: bool = False,
+    use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
 ) -> Dict[str, Any]:
     """One CLARA iteration: sample, cluster the sample, assign all sequences."""
@@ -298,7 +302,7 @@ def _run_single_iteration(
             initialclust=hc,
             weights=sample_weights,
             verbose=False,
-        )
+        )  # diss_sample is square; Ward init would expand condensed input.
         medoid_rows = medoid_indices_from_kmedoids_result(clustering)
         medoids = local_indices[medoid_rows]
 
@@ -338,7 +342,6 @@ def _run_single_iteration(
         )
 
     del diss_sample, linkage_input
-    gc.collect()
 
     result: Dict[str, Any] = {"k_results": outputs}
     if subsample_diagnostics:
@@ -372,7 +375,7 @@ def clara_from_distance_provider(
     verbose: bool = True,
     subsample_diagnostics: bool = False,
     rare_profile_threshold: int = 5,
-    use_medoid_cache: bool = False,
+    use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -388,10 +391,10 @@ def clara_from_distance_provider(
     condensed_subsample
         If ``True``, within-subsample distances use condensed storage (and DAT
         combines domain-level condensed vectors). If ``False``, providers return
-        square ``b x b`` matrices (legacy path for ablation benchmarks).
+        square ``b x b`` matrices (unoptimized path for ablation benchmarks).
     use_medoid_cache
         Reuse all-to-medoid distance columns across ``kvals`` within each
-        repetition when ``True``.
+        repetition when ``True`` (default; the optimized public path).
     """
     if n_jobs == 0:
         raise ValueError("n_jobs must not be 0.")

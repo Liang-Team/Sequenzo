@@ -432,6 +432,22 @@ def test_guard_rejects_elzingastuder(biofam_domains):
         )
 
 
+def test_md_clara_default_is_optimized_path(biofam_domains):
+    result = md_clara(
+        biofam_domains,
+        strategy="idcd",
+        distance_params={"method": "HAM", "sm": "CONSTANT", "indel": 1, "norm": "none"},
+        R=2,
+        sample_size=25,
+        kvals=[2, 3],
+        n_jobs=1,
+        verbose=False,
+        random_state=0,
+    )
+    assert result.settings["condensed_subsample"] is True
+    assert result.settings["use_medoid_cache"] is True
+
+
 def test_md_clara_default_distance_params(biofam_domains):
     result = md_clara(
         biofam_domains,
