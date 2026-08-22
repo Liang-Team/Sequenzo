@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <climits>
+#include <cstring>
 #include <limits>
 
 struct PamCandidate {
@@ -9,6 +12,34 @@ struct PamCandidate {
     int h = -1;
     int k_slot = -1;
 };
+
+inline bool pam_is_significant_improvement(double score) {
+    return score < 0.0;
+}
+
+inline int pam_binary_quantum_exponent(double value) {
+    if (value == 0.0) return INT_MAX;
+    std::uint64_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    bits &= 0x7fffffffffffffffULL;
+    const int exponent_field = static_cast<int>((bits >> 52U) & 0x7ffU);
+    const std::uint64_t fraction = bits & 0x000fffffffffffffULL;
+    const std::uint64_t significand = exponent_field == 0
+        ? fraction
+        : fraction | 0x0010000000000000ULL;
+#if defined(__GNUC__) || defined(__clang__)
+    const int trailing_zeros = __builtin_ctzll(significand);
+#else
+    int trailing_zeros = 0;
+    std::uint64_t reduced = significand;
+    while ((reduced & 1U) == 0U) {
+        reduced >>= 1U;
+        ++trailing_zeros;
+    }
+#endif
+    if (exponent_field == 0) return -1074 + trailing_zeros;
+    return exponent_field - 1023 - 52 + trailing_zeros;
+}
 
 template <typename Callback>
 inline void pam_for_each_distance_in_row(

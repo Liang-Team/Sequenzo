@@ -69,6 +69,31 @@ def test_pamonce_matches_classic_pam_for_sub_tolerance_improvement():
     np.testing.assert_array_equal(fast, classic)
 
 
+def test_classic_pam_accepts_a_representable_strict_improvement():
+    large = 1e15
+    diss = np.full((4, 4), large, dtype=np.float64)
+    np.fill_diagonal(diss, 0.0)
+    diss[2, 3] = diss[3, 2] = large - 2.0
+
+    common = dict(
+        diss=diss,
+        k=2,
+        initialclust=[0, 1],
+        npass=0,
+        threads=1,
+        return_diagnostics=True,
+        verbose=False,
+    )
+    classic, classic_diagnostics = KMedoids(method="PAM", **common)
+    fast, fast_diagnostics = KMedoids(method="PAMonce", **common)
+
+    expected = np.array([3, 2, 3, 3], dtype=np.int32)
+    np.testing.assert_array_equal(classic, expected)
+    np.testing.assert_array_equal(fast, expected)
+    assert classic_diagnostics["swap_trace"] == [(0, 2, 0)]
+    assert fast_diagnostics["swap_trace"] == classic_diagnostics["swap_trace"]
+
+
 def test_pamonce_is_identical_with_one_and_eight_threads_on_ties():
     one_core = _run_in_fresh_process(
         method="PAMonce",
@@ -388,3 +413,32 @@ print(json.dumps(all_results))
 
     assert len(outputs[0]) == 48
     assert outputs[1] == outputs[0]
+
+
+def test_seeded_multi_pass_pamonce_matches_classic_pass_by_pass():
+    rng = np.random.default_rng(20260819)
+    points = rng.normal(size=(30, 4))
+    diss = np.sqrt(
+        ((points[:, None, :] - points[None, :, :]) ** 2).sum(axis=2)
+    )
+    weights = rng.integers(1, 5, size=30).astype(np.float64)
+
+    for matrix in (diss, diss[np.triu_indices(30, 1)]):
+        common = dict(
+            diss=matrix,
+            k=5,
+            weights=weights,
+            npass=4,
+            random_state=91,
+            threads=1,
+            return_diagnostics=True,
+            verbose=False,
+        )
+        classic, classic_diagnostics = KMedoids(method="PAM", **common)
+        fast, fast_diagnostics = KMedoids(method="PAMonce", **common)
+
+        np.testing.assert_array_equal(fast, classic)
+        assert fast_diagnostics["objective"] == classic_diagnostics["objective"]
+        assert [item["swap_trace"] for item in fast_diagnostics["passes"]] == [
+            item["swap_trace"] for item in classic_diagnostics["passes"]
+        ]

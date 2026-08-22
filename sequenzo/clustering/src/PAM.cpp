@@ -19,7 +19,8 @@ class PAM {
 public:
     PAM(int nelements, PamDoubleArray diss,
         PamIntArray centroids, int npass,
-        PamDoubleArray weights)
+        PamDoubleArray weights, int requested_threads = 0,
+        std::size_t memory_budget_bytes = 0)
         : nelements(nelements),
           diss(std::move(diss)),
           centroids(std::move(centroids)),
@@ -40,10 +41,32 @@ public:
         }
         maxdist = std::numeric_limits<double>::infinity();
 #ifdef _OPENMP
+        const int available_threads = requested_threads > 0
+            ? requested_threads
+            : omp_get_max_threads();
         candidate_threads = std::max(
-            1, std::min(omp_get_max_threads(), nelements - nclusters));
-        thread_best.resize(candidate_threads);
+            1, std::min(available_threads, nelements - nclusters));
+#else
+        (void)requested_threads;
+        candidate_threads = 1;
 #endif
+        constexpr std::size_t bytes_per_worker =
+            sizeof(PamCandidate) + 64;
+        if (memory_budget_bytes > 0) {
+            if (memory_budget_bytes < bytes_per_worker) {
+                throw py::value_error(
+                    "memory_budget_mb is too small for one PAM thread workspace.");
+            }
+            const std::size_t affordable =
+                memory_budget_bytes / bytes_per_worker;
+            candidate_threads = std::min(
+                candidate_threads,
+                static_cast<int>(std::min<std::size_t>(
+                    affordable, static_cast<std::size_t>(candidate_threads))));
+        }
+        thread_workspace_bytes =
+            static_cast<std::size_t>(candidate_threads) * bytes_per_worker;
+        thread_best.resize(candidate_threads);
     }
 
     py::array_t<int> runclusterloop() {
@@ -54,10 +77,36 @@ public:
         return runclusterloopImpl(1);
     }
 
+    double objective() const {
+        return final_objective;
+    }
+
+    py::dict diagnostics() const {
+        py::dict result;
+        result["worker_count"] = candidate_threads;
+        result["accepted_swaps"] = swap_entering.size();
+        result["swap_trace"] = swapTrace();
+        result["objective"] = final_objective;
+        result["thread_workspace_bytes"] = thread_workspace_bytes;
+        return result;
+    }
+
 private:
+    py::list swapTrace() const {
+        py::list trace;
+        for (std::size_t index = 0; index < swap_entering.size(); ++index) {
+            trace.append(py::make_tuple(
+                swap_removed[index], swap_entering[index], swap_slots[index]));
+        }
+        return trace;
+    }
+
     py::array_t<int> runclusterloopImpl(int output_offset) {
         int* cent_ptr = centroids.mutable_data();
         int* assignment = clusterid.mutable_data();
+        swap_removed.clear();
+        swap_entering.clear();
+        swap_slots.clear();
 
         {
             py::gil_scoped_release release;
@@ -73,6 +122,7 @@ private:
             }
 
             PamCandidate best;
+            bool accept_swap = false;
             do {
                 assignToNearestMedoids(cent_ptr, assignment);
 
@@ -81,8 +131,12 @@ private:
                         cent_ptr, assignment, is_medoid)
                     : findBestClassicSwap<false>(
                         cent_ptr, assignment, is_medoid);
-                if (best.score < 0.0) {
+                accept_swap = pam_is_significant_improvement(best.score);
+                if (accept_swap) {
                     const int removed = cent_ptr[best.k_slot];
+                    swap_removed.push_back(removed);
+                    swap_entering.push_back(best.h);
+                    swap_slots.push_back(best.k_slot);
                     cent_ptr[best.k_slot] = best.h;
                     bool removed_is_still_used = false;
                     for (int k = 0; k < nclusters; ++k) {
@@ -94,10 +148,14 @@ private:
                     if (!removed_is_still_used) is_medoid[removed] = 0;
                     is_medoid[best.h] = 1;
                 }
-            } while (best.score < 0.0);
+            } while (accept_swap);
+
+            final_objective = unit_weights
+                ? currentObjective<true>()
+                : currentObjective<false>();
 
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(candidate_threads) if(candidate_threads > 1) schedule(static)
 #endif
             for (int i = 0; i < nelements; ++i) {
                 assignment[i] = cent_ptr[assignment[i]] + output_offset;
@@ -110,6 +168,15 @@ private:
     inline double weightAt(int index) const {
         if constexpr (UnitWeights) return 1.0;
         return wt_ptr[index];
+    }
+
+    template <bool UnitWeights>
+    double currentObjective() const {
+        double objective = 0.0;
+        for (int i = 0; i < nelements; ++i) {
+            objective += weightAt<UnitWeights>(i) * dysma[i];
+        }
+        return objective;
     }
 
     inline double get_dist(int i, int j) const {
@@ -138,7 +205,7 @@ private:
             const std::ptrdiff_t pair_count =
                 static_cast<std::ptrdiff_t>(diss.size());
 #ifdef _OPENMP
-#pragma omp parallel for reduction(max:maximum) schedule(static)
+#pragma omp parallel for num_threads(candidate_threads) if(candidate_threads > 1) reduction(max:maximum) schedule(static)
 #endif
             for (std::ptrdiff_t index = 0; index < pair_count; ++index) {
                 maximum = std::max(maximum, cond_ptr[index]);
@@ -146,7 +213,7 @@ private:
             return 1.1 * maximum + 1.0;
         }
 #ifdef _OPENMP
-#pragma omp parallel for reduction(max:maximum) schedule(static)
+#pragma omp parallel for num_threads(candidate_threads) if(candidate_threads > 1) reduction(max:maximum) schedule(static)
 #endif
         for (int i = 0; i < nelements; ++i) {
             for (int j = i + 1; j < nelements; ++j) {
@@ -166,7 +233,7 @@ private:
             int best_index = -1;
 
 #ifdef _OPENMP
-#pragma omp parallel
+#pragma omp parallel num_threads(candidate_threads) if(candidate_threads > 1)
             {
                 double local_gain = -std::numeric_limits<double>::infinity();
                 int local_index = -1;
@@ -229,7 +296,7 @@ private:
 
     void assignToNearestMedoids(const int* cent_ptr, int* assignment) {
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(candidate_threads) if(candidate_threads > 1) schedule(static)
 #endif
         for (int i = 0; i < nelements; ++i) {
             double nearest = maxdist;
@@ -259,7 +326,7 @@ private:
         PamCandidate best;
 #ifdef _OPENMP
         std::fill(thread_best.begin(), thread_best.end(), PamCandidate{});
-#pragma omp parallel num_threads(candidate_threads)
+#pragma omp parallel num_threads(candidate_threads) if(candidate_threads > 1)
         {
             PamCandidate local;
 #pragma omp for schedule(static) nowait
@@ -318,11 +385,16 @@ private:
     std::vector<double> dysmb;
     std::vector<std::uint8_t> is_medoid;
     std::vector<PamCandidate> thread_best;
+    std::vector<int> swap_removed;
+    std::vector<int> swap_entering;
+    std::vector<int> swap_slots;
     double maxdist;
+    double final_objective = std::numeric_limits<double>::infinity();
     const double* diss_ptr = nullptr;
     const double* cond_ptr = nullptr;
     const double* wt_ptr = nullptr;
     bool use_condensed = false;
     bool unit_weights = false;
     int candidate_threads = 1;
+    std::size_t thread_workspace_bytes = 0;
 };
