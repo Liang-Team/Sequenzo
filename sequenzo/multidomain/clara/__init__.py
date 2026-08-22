@@ -11,6 +11,8 @@ from .distance_providers import (
     DATDistanceProvider,
     DistanceProvider,
     IDCDDistanceProvider,
+    SequenceDistanceProvider,
+    make_aggregated_distance_provider,
     make_distance_provider,
 )
 from .clara_engine import clara_from_distance_provider
@@ -42,7 +44,9 @@ __all__ = [
     "IDCDDistanceProvider",
     "CATDistanceProvider",
     "DATDistanceProvider",
+    "SequenceDistanceProvider",
     "make_distance_provider",
+    "make_aggregated_distance_provider",
     "plot_md_clara_quality",
     "plot_md_clara_stability",
     "plot_md_clara_runtime",

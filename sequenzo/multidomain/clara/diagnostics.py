@@ -20,7 +20,7 @@ from sequenzo.big_data.clara.clara import adjustedRandIndex, jaccardCoef
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.multidomain.idcd import create_idcd_sequence_from_domains, validate_multidomain_domains
 
-from .distance_providers import DATDistanceProvider
+from .distance_providers import DATDistanceProvider, SequenceDistanceProvider
 from .results import MDClaraResult
 
 
@@ -395,29 +395,76 @@ def _best_clustering_single_domain(
     sample_size: int,
     method: str,
     criteria: Sequence[str],
-) -> np.ndarray:
-    """Run standard CLARA on one domain (leave-one-domain-out when only one remains)."""
-    from sequenzo.big_data.clara.clara import clara
+    random_state: Optional[int] = None,
+    n_jobs: int = 1,
+    sampling_policy: str = "studer_bootstrap",
+) -> Dict[str, Any]:
+    """
+    Run MD-CLARA's engine on one domain (leave-one-domain-out remainder).
+
+    Uses the same ``random_state`` / subsample machinery as ``md_clara``, not
+    the unseeded parallel path in ``sequenzo.big_data.clara.clara``.
+    """
+    from sequenzo.big_data.clara.utils.aggregatecases import DataFrameAggregator
+    from sequenzo.multidomain.clara._utils import (
+        one_based_to_zero_based,
+        subset_sequence_data,
+        validate_domain_weights,
+    )
+    from sequenzo.multidomain.clara.clara_engine import (
+        STUDER_BOOTSTRAP_POLICIES,
+        clara_from_distance_provider,
+        normalize_sampling_policy,
+    )
 
     dist_args = _single_domain_dist_args(
         strategy,
         distance_params,
         domain_index=domain_index,
     )
-    raw = clara(
-        seqdata,
+    weights = validate_domain_weights([seqdata])
+    ac = DataFrameAggregator().aggregate(
+        seqdata.seqdata,
+        weights=weights,
+    )
+    agg_idx = one_based_to_zero_based(ac["aggIndex"], name="aggIndex")
+    agg_weights = np.asarray(ac["aggWeights"], dtype=float)
+    agg_seq = subset_sequence_data(seqdata, agg_idx, weights=agg_weights)
+    provider = SequenceDistanceProvider(agg_seq, dist_args)
+    policy = normalize_sampling_policy(sampling_policy)
+    effective_b = int(sample_size)
+    if policy not in STUDER_BOOTSTRAP_POLICIES:
+        effective_b = min(effective_b, len(agg_weights))
+    raw = clara_from_distance_provider(
+        provider,
+        reference_seqdata=seqdata,
+        aggregation=ac,
         R=R,
-        sample_size=sample_size,
+        sample_size=effective_b,
         kvals=[k],
         method=method,
-        dist_args=dist_args,
-        criteria=list(criteria),
+        criteria=tuple(criteria),
         stability=False,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        verbose=False,
+        sampling_policy=sampling_policy,
     )
     column = f"Cluster {k}"
     if column not in raw["clustering"].columns:
         raise KeyError(f"Single-domain CLARA did not return {column!r}.")
-    return np.asarray(raw["clustering"][column], dtype=int)
+    cluster_info = raw["clara"][k]
+    return {
+        "labels": np.asarray(raw["clustering"][column], dtype=int),
+        "requested_sample_size": sample_size,
+        "effective_sample_size": raw.get("sample_size", sample_size),
+        "n_unique_profiles": int(len(agg_weights)),
+        "medoids": np.asarray(cluster_info["medoids"]),
+        "objective": float(cluster_info["objective"]),
+        "iteration": int(cluster_info["iteration"]),
+        "reduced_model": "md_clara_single_domain",
+        "random_state": random_state,
+    }
 
 
 def leave_one_domain_out_sensitivity(
@@ -434,6 +481,7 @@ def leave_one_domain_out_sensitivity(
     criteria: Sequence[str] = ("distance",),
     stability: bool = False,
     verbose: bool = False,
+    sampling_policy: str = "studer_bootstrap",
 ) -> pd.DataFrame:
     """
     Rerun MD-CLARA without each domain and compare partitions to the full model.
@@ -465,11 +513,14 @@ def leave_one_domain_out_sensitivity(
         random_state=random_state,
         n_jobs=n_jobs,
         verbose=verbose,
+        sampling_policy=sampling_policy,
     )
     full_labels = full_result.best_clustering(k)
     full_requested_b = full_result.settings.get("requested_sample_size", sample_size)
     full_effective_b = full_result.settings.get("effective_sample_size", sample_size)
     full_n_profiles = full_result.settings.get("n_unique_profiles")
+    full_medoids = np.asarray(full_result.medoids.get(k))
+    full_objective = float(full_result.best_by_k[k]["objective"])
 
     rows: List[Dict[str, Any]] = []
     for omit_index in range(len(domains)):
@@ -493,6 +544,7 @@ def leave_one_domain_out_sensitivity(
                 random_state=random_state,
                 n_jobs=n_jobs,
                 verbose=verbose,
+                sampling_policy=sampling_policy,
             )
             reduced_labels = reduced_result.best_clustering(k)
             reduced_requested_b = reduced_result.settings.get(
@@ -503,9 +555,11 @@ def leave_one_domain_out_sensitivity(
             )
             reduced_n_profiles = reduced_result.settings.get("n_unique_profiles")
             reduced_model = "md_clara"
+            reduced_medoids = np.asarray(reduced_result.medoids.get(k))
+            reduced_objective = float(reduced_result.best_by_k[k]["objective"])
         else:
             kept_index = next(i for i in range(len(domains)) if i != omit_index)
-            reduced_labels = _best_clustering_single_domain(
+            single = _best_clustering_single_domain(
                 reduced[0],
                 strategy=strategy,
                 distance_params=distance_params,
@@ -515,11 +569,17 @@ def leave_one_domain_out_sensitivity(
                 sample_size=sample_size,
                 method=method,
                 criteria=criteria,
+                random_state=random_state,
+                n_jobs=n_jobs,
+                sampling_policy=sampling_policy,
             )
-            reduced_requested_b = sample_size
-            reduced_effective_b = sample_size
-            reduced_n_profiles = None
-            reduced_model = "clara_single_domain"
+            reduced_labels = single["labels"]
+            reduced_requested_b = single["requested_sample_size"]
+            reduced_effective_b = single["effective_sample_size"]
+            reduced_n_profiles = single["n_unique_profiles"]
+            reduced_model = single["reduced_model"]
+            reduced_medoids = single["medoids"]
+            reduced_objective = single["objective"]
         metrics = _pairwise_partition_metrics(full_labels, reduced_labels)
         rows.append(
             {
@@ -529,12 +589,17 @@ def leave_one_domain_out_sensitivity(
                 "k": k,
                 "ari_vs_all_domains": metrics["ari"],
                 "jaccard_vs_all_domains": metrics["jaccard"],
+                "random_state": random_state,
                 "full_requested_sample_size": full_requested_b,
                 "full_effective_sample_size": full_effective_b,
                 "full_n_unique_profiles": full_n_profiles,
+                "full_objective": full_objective,
+                "full_medoids": np.asarray(full_medoids).tolist(),
                 "reduced_requested_sample_size": reduced_requested_b,
                 "reduced_effective_sample_size": reduced_effective_b,
                 "reduced_n_unique_profiles": reduced_n_profiles,
+                "reduced_objective": reduced_objective,
+                "reduced_medoids": np.asarray(reduced_medoids).tolist(),
                 "reduced_model": reduced_model,
             }
         )
@@ -591,7 +656,35 @@ def summarize_subsample_coverage(
         "min_rare_profile_coverage": float(coverage.min()) if len(coverage) else np.nan,
         "mean_sampled_weight_share": float(weight_share.mean()) if len(weight_share) else np.nan,
         "n_repetitions": float(len(subsample_diagnostics)),
+        "mean_sampled_profiles": float(subsample_diagnostics["sampled_profiles"].mean()),
     }
+    if "subsample_pam_weight_sum" in subsample_diagnostics.columns:
+        summary["mean_subsample_pam_weight_sum"] = float(
+            subsample_diagnostics["subsample_pam_weight_sum"].mean()
+        )
+    if "max_draw_multiplicity" in subsample_diagnostics.columns:
+        summary["mean_max_draw_multiplicity"] = float(
+            subsample_diagnostics["max_draw_multiplicity"].mean()
+        )
+    if "max_subsample_pam_weight" in subsample_diagnostics.columns:
+        summary["mean_max_subsample_pam_weight"] = float(
+            subsample_diagnostics["max_subsample_pam_weight"].mean()
+        )
+    if "rare_latent_absent" in subsample_diagnostics.columns:
+        absent = subsample_diagnostics["rare_latent_absent"].dropna()
+        summary["rare_latent_absence_rate"] = (
+            float(absent.mean()) if len(absent) else np.nan
+        )
+    if "rare_latent_profiles_sampled" in subsample_diagnostics.columns:
+        sampled = subsample_diagnostics["rare_latent_profiles_sampled"].dropna()
+        summary["mean_rare_latent_profiles_sampled"] = (
+            float(sampled.mean()) if len(sampled) else np.nan
+        )
+    if "rare_latent_weight_sampled" in subsample_diagnostics.columns:
+        weight = subsample_diagnostics["rare_latent_weight_sampled"].dropna()
+        summary["mean_rare_latent_weight_sampled"] = (
+            float(weight.mean()) if len(weight) else np.nan
+        )
     return summary
 
 

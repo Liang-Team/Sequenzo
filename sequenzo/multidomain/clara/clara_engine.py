@@ -33,14 +33,49 @@ from sequenzo.define_sequence_data import SequenceData
 
 from .distance_providers import DistanceProvider
 from ._utils import (
-    aggregate_domains,
-    build_multidomain_profile_frame,
     check_sample_size_for_k,
     one_based_to_zero_based,
-    validate_domain_weights,
     validate_kvals,
     validate_profile_weights,
 )
+
+
+SAMPLING_POLICIES = (
+    "uniform_unique_profiles",
+    "case_sample_then_aggregate",
+    "frequency_proportional_profiles",
+    "studer_bootstrap",
+)
+
+SAMPLING_POLICY_ALIASES = {
+    "frequency_proportional_with_replacement": "studer_bootstrap",
+}
+
+STUDER_BOOTSTRAP_POLICIES = frozenset({"studer_bootstrap"})
+
+
+def normalize_sampling_policy(name: str) -> str:
+    """Canonical sampling-policy name, including aliases."""
+    policy = str(name).lower()
+    policy = SAMPLING_POLICY_ALIASES.get(policy, policy)
+    if policy not in SAMPLING_POLICIES:
+        raise ValueError(
+            f"sampling_policy must be one of {list(SAMPLING_POLICIES)}; "
+            f"got {name!r}."
+        )
+    return policy
+
+
+def _pbm_index(k: int, total_diss: float, max_intermedoid: float) -> float:
+    """
+    PBM index of Studer et al. (2026) with E1=1.
+
+    PBM = ((1/K) * (1/E) * D)^2 where E is the weighted total
+    within-cluster distance and D is the maximum inter-medoid distance.
+    """
+    if total_diss <= 0:
+        return float(np.inf)
+    return float(((1.0 / k) * (1.0 / total_diss) * max_intermedoid) ** 2)
 
 
 def _quality_from_distances(
@@ -84,11 +119,7 @@ def _quality_from_distances(
         highest_memb = np.sort(memb, axis=1)[:, -2:]
         crispness = np.power(highest_memb[:, 1] - highest_memb[:, 0], 1.0)
         crisp_sum = float(np.sum(crispness * weights))
-        pbm = (
-            ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / avg_diss)) ** 2
-            if avg_diss > 0
-            else np.inf
-        )
+        pbm = _pbm_index(len(medoids), total_diss, float(np.max(diss_to_medoids[medoids])))
         ams = (
             float(np.sum(crispness * sil * weights) / crisp_sum)
             if crisp_sum > 0
@@ -112,11 +143,7 @@ def _quality_from_distances(
                 medoids=medoids,
                 weights=weights,
             )["db"]
-        pbm = (
-            ((1 / len(medoids)) * (np.max(diss_to_medoids[medoids]) / avg_diss)) ** 2
-            if avg_diss > 0
-            else np.inf
-        )
+        pbm = _pbm_index(len(medoids), total_diss, float(np.max(diss_to_medoids[medoids])))
         ams = (
             float(np.sum(sil * weights) / weight_sum)
             if weight_sum > 0
@@ -198,15 +225,131 @@ def _assemble_distance_to_medoids(
     return diss_full, cache_hits, cache_misses
 
 
+def _stability_pair_labels(
+    left_labels: np.ndarray,
+    right_labels: np.ndarray,
+    weights: np.ndarray,
+) -> Tuple[float, float]:
+    """Weighted ARI and Jaccard between two profile-level partitions."""
+    df = pd.DataFrame(
+        {
+            "left": left_labels,
+            "right": right_labels,
+            "w": weights,
+        }
+    )
+    tab = df.groupby(["left", "right"])["w"].sum().unstack(fill_value=0)
+    return adjustedRandIndex(tab), jaccardCoef(tab)
+
+
+def _unique_with_counts_first_occurrence(draws: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Collapse a with-replacement draw, preserving first-occurrence order.
+
+    Matches ``wcAggregateCases`` on the bootstrap index vector: unique ids in
+    the order they first appear, with counts equal to draw multiplicities.
+    """
+    uniques, first_idx, counts = np.unique(
+        np.asarray(draws, dtype=int),
+        return_index=True,
+        return_counts=True,
+    )
+    order = np.argsort(first_idx)
+    return uniques[order], counts[order].astype(float)
+
+
+def _draw_profile_sample(
+    rng: np.random.Generator,
+    *,
+    sampling_policy: str,
+    n_profiles: int,
+    sample_size: int,
+    profile_weights: np.ndarray,
+    disagg: np.ndarray,
+    max_k: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Draw unique-profile indices and the weights used inside subsample PAM.
+
+    Full-data evaluation always uses ``profile_weights`` (``aggWeights``).
+    Subsample PAM weights differ by policy:
+
+    * ``studer_bootstrap`` (default) uses the number of times each profile
+      was drawn in this repetition (Studer et al. 2026 / ``seqclararange``);
+    * the other policies use the full-data frequencies a_u of the drawn
+      unique profiles.
+    """
+    policy = normalize_sampling_policy(sampling_policy)
+
+    if policy == "uniform_unique_profiles":
+        if sample_size > n_profiles:
+            raise ValueError(
+                f"sample_size ({sample_size}) cannot exceed the number of "
+                f"unique multidomain profiles ({n_profiles}) when sampling "
+                "without replacement."
+            )
+        indices = rng.choice(n_profiles, size=sample_size, replace=False)
+        return indices, profile_weights[indices]
+
+    if policy == "frequency_proportional_profiles":
+        draw = min(sample_size, n_profiles)
+        probs = profile_weights / float(np.sum(profile_weights))
+        indices = rng.choice(n_profiles, size=draw, replace=False, p=probs)
+        return indices, profile_weights[indices]
+
+    if policy == "case_sample_then_aggregate":
+        n_original = int(disagg.size)
+        n_draw = min(int(sample_size), n_original)
+        last = np.empty(0, dtype=int)
+        for _ in range(25):
+            cases = rng.choice(n_original, size=n_draw, replace=False)
+            last = np.unique(disagg[cases]).astype(int, copy=False)
+            if last.size >= max_k:
+                return last, profile_weights[last]
+        raise ValueError(
+            "case_sample_then_aggregate could not obtain "
+            f"max(kvals)={max_k} unique profiles from {n_draw} cases "
+            f"(last draw had {last.size}). Increase sample_size."
+        )
+
+    if policy == "studer_bootstrap":
+        # One draw, as in seqclararange: sample.int(..., replace=TRUE) then
+        # wcAggregateCases. No redraw if the unique count is below K.
+        probs = profile_weights / float(np.sum(profile_weights))
+        draws = rng.choice(n_profiles, size=int(sample_size), replace=True, p=probs)
+        indices, counts = _unique_with_counts_first_occurrence(draws)
+        if int(indices.size) < max_k:
+            raise ValueError(
+                f"studer_bootstrap draw of size {sample_size} yielded only "
+                f"{int(indices.size)} unique profiles, but max(kvals)={max_k}. "
+                "Increase sample_size; seqclararange does not redraw."
+            )
+        return indices, counts
+
+    raise ValueError(
+        f"Unknown sampling_policy {sampling_policy!r}. "
+        f"Choose one of: {list(SAMPLING_POLICIES)}."
+    )
+
+
 def _subsample_coverage_row(
     *,
     repetition: int,
     local_indices: np.ndarray,
     profile_weights: np.ndarray,
     rare_profile_threshold: int,
+    sampling_policy: str,
+    requested_sample_size: int,
+    subsample_pam_weights: Optional[np.ndarray] = None,
+    profile_true_labels: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
-    """One repetition's rare-profile subsample coverage statistics."""
+    """One repetition's rare-profile (and optional latent-cluster) coverage."""
     sampled_weights = profile_weights[local_indices]
+    pam_w = (
+        np.asarray(subsample_pam_weights, dtype=float)
+        if subsample_pam_weights is not None
+        else sampled_weights
+    )
     rare_mask = profile_weights < rare_profile_threshold
     rare_indices = np.flatnonzero(rare_mask)
     n_rare = int(rare_indices.size)
@@ -222,9 +365,19 @@ def _subsample_coverage_row(
         float(np.sum(sampled_weights) / total_weight) if total_weight > 0 else np.nan
     )
 
-    return {
+    row: Dict[str, Any] = {
         "repetition": repetition,
+        "sampling_policy": sampling_policy,
+        "requested_sample_size": int(requested_sample_size),
+        "n_draws": int(requested_sample_size),
         "sampled_profiles": int(local_indices.size),
+        "subsample_pam_weight_sum": float(np.sum(pam_w)),
+        "max_subsample_pam_weight": float(np.max(pam_w)) if pam_w.size else np.nan,
+        "max_draw_multiplicity": (
+            float(np.max(pam_w))
+            if pam_w.size and normalize_sampling_policy(sampling_policy) in STUDER_BOOTSTRAP_POLICIES
+            else (1.0 if local_indices.size else np.nan)
+        ),
         "sampled_rare_profiles": sampled_rare,
         "rare_profile_coverage": rare_coverage,
         "sampled_weight_share": sampled_weight_share,
@@ -232,6 +385,87 @@ def _subsample_coverage_row(
         "median_sampled_weight": float(np.median(sampled_weights)),
         "max_sampled_weight": float(np.max(sampled_weights)),
     }
+
+    if profile_true_labels is not None:
+        labels = np.asarray(profile_true_labels)
+        sampled_labels = labels[local_indices]
+        unique_labels = np.unique(labels)
+        for lab in unique_labels:
+            lab_i = int(lab)
+            in_full = labels == lab
+            in_sample = sampled_labels == lab
+            n_profiles_full = int(np.sum(in_full))
+            n_profiles_sample = int(np.sum(in_sample))
+            weight_full = float(np.sum(profile_weights[in_full]))
+            weight_sample = float(np.sum(sampled_weights[in_sample]))
+            row[f"cluster_{lab_i}_profiles_sampled"] = n_profiles_sample
+            row[f"cluster_{lab_i}_profiles_full"] = n_profiles_full
+            row[f"cluster_{lab_i}_weight_sampled"] = weight_sample
+            row[f"cluster_{lab_i}_weight_full"] = weight_full
+            row[f"cluster_{lab_i}_absent"] = int(n_profiles_sample == 0)
+        rare_lab = int(unique_labels[np.argmin(
+            [float(np.sum(profile_weights[labels == lab])) for lab in unique_labels]
+        )])
+        row["rare_latent_cluster"] = rare_lab
+        row["rare_latent_profiles_sampled"] = int(row[f"cluster_{rare_lab}_profiles_sampled"])
+        row["rare_latent_weight_sampled"] = float(row[f"cluster_{rare_lab}_weight_sampled"])
+        row["rare_latent_absent"] = int(row[f"cluster_{rare_lab}_absent"])
+
+    return row
+
+
+def _scheduled_sample(
+    entry: Any,
+    *,
+    sampling_policy: str,
+    sample_size: int,
+    n_agg: int,
+    profile_weights: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Replay a stored subsample.
+
+    For ``studer_bootstrap`` the entry must keep draw multiplicities: either a
+    dict with ``indices`` and ``pam_weights`` (or ``counts``), or a length-``b``
+    array of raw with-replacement profile draws. A unique-index list without
+    weights is rejected because it would silently replace counts with ``a_u``.
+    """
+    policy = normalize_sampling_policy(sampling_policy)
+    if isinstance(entry, dict):
+        if "indices" not in entry:
+            raise ValueError("scheduled subsample dict must contain 'indices'.")
+        indices = np.asarray(entry["indices"], dtype=int)
+        if "pam_weights" in entry:
+            weights = np.asarray(entry["pam_weights"], dtype=float)
+        elif "counts" in entry:
+            weights = np.asarray(entry["counts"], dtype=float)
+        else:
+            raise ValueError(
+                "scheduled subsample dict must contain 'pam_weights' or 'counts'."
+            )
+        if indices.shape != weights.shape:
+            raise ValueError("scheduled indices and PAM weights must have the same shape.")
+        if np.any(indices < 0) or np.any(indices >= n_agg):
+            raise IndexError("scheduled subsample indices are out of range for N*.")
+        return indices, weights
+
+    arr = np.asarray(entry, dtype=int)
+    if arr.ndim != 1 or arr.size == 0:
+        raise ValueError("scheduled subsample indices must be a non-empty 1-d array.")
+    if np.any(arr < 0) or np.any(arr >= n_agg):
+        raise IndexError("scheduled subsample indices are out of range for N*.")
+
+    if policy in STUDER_BOOTSTRAP_POLICIES:
+        if arr.size != int(sample_size):
+            raise ValueError(
+                "studer_bootstrap subsample_schedule must be raw draws of length "
+                f"sample_size={sample_size} (got {arr.size}), or dicts with "
+                "indices and pam_weights. Unique profile lists drop multiplicities."
+            )
+        return _unique_with_counts_first_occurrence(arr)
+
+    indices = np.unique(arr)
+    return indices, profile_weights[indices]
 
 
 def _run_single_iteration(
@@ -247,6 +481,9 @@ def _run_single_iteration(
     rare_profile_threshold: int = 5,
     use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
+    sampling_policy: str = "studer_bootstrap",
+    scheduled_entry: Optional[Any] = None,
+    profile_true_labels: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     """One CLARA iteration: sample, cluster the sample, assign all sequences."""
     n_agg = provider.n_sequences()
@@ -255,21 +492,37 @@ def _run_single_iteration(
         n_profiles=n_agg,
     )
     max_k = max(kvals)
+    disagg = one_based_to_zero_based(aggregation["disaggIndex"], name="disaggIndex")
 
-    if sample_size > n_agg:
-        raise ValueError(
-            f"sample_size ({sample_size}) cannot exceed the number of "
-            f"unique multidomain profiles ({n_agg}) when sampling without replacement."
+    if scheduled_entry is not None:
+        local_indices, sample_weights = _scheduled_sample(
+            scheduled_entry,
+            sampling_policy=sampling_policy,
+            sample_size=sample_size,
+            n_agg=n_agg,
+            profile_weights=profile_weights,
         )
+    else:
+        if (
+            sampling_policy == "uniform_unique_profiles"
+            and sample_size > n_agg
+        ):
+            raise ValueError(
+                f"sample_size ({sample_size}) cannot exceed the number of "
+                f"unique multidomain profiles ({n_agg}) when sampling without replacement."
+            )
+        local_indices, sample_weights = _draw_profile_sample(
+            rng,
+            sampling_policy=sampling_policy,
+            n_profiles=n_agg,
+            sample_size=sample_size,
+            profile_weights=profile_weights,
+            disagg=disagg,
+            max_k=max_k,
+        )
+        local_indices = np.asarray(local_indices, dtype=int)
+        sample_weights = np.asarray(sample_weights, dtype=float)
 
-    sample_rows = rng.choice(
-        n_agg,
-        size=sample_size,
-        replace=False,
-    )
-
-    local_indices = np.asarray(sample_rows, dtype=int)
-    sample_weights = profile_weights[local_indices]
     n_unique_sample = len(local_indices)
 
     if n_unique_sample < max_k:
@@ -350,6 +603,10 @@ def _run_single_iteration(
             local_indices=local_indices,
             profile_weights=profile_weights,
             rare_profile_threshold=rare_profile_threshold,
+            sampling_policy=sampling_policy,
+            requested_sample_size=sample_size,
+            subsample_pam_weights=sample_weights,
+            profile_true_labels=profile_true_labels,
         )
     result["medoid_cache"] = {
         "hits": total_cache_hits,
@@ -377,6 +634,9 @@ def clara_from_distance_provider(
     rare_profile_threshold: int = 5,
     use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
+    sampling_policy: str = "studer_bootstrap",
+    subsample_schedule: Optional[Sequence[Any]] = None,
+    profile_true_labels: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     """
     Run CLARA using a distance provider instead of a full distance matrix.
@@ -395,6 +655,21 @@ def clara_from_distance_provider(
     use_medoid_cache
         Reuse all-to-medoid distance columns across ``kvals`` within each
         repetition when ``True`` (default; the optimized public path).
+    sampling_policy
+        ``studer_bootstrap`` (default: frequency-proportional with replacement;
+        subsample PAM uses draw multiplicities, matching ``seqclararange``);
+        ``uniform_unique_profiles`` (profile-balanced: distinct profiles
+        uniformly, subsample PAM uses full frequencies a_u);
+        ``case_sample_then_aggregate``; or
+        ``frequency_proportional_profiles``.
+        Alias: ``frequency_proportional_with_replacement``.
+    subsample_schedule
+        Optional list of ``R`` stored draws used instead of the RNG. For
+        ``studer_bootstrap`` each entry must be raw length-``b`` draws or a
+        dict with ``indices`` and ``pam_weights``. Unique-index lists are
+        valid for the other policies.
+    profile_true_labels
+        Optional length-``N*`` latent labels for subsample coverage diagnostics.
     """
     if n_jobs == 0:
         raise ValueError("n_jobs must not be 0.")
@@ -408,6 +683,8 @@ def clara_from_distance_provider(
         raise ValueError("R must be at least 1.")
     if stability and R < 2:
         raise ValueError("stability=True requires R >= 2.")
+
+    sampling_policy = normalize_sampling_policy(sampling_policy)
 
     if aggregation is None:
         raise ValueError(
@@ -427,6 +704,22 @@ def clara_from_distance_provider(
         n_unique_cases=len(profile_weights),
     )
 
+    schedule: Optional[List[Any]] = None
+    if subsample_schedule is not None:
+        if len(subsample_schedule) != R:
+            raise ValueError(
+                f"subsample_schedule length ({len(subsample_schedule)}) must equal R={R}."
+            )
+        schedule = list(subsample_schedule)
+
+    if profile_true_labels is not None:
+        labels_arr = np.asarray(profile_true_labels)
+        if labels_arr.shape != (provider.n_sequences(),):
+            raise ValueError(
+                "profile_true_labels must have length equal to the number of unique profiles."
+            )
+        profile_true_labels = labels_arr
+
     method = method.lower()
     if method != "crisp":
         raise ValueError(
@@ -445,6 +738,7 @@ def clara_from_distance_provider(
     if verbose:
         print("[>] Starting multidomain CLARA with distance provider.")
         print(f"  - Strategy sample size: {sample_size}, iterations: {R}")
+        print(f"  - Sampling policy: {sampling_policy}")
         print(
             f"  - Within-subsample storage: "
             f"{'condensed' if condensed_subsample else 'square'}; "
@@ -456,6 +750,7 @@ def clara_from_distance_provider(
 
     def _iteration(rep_index: int, seed: int) -> Dict[str, Any]:
         iter_rng = np.random.default_rng(seed)
+        scheduled = None if schedule is None else schedule[rep_index]
         return _run_single_iteration(
             provider,
             sample_size=sample_size,
@@ -468,6 +763,9 @@ def clara_from_distance_provider(
             rare_profile_threshold=rare_profile_threshold,
             use_medoid_cache=use_medoid_cache,
             condensed_subsample=condensed_subsample,
+            sampling_policy=sampling_policy,
+            scheduled_entry=scheduled,
+            profile_true_labels=profile_true_labels,
         )
 
     if verbose:
@@ -544,17 +842,54 @@ def clara_from_distance_provider(
                     delayed(_stability_pair)(j) for j in comparison_indices
                 )
             arimatrix = pd.DataFrame(arilist, columns=["ARI", "JC"])
-            ari08 = int(np.sum(arimatrix.iloc[:, 0] >= 0.8))
-            jc08 = int(np.sum(arimatrix.iloc[:, 1] >= 0.8))
+            ari_vs_best = arimatrix.iloc[:, 0].to_numpy(dtype=float)
+            jc_vs_best = arimatrix.iloc[:, 1].to_numpy(dtype=float)
+            ari08 = int(np.sum(ari_vs_best >= 0.8))
+            jc08 = int(np.sum(jc_vs_best >= 0.8))
             n_comparisons = len(comparison_indices)
+
+            all_pair_ari: List[float] = []
+            all_pair_jc: List[float] = []
+            for i in range(R):
+                for j in range(i + 1, R):
+                    ari_ij, jc_ij = _stability_pair_labels(
+                        clustering_all[i], clustering_all[j], ac["aggWeights"]
+                    )
+                    all_pair_ari.append(ari_ij)
+                    all_pair_jc.append(jc_ij)
+
+            n_top = max(1, int(np.ceil(0.2 * R)))
+            top_order = np.argsort(np.asarray(total_all, dtype=float))[:n_top]
+            top_vs_best = [int(idx) for idx in top_order if int(idx) != best]
+            if top_vs_best:
+                top_pairs = [
+                    _stability_pair_labels(
+                        clustering_all[j], clustering_all[best], ac["aggWeights"]
+                    )
+                    for j in top_vs_best
+                ]
+                mean_ari_top20 = float(np.mean([p[0] for p in top_pairs]))
+                mean_jc_top20 = float(np.mean([p[1] for p in top_pairs]))
+            else:
+                mean_ari_top20 = np.nan
+                mean_jc_top20 = np.nan
+
             stability_info = {
-                "ari": arimatrix["ARI"].to_numpy(),
-                "jc": arimatrix["JC"].to_numpy(),
+                "ari": ari_vs_best,
+                "jc": jc_vs_best,
                 "ari08": ari08,
                 "jc08": jc08,
-                "mean_ari": float(arimatrix["ARI"].mean()) if n_comparisons else np.nan,
-                "mean_jc": float(arimatrix["JC"].mean()) if n_comparisons else np.nan,
+                "mean_ari": float(np.mean(ari_vs_best)) if n_comparisons else np.nan,
+                "mean_jc": float(np.mean(jc_vs_best)) if n_comparisons else np.nan,
                 "n_comparisons": n_comparisons,
+                "mean_ari_all": float(np.mean(all_pair_ari)) if all_pair_ari else np.nan,
+                "mean_jc_all": float(np.mean(all_pair_jc)) if all_pair_jc else np.nan,
+                "mean_ari_top20": mean_ari_top20,
+                "mean_jc_top20": mean_jc_top20,
+                "n_ari_ge_0.9": int(np.sum(ari_vs_best >= 0.9)),
+                "n_ari_ge_0.8": ari08,
+                "n_ari_ge_0.7": int(np.sum(ari_vs_best >= 0.7)),
+                "n_jc_ge_0.8": jc08,
             }
         else:
             arimatrix = None
@@ -639,6 +974,7 @@ def clara_from_distance_provider(
     }
     packaged["condensed_subsample"] = condensed_subsample
     packaged["use_medoid_cache"] = use_medoid_cache
+    packaged["sampling_policy"] = sampling_policy
     return packaged
 
 
@@ -703,4 +1039,9 @@ def _package_clara_output(
 __all__ = [
     "clara_from_distance_provider",
     "_assemble_distance_to_medoids",
+    "SAMPLING_POLICIES",
+    "STUDER_BOOTSTRAP_POLICIES",
+    "normalize_sampling_policy",
+    "_pbm_index",
+    "_draw_profile_sample",
 ]

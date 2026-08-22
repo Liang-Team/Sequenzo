@@ -228,8 +228,18 @@ def validate_kvals(kvals: Optional[Sequence[int]]) -> List[int]:
     return normalized
 
 
-def subset_sequence_data(seqdata: SequenceData, indices: Sequence[int]) -> SequenceData:
-    """Return a SequenceData view containing only the requested row indices."""
+def subset_sequence_data(
+    seqdata: SequenceData,
+    indices: Sequence[int],
+    *,
+    weights: Optional[Sequence[float]] = None,
+) -> SequenceData:
+    """Return a SequenceData view containing only the requested row indices.
+
+    ``weights``, when given, replaces the subset of ``seqdata.weights``. MD-CLARA
+    uses this to attach profile frequencies (``aggWeights``) after collapsing
+    identical trajectories.
+    """
     idx = np.asarray(indices, dtype=int)
     if idx.ndim != 1:
         raise ValueError("indices must be one-dimensional.")
@@ -250,7 +260,15 @@ def subset_sequence_data(seqdata: SequenceData, indices: Sequence[int]) -> Seque
     }
     if id_col:
         kwargs["id_col"] = id_col
-    if getattr(seqdata, "weights", None) is not None:
+    if weights is not None:
+        weight_arr = np.asarray(weights, dtype=float)
+        if weight_arr.shape != (idx.size,):
+            raise ValueError(
+                f"weights length ({weight_arr.size}) must match the number of "
+                f"subset rows ({idx.size})."
+            )
+        kwargs["weights"] = weight_arr
+    elif getattr(seqdata, "weights", None) is not None:
         kwargs["weights"] = np.asarray(seqdata.weights)[idx]
     if getattr(seqdata, "void", None) is not None:
         kwargs["void"] = seqdata.void
@@ -298,6 +316,53 @@ def _substitution_cost_kwargs(
             if key in dist_args:
                 kwargs[key] = dist_args[key]
     return kwargs
+
+
+_DATA_INDEPENDENT_SM = frozenset({"CONSTANT"})
+
+
+def _sm_spec_is_data_dependent(sm: Any) -> bool:
+    """True when ``sm`` still needs empirical frequencies from the data."""
+    if isinstance(sm, str):
+        return sm.upper() not in _DATA_INDEPENDENT_SM
+    if isinstance(sm, (list, tuple)):
+        return any(_sm_spec_is_data_dependent(item) for item in sm)
+    return False
+
+
+def _indel_auto_is_frequency_dependent(sm: Any) -> bool:
+    """True when ``indel='auto'`` still needs observed frequencies to resolve."""
+    return _sm_spec_is_data_dependent(sm)
+
+
+def distance_params_are_data_dependent(
+    strategy: str,
+    distance_params: Optional[Dict[str, Any]],
+) -> bool:
+    """
+    Whether substitution/indel costs must be estimated from observed frequencies.
+
+    CONSTANT substitution (and an explicit substitution matrix) is
+    data-independent, including ``indel='auto'``, which is then determined by
+    the substitution costs themselves (typically max(sm)/2). TRATE, INDELS,
+    and INDELSLOG remain data-dependent and must be frozen on the original
+    weighted cases *before* unique-profile aggregation.
+    """
+    strategy = strategy.lower()
+    params = dict(distance_params or {})
+    if strategy == "dat":
+        method_params = list(params.get("method_params", []))
+        return any(
+            _sm_spec_is_data_dependent(block.get("sm"))
+            or (
+                str(block.get("indel", "")).lower() == "auto"
+                and _indel_auto_is_frequency_dependent(block.get("sm"))
+            )
+            for block in method_params
+        )
+    if str(params.get("indel", "")).lower() == "auto":
+        return _indel_auto_is_frequency_dependent(params.get("sm"))
+    return _sm_spec_is_data_dependent(params.get("sm"))
 
 
 _OM_INDEL_METHODS = frozenset(
@@ -361,6 +426,23 @@ def _normalize_generated_indel_for_explicit_use(
     return arr
 
 
+def _explicit_indel_from_constant(
+    seqdata: SequenceData,
+    method: str,
+    dist_args: Dict[str, Any],
+) -> Any:
+    """Resolve ``indel='auto'`` for CONSTANT substitution (not frequency-based)."""
+    from sequenzo.dissimilarity_measures import get_substitution_cost_matrix
+
+    sm_kw = _substitution_cost_kwargs(method, "CONSTANT", dist_args)
+    with open(os.devnull, "w") as devnull:
+        with redirect_stdout(devnull):
+            costs = get_substitution_cost_matrix(seqdata, **sm_kw)
+    return _normalize_generated_indel_for_explicit_use(
+        seqdata, method, costs["indel"]
+    )
+
+
 def freeze_seqdist_costs(
     seqdata: SequenceData,
     dist_args: Dict[str, Any],
@@ -379,6 +461,8 @@ def freeze_seqdist_costs(
     if isinstance(sm, str):
         sm_method = sm.upper()
         if sm_method == "CONSTANT":
+            if str(indel).lower() == "auto":
+                frozen["indel"] = _explicit_indel_from_constant(seqdata, method, frozen)
             return frozen
     elif sm is None:
         if method == "HAM":
@@ -386,8 +470,14 @@ def freeze_seqdist_costs(
         elif method == "DHD":
             sm_method = "TRATE"
         else:
+            if str(indel).lower() == "auto":
+                raise ValueError(
+                    "indel='auto' requires a substitution-cost specification."
+                )
             return frozen
     else:
+        if str(indel).lower() == "auto":
+            frozen["indel"] = float(np.nanmax(np.asarray(sm, dtype=float))) / 2.0
         return frozen
 
     if sm_method is None:
@@ -406,7 +496,7 @@ def freeze_seqdist_costs(
     else:
         sm_out = np.asarray(sm_out, dtype=float)
     frozen["sm"] = sm_out
-    if indel == "auto":
+    if str(indel).lower() == "auto":
         frozen["indel"] = _normalize_generated_indel_for_explicit_use(
             seqdata,
             method,
@@ -557,9 +647,25 @@ def aggregate_domains(
     domains: List[SequenceData],
     aggregation: Dict[str, Any],
 ) -> List[SequenceData]:
-    """Subset each domain to the aggregated unique-case indices."""
+    """
+    Subset each domain to unique multidomain profiles.
+
+    Profile frequencies (``aggregation['aggWeights']``) are written onto every
+    aggregated ``SequenceData.weights``. That keeps data-dependent substitution
+    and indel costs (TRATE, INDELS, INDELSLOG) frequency-weighted if they are
+    estimated after aggregation. Prefer estimating those costs on the original
+    weighted data first (see ``make_aggregated_distance_provider``).
+    """
     agg_idx = one_based_to_zero_based(aggregation["aggIndex"], name="aggIndex")
-    return [subset_sequence_data(domain, agg_idx) for domain in domains]
+    agg_weights = np.asarray(aggregation["aggWeights"], dtype=float)
+    if agg_weights.shape != (agg_idx.size,):
+        raise ValueError(
+            "aggWeights length does not match the number of unique profiles."
+        )
+    return [
+        subset_sequence_data(domain, agg_idx, weights=agg_weights)
+        for domain in domains
+    ]
 
 
 def warn_large_combined_state_space(seqdata: SequenceData, threshold: int = 500) -> None:
@@ -643,6 +749,7 @@ __all__ = [
     "validate_domain_weights",
     "validate_profile_weights",
     "validate_kvals",
+    "distance_params_are_data_dependent",
     "assert_sample_distance_shape",
     "assert_condensed_distance_shape",
     "assert_distance_to_medoids_shape",

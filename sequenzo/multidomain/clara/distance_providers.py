@@ -27,10 +27,13 @@ from ._utils import (
     assert_distance_to_medoids_shape,
     assert_sample_distance_shape,
     compute_distance_matrix,
+    distance_params_are_data_dependent,
     freeze_seqdist_costs,
     guard_on_demand_distance_params,
+    one_based_to_zero_based,
     pairwise_distances_on_indices,
     parallel_map,
+    subset_sequence_data,
     warn_large_combined_state_space,
     warm_distance_query_caches,
 )
@@ -118,15 +121,20 @@ class IDCDDistanceProvider(DistanceProvider):
         *,
         ch_sep: str = "+",
         quiet: bool = True,
+        seqdata: Optional[SequenceData] = None,
         **seqdist_args: Any,
     ) -> None:
-        validate_multidomain_domains(domains)
-        self._domains = domains
-        self._md_seqdata = create_idcd_sequence_from_domains(
-            domains,
-            ch_sep=ch_sep,
-            quiet=quiet,
-        )
+        if seqdata is None:
+            validate_multidomain_domains(domains)
+            self._domains = domains
+            self._md_seqdata = create_idcd_sequence_from_domains(
+                domains,
+                ch_sep=ch_sep,
+                quiet=quiet,
+            )
+        else:
+            self._domains = domains
+            self._md_seqdata = seqdata
         warn_large_combined_state_space(self._md_seqdata)
         if not seqdist_args:
             raise ValueError(
@@ -193,15 +201,43 @@ class CATDistanceProvider(DistanceProvider):
         miss_cost: float = 2,
         cweight: Optional[List[float]] = None,
         ch_sep: str = "+",
+        seqdata: Optional[SequenceData] = None,
+        combined_sm: Optional[Any] = None,
+        combined_indel: Optional[Any] = None,
         **extra_seqdist_args: Any,
     ) -> None:
-        validate_multidomain_domains(domains)
         method = str(method).upper()
         if method not in _CAT_METHODS:
             raise ValueError(
                 f"CATDistanceProvider currently supports methods in "
                 f"{sorted(_CAT_METHODS)}; got {method!r}."
             )
+
+        if seqdata is not None:
+            if combined_sm is None:
+                raise ValueError(
+                    "CATDistanceProvider(seqdata=...) requires combined_sm "
+                    "(the already-frozen combined substitution matrix)."
+                )
+            sm_matrix = combined_sm
+            if isinstance(sm_matrix, pd.DataFrame):
+                sm_matrix = sm_matrix.to_numpy(dtype=float)
+            else:
+                sm_matrix = np.asarray(sm_matrix, dtype=float)
+            self._md_seqdata = seqdata
+            warn_large_combined_state_space(self._md_seqdata)
+            self._dist_args = {
+                "method": method,
+                "sm": sm_matrix,
+                "indel": indel if combined_indel is None else combined_indel,
+                "norm": norm,
+                **extra_seqdist_args,
+            }
+            guard_on_demand_distance_params(self._dist_args)
+            warm_distance_query_caches(self._md_seqdata)
+            return
+
+        validate_multidomain_domains(domains)
         if sm is None:
             raise ValueError("CAT requires 'sm': substitution-cost specs per domain.")
         if isinstance(sm, str):
@@ -499,6 +535,157 @@ class DATDistanceProvider(DistanceProvider):
         ]
 
 
+class SequenceDistanceProvider(DistanceProvider):
+    """On-demand distances for a single ``SequenceData`` object.
+
+    Used by leave-one-domain-out when only one domain remains, so the reduced
+    fit shares MD-CLARA's ``random_state`` and query path.
+    """
+
+    def __init__(
+        self,
+        seqdata: SequenceData,
+        dist_args: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if dist_args is None:
+            raise ValueError("SequenceDistanceProvider requires dist_args.")
+        self._seqdata = seqdata
+        self._dist_args = freeze_seqdist_costs(seqdata, dict(dist_args))
+        warm_distance_query_caches(seqdata)
+
+    def n_sequences(self) -> int:
+        return int(self._seqdata.seqdata.shape[0])
+
+    def sample_distances(
+        self,
+        sample_indices: Sequence[int],
+        *,
+        condensed: bool = False,
+    ) -> np.ndarray:
+        return pairwise_distances_on_indices(
+            self._seqdata,
+            self._dist_args,
+            sample_indices,
+            condensed=condensed,
+        )
+
+    def distance_to_medoids(self, medoid_indices: Sequence[int]) -> np.ndarray:
+        medoids = list(map(int, medoid_indices))
+        n = self.n_sequences()
+        refseq = [np.arange(n, dtype=np.intp), np.asarray(medoids, dtype=np.intp)]
+        matrix = compute_distance_matrix(
+            self._seqdata,
+            self._dist_args,
+            refseq=refseq,
+            full_matrix=True,
+        )
+        return assert_distance_to_medoids_shape(matrix, n, medoids)
+
+
+def _cat_init_kwargs(params: Dict[str, Any], n_domains: int) -> Dict[str, Any]:
+    """Keyword arguments for :class:`CATDistanceProvider` / CAT cost construction."""
+    out = dict(params)
+    sm = out.get("sm")
+    if isinstance(sm, str):
+        out["sm"] = [sm] * n_domains
+    return out
+
+
+def make_aggregated_distance_provider(
+    domains: List[SequenceData],
+    strategy: str,
+    distance_params: Optional[Dict[str, Any]],
+    aggregation: Dict[str, Any],
+) -> DistanceProvider:
+    """
+    Build an MD-CLARA provider on unique profiles with costs frozen correctly.
+
+    Data-independent costs (OM CONSTANT with a numeric indel) are estimated on
+    the aggregated unique-profile objects, which already carry ``aggWeights``.
+
+    Data-dependent costs (TRATE, INDELS, INDELSLOG) are estimated on the
+    original weighted cases, then sequences are subset to unique profiles.
+    ``indel='auto'`` with CONSTANT or an explicit substitution matrix is
+    resolved to an explicit number from those substitution costs; it is not
+    treated as a frequency-dependent cost.
+    """
+    strategy = strategy.lower()
+    params = dict(distance_params or {})
+    agg_idx = one_based_to_zero_based(aggregation["aggIndex"], name="aggIndex")
+    agg_weights = np.asarray(aggregation["aggWeights"], dtype=float)
+    agg_domains = [
+        subset_sequence_data(domain, agg_idx, weights=agg_weights)
+        for domain in domains
+    ]
+    freeze_on_original = distance_params_are_data_dependent(strategy, params)
+
+    if strategy == "dat":
+        method_params = list(params.get("method_params", []))
+        if not method_params:
+            raise ValueError("DAT strategy requires distance_params['method_params'].")
+        source_domains = domains if freeze_on_original else agg_domains
+        frozen = dict(params)
+        frozen["method_params"] = [
+            freeze_seqdist_costs(domain, dict(block))
+            for domain, block in zip(source_domains, method_params)
+        ]
+        return DATDistanceProvider(agg_domains, **frozen)
+
+    if strategy == "idcd":
+        ch_sep = params.get("ch_sep", "+")
+        seqdist = {key: value for key, value in params.items() if key != "ch_sep"}
+        if freeze_on_original:
+            original_md = create_idcd_sequence_from_domains(
+                domains, ch_sep=ch_sep, quiet=True
+            )
+            frozen = freeze_seqdist_costs(original_md, seqdist)
+            subset = subset_sequence_data(
+                original_md, agg_idx, weights=agg_weights
+            )
+            return IDCDDistanceProvider(
+                agg_domains,
+                seqdata=subset,
+                ch_sep=ch_sep,
+                quiet=True,
+                **frozen,
+            )
+        return IDCDDistanceProvider(agg_domains, ch_sep=ch_sep, quiet=True, **seqdist)
+
+    if strategy == "cat":
+        cat_kwargs = _cat_init_kwargs(params, n_domains=len(domains))
+        if freeze_on_original:
+            bundle = build_cat_sequence_and_costs(channels=domains, **{
+                key: cat_kwargs[key]
+                for key in (
+                    "method",
+                    "norm",
+                    "indel",
+                    "sm",
+                    "with_missing",
+                    "link",
+                    "cval",
+                    "miss_cost",
+                    "cweight",
+                    "ch_sep",
+                )
+                if key in cat_kwargs
+            })
+            subset = subset_sequence_data(
+                bundle["seqdata"], agg_idx, weights=agg_weights
+            )
+            return CATDistanceProvider(
+                agg_domains,
+                method=str(cat_kwargs.get("method", "OM")),
+                norm=str(cat_kwargs.get("norm", "none")),
+                seqdata=subset,
+                combined_sm=bundle["sm"],
+                combined_indel=bundle["indel"],
+            )
+        return CATDistanceProvider(agg_domains, **cat_kwargs)
+
+    raise ValueError("strategy must be one of: 'idcd', 'cat', 'dat'")
+
+
 def make_distance_provider(
     domains: List[SequenceData],
     strategy: str,
@@ -524,5 +711,7 @@ __all__ = [
     "IDCDDistanceProvider",
     "CATDistanceProvider",
     "DATDistanceProvider",
+    "SequenceDistanceProvider",
     "make_distance_provider",
+    "make_aggregated_distance_provider",
 ]

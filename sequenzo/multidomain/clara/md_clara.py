@@ -16,17 +16,22 @@ import numpy as np
 from sequenzo.big_data.clara.utils.aggregatecases import DataFrameAggregator
 from sequenzo.define_sequence_data import SequenceData
 
-from .clara_engine import clara_from_distance_provider
+from .clara_engine import (
+    STUDER_BOOTSTRAP_POLICIES,
+    clara_from_distance_provider,
+    normalize_sampling_policy,
+)
 from .diagnostics import (
     dat_domain_contributions,
     summarize_combined_state_space,
     summarize_subsample_coverage,
 )
-from .distance_providers import DATDistanceProvider, make_distance_provider
+from .distance_providers import DATDistanceProvider, make_aggregated_distance_provider
 from .results import MDClaraResult
 from ._utils import (
-    aggregate_domains,
     build_multidomain_profile_frame,
+    distance_params_are_data_dependent,
+    one_based_to_zero_based,
     validate_domain_weights,
     validate_kvals,
     validate_multidomain_domains,
@@ -79,26 +84,51 @@ def _resolve_effective_sample_size(
     *,
     kvals: Sequence[int],
     n_unique_profiles: int,
+    n_original: int,
+    sampling_policy: str,
 ) -> tuple[Optional[int], int]:
-    """Map requested ``b`` to effective subsample size capped by ``N*``."""
+    """Map requested ``b`` to effective subsample size."""
     requested_sample_size = sample_size
     max_k = max(kvals)
+    policy = normalize_sampling_policy(sampling_policy)
+
+    # With-replacement bootstrap may draw more than N* unique profiles.
+    if policy in STUDER_BOOTSTRAP_POLICIES:
+        if sample_size is None:
+            return requested_sample_size, 40 + 2 * max_k
+        return requested_sample_size, int(sample_size)
+
+    cap = n_original if policy == "case_sample_then_aggregate" else n_unique_profiles
 
     if sample_size is None:
-        effective = min(40 + 2 * max_k, n_unique_profiles)
-    elif sample_size > n_unique_profiles:
+        effective = min(40 + 2 * max_k, cap)
+    elif sample_size > cap:
         warnings.warn(
-            f"sample_size={sample_size} exceeds the number of unique "
-            f"multidomain profiles ({n_unique_profiles}). "
-            f"Using sample_size={n_unique_profiles}.",
+            f"sample_size={sample_size} exceeds the "
+            f"{'number of cases' if policy == 'case_sample_then_aggregate' else 'number of unique multidomain profiles'} "
+            f"({cap}). Using sample_size={cap}.",
             UserWarning,
             stacklevel=3,
         )
-        effective = n_unique_profiles
+        effective = cap
     else:
         effective = sample_size
 
     return requested_sample_size, effective
+
+
+def _count_mixed_latent_profiles(
+    case_labels: np.ndarray,
+    disagg: np.ndarray,
+    n_profiles: int,
+) -> int:
+    """How many unique profiles mix more than one case-level latent label."""
+    mixed = 0
+    for u in range(int(n_profiles)):
+        labs = case_labels[disagg == u]
+        if labs.size and np.unique(labs).size > 1:
+            mixed += 1
+    return mixed
 
 
 def md_clara(
@@ -120,6 +150,9 @@ def md_clara(
     dat_domain_contribution: bool = False,
     use_medoid_cache: bool = True,
     condensed_subsample: bool = True,
+    sampling_policy: str = "studer_bootstrap",
+    subsample_schedule: Optional[Sequence[Any]] = None,
+    case_true_labels: Optional[np.ndarray] = None,
 ) -> MDClaraResult:
     """
     Scalable multidomain CLARA with IDCD, CAT, or DAT dissimilarity.
@@ -154,6 +187,17 @@ def md_clara(
 
     An intermediate condensed-only path (``use_medoid_cache=False``) is kept
     for engineering ablation.
+
+    Sampling policies (the full-data objective always uses frequencies
+    a_u; only the candidate-medoid search draw changes):
+
+    - ``studer_bootstrap`` (default): frequency-proportional with replacement;
+      subsample PAM uses this-round draw counts (``seqclararange``).
+    - ``uniform_unique_profiles``: profile-balanced sampling of distinct
+      profiles without replacement; subsample PAM uses full frequencies a_u.
+    - ``frequency_proportional_profiles``: PPS without replacement; full a_u.
+    - ``case_sample_then_aggregate``: sample original cases without
+      replacement, then collapse; subsample PAM still uses full a_u.
     """
     if n_jobs == 0:
         raise ValueError("n_jobs must not be 0.")
@@ -175,6 +219,8 @@ def md_clara(
 
     kvals = validate_kvals(kvals)
 
+    sampling_policy = normalize_sampling_policy(sampling_policy)
+
     reference = domains[0]
     reference_weights = validate_domain_weights(domains)
     multidomain_profiles = build_multidomain_profile_frame(domains)
@@ -182,13 +228,15 @@ def md_clara(
         multidomain_profiles,
         weights=reference_weights,
     )
-    agg_domains = aggregate_domains(domains, ac)
 
     n_unique_profiles = len(ac["aggWeights"])
+    n_original = int(reference.seqdata.shape[0])
     requested_sample_size, effective_sample_size = _resolve_effective_sample_size(
         sample_size,
         kvals=kvals,
         n_unique_profiles=n_unique_profiles,
+        n_original=n_original,
+        sampling_policy=sampling_policy,
     )
 
     params = (
@@ -196,22 +244,45 @@ def md_clara(
         if distance_params is not None
         else _default_distance_params(strategy, len(domains))
     )
+    costs_frozen_on_original = distance_params_are_data_dependent(strategy, params)
     n_jobs_domains = int(params.get("n_jobs_domains", 1))
     if strategy == "dat":
         if n_jobs_domains == 0:
             raise ValueError("distance_params['n_jobs_domains'] must not be 0.")
         warn_nested_parallelism(n_jobs=n_jobs, n_jobs_domains=n_jobs_domains)
 
-    provider = make_distance_provider(
-        agg_domains,
+    provider = make_aggregated_distance_provider(
+        domains,
         strategy=strategy,
         distance_params=params,
+        aggregation=ac,
     )
     if len(ac["aggWeights"]) != provider.n_sequences():
         raise ValueError(
             "Aggregation size does not match the number of profiles represented "
             "by the distance provider."
         )
+
+    profile_true_labels = None
+    n_mixed_latent_profiles = 0
+    if case_true_labels is not None:
+        case_arr = np.asarray(case_true_labels)
+        if case_arr.shape != (n_original,):
+            raise ValueError("case_true_labels must have length N (original cases).")
+        agg_idx = one_based_to_zero_based(ac["aggIndex"], name="aggIndex")
+        disagg = one_based_to_zero_based(ac["disaggIndex"], name="disaggIndex")
+        profile_true_labels = case_arr[agg_idx]
+        n_mixed_latent_profiles = _count_mixed_latent_profiles(
+            case_arr, disagg, n_unique_profiles
+        )
+        if n_mixed_latent_profiles:
+            warnings.warn(
+                f"{n_mixed_latent_profiles} unique profile(s) mix latent labels "
+                "after aggregation. Profile-level rare-cluster coverage uses the "
+                "representative case; case-level ARI_true is unaffected.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     raw = clara_from_distance_provider(
         provider,
@@ -230,6 +301,9 @@ def md_clara(
         rare_profile_threshold=rare_profile_threshold,
         use_medoid_cache=use_medoid_cache,
         condensed_subsample=condensed_subsample,
+        sampling_policy=sampling_policy,
+        subsample_schedule=subsample_schedule,
+        profile_true_labels=profile_true_labels,
     )
 
     raw["requested_sample_size"] = requested_sample_size
@@ -281,6 +355,10 @@ def md_clara(
         route_diagnostics=route_diagnostics or None,
         condensed_subsample=condensed_subsample,
         use_medoid_cache=use_medoid_cache,
+        sampling_policy=sampling_policy,
+        costs_frozen_on_original=costs_frozen_on_original,
+        random_state=random_state,
+        n_mixed_latent_profiles=n_mixed_latent_profiles,
     )
 
 
@@ -298,6 +376,10 @@ def _to_md_clara_result(
     route_diagnostics: Optional[Dict[str, Any]] = None,
     condensed_subsample: bool = True,
     use_medoid_cache: bool = True,
+    sampling_policy: str = "studer_bootstrap",
+    costs_frozen_on_original: bool = False,
+    random_state: Optional[int] = None,
+    n_mixed_latent_profiles: int = 0,
 ) -> MDClaraResult:
     """Convert engine output into :class:`MDClaraResult`."""
     if "clustering" not in raw:
@@ -341,6 +423,10 @@ def _to_md_clara_result(
         "combined_state_space": combined_state_space is not None,
         "condensed_subsample": raw.get("condensed_subsample", condensed_subsample),
         "use_medoid_cache": raw.get("use_medoid_cache", use_medoid_cache),
+        "sampling_policy": raw.get("sampling_policy", sampling_policy),
+        "costs_frozen_on_original": costs_frozen_on_original,
+        "random_state": random_state,
+        "n_mixed_latent_profiles": n_mixed_latent_profiles,
     }
     if combined_state_space is not None:
         settings["combined_state_space_summary"] = combined_state_space
