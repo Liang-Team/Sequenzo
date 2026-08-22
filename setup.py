@@ -191,6 +191,22 @@ def get_mac_arch():
         get_mac_arch._cached_result = 'x86_64'
         return 'x86_64'
 
+def _iter_build_conda_prefixes():
+    """Conda prefixes relevant to this build, interpreter's own env first.
+
+    ``CONDA_PREFIX`` names whichever env the shell activated, which is not always
+    the env whose python is running the build (e.g. ``envs/foo/bin/python setup.py``
+    while ``base`` is active).
+    """
+    prefixes = []
+    for prefix in (sys.prefix, os.environ.get('CONDA_PREFIX', '').strip()):
+        if not prefix or prefix in prefixes:
+            continue
+        if os.path.isdir(os.path.join(prefix, 'conda-meta')):
+            prefixes.append(prefix)
+    return prefixes
+
+
 def _find_libomp_prefix():
     """Find a libomp prefix compatible with the active Apple Clang/OpenMP ABI."""
     candidates = []
@@ -198,17 +214,21 @@ def _find_libomp_prefix():
     if env_prefix:
         candidates.append(env_prefix)
 
-    conda_prefix = os.environ.get('CONDA_PREFIX', '')
-    if conda_prefix:
-        candidates.extend(sorted(glob(os.path.join(conda_prefix, 'pkgs', 'llvm-openmp-*')), reverse=True))
+    # An env's own libomp wins: its omp.h and libomp.dylib ship as one package, and
+    # it is the copy sequenzo.openmp_setup points extensions at when they load.
+    conda_prefixes = _iter_build_conda_prefixes()
+    candidates.extend(conda_prefixes)
+    # pkgs/ is Conda's extraction cache: a valid fallback, but `conda clean` wipes it.
+    for prefix in conda_prefixes:
+        candidates.extend(
+            sorted(glob(os.path.join(prefix, 'pkgs', 'llvm-openmp-*')), reverse=True)
+        )
 
     candidates.extend([
         str(BASE_DIR / '.local-libomp'),
         '/opt/homebrew/opt/libomp',   # Apple Silicon
         '/usr/local/opt/libomp',      # Intel Mac
     ])
-    if conda_prefix:
-        candidates.append(conda_prefix)
 
     for prefix in candidates:
         inc = os.path.join(prefix, 'include')
@@ -555,12 +575,28 @@ def get_core_distance_operations_include_dirs():
     ]
 
 
+def _conda_libomp_link_args():
+    """-L/-rpath pointing at the active Conda env's libomp, if it has one."""
+    for conda_prefix in _iter_build_conda_prefixes():
+        lib_dir = os.path.join(conda_prefix, 'lib')
+        if os.path.isfile(os.path.join(lib_dir, 'libomp.dylib')):
+            print(f"[SETUP] Linking against Conda libomp at: {lib_dir}")
+            return [f'-L{lib_dir}', f'-Wl,-rpath,{lib_dir}']
+    return []
+
+
 def get_link_args():
     """获取平台特定的链接参数"""
     link_args = []
     
     if has_openmp_support():
         if sys.platform == 'darwin':
+            # Inside a Conda env, link its libomp rather than Homebrew's. Homebrew
+            # records an absolute install name, so mixing the two puts a second
+            # OpenMP runtime in the process at import time and segfaults in
+            # __kmp_suspend once a parallel region starts.
+            link_args.extend(_conda_libomp_link_args())
+
             # Add library path from environment or Homebrew default
             ldflags = os.environ.get('LDFLAGS', '')
             if ldflags:

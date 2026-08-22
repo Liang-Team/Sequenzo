@@ -48,10 +48,15 @@ _WINDOWS_DLL_DIRECTORY_HANDLES = []
 
 
 def _get_conda_prefix() -> str | None:
-    """Return the active Conda environment prefix, if any."""
-    prefix = os.environ.get("CONDA_PREFIX")
-    if prefix and os.path.isdir(prefix):
-        return prefix
+    """Return the Conda prefix owning the running interpreter, if any.
+
+    ``sys.prefix`` is checked first: ``CONDA_PREFIX`` describes whichever env the
+    shell activated, which is not necessarily the env whose python is executing
+    (e.g. calling ``envs/foo/bin/python`` while ``base`` is active).
+    """
+    for prefix in (sys.prefix, os.environ.get("CONDA_PREFIX")):
+        if prefix and os.path.isdir(os.path.join(prefix, "conda-meta")):
+            return prefix
     return None
 
 
@@ -61,6 +66,64 @@ def _get_sequenzo_package_dir() -> Path:
 
 def _get_sequenzo_libs_dir() -> Path:
     return _get_sequenzo_package_dir().parent / "sequenzo.libs"
+
+
+def _iter_sequenzo_extension_modules() -> list[Path]:
+    """Every compiled module shipped with Sequenzo.
+
+    ``_sequenzo_fastcluster`` is a top-level module, so it sits next to the
+    package directory rather than inside it and would be missed by a plain
+    ``rglob`` over the package.
+    """
+    pkg_dir = _get_sequenzo_package_dir()
+    modules = [path for path in pkg_dir.rglob("*.so") if path.is_file()]
+    modules.extend(
+        path for path in pkg_dir.parent.glob("_sequenzo_*.so") if path.is_file()
+    )
+    return modules
+
+
+def _iter_loaded_openmp_images() -> list[str]:
+    """Return paths of OpenMP runtimes already mapped into this process."""
+    try:
+        libc = ctypes.CDLL(None)
+        libc._dyld_image_count.restype = ctypes.c_uint32
+        libc._dyld_get_image_name.restype = ctypes.c_char_p
+        libc._dyld_get_image_name.argtypes = [ctypes.c_uint32]
+        count = libc._dyld_image_count()
+    except Exception:
+        return []
+
+    loaded = []
+    for index in range(count):
+        try:
+            raw_name = libc._dyld_get_image_name(index)
+        except Exception:
+            continue
+        if not raw_name:
+            continue
+        path = raw_name.decode("utf-8", "replace")
+        if os.path.basename(path).startswith(("libomp", "libiomp", "libgomp")):
+            loaded.append(path)
+    return loaded
+
+
+def _iter_macos_libomp_candidates() -> list[str]:
+    """Preferred libomp locations, ordered to match what our extensions link to.
+
+    The bundled (wheel) copy and the active Conda copy come first: loading a
+    Homebrew libomp alongside them puts two LLVM OpenMP runtimes in one process,
+    which corrupts libomp's internal thread table and segfaults in
+    ``__kmp_suspend`` as soon as a parallel region starts.
+    """
+    candidates = [str(_get_sequenzo_package_dir() / ".dylibs" / "libomp.dylib")]
+
+    conda_prefix = _get_conda_prefix()
+    if conda_prefix:
+        candidates.append(os.path.join(conda_prefix, "lib", "libomp.dylib"))
+
+    candidates.extend(_MACOS_HOMEBREW_LIBOMP_PATHS)
+    return candidates
 
 
 def _iter_windows_wheel_openmp_dirs() -> list[Path]:
@@ -110,20 +173,23 @@ def check_libomp_availability():
         bool: True if libomp is available, False otherwise
     """
     if sys.platform == "darwin":
-        try:
-            ctypes.CDLL("libomp.dylib")
+        # A runtime is already mapped in; loading a second one would crash.
+        if _iter_loaded_openmp_images():
             return True
-        except OSError:
-            pass
 
-        for path in ("/opt/homebrew/lib/libomp.dylib", "/usr/local/lib/libomp.dylib"):
+        for path in _iter_macos_libomp_candidates():
             if os.path.exists(path):
                 try:
                     ctypes.CDLL(path)
                     return True
                 except OSError:
                     continue
-        return False
+
+        try:
+            ctypes.CDLL("libomp.dylib")
+            return True
+        except OSError:
+            return False
 
     if sys.platform == "win32":
         for directory in _iter_conda_openmp_dirs(os.environ.get("CONDA_PREFIX", "")):
@@ -260,8 +326,7 @@ def _fix_duplicate_libomp_in_conda_darwin() -> None:
     if not conda_libomp.is_file():
         return
 
-    pkg_dir = _get_sequenzo_package_dir()
-    for so_path in pkg_dir.rglob("*.so"):
+    for so_path in _iter_sequenzo_extension_modules():
         _rewrite_macos_extension_to_conda_libomp(so_path, conda_libomp)
 
 

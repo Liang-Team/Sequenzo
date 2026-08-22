@@ -12,26 +12,153 @@ import pytest
 
 
 class TestCondaPrefixDetection:
-    def test_get_conda_prefix_uses_conda_prefix_only(self, tmp_path):
-        from sequenzo.openmp_setup import _get_conda_prefix
+    @staticmethod
+    def _make_conda_env(root: Path) -> str:
+        (root / "conda-meta").mkdir(parents=True)
+        return str(root)
 
-        conda_prefix = tmp_path / "conda-env"
-        conda_prefix.mkdir()
-        with mock.patch.dict(
-            os.environ,
-            {"CONDA_PREFIX": str(conda_prefix), "CONDA_DEFAULT_ENV": "base"},
-            clear=False,
-        ):
-            assert _get_conda_prefix() == str(conda_prefix)
+    def test_prefers_interpreter_prefix_over_activated_env(self, tmp_path, monkeypatch):
+        """``envs/foo/bin/python`` run while ``base`` is active must resolve to foo."""
+        from sequenzo import openmp_setup
 
-    def test_get_conda_prefix_ignores_env_name(self):
-        from sequenzo.openmp_setup import _get_conda_prefix
+        running = self._make_conda_env(tmp_path / "running-env")
+        activated = self._make_conda_env(tmp_path / "activated-env")
 
-        env = os.environ.copy()
-        env.pop("CONDA_PREFIX", None)
-        env["CONDA_DEFAULT_ENV"] = "base"
-        with mock.patch.dict(os.environ, env, clear=True):
-            assert _get_conda_prefix() is None
+        monkeypatch.setattr(openmp_setup.sys, "prefix", running)
+        monkeypatch.setenv("CONDA_PREFIX", activated)
+
+        assert openmp_setup._get_conda_prefix() == running
+
+    def test_falls_back_to_conda_prefix_env(self, tmp_path, monkeypatch):
+        from sequenzo import openmp_setup
+
+        plain = tmp_path / "plain-venv"
+        plain.mkdir()
+        activated = self._make_conda_env(tmp_path / "activated-env")
+
+        monkeypatch.setattr(openmp_setup.sys, "prefix", str(plain))
+        monkeypatch.setenv("CONDA_PREFIX", activated)
+
+        assert openmp_setup._get_conda_prefix() == activated
+
+    def test_returns_none_outside_conda(self, tmp_path, monkeypatch):
+        from sequenzo import openmp_setup
+
+        plain = tmp_path / "plain-venv"
+        plain.mkdir()
+
+        monkeypatch.setattr(openmp_setup.sys, "prefix", str(plain))
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        monkeypatch.setenv("CONDA_DEFAULT_ENV", "base")
+
+        assert openmp_setup._get_conda_prefix() is None
+
+    def test_ignores_prefix_without_conda_meta(self, tmp_path, monkeypatch):
+        from sequenzo import openmp_setup
+
+        plain = tmp_path / "plain-venv"
+        plain.mkdir()
+        not_conda = tmp_path / "not-conda"
+        not_conda.mkdir()
+
+        monkeypatch.setattr(openmp_setup.sys, "prefix", str(plain))
+        monkeypatch.setenv("CONDA_PREFIX", str(not_conda))
+
+        assert openmp_setup._get_conda_prefix() is None
+
+
+class TestDuplicateRuntimeGuards:
+    """Loading a second OpenMP runtime corrupts libomp and segfaults in __kmp_suspend."""
+
+    def test_extension_discovery_covers_top_level_modules(self, monkeypatch, tmp_path):
+        from sequenzo import openmp_setup
+
+        site_packages = tmp_path / "site-packages"
+        pkg_dir = site_packages / "sequenzo"
+        (pkg_dir / "clustering").mkdir(parents=True)
+        nested = pkg_dir / "clustering" / "clustering_c_code.so"
+        nested.write_bytes(b"fake")
+        top_level = site_packages / "_sequenzo_fastcluster.cpython-310-darwin.so"
+        top_level.write_bytes(b"fake")
+
+        monkeypatch.setattr(openmp_setup, "_get_sequenzo_package_dir", lambda: pkg_dir)
+
+        found = set(openmp_setup._iter_sequenzo_extension_modules())
+        assert nested in found
+        assert top_level in found
+
+    def test_darwin_fix_rewrites_top_level_module(self, monkeypatch, tmp_path):
+        from sequenzo import openmp_setup
+
+        conda_prefix = tmp_path / "conda"
+        (conda_prefix / "lib").mkdir(parents=True)
+        (conda_prefix / "lib" / "libomp.dylib").write_bytes(b"fake")
+
+        site_packages = tmp_path / "site-packages"
+        pkg_dir = site_packages / "sequenzo"
+        pkg_dir.mkdir(parents=True)
+        top_level = site_packages / "_sequenzo_fastcluster.cpython-310-darwin.so"
+        top_level.write_bytes(b"fake")
+
+        rewritten = []
+        monkeypatch.setattr(openmp_setup, "_get_conda_prefix", lambda: str(conda_prefix))
+        monkeypatch.setattr(openmp_setup, "_get_sequenzo_package_dir", lambda: pkg_dir)
+        monkeypatch.setattr(
+            openmp_setup,
+            "_rewrite_macos_extension_to_conda_libomp",
+            lambda so_path, conda_libomp: rewritten.append(so_path),
+        )
+
+        openmp_setup._fix_duplicate_libomp_in_conda_darwin()
+
+        assert top_level in rewritten
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+    def test_availability_check_does_not_load_second_runtime(self, monkeypatch):
+        from sequenzo import openmp_setup
+
+        def _explode(*args, **kwargs):
+            raise AssertionError("must not dlopen another OpenMP runtime")
+
+        monkeypatch.setattr(
+            openmp_setup,
+            "_iter_loaded_openmp_images",
+            lambda: ["/somewhere/libomp.dylib"],
+        )
+        monkeypatch.setattr(openmp_setup.ctypes, "CDLL", _explode)
+
+        assert openmp_setup.check_libomp_availability() is True
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+    def test_availability_check_prefers_bundled_over_homebrew(self, monkeypatch, tmp_path):
+        from sequenzo import openmp_setup
+
+        pkg_dir = tmp_path / "sequenzo"
+        (pkg_dir / ".dylibs").mkdir(parents=True)
+        bundled = pkg_dir / ".dylibs" / "libomp.dylib"
+        bundled.write_bytes(b"fake")
+
+        monkeypatch.setattr(openmp_setup, "_get_sequenzo_package_dir", lambda: pkg_dir)
+        monkeypatch.setattr(openmp_setup, "_get_conda_prefix", lambda: None)
+
+        candidates = openmp_setup._iter_macos_libomp_candidates()
+        assert candidates[0] == str(bundled)
+        assert all(
+            candidates.index(str(bundled)) < candidates.index(brew)
+            for brew in openmp_setup._MACOS_HOMEBREW_LIBOMP_PATHS
+        )
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+    def test_only_one_openmp_runtime_is_loaded(self):
+        """Regression: Homebrew + Conda libomp in one process crashed OM distances."""
+        import sequenzo.dissimilarity_measures.c_code  # noqa: F401
+        from sequenzo.openmp_setup import _iter_loaded_openmp_images
+
+        loaded = {os.path.realpath(path) for path in _iter_loaded_openmp_images()}
+        sequenzo_runtimes = {path for path in loaded if "/sklearn/" not in path}
+        assert len(sequenzo_runtimes) <= 1, (
+            f"Multiple OpenMP runtimes loaded: {sorted(sequenzo_runtimes)}"
+        )
 
 
 class TestFixDuplicateLibompInConda:
