@@ -105,6 +105,11 @@ class TestDuplicateRuntimeGuards:
         monkeypatch.setattr(openmp_setup, "_get_sequenzo_package_dir", lambda: pkg_dir)
         monkeypatch.setattr(
             openmp_setup,
+            "_macos_libomp_is_compatible",
+            lambda path: True,
+        )
+        monkeypatch.setattr(
+            openmp_setup,
             "_rewrite_macos_extension_to_conda_libomp",
             lambda so_path, conda_libomp: rewritten.append(so_path),
         )

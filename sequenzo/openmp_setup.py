@@ -44,6 +44,8 @@ _MACOS_HOMEBREW_LIBOMP_PATHS = (
     "/usr/local/lib/libomp.dylib",
 )
 
+_MACOS_REQUIRED_LIBOMP_SYMBOL = "__kmpc_dispatch_deinit"
+
 _WINDOWS_DLL_DIRECTORY_HANDLES = []
 
 
@@ -118,12 +120,40 @@ def _iter_macos_libomp_candidates() -> list[str]:
     """
     candidates = [str(_get_sequenzo_package_dir() / ".dylibs" / "libomp.dylib")]
 
+    sequenzo_libs = _get_sequenzo_libs_dir()
+    if sequenzo_libs.is_dir():
+        candidates.extend(
+            sorted(str(path) for path in sequenzo_libs.glob("libomp*.dylib"))
+        )
+
+    explicit_prefix = os.environ.get("SEQUENZO_LIBOMP_PREFIX")
+    if explicit_prefix:
+        candidates.append(str(Path(explicit_prefix) / "lib" / "libomp.dylib"))
+
     conda_prefix = _get_conda_prefix()
     if conda_prefix:
-        candidates.append(os.path.join(conda_prefix, "lib", "libomp.dylib"))
+        candidates.append(str(Path(conda_prefix) / "lib" / "libomp.dylib"))
+        candidates.extend(
+            sorted(
+                (
+                    str(path)
+                    for path in Path(conda_prefix).glob(
+                        "pkgs/llvm-openmp-*/lib/libomp.dylib"
+                    )
+                ),
+                reverse=True,
+            )
+        )
 
     candidates.extend(_MACOS_HOMEBREW_LIBOMP_PATHS)
-    return candidates
+
+    unique = []
+    seen = set()
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique
 
 
 def _iter_windows_wheel_openmp_dirs() -> list[Path]:
@@ -165,6 +195,26 @@ def _find_dlls(directory: Path, names: tuple[str, ...]) -> dict[str, Path]:
     return found
 
 
+def _macos_libomp_is_compatible(path: Path) -> bool:
+    """Return whether libomp exports the ABI required by built extensions."""
+    if not path.is_file():
+        return False
+    try:
+        result = subprocess.run(
+            ["nm", "-gU", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return (
+        result.returncode == 0
+        and _MACOS_REQUIRED_LIBOMP_SYMBOL in result.stdout
+    )
+
+
 def check_libomp_availability():
     """
     Check if libomp is available on the system.
@@ -178,18 +228,14 @@ def check_libomp_availability():
             return True
 
         for path in _iter_macos_libomp_candidates():
-            if os.path.exists(path):
-                try:
-                    ctypes.CDLL(path)
-                    return True
-                except OSError:
-                    continue
-
-        try:
-            ctypes.CDLL("libomp.dylib")
-            return True
-        except OSError:
-            return False
+            if not _macos_libomp_is_compatible(Path(path)):
+                continue
+            try:
+                ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+                return True
+            except OSError:
+                continue
+        return False
 
     if sys.platform == "win32":
         for directory in _iter_conda_openmp_dirs(os.environ.get("CONDA_PREFIX", "")):
@@ -323,7 +369,7 @@ def _fix_duplicate_libomp_in_conda_darwin() -> None:
         return
 
     conda_libomp = Path(conda_prefix) / "lib" / "libomp.dylib"
-    if not conda_libomp.is_file():
+    if not _macos_libomp_is_compatible(conda_libomp):
         return
 
     for so_path in _iter_sequenzo_extension_modules():

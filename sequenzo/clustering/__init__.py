@@ -12,6 +12,10 @@ import sys
 import types
 from typing import Any
 
+from sequenzo.openmp_setup import check_libomp_availability
+
+check_libomp_availability()
+
 
 _LAZY: dict[str, tuple[str, str]] = {
     "Cluster": ("sequenzo.clustering.hierarchical_clustering", "Cluster"),

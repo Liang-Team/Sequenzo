@@ -579,7 +579,8 @@ def _conda_libomp_link_args():
     """-L/-rpath pointing at the active Conda env's libomp, if it has one."""
     for conda_prefix in _iter_build_conda_prefixes():
         lib_dir = os.path.join(conda_prefix, 'lib')
-        if os.path.isfile(os.path.join(lib_dir, 'libomp.dylib')):
+        libomp = os.path.join(lib_dir, 'libomp.dylib')
+        if os.path.isfile(libomp) and _libomp_exports_runtime_symbols(libomp):
             print(f"[SETUP] Linking against Conda libomp at: {lib_dir}")
             return [f'-L{lib_dir}', f'-Wl,-rpath,{lib_dir}']
     return []
@@ -857,6 +858,40 @@ class BuildExt(build_ext):
         # delocate (SameFileError when -L points at the same libomp.dylib).
 
     @staticmethod
+    def _sanitize_macos_openmp_linker(compiler):
+        """Remove Conda linker paths whose libomp cannot load our extensions."""
+        if sys.platform != 'darwin' or _find_libomp_runtime_library() is None:
+            return
+
+        incompatible_dirs = []
+        for conda_prefix in _iter_build_conda_prefixes():
+            lib_dir = os.path.join(conda_prefix, 'lib')
+            libomp = os.path.join(lib_dir, 'libomp.dylib')
+            if os.path.isfile(libomp) and not _libomp_exports_runtime_symbols(libomp):
+                incompatible_dirs.append(lib_dir)
+
+        if not incompatible_dirs:
+            return
+
+        blocked = {
+            flag
+            for lib_dir in incompatible_dirs
+            for flag in (f'-L{lib_dir}', f'-Wl,-rpath,{lib_dir}')
+        }
+        for linker_name in ('linker_so', 'linker_so_cxx'):
+            linker = getattr(compiler, linker_name, None)
+            if linker is not None:
+                setattr(
+                    compiler,
+                    linker_name,
+                    [flag for flag in linker if flag not in blocked],
+                )
+        print(
+            "[SETUP] Removed incompatible Conda libomp linker path(s): "
+            + ", ".join(incompatible_dirs)
+        )
+
+    @staticmethod
     def _sanitize_windows_path_and_fix_linker(compiler):
         """Ensure MSVC link.exe is used instead of Git's /usr/bin/link.exe."""
         if sys.platform != 'win32':
@@ -911,6 +946,7 @@ class BuildExt(build_ext):
             self._sanitize_windows_path_and_fix_linker(self.compiler)
 
         if sys.platform == 'darwin':
+            self._sanitize_macos_openmp_linker(self.compiler)
             arch = get_mac_arch()
             if isinstance(arch, list):
                 print(f"[SETUP] Compiling Universal Binary for macOS: {arch}")
