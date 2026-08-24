@@ -126,10 +126,9 @@
 """
 import gc
 import numbers
-import time
 import warnings
 
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import squareform
 import numpy as np
 import pandas as pd
 
@@ -304,6 +303,19 @@ def _unique_condensed_to_condensed(nseqs, seqdata_didxs, unique_condensed, nuniq
         pos += width
 
     return condensed
+
+
+def _sqrt_clamped_inplace(values):
+    arr = np.asarray(values, dtype=np.float64)
+    np.maximum(arr, 0.0, out=arr)
+    np.sqrt(arr, out=arr)
+    return arr
+
+
+def _reuse_all_unique_matrix(nseqs, seqdata_didxs, unique_matrix):
+    if not np.array_equal(seqdata_didxs, np.arange(nseqs)):
+        return None
+    return np.asarray(unique_matrix, dtype=np.float64)
 
 
 def _condensed_value(condensed, nseqs, i, j):
@@ -537,10 +549,10 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
 
         if method == "OMopt":
             method = "OM"
-            print(f"[!] 'method' is set to \"OM\" which is equivalent.")
+            print("[!] 'method' is set to \"OM\" which is equivalent.")
         elif method == "LCSopt":
             method = "LCS"
-            print(f"[!] 'method' is set to \"LCS\" which is equivalent.")
+            print("[!] 'method' is set to \"LCS\" which is equivalent.")
 
     if method == "OMspellUnitFree":
         method = "OMspellRS"
@@ -941,8 +953,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     )
                 else:
                     unique_dist = euclid.compute_all_distances()
-                    matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
-                    result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
+                    result = _reuse_all_unique_matrix(
+                        nseqs,
+                        seqdata_didxs,
+                        unique_dist,
+                    )
+                    if result is None:
+                        matrix_expander = c_code.dist2matrix(nseqs, seqdata_didxs, unique_dist)
+                        result = np.asarray(matrix_expander.padding_matrix(), dtype=np.float64)
                     dist_matrix = pd.DataFrame(result, index=seqdata.ids, columns=seqdata.ids)
 
             print("[>] Computed Successfully.")
@@ -980,12 +998,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
         n_total = built["n_total"]
         n1, n2 = built["n1"], built["n2"]
 
-        use_cpp = False
-        try:
-            if c_code is not None and hasattr(c_code, "CHI2distance"):
-                use_cpp = True
-        except Exception:
-            pass
+        use_cpp = c_code is not None and hasattr(c_code, "CHI2distance")
 
         if use_cpp:
             chi2 = c_code.CHI2distance(allmat, pdotj, float(norm_factor), refseq_id)
@@ -1010,6 +1023,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                 global_pdotj=global_pdotj,
                 refseq=refseq_arg,
                 full_matrix=full_matrix,
+                _built=built,
             )
             if refseq_type_b == "none" and not full_matrix:
                 print("[>] Computed Successfully.")
@@ -1956,6 +1970,8 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     )
             else:
                 dist_matrix = distance_obj.compute_all_distances()
+                if post_transform is not None:
+                    dist_matrix = post_transform(dist_matrix)
 
         if method == "OM":
             lcs_scale = _om_lcs_fast_scale()
@@ -2071,7 +2087,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                kweights_svr,
                                                norm_num,
                                                refseq_id)
-            _set_pairwise_result(SVRspell, lambda values: np.sqrt(np.maximum(values, 0.0)))
+            _set_pairwise_result(SVRspell, _sqrt_clamped_inplace)
 
         elif method == "NMS":
             if prox_nms is not None:
@@ -2081,14 +2097,14 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                                       kweights_nms,
                                                       norm_num,
                                                       refseq_id)
-                _set_pairwise_result(NMSprox, lambda values: np.sqrt(np.maximum(values, 0.0)))
+                _set_pairwise_result(NMSprox, _sqrt_clamped_inplace)
             else:
                 NMS = c_code.NMSdistance(dseqs_num,
                                          lengths,
                                          kweights_nms,
                                          norm_num,
                                          refseq_id)
-                _set_pairwise_result(NMS, lambda values: np.sqrt(np.maximum(values, 0.0)))
+                _set_pairwise_result(NMS, _sqrt_clamped_inplace)
 
         elif method == "NMSMST":
             NMSMST = c_code.NMSMSTdistance(dseqs_num,
@@ -2097,7 +2113,7 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                                             kweights_nms,
                                             norm_num,
                                             refseq_id)
-            _set_pairwise_result(NMSMST, lambda values: np.sqrt(np.maximum(values, 0.0)))
+            _set_pairwise_result(NMSMST, _sqrt_clamped_inplace)
 
         elif method == "LCP" or method == "RLCP":
             LCP = c_code.LCPdistance(dseqs_num,
@@ -2126,17 +2142,19 @@ def get_distance_matrix(seqdata=None, method=None, refseq=None, norm="none", ind
                     dseqs_num, dseqs_dur, _seqlength, _totaldur, norm_num, sign, refseq_id)
             _set_pairwise_result(LCPdur)
 
-        # TraMineR applies sqrt to NMS, NMSMST, SVRspell output
-        if method in ["NMS", "NMSMST", "SVRspell"] and _dist2condensed is None:
-            dist_matrix = np.sqrt(np.maximum(dist_matrix, 0.0))
-
         if _dist2condensed is None:
             if full_matrix == False and refseq is None:
                 _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
                 _dist2condensed = _matrix.padding_condensed()
             else:
-                _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
-                _dist2matrix = _matrix.padding_matrix()
+                _dist2matrix = _reuse_all_unique_matrix(
+                    nseqs,
+                    seqdata_didxs,
+                    dist_matrix,
+                )
+                if _dist2matrix is None:
+                    _matrix = c_code.dist2matrix(nseqs, seqdata_didxs, dist_matrix)
+                    _dist2matrix = _matrix.padding_matrix()
 
     if full_matrix == True and refseq == None:
         if as_numpy:
@@ -2247,108 +2265,3 @@ def getElementsNumber(x):
         return x.size if isinstance(x, np.ndarray) else len(x)
     else:
         return 1
-
-
-if __name__ == '__main__':
-    from sequenzo import *
-
-    start_time = time.time()
-
-    # tracemalloc.start()
-
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/sampled_data_sets/broad_data/sampled_30000_data.csv")
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/files/orignal data/detailed_sequence_10_work_years_df.csv")
-
-    # ===============================
-    #             Sohee
-    # ===============================
-    # df = pd.read_csv('/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/sohee/sequence_data.csv')
-    # time_list = list(df.columns)[1:133]
-    # states = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    # # states = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    # labels = ['FT+WC', 'FT+BC', 'PT+WC', 'PT+BC', 'U', 'OLF']
-    # sequence_data = SequenceData(df, time=time_list, states=states, labels=labels, id_col="PID")
-    # start = time.time()
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
-    # end = time.time()
-    # print("time = ", end-start)
-
-    # om.to_csv("D:/college/research/QiQi/sequenzo/files/sequenzo_Sohee_string_OM_TRATE.csv", index=True)
-
-    # ===============================
-    #             kass
-    # ===============================
-    # df = pd.read_csv('D:/college/research/QiQi/sequenzo/files/orignal data/kass/wide_civil_final_df.csv')
-    # time_list = list(df.columns)[1:]
-    # states = ['Extensive Warfare', 'Limited Violence', 'No Violence', 'Pervasive Warfare', 'Prolonged Warfare',
-    #           'Serious Violence', 'Serious Warfare', 'Sporadic Violence', 'Technological Warfare', 'Total Warfare']
-    # sequence_data = SequenceData(df, time=time_list, time_type="year", states=states, id_col="COUNTRY")
-    # om = get_distance_matrix(sequence_data, method="RLCP", sm="TRATE", indel="auto")
-
-
-    # ===============================
-    #             CO2
-    # ===============================
-    # df = pd.read_csv("D:/country_co2_emissions_missing.csv")
-    # _time = list(df.columns)[1:]
-    # states = ['Very Low', 'Low', 'Middle', 'High', 'Very High']
-    # sequence_data = SequenceData(df, time=_time, id_col="country", states=states)
-    # om = get_distance_matrix(sequence_data, method="OMspell", sm="TRATE", indel="auto")
-
-
-    # ===============================
-    #            detailed
-    # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/detailed_data/sampled_1000_data.csv")
-    # _time = list(df.columns)[4:]
-    # states = ['data', 'data & intensive math', 'hardware', 'research', 'software', 'software & hardware', 'support & test']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']],
-    #                              time_type="age", time=_time, id_col="worker_id", states=states)
-    # # refseq = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [142, 85]]
-    # om = get_distance_matrix(sequence_data, method="OM", sm="TRATE", indel="auto")
-
-    # ===============================
-    #             broad
-    # ===============================
-    # df = pd.read_csv("D:/college/research/QiQi/sequenzo/data_and_output/sampled_data_sets/broad_data/sampled_1000_data.csv")
-    # _time = list(df.columns)[4:]
-    # states = ['Non-computing', 'Non-technical computing', 'Technical computing']
-    # sequence_data = SequenceData(df[['worker_id', 'C1', 'C2', 'C3', 'C4', 'C5']],
-    #                              time_type="age", time=_time, id_col="worker_id", states=states)
-    # om = get_distance_matrix(sequence_data, method="DHD", sm="TRATE", indel="auto")
-
-    # refseq = [[0, 1, 2], [99, 100]]
-    # print(om)
-
-    # snapshot = tracemalloc.take_snapshot()
-    # top_stats = snapshot.statistics('lineno')
-    # for stat in top_stats[:10]:
-    #     print(stat)
-
-    # print("================")
-    # end_time = time.time()
-    # print(f"[>] Total time: {end_time - start_time:.2f} seconds")
-    # print(om)
-
-    # df = load_dataset("country_life_expectancy_global_deciles")
-    # time_list = list(df.columns)[1:]
-    # states = ['D1 (Very Low)', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10 (Very High)']
-    # sequence_data = SequenceData(df,
-    #                              time=time_list,
-    #                              id_col="country",
-    #                              states=states,
-    #                              labels=states)
-    # diss = get_distance_matrix(seqdata=sequence_data, method="OMloc", sm="TRATE", indel="auto")
-    #
-    # print(diss)
-
-    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/biofam_subset.csv")
-    time_list = list(df.columns)[1:]
-    states = [0, 1, 2, 3, 4, 5, 6, 7]
-    sequence_data = SequenceData(df,
-                                 time=time_list,
-                                 id_col="id",
-                                 states=states)
-    diss = get_distance_matrix(seqdata=sequence_data, method="OMstran", sm="TRATE", indel="auto", otto=.3, transindel="prob", norm="YujianBo")
-
-    print(diss)

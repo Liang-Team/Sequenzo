@@ -12,7 +12,6 @@ import sys
 import types
 from typing import Any
 
-
 _LAZY: dict[str, tuple[str, str]] = {
     "get_distance_matrix": (
         "sequenzo.dissimilarity_measures.get_distance_matrix",

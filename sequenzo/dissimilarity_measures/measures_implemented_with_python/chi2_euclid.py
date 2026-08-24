@@ -197,22 +197,22 @@ def build_chi2_allmat_pdotj(
     else:
         breaks = [tuple(b) for b in breaks]
 
-    block_mats = []
-    block_pdotj = []
-    for (start, end) in breaks:
+    n_breaks = len(breaks)
+    allmat = np.empty((n, n_breaks * nalph), dtype=np.float64)
+    pdotj = np.empty(n_breaks * nalph, dtype=np.float64)
+    for block_index, (start, end) in enumerate(breaks):
         mat_b, pdotj_b = _dummies_one_break(
             seqdata_mat, weights, alphabet, (start, end),
             norm=norm, euclid=euclid, global_pdotj=global_pdotj,
         )
-        block_mats.append(mat_b)
-        block_pdotj.append(pdotj_b)
-    allmat = np.hstack(block_mats)
-    pdotj = np.concatenate(block_pdotj)
+        block_slice = slice(block_index * nalph, (block_index + 1) * nalph)
+        allmat[:, block_slice] = mat_b
+        pdotj[block_slice] = pdotj_b
 
     cond = pdotj > 0
-    allmat = np.ascontiguousarray(allmat[:, cond], dtype=np.float64)
-    pdotj = np.ascontiguousarray(pdotj[cond], dtype=np.float64)
-    n_breaks = len(breaks)
+    if not np.all(cond):
+        allmat = np.ascontiguousarray(allmat[:, cond], dtype=np.float64)
+        pdotj = np.ascontiguousarray(pdotj[cond], dtype=np.float64)
     norm_factor = 1.0 / np.sqrt(n_breaks) if norm else 1.0
 
     refseq_type = "none"
@@ -242,6 +242,7 @@ def build_chi2_allmat_pdotj(
         "n_total": n_total,
         "n1": n1,
         "n2": n2,
+        "n_breaks": n_breaks,
     }
 
 
@@ -257,6 +258,7 @@ def chi2_euclid_distances(
     global_pdotj: Optional[Union[str, np.ndarray]] = None,
     refseq: Optional[Union[int, List[List[int]]]] = None,
     full_matrix: bool = True,
+    _built: Optional[dict] = None,
 ) -> Union[np.ndarray, object]:
     """
     Compute CHI2 or EUCLID distances between sequences (TraMineR-aligned).
@@ -274,69 +276,26 @@ def chi2_euclid_distances(
     :param full_matrix: If True and refseq is None, return (n,n) matrix; else return lower-triangle vector.
     :return: Distance matrix (n,n), or (n,) to-ref vector, or (n1,n2) sets matrix; or dist-like vector.
     """
-    n, n_cols = seqdata_mat.shape
-    nalph = len(alphabet)
-    alphabet = np.asarray(alphabet, dtype=seqdata_mat.dtype)
-
-    if weights is None or len(weights) != n:
-        weights = np.ones(n, dtype=np.float64)
-    if euclid:
-        weights = np.ones(n, dtype=np.float64)
-
-    # Resolve global_pdotj for CHI2
-    if not euclid and global_pdotj is not None:
-        if isinstance(global_pdotj, str) and global_pdotj == "obs":
-            global_pdotj = _seqmeant_proportions(seqdata_mat, weights, alphabet)
-        else:
-            global_pdotj = np.asarray(global_pdotj, dtype=np.float64)
-            if global_pdotj.size != nalph:
-                raise ValueError("global_pdotj length must equal alphabet size.")
-            global_pdotj = global_pdotj / np.sum(global_pdotj)
-    else:
-        global_pdotj = None
-
-    # Build breaks (0-based inclusive)
-    if breaks is None:
-        breaks = _build_breaks(n_cols, step, overlap)
-    else:
-        breaks = [tuple(b) for b in breaks]
-
-    # Build allmat (n x total_cols) and pdotj (total_cols,) with only columns where pdotj > 0
-    block_mats = []
-    block_pdotj = []
-    for (start, end) in breaks:
-        mat_b, pdotj_b = _dummies_one_break(
-            seqdata_mat, weights, alphabet, (start, end),
-            norm=norm, euclid=euclid, global_pdotj=global_pdotj,
+    built = _built
+    if built is None:
+        built = build_chi2_allmat_pdotj(
+            seqdata_mat=seqdata_mat,
+            alphabet=alphabet,
+            weights=weights,
+            step=step,
+            breaks=breaks,
+            overlap=overlap,
+            norm=norm,
+            euclid=euclid,
+            global_pdotj=global_pdotj,
+            refseq=refseq,
         )
-        block_mats.append(mat_b)
-        block_pdotj.append(pdotj_b)
-    allmat = np.hstack(block_mats)   # (n, nalph * n_breaks)
-    pdotj = np.concatenate(block_pdotj)
-
-    cond = pdotj > 0
-    allmat = allmat[:, cond]
-    pdotj = pdotj[cond]
-    n_breaks = len(breaks)
-
-    # Handle refseq
-    sets = False
-    if isinstance(refseq, list) and len(refseq) >= 2:
-        set1, set2 = refseq[0], refseq[1]
-        n1, n2 = len(set1), len(set2)
-        refseq_id = (n1, n1 + n2)
-        # TraMineR: allmat <- allmat[c(refseq[[1]],refseq[[2]]),]
-        allmat = np.vstack([allmat[set1], allmat[set2]])
-        n_total = n1 + n2
-        sets = True
-    elif refseq is not None and not isinstance(refseq, list):
-        ref_idx = int(refseq)
-        refseq_id = (ref_idx, ref_idx)
-        n_total = n
-        sets = False
-    else:
-        refseq_id = None
-        n_total = n
+    allmat = built["allmat"]
+    pdotj = built["pdotj"]
+    n_total = built["n_total"]
+    n1 = built["n1"]
+    n2 = built["n2"]
+    refseq_id = None if built["refseq_type"] == "none" else built["refseq_id"]
 
     # Distance formula: d(i,j) = sqrt(sum_c (allmat[i,c]-allmat[j,c])^2 / pdotj[c])
     def dist_ij(i: int, j: int) -> float:
@@ -357,7 +316,6 @@ def chi2_euclid_distances(
         if rseq1 < rseq2:
             # Sets: allmat is [set1 rows, set2 rows]. For each ref row in set2, distance from each set1 row.
             # tmrChisqRef: dist[i + nseq*(rseq-rseq1)] for rseq in [rseq1, rseq2), i in [0, nseq).
-            nseq = n1
             na = n1 * n2
             dd = np.zeros(na, dtype=np.float64)
             for rseq in range(n2):
@@ -372,7 +330,7 @@ def chi2_euclid_distances(
                 dd[i] = dist_ij(i, ref_row)
 
     if norm:
-        dd = dd / np.sqrt(n_breaks)
+        dd = dd / np.sqrt(built["n_breaks"])
 
     if refseq_id is None:
         if full_matrix:

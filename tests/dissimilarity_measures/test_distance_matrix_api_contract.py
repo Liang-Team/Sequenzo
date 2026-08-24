@@ -1248,6 +1248,108 @@ def test_full_matrix_false_fallback_uses_cxx_condensed_padding_without_full_padd
     np.testing.assert_allclose(condensed, expected)
 
 
+def test_chi2_python_fallback_reuses_preprocessed_data(monkeypatch):
+    from sequenzo.dissimilarity_measures.measures_implemented_with_python import (
+        chi2_euclid,
+    )
+
+    seqdata_mat = np.array(
+        [
+            [1, 2, 3, 1],
+            [2, 3, 1, 2],
+            [3, 1, 2, 3],
+        ],
+        dtype=np.int32,
+    )
+
+    alphabet = np.array([1, 2, 3], dtype=np.int32)
+    weights = np.ones(3, dtype=np.float64)
+    built = chi2_euclid.build_chi2_allmat_pdotj(
+        seqdata_mat=seqdata_mat,
+        alphabet=alphabet,
+        weights=weights,
+        norm=False,
+        euclid=False,
+    )
+
+    def unexpected_rebuild(*args, **kwargs):
+        raise AssertionError("preprocessed CHI2 data was rebuilt")
+
+    monkeypatch.setattr(
+        chi2_euclid, "build_chi2_allmat_pdotj", unexpected_rebuild
+    )
+    distances = chi2_euclid.chi2_euclid_distances(
+        seqdata_mat=seqdata_mat,
+        alphabet=alphabet,
+        weights=weights,
+        norm=False,
+        full_matrix=True,
+        _built=built,
+    )
+
+    assert distances.shape == (3, 3)
+    np.testing.assert_allclose(np.diag(distances), 0.0)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(
+            method="OM",
+            sm=np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float64),
+            indel=1.0,
+            norm="none",
+        ),
+        dict(method="LCS", norm="none"),
+        dict(method="NMS", norm="none"),
+        dict(method="NMSMST", norm="none"),
+        dict(method="SVRspell", norm="none", tpow=1.0),
+        dict(method="EUCLID", norm="none", euclid_backend="categorical"),
+    ],
+)
+def test_all_unique_full_matrix_skips_dist2matrix(monkeypatch, kwargs):
+    import sequenzo.dissimilarity_measures.c_code as c_code
+
+    seqdata = _seqdata_all_unique_reference()
+    distance_module = importlib.import_module(
+        "sequenzo.dissimilarity_measures.get_distance_matrix"
+    )
+    reuse_all_unique_matrix = distance_module._reuse_all_unique_matrix
+    monkeypatch.setattr(
+        distance_module,
+        "_reuse_all_unique_matrix",
+        lambda *args, **kwargs: None,
+    )
+    expected = get_distance_matrix(seqdata, **kwargs)
+    monkeypatch.setattr(
+        distance_module,
+        "_reuse_all_unique_matrix",
+        reuse_all_unique_matrix,
+    )
+
+    real_dist2matrix = c_code.dist2matrix
+    dist2matrix_calls = 0
+
+    def track_dist2matrix(*args, **kwargs):
+        nonlocal dist2matrix_calls
+        dist2matrix_calls += 1
+        return real_dist2matrix(*args, **kwargs)
+
+    monkeypatch.setattr(c_code, "dist2matrix", track_dist2matrix)
+
+    actual = get_distance_matrix(seqdata, **kwargs)
+
+    assert dist2matrix_calls == 0
+    assert list(actual.index) == list(expected.index)
+    assert list(actual.columns) == list(expected.columns)
+    np.testing.assert_allclose(
+        actual.to_numpy(dtype=np.float64),
+        expected.to_numpy(dtype=np.float64),
+        rtol=1e-10,
+        atol=1e-10,
+    )
+
+
 def test_nms_full_matrix_false_uses_direct_condensed_kernel(monkeypatch):
     import sequenzo.dissimilarity_measures.c_code as c_code
 

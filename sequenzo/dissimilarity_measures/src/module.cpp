@@ -1,5 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <string>
+#include "../../_openmp_compat.h"
+
 #include "OMdistance.cpp"
 #include "OMlocDistance.cpp"
 #include "OMspellDistance.cpp"
