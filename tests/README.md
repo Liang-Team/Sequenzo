@@ -36,9 +36,10 @@ tests/
 │   ├── README.md                       # Why 3 tests skip, how to generate refs
 │   ├── test_event_sequence_lsog.py
 │   └── traminer_reference_event_sequence.R
-└── openmp/                            # OpenMP-related tests and solutions
-    ├── test_apple_silicon_solution.py
-    └── test_solution_simple.py
+└── openmp/                            # OpenMP build and runtime tests
+    ├── test_openmp_setup.py
+    ├── test_repair_windows_wheel.py
+    └── test_windows_wheel_workflow.py
 ```
 
 ## Running Tests
@@ -247,14 +248,12 @@ See `tests/event_sequence_analysis/README.md` for details.
 
 ### 7. OpenMP Tests (`openmp/`)
 
-**Purpose**: Verify OpenMP parallelization works correctly
+**Purpose**: Verify OpenMP build and runtime configuration.
 
 **Tests**:
-- Apple Silicon compatibility
-- Multi-threading correctness
-- Performance improvements
-
-**Documentation**: See `openmp/for_users_APPLE_SILICON_GUIDE.md` and `openmp/for_developers_OPENMP_SOLUTION_SUMMARY.md` for detailed information.
+- macOS runtime compatibility
+- Windows wheel repair
+- Platform-specific build configuration
 
 ## CI/CD Integration
 

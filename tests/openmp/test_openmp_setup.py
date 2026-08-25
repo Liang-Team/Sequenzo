@@ -2,11 +2,12 @@
 Tests for OpenMP configuration fixes.
 Run: pytest tests/openmp/test_openmp_setup.py -v
 """
-import os
-import sys
+import importlib.util
 import inspect
+import os
+import subprocess
+import sys
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -117,6 +118,32 @@ class TestDuplicateRuntimeGuards:
         openmp_setup._fix_duplicate_libomp_in_conda_darwin()
 
         assert top_level in rewritten
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
+    def test_extensions_import_after_sklearn(self):
+        if importlib.util.find_spec("sklearn") is None:
+            pytest.skip("scikit-learn is not installed")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sklearn; "
+                    "import sequenzo.dissimilarity_measures.c_code as c; "
+                    "import sequenzo.clustering.clustering_c_code; "
+                    "info = c._openmp_runtime_info(2); "
+                    "assert info['_OPENMP']; "
+                    "assert info['actual_threads'] >= 1"
+                ),
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
 
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
     def test_availability_check_does_not_load_second_runtime(self, monkeypatch):
@@ -265,7 +292,7 @@ class TestKMPDuplicateLib:
 
     def test_kmp_duplicate_lib_ok_is_set(self):
         """KMP_DUPLICATE_LIB_OK should be set after importing sequenzo."""
-        import sequenzo
+        importlib.import_module("sequenzo")
         assert os.environ.get("KMP_DUPLICATE_LIB_OK") == "TRUE"
 
     def test_kmp_does_not_override_user_setting(self):
