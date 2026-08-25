@@ -5,6 +5,7 @@ import pytest
 from sequenzo.clustering import (
     wfcmdd,
     crispness,
+    compute_partition_quality,
     cluster_range_from_partitions,
     cluster_association,
     boot_cluster_range,
@@ -22,6 +23,60 @@ def _toy_distance() -> np.ndarray:
         ],
         dtype=float,
     )
+
+
+def test_medoid_subsampling_uses_one_based_kmedoids_indices():
+    from sequenzo.clustering.validation.bootstrap_cluster_range import (
+        _draw_bootstrap_sample,
+    )
+
+    clustering = pd.DataFrame({"cluster2": [1, 1, 2, 2]})
+    sample = _draw_bootstrap_sample(
+        clustering=clustering,
+        sample_size=2,
+        sampling="medoids",
+        strata=None,
+        medoids=[1, 4],
+        rng=np.random.default_rng(17),
+    )
+
+    np.testing.assert_array_equal(sample, np.array([0, 3]))
+
+
+def test_bootstrap_sample_is_not_conditioned_on_all_partitions():
+    from sequenzo.clustering.validation.bootstrap_cluster_range import (
+        _draw_bootstrap_sample,
+    )
+
+    clustering = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1],
+            "b": [0, 1, 0, 1],
+            "c": [0, 1, 1, 0],
+        }
+    )
+
+    class FixedRng:
+        calls = 0
+
+        def choice(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls > 1:
+                raise AssertionError("bootstrap repeated a draw")
+            return np.array([0, 1])
+
+    rng = FixedRng()
+    sample = _draw_bootstrap_sample(
+        clustering,
+        sample_size=2,
+        sampling="simple",
+        strata=None,
+        medoids=None,
+        rng=rng,
+    )
+
+    np.testing.assert_array_equal(sample, [0, 1])
+    assert rng.calls == 1
 
 
 def test_wfcmdd_runs_and_normalizes_membership():
@@ -86,6 +141,49 @@ def test_cluster_range_from_partitions_matches_cpp():
         "PBC", "HG", "HGSD", "ASW", "ASWw", "CH", "R2", "CHsq", "R2sq", "HC",
     ]
     assert result.stats.shape[0] == 2
+
+
+def test_condensed_partition_quality_matches_full_matrix():
+    from scipy.spatial.distance import squareform
+
+    diss = _toy_distance()
+    condensed = squareform(diss, checks=False)
+    labels = np.array([1, 1, 2, 2, 2])
+
+    full = compute_partition_quality(diss, labels)
+    compact = compute_partition_quality(condensed, labels)
+
+    assert np.allclose(
+        [compact[name] for name in full],
+        [full[name] for name in full],
+        rtol=1e-10,
+        atol=1e-10,
+        equal_nan=True,
+    )
+
+
+def test_cluster_range_computes_quality_once_per_partition(monkeypatch):
+    import sequenzo.clustering.validation.partition_quality as quality_module
+
+    calls = 0
+    original = quality_module.compute_partition_quality
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(quality_module, "compute_partition_quality", counted)
+    clustering = pd.DataFrame(
+        {
+            "k2": [1, 1, 2, 2, 2],
+            "k3": [1, 1, 2, 2, 3],
+        }
+    )
+
+    cluster_range_from_partitions(_toy_distance(), clustering)
+
+    assert calls == 2
 
 
 def test_boot_cluster_range_with_distance_builder():

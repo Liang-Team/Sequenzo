@@ -11,7 +11,7 @@ already known (for example bootstrap resamples in ``bootclustrange``).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -74,7 +74,7 @@ def compute_partition_quality(
     Parameters
     ----------
     diss : np.ndarray
-        Square symmetric distance matrix.
+        Square symmetric distance matrix or condensed distance vector.
     labels : np.ndarray
         Cluster membership labels (any hashable values).
     weights : np.ndarray, optional
@@ -87,16 +87,27 @@ def compute_partition_quality(
     """
     cpp = _import_cpp()
     diss = np.asarray(diss, dtype=np.float64, order="C")
-    if diss.ndim != 2 or diss.shape[0] != diss.shape[1]:
-        raise ValueError("diss must be a square distance matrix.")
-    n = diss.shape[0]
+    if diss.ndim == 1:
+        condensed_length = diss.size
+        n = int((1 + np.sqrt(1 + 8 * condensed_length)) / 2)
+        if n * (n - 1) // 2 != condensed_length:
+            raise ValueError("diss has an invalid condensed-vector length.")
+    elif diss.ndim == 2 and diss.shape[0] == diss.shape[1]:
+        n = diss.shape[0]
+    else:
+        raise ValueError("diss must be square or a valid condensed vector.")
     labels = np.asarray(labels).reshape(-1)
     if labels.shape[0] != n:
         raise ValueError("labels must have one value per observation.")
     weights = _prepare_weights(weights, n)
     cluster_ids = _labels_to_one_based(labels)
     n_clusters = int(np.max(cluster_ids))
-    result = cpp.cluster_quality(diss, cluster_ids, weights, n_clusters)
+    if diss.ndim == 1:
+        result = cpp.cluster_quality_condensed(
+            diss, cluster_ids, weights, n, n_clusters
+        )
+    else:
+        result = cpp.cluster_quality(diss, cluster_ids, weights, n_clusters)
     return {metric: float(result[metric]) for metric in METRIC_ORDER}
 
 
@@ -138,7 +149,15 @@ def cluster_range_from_partitions(
     """
     diss = np.asarray(diss, dtype=np.float64, order="C")
     frame = _to_clustering_frame(clustering)
-    n = diss.shape[0]
+    if diss.ndim == 1:
+        condensed_length = diss.size
+        n = int((1 + np.sqrt(1 + 8 * condensed_length)) / 2)
+        if n * (n - 1) // 2 != condensed_length:
+            raise ValueError("diss has an invalid condensed-vector length.")
+    elif diss.ndim == 2 and diss.shape[0] == diss.shape[1]:
+        n = diss.shape[0]
+    else:
+        raise ValueError("diss must be square or a valid condensed vector.")
     if frame.shape[0] != n:
         raise ValueError("clustering and diss must refer to the same observations.")
     weights = _prepare_weights(weights, n)
@@ -150,7 +169,8 @@ def cluster_range_from_partitions(
     for idx, column in enumerate(frame.columns):
         labels = frame.iloc[:, idx].to_numpy()
         kvals[idx] = len(np.unique(labels))
-        stats[idx, :] = [compute_partition_quality(diss, labels, weights)[metric] for metric in METRIC_ORDER]
+        quality = compute_partition_quality(diss, labels, weights)
+        stats[idx, :] = [quality[metric] for metric in METRIC_ORDER]
         renamed_columns.append(f"cluster{kvals[idx]}")
 
     clustering_out = frame.copy()

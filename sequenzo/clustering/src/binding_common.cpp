@@ -18,7 +18,8 @@ void validate_vector_length(py::ssize_t actual, py::ssize_t expected, const char
 }
 
 void validate_condensed_size(py::ssize_t actual, int n, const char* msg) {
-    const int expected = n * (n - 1) / 2;
+    const py::ssize_t expected =
+        static_cast<py::ssize_t>(n) * (n - 1) / 2;
     if (actual != expected) {
         throw std::runtime_error(msg);
     }

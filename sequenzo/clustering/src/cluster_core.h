@@ -36,9 +36,14 @@ ClusterCoreResult cluster_from_condensed(
     bool retain_condensed = false
 );
 
+ClusterCoreResult cluster_from_condensed_inplace(
+    double* condensed, int N,
+    const std::string& method,
+    bool fast_path
+);
+
 // Full pipeline: feature matrix -> linkage_vector.
 // X: N x D feature matrix (row-major, will be copied internally).
-// method: "ward", "ward_d", "ward_d2" only.
 ClusterCoreResult cluster_from_features(
     const double* X, int N, int D,
     const std::string& method

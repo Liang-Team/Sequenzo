@@ -1,3 +1,4 @@
+#include "../../_openmp_compat.h"
 #include "KMedoid.cpp"
 #include "cluster_quality.cpp"
 #include "binding_common.cpp"
@@ -710,6 +711,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         if (buf.ndim != 1) {
             throw std::runtime_error("Condensed distance array must be a 1D array.");
         }
+        validate_condensed_size(buf.size, n, "Condensed distance array size mismatch");
         const int N = n;
         const auto* ptr = static_cast<const double*>(buf.ptr);
 
@@ -742,6 +744,45 @@ PYBIND11_MODULE(clustering_c_code, m) {
     py::arg("retain_condensed") = false,
     "Fast clustering pipeline: condensed distance array -> linkage matrix (C++ core).");
 
+    m.def("cluster_from_condensed_inplace", [](py::array_t<double, py::array::c_style> condensed,
+                                               int n,
+                                               const std::string& method,
+                                               bool fast_path) -> py::dict {
+        if (!condensed.writeable()) {
+            throw std::runtime_error(
+                "preserve_input=False requires a writable condensed array.");
+        }
+        auto buf = condensed.request();
+        if (buf.ndim != 1) {
+            throw std::runtime_error("Condensed distance array must be a 1D array.");
+        }
+        validate_condensed_size(buf.size, n, "Condensed distance array size mismatch");
+        auto* ptr = static_cast<double*>(buf.ptr);
+
+        ClusterCoreResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_from_condensed_inplace(ptr, n, method, fast_path);
+        }
+
+        py::dict out;
+        if (!res.linkage_matrix.empty()) {
+            const py::ssize_t rows = static_cast<py::ssize_t>(n - 1);
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix), rows, 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        out["condensed_matrix"] = py::none();
+        out["full_matrix"] = py::none();
+        out["warning_flags"] = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+        return out;
+    },
+    py::arg("condensed"), py::arg("n"), py::arg("method"),
+    py::arg("fast_path") = false,
+    "Cluster from a writable condensed array in place.");
+
     m.def("cluster_from_features", [](py::array_t<double, py::array::c_style | py::array::forcecast> X,
                                        const std::string& method) -> py::dict {
         auto buf = X.request();
@@ -773,7 +814,7 @@ PYBIND11_MODULE(clustering_c_code, m) {
         return out;
     },
     py::arg("X"), py::arg("method"),
-    "Full clustering pipeline: feature matrix -> linkage matrix via linkage_vector (C++ core).");
+    "Ward.D2 feature matrix -> linkage matrix via linkage_vector (C++ core).");
     };
     register_cluster_core_apis();
 

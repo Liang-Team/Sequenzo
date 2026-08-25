@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from unittest import mock
 
 import numpy as np
 
@@ -12,6 +13,19 @@ from sequenzo.clustering import KMedoids
 def _distance_matrix(points):
     points = np.asarray(points, dtype=np.float64)
     return np.abs(points[:, None] - points[None, :])
+
+
+def test_pamonce_core_rejects_mismatched_condensed_length():
+    core = importlib.import_module("sequenzo.clustering.clustering_c_code")
+
+    with np.testing.assert_raises_regex(ValueError, "nelements"):
+        core.PAMonce(
+            4,
+            np.zeros(4, dtype=np.float64),
+            np.arange(2, dtype=np.int32),
+            1,
+            np.empty(0, dtype=np.float64),
+        )
 
 
 def test_pamonce_public_api_returns_bounded_workspace_diagnostics():
@@ -275,11 +289,8 @@ def test_flat_fractional_distances_have_zero_width_score_intervals():
 
 def test_public_pamonce_uses_core_objective_without_python_rescan(monkeypatch):
     module = importlib.import_module("sequenzo.clustering.k_medoids")
-
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("PAMonce should reuse the objective already computed in C++")
-
-    monkeypatch.setattr(module, "_pam_objective", fail_if_called)
+    objective_scan = mock.Mock(wraps=module._pam_objective)
+    monkeypatch.setattr(module, "_pam_objective", objective_scan)
     result, diagnostics = module.KMedoids(
         diss=_distance_matrix([0.0, 1.0, 4.0, 10.0, 11.0, 15.0]),
         k=2,
@@ -289,6 +300,7 @@ def test_public_pamonce_uses_core_objective_without_python_rescan(monkeypatch):
         verbose=False,
     )
 
+    assert objective_scan.call_count == 0
     assert len(result) == 6
     assert diagnostics["objective"] >= 0.0
 
@@ -310,8 +322,7 @@ def test_public_api_skips_diagnostics_when_they_are_not_requested(monkeypatch):
         def objective(self):
             return 0.0
 
-        def diagnostics(self):
-            raise AssertionError("diagnostics should remain lazy")
+        diagnostics = mock.Mock(return_value={})
 
     monkeypatch.setattr(
         module.clustering_c_code, "PAMonce", NoDiagnosticsPamonce)
@@ -323,6 +334,7 @@ def test_public_api_skips_diagnostics_when_they_are_not_requested(monkeypatch):
         verbose=False,
     )
 
+    assert NoDiagnosticsPamonce.diagnostics.call_count == 0
     np.testing.assert_array_equal(result, np.ones(4, dtype=np.int32))
     assert collection_modes == [False]
 
@@ -363,11 +375,8 @@ def test_public_api_enables_core_diagnostics_when_requested(monkeypatch):
 
 def test_single_build_pass_does_not_initialize_a_random_generator(monkeypatch):
     module = importlib.import_module("sequenzo.clustering.k_medoids")
-
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("a deterministic BUILD pass does not need RNG state")
-
-    monkeypatch.setattr(module.np.random, "default_rng", fail_if_called)
+    default_rng = mock.Mock(wraps=module.np.random.default_rng)
+    monkeypatch.setattr(module.np.random, "default_rng", default_rng)
     result = module.KMedoids(
         diss=_distance_matrix([0.0, 1.0, 2.0, 3.0]),
         k=2,
@@ -376,6 +385,7 @@ def test_single_build_pass_does_not_initialize_a_random_generator(monkeypatch):
         verbose=False,
     )
 
+    assert default_rng.call_count == 0
     assert len(result) == 4
 
 

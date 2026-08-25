@@ -11,6 +11,7 @@
 #include "distance_prep_utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -33,21 +34,9 @@ bool is_ward_method(const std::string& method) {
     return method == "ward_d" || method == "ward_d2";
 }
 
-// Apply Ward-D correction: divide linkage distances (col 2) by 2.
-void apply_ward_d_correction(std::vector<double>& Z, int N) {
-    const int rows = N - 1;
-    for (int i = 0; i < rows; ++i) {
-        Z[static_cast<size_t>(i) * 4 + 2] /= 2.0;
-    }
-}
-
 // Map normalised method name to the fastcluster-internal method code
 // used for the condensed-distance path.
-// This resolves "ward_d" -> METHOD_METR_WARD and keeps fastcluster semantics.
 int condensed_method_code(const std::string& method) {
-    // For the condensed path, both ward_d and ward_d2 use the same core
-    // algorithm (ward_d2 / NN_chain_core<WARD_D2>).  We differentiate
-    // them only after linkage via the Ward-D correction.
     if (method == "ward_d") return 4;   // METHOD_METR_WARD
     if (method == "ward_d2") return 7;  // METHOD_METR_WARD_D2
     return method_string_to_code(method);
@@ -56,10 +45,9 @@ int condensed_method_code(const std::string& method) {
 // Map normalised method name to the fastcluster-internal method code
 // used for the feature-vector path.
 int vector_method_code(const std::string& method) {
-    if (method == "ward_d") return 4;   // METHOD_METR_WARD
     if (method == "ward_d2") return 7;  // METHOD_METR_WARD_D2
     throw std::runtime_error(
-        "cluster_from_features only supports ward_d / ward_d2, got '" +
+        "cluster_from_features only supports ward_d2, got '" +
         method + "'.");
 }
 
@@ -116,9 +104,6 @@ ClusterCoreResult cluster_from_matrix(
             result.linkage_matrix.data()
         );
 
-        if (method == "ward_d") {
-            apply_ward_d_correction(result.linkage_matrix, N);
-        }
     } else {
         // ---- FULL PATH (optimized: fused single-pass extraction) ----
         // Uses prepare_matrix_to_condensed_fused to combine symmetry check,
@@ -163,9 +148,6 @@ ClusterCoreResult cluster_from_matrix(
             result.linkage_matrix.data()
         );
 
-        if (method == "ward_d") {
-            apply_ward_d_correction(result.linkage_matrix, N);
-        }
     }
 
     return result;
@@ -209,8 +191,6 @@ ClusterCoreResult cluster_from_condensed(
     result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 
     if (fast_path) {
-        // ---- FAST PATH ----
-        // No Euclidean check, no condensed copy — compute linkage directly.
         if (retain_condensed) {
             result.condensed_matrix = prep.condensed.to_vector();
         }
@@ -252,11 +232,63 @@ ClusterCoreResult cluster_from_condensed(
         );
     }
 
-    if (method == "ward_d") {
-        apply_ward_d_correction(result.linkage_matrix, N);
+    return result;
+}
+
+ClusterCoreResult cluster_from_condensed_inplace(
+    double* condensed, int N,
+    const std::string& raw_method,
+    bool fast_path)
+{
+    if (N < 1) {
+        throw std::runtime_error("At least one element is needed for clustering.");
     }
 
-    // full_matrix left empty — lazily reconstructed in Python if needed.
+    const std::string method = normalise_method(raw_method);
+    const int mcode = condensed_method_code(method);
+    ClusterCoreResult result;
+
+    if (N == 1) {
+        result.warning_flags = 0;
+        result.euclidean_compatible = true;
+        return result;
+    }
+
+    const auto n = static_cast<ssize_t>(N);
+    const auto condensed_len = static_cast<ssize_t>(N) * (N - 1) / 2;
+    for (ssize_t i = 0; i < condensed_len; ++i) {
+        if (!std::isfinite(condensed[i]) || condensed[i] < 0.0) {
+            throw std::runtime_error(
+                "preserve_input=False requires finite, non-negative distances.");
+        }
+    }
+
+    if (!fast_path && is_ward_method(method)) {
+        const int sample_cap = std::min(N, 50);
+        std::vector<double> sample_full(
+            static_cast<size_t>(sample_cap) * sample_cap, 0.0);
+        for (int i = 0; i < sample_cap; ++i) {
+            for (int j = i + 1; j < sample_cap; ++j) {
+                const auto idx = static_cast<size_t>(
+                    static_cast<ssize_t>(i) * (2 * n - i - 1) / 2 + (j - i - 1));
+                const double d = condensed[idx];
+                sample_full[i * sample_cap + j] = d;
+                sample_full[j * sample_cap + i] = d;
+            }
+        }
+        EuclideanCheckResult eu = check_euclidean_compatibility_pure(
+            sample_full.data(), static_cast<ssize_t>(sample_cap), method);
+        result.euclidean_compatible = eu.compatible;
+        if (!eu.compatible) {
+            result.warning_flags |= WARN_WARD_NON_EUCLIDEAN;
+        }
+    }
+
+    result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
+    compute_linkage_condensed(
+        condensed, N, mcode,
+        result.linkage_matrix.data()
+    );
     return result;
 }
 
@@ -298,12 +330,6 @@ ClusterCoreResult cluster_from_features(
         X_work.data(), N, D, mcode,
         result.linkage_matrix.data()
     );
-
-    // Ward-D correction: linkage_vector with METHOD_METR_WARD produces
-    // ward_d2-style distances; divide by 2 for ward_d.
-    if (method == "ward_d") {
-        apply_ward_d_correction(result.linkage_matrix, N);
-    }
 
     // condensed_matrix and full_matrix are left empty for the vector path;
     // Python can lazily compute them from the feature matrix if needed.

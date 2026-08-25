@@ -249,6 +249,18 @@ private:
             throw py::type_error("PAMonce distance input must be C-contiguous.");
         }
         use_condensed = diss.ndim() == 1;
+        const py::ssize_t expected_condensed =
+            static_cast<py::ssize_t>(nelements) * (nelements - 1) / 2;
+        if ((use_condensed && diss.size() != expected_condensed) ||
+            (!use_condensed &&
+             (diss.shape(0) != nelements || diss.shape(1) != nelements))) {
+            throw py::value_error(
+                "PAMonce distance input does not match nelements.");
+        }
+        if (!unit_weights && weights.size() != nelements) {
+            throw py::value_error(
+                "PAMonce weights must have one value per observation.");
+        }
         if (py::dtype::of<double>().is(diss.dtype())) {
             if (distance_codebook_size > 0) {
                 throw py::value_error(

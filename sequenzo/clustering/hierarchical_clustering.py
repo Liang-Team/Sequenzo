@@ -30,14 +30,13 @@
 
     WARD METHOD VARIANTS:
     The module supports two Ward linkage variants:
-    - 'ward_d' (Ward D): Classic Ward method using squared Euclidean distances ÷ 2
-    - 'ward_d2' (Ward D2): Ward method using squared Euclidean distances
+    - 'ward_d' (Ward D): R fastcluster-compatible Ward.D recurrence and heights
+    - 'ward_d2' (Ward D2): accepts Euclidean distances and squares them internally
     For backward compatibility, 'ward' maps to 'ward_d'.
     
     The difference affects clustering results and dendrogram heights:
-    - Ward D produces smaller distances in the linkage matrix
-    - Ward D2 produces distances equal to the increase in cluster variance
-    - Both methods produce identical cluster assignments, only distances differ
+    - Ward D and Ward D2 use different input and height conventions
+    - They can produce different trees when called on the same untransformed distance input
 
     ROBUSTNESS AND VALIDATION FEATURES:
     - Ward Method Validation: Automatic detection of non-Euclidean distance matrices
@@ -63,36 +62,26 @@
                 https://github.com/cran/WeightedCluster/blob/master/src/clusterqualitybody.cpp
             plot_cqi_scores(): `wcCmpCluster()` produces `clustrangefamily` object + `plot.clustrangefamily()` for plotting
 """
-import matplotlib.pyplot as plt
-import seaborn as sns
+from __future__ import annotations
+
 import importlib
 import warnings
-from matplotlib.ticker import MaxNLocator
 
-import pandas as pd
 import numpy as np
-from scipy.cluster.hierarchy import fcluster, dendrogram
-from scipy.spatial.distance import squareform, pdist
-# sklearn metrics no longer needed - using C++ implementation
 
 clustering_c_code = None
-_CPP_IMPORT_ERROR = None
 
 
 def _get_clustering_c_code():
     """Load the C++ clustering extension only when clustering work needs it."""
-    global clustering_c_code, _CPP_IMPORT_ERROR
+    global clustering_c_code
     if clustering_c_code is not None:
         return clustering_c_code
 
     try:
         clustering_c_code = importlib.import_module("sequenzo.clustering.clustering_c_code")
     except ImportError as exc:
-        _CPP_IMPORT_ERROR = exc
-        raise RuntimeError(
-            "C++ clustering core is not available. "
-            "Please ensure the C++ extensions are properly compiled."
-        ) from exc
+        raise RuntimeError("C++ clustering extension is not available.") from exc
     return clustering_c_code
 
 
@@ -108,7 +97,27 @@ def _save_and_show_results(*args, **kwargs):
 
     return save_and_show_results(*args, **kwargs)
 
-# Global flag to ensure Ward warning is only shown once per session
+
+def _is_pandas_dataframe(value):
+    if value.__class__.__module__.split(".", 1)[0] != "pandas":
+        return False
+    import pandas as pd
+
+    return isinstance(value, pd.DataFrame)
+
+
+def _copy_condensed(matrix):
+    n = matrix.shape[0]
+    condensed = np.empty(n * (n - 1) // 2, dtype=np.float64)
+    offset = 0
+    for left in range(n - 1):
+        width = n - left - 1
+        condensed[offset : offset + width] = 0.5 * (
+            matrix[left, left + 1 :] + matrix[left + 1 :, left]
+        )
+        offset += width
+    return condensed
+
 _WARD_WARNING_SHOWN = False
 _WARN_NONFINITE = 1 << 0
 _WARN_NEGATIVE = 1 << 1
@@ -130,6 +139,8 @@ def _cutree_maxclust(linkage_matrix, num_clusters):
             int(num_clusters),
         )
         return np.asarray(labels, dtype=np.int32)
+
+    from scipy.cluster.hierarchy import fcluster
 
     return fcluster(linkage_matrix, t=num_clusters, criterion="maxclust")
 
@@ -161,7 +172,6 @@ def _warn_ward_usage_once(matrix, method, euclidean_compatible=None, warning_fla
     """
     global _WARD_WARNING_SHOWN
     
-    # Check for both Ward D and Ward D2 methods
     if not _WARD_WARNING_SHOWN and method.lower() in ["ward", "ward_d", "ward_d2"]:
         if warning_flags is not None:
             is_compatible = (int(warning_flags) & _WARN_WARD_NON_EUCLIDEAN) == 0
@@ -177,8 +187,8 @@ def _warn_ward_usage_once(matrix, method, euclidean_compatible=None, warning_fla
                 "   Ward clustering (both Ward D and Ward D2) assumes Euclidean distances for theoretical validity.\n"
                 "   \n"
                 "   Ward method variants:\n"
-                "   - 'ward_d' (classic): Uses squared Euclidean distances ÷ 2\n"
-                "   - 'ward_d2': Uses squared Euclidean distances\n"
+                "   - 'ward_d' (classic): Uses R fastcluster-compatible Ward.D recurrence and heights\n"
+                "   - 'ward_d2': Uses the Ward.D2 recurrence\n"
                 "   \n"
                 "   For sequence distances (OM, LCS, etc.), consider using:\n"
                 "   - method='average' (UPGMA)\n"
@@ -202,9 +212,10 @@ class Cluster:
                  clustering_method="ward",
                  weights=None,
                  X_features=None,
-                 fast_path=False):
+                 fast_path=False,
+                 preserve_input=True):
         """
-        Hierarchical clustering with the full computational pipeline in C++.
+        Hierarchical clustering from distances or Euclidean features.
 
         :param matrix: Precomputed distance matrix. Accepts:
             - Full square form: 2D array (N×N) or pandas DataFrame
@@ -212,24 +223,28 @@ class Cluster:
             Required when X_features is None.
         :param entity_ids: List of IDs corresponding to the entities in the matrix.
         :param clustering_method: Clustering algorithm to use. Options include:
-            - "ward" or "ward_d": Classic Ward method (squared Euclidean distances ÷ 2) [default]
-            - "ward_d2": Ward method with squared Euclidean distances
+            - "ward" or "ward_d": R fastcluster-compatible Ward.D [default]
+            - "ward_d2": Accepts Euclidean distances and applies Ward.D2 squaring internally
             - "single": Single linkage (minimum method)
             - "complete": Complete linkage (maximum method)
             - "average": Average linkage (UPGMA)
             - "centroid": Centroid linkage
             - "median": Median linkage
-        :param weights: Optional array of weights for each entity (default: None for equal weights).
-        :param X_features: Optional (n x d) feature matrix for Euclidean Ward clustering. When provided
-            with ward/ward_d/ward_d2, uses memory-efficient linkage_vector (O(ND) vs O(N²)).
+        :param weights: Optional weights for quality summaries. Linkage itself is unweighted.
+        :param X_features: Optional (n x d) feature matrix for Euclidean Ward clustering.
+            Ward.D uses R-compatible condensed distances; Ward.D2 uses the O(ND)
+            feature-vector path.
         :param fast_path: If True, skips Ward compatibility checking and full_matrix retention.
+        :param preserve_input: When False, a writable, C-contiguous float64 condensed
+            array is consumed in place to avoid the linkage working copy and is not
+            retained for later quality evaluation. The default keeps an internal copy.
         """
         cpp = _get_clustering_c_code()
 
         method = clustering_method.lower()
 
-        ward_methods = ("ward", "ward_d", "ward_d2")
-        use_vector_path = (X_features is not None and method in ward_methods)
+        ward_d_feature_path = X_features is not None and method in ("ward", "ward_d")
+        use_vector_path = X_features is not None and method == "ward_d2"
         use_condensed_path = False
 
         if use_vector_path:
@@ -237,15 +252,38 @@ class Cluster:
             if X.ndim != 2:
                 raise ValueError("X_features must be a 2D array (n x d).")
             n = X.shape[0]
+        elif ward_d_feature_path:
+            from scipy.spatial.distance import pdist
+
+            X = np.asarray(X_features, dtype=np.float64, order="C")
+            if X.ndim != 2:
+                raise ValueError("X_features must be a 2D array (n x d).")
+            n = X.shape[0]
+            matrix = np.ascontiguousarray(pdist(X, metric="euclidean"))
+            use_condensed_path = True
         else:
             if matrix is None:
                 raise ValueError("Either matrix or X_features (with ward/ward_d2) must be provided.")
-            if isinstance(matrix, pd.DataFrame):
+            if _is_pandas_dataframe(matrix):
+                if not preserve_input:
+                    raise ValueError(
+                        "preserve_input=False requires a NumPy condensed array.")
                 matrix = matrix.values
-            matrix = np.asarray(matrix, dtype=np.float64, order="C")
+            if not preserve_input:
+                if (
+                    not isinstance(matrix, np.ndarray)
+                    or matrix.dtype != np.float64
+                    or matrix.ndim != 1
+                    or not matrix.flags.c_contiguous
+                    or not matrix.flags.writeable
+                ):
+                    raise ValueError(
+                        "preserve_input=False requires a writable, C-contiguous "
+                        "float64 condensed NumPy array.")
+            else:
+                matrix = np.asarray(matrix, dtype=np.float64, order="C")
 
             if matrix.ndim == 1:
-                # Condensed distance array: infer n from length = n*(n-1)/2
                 condensed_len = matrix.shape[0]
                 n = int((1 + np.sqrt(1 + 8 * condensed_len)) / 2)
                 if n * (n - 1) // 2 != condensed_len:
@@ -278,15 +316,23 @@ class Cluster:
         if use_vector_path:
             result = cpp.cluster_from_features(X, method)
             self._X_features = X
+        elif ward_d_feature_path:
+            result = cpp.cluster_from_condensed_inplace(
+                matrix, int(n), method, bool(fast_path))
+            self._X_features = X
         elif use_condensed_path:
-            result = cpp.cluster_from_condensed(
-                matrix, int(n), method, bool(fast_path),
-                False)  # retain_condensed=False for performance
+            if preserve_input:
+                result = cpp.cluster_from_condensed(
+                    matrix, int(n), method, bool(fast_path),
+                    False)
+            else:
+                result = cpp.cluster_from_condensed_inplace(
+                    matrix, int(n), method, bool(fast_path))
             self._X_features = None
         else:
             result = cpp.cluster_from_matrix(
                 matrix, method, bool(fast_path),
-                False)  # retain_condensed=False for performance
+                False)
             self._X_features = None
 
         self.clustering_method = "ward_d" if method == "ward" else method
@@ -298,16 +344,12 @@ class Cluster:
         cm = result["condensed_matrix"]
         self._condensed_matrix = np.asarray(cm) if cm is not None else None
 
-        # Keep reference to original input matrix for lazy condensed reconstruction
         if not use_vector_path and not use_condensed_path:
-            self._input_matrix = matrix  # N×N numpy array
-        elif use_condensed_path:
-            self._input_matrix = None
-            # If condensed was the input and we didn't retain, store original
             if self._condensed_matrix is None:
+                self._condensed_matrix = _copy_condensed(matrix)
+        elif use_condensed_path and not ward_d_feature_path:
+            if self._condensed_matrix is None and preserve_input:
                 self._condensed_matrix = np.array(matrix, dtype=np.float64, copy=True)
-        else:
-            self._input_matrix = None
 
         fm = result["full_matrix"]
         self._full_matrix = np.asarray(fm) if fm is not None else None
@@ -317,10 +359,10 @@ class Cluster:
     @property
     def condensed_matrix(self):
         """Condensed distance matrix. Lazy-computed from input matrix if not retained."""
-        if self._condensed_matrix is None and self._input_matrix is not None:
-            self._condensed_matrix = squareform(
-                (self._input_matrix + self._input_matrix.T) / 2.0
-            )
+        if self._condensed_matrix is None and self._X_features is not None:
+            from scipy.spatial.distance import pdist
+
+            self._condensed_matrix = pdist(self._X_features, "euclidean")
         return self._condensed_matrix
 
     @condensed_matrix.setter
@@ -331,10 +373,12 @@ class Cluster:
     def full_matrix(self):
         """Full distance matrix. Lazy-computed from X_features or condensed_matrix."""
         if self._full_matrix is None and self._X_features is not None:
+            from scipy.spatial.distance import pdist, squareform
+
             self._full_matrix = squareform(pdist(self._X_features, "euclidean"))
-        elif self._full_matrix is None and self._input_matrix is not None:
-            self._full_matrix = self._input_matrix
         elif self._full_matrix is None and self.condensed_matrix is not None:
+            from scipy.spatial.distance import squareform
+
             self._full_matrix = squareform(self.condensed_matrix)
         return self._full_matrix
 
@@ -381,6 +425,10 @@ class Cluster:
         if self.linkage_matrix is None:
             raise ValueError("Linkage matrix is not computed.")
 
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from scipy.cluster.hierarchy import dendrogram
+
         sns.set(style=style)
         plt.figure(figsize=figsize)
         dendrogram(self.linkage_matrix, labels=None)  # Do not plot labels for large datasets
@@ -415,9 +463,10 @@ def ward_labels_only(
     matrix=None,
     X_features=None,
     entity_ids=None,
-    ward_variant="ward_d2",
+    ward_variant="ward_d",
     fast_path=True,
     early_stop=False,
+    preserve_input=True,
 ):
     """
     Labels-only API for Ward clustering.
@@ -432,6 +481,8 @@ def ward_labels_only(
     if early_stop:
         if X_features is None:
             raise ValueError("early_stop=True requires X_features input.")
+        if ward_variant.lower() != "ward_d2":
+            raise ValueError("early_stop=True is only available for Ward.D2.")
         from sklearn.cluster import AgglomerativeClustering
 
         X = np.asarray(X_features, dtype=np.float64)
@@ -447,24 +498,30 @@ def ward_labels_only(
     if X_features is None and matrix is None:
         raise ValueError("Provide either matrix or X_features.")
 
-    if X_features is not None:
-        n = np.asarray(X_features).shape[0]
-    else:
-        n = np.asarray(matrix).shape[0]
-    if entity_ids is None:
-        entity_ids = np.arange(n)
-
     cluster = Cluster(
         matrix=matrix,
         entity_ids=entity_ids,
         clustering_method=ward_variant,
         X_features=X_features,
         fast_path=bool(fast_path),
+        preserve_input=bool(preserve_input),
     )
     return cluster.get_cluster_labels(num_clusters)
 
 
 class ClusterQuality:
+    @property
+    def matrix(self):
+        if self._matrix is None:
+            from scipy.spatial.distance import squareform
+
+            self._matrix = squareform(self._condensed_matrix)
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        self._matrix = value
+
     def __init__(self, matrix_or_cluster, max_clusters=20, clustering_method=None, weights=None):
         """
         Initialize the ClusterQuality class for precomputed distance matrices or a Cluster instance.
@@ -480,6 +537,7 @@ class ClusterQuality:
                        weights will be extracted from the Cluster object.
         """
         cpp = _get_clustering_c_code()
+        self._matrix = None
 
         self.metric_order = [
             "PBC", "HG", "HGSD", "ASW", "ASWw",
@@ -488,11 +546,15 @@ class ClusterQuality:
 
         if isinstance(matrix_or_cluster, Cluster):
             cluster = matrix_or_cluster
-            self.matrix = cluster.full_matrix
             self.clustering_method = cluster.clustering_method
             self.linkage_matrix = cluster.linkage_matrix
             self.weights = cluster.weights
             self._condensed_matrix = cluster.condensed_matrix
+            if self._condensed_matrix is None:
+                raise ValueError(
+                    "Cluster created with preserve_input=False does not retain "
+                    "distances; recreate it with preserve_input=True."
+                )
 
             n = len(cluster.entity_ids)
             k_max = min(int(max_clusters), n)
@@ -506,8 +568,8 @@ class ClusterQuality:
                 n, 2, k_max,
             )
 
-        elif isinstance(matrix_or_cluster, (np.ndarray, pd.DataFrame)):
-            if isinstance(matrix_or_cluster, pd.DataFrame):
+        elif isinstance(matrix_or_cluster, np.ndarray) or _is_pandas_dataframe(matrix_or_cluster):
+            if _is_pandas_dataframe(matrix_or_cluster):
                 print("[>] Detected Pandas DataFrame. Converting to NumPy array...")
                 matrix_or_cluster = matrix_or_cluster.values
             matrix = np.asarray(matrix_or_cluster, dtype=np.float64, order="C")
@@ -535,7 +597,6 @@ class ClusterQuality:
 
             self.linkage_matrix = np.asarray(result["linkage_matrix"])
             self._condensed_matrix = np.asarray(result["condensed_matrix"])
-            self.matrix = np.asarray(result["full_matrix"])
             self.clustering_method = result["clustering_method"]
             self.weights = w
 
@@ -613,13 +674,15 @@ class ClusterQuality:
                 normalized_scores[metric] = values.copy()
         return normalized_scores
 
-    def get_cluster_range_table(self) -> pd.DataFrame:
+    def get_cluster_range_table(self):
         """
         Return a metrics-by-cluster table mirroring R's `as.clustrange()` output.
 
         :return: DataFrame indexed by cluster count ("cluster2", ...)
                  with raw metric values for each quality indicator.
         """
+        import pandas as pd
+
         values = self._range_table_values
         n_rows = values.shape[0]
         index_labels = [f"cluster{k}" for k in range(2, 2 + n_rows)]
@@ -634,6 +697,8 @@ class ClusterQuality:
         :return: Pandas DataFrame summarizing the optimal number of clusters (N groups),
                  the corresponding raw metric values, and z-score normalized values.
         """
+        import pandas as pd
+
         return pd.DataFrame({
             "Metric": self.metric_order,
             "Opt. Clusters": self._summary_opt,
@@ -686,6 +751,10 @@ class ClusterQuality:
             metric: np.asarray(values, dtype=np.float64).copy()
             for metric, values in self.scores.items()
         }
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from matplotlib.ticker import MaxNLocator
 
         original_stats = {}
         for metric in metrics_list or self.metric_order:
@@ -775,7 +844,7 @@ class ClusterResults:
             )
         return self._results_cache[num_clusters]
 
-    def get_cluster_memberships(self, num_clusters) -> pd.DataFrame:
+    def get_cluster_memberships(self, num_clusters):
         """
         Generate a table mapping entity IDs to their corresponding cluster IDs.
 
@@ -784,13 +853,15 @@ class ClusterResults:
         """
         if self.linkage_matrix is None:
             raise ValueError("Linkage matrix is not computed.")
+        import pandas as pd
+
         result = self._get_cached_result(num_clusters)
         return pd.DataFrame({
             "Entity ID": self.entity_ids,
             "Cluster": np.asarray(result["labels"], dtype=np.int32),
         })
 
-    def get_cluster_distribution(self, num_clusters, weighted=False) -> pd.DataFrame:
+    def get_cluster_distribution(self, num_clusters, weighted=False):
         """
         Generate a distribution summary of clusters showing counts, percentages,
         and optionally weighted statistics.
@@ -799,6 +870,8 @@ class ClusterResults:
         :param weighted: If True, include weighted statistics in the distribution.
         :return: DataFrame with cluster distribution information.
         """
+        import pandas as pd
+
         result = self._get_cached_result(num_clusters)
         distribution = pd.DataFrame({
             "Cluster": np.asarray(result["Cluster"], dtype=np.int32),
@@ -826,6 +899,10 @@ class ClusterResults:
         :param weighted: If True, display weighted percentages instead of entity count percentages.
         """
         distribution = self.get_cluster_distribution(num_clusters, weighted=weighted)
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from matplotlib.ticker import MaxNLocator
 
         sns.set(style=style)
         plt.figure(figsize=figsize)
@@ -871,108 +948,3 @@ class ClusterResults:
         plt.figtext(0.5, 0.01, note_text, ha='center', fontsize=10, style='italic')
 
         _save_and_show_results(save_as, dpi)
-
-
-# For xinyi's test, because she can't debug in Jupyter :
-    # Traceback (most recent call last):
-    #   File "/Applications/PyCharm.app/Contents/plugins/python-ce/helpers/pydev/_pydevd_bundle/pydevd_comm.py", line 736, in make_thread_stack_str
-    #     append('file="%s" line="%s">' % (make_valid_xml_value(my_file), lineno))
-    #   File "/Applications/PyCharm.app/Contents/plugins/python-ce/helpers/pydev/_pydevd_bundle/pydevd_xml.py", line 36, in make_valid_xml_value
-    #     return s.replace("&", "&amp;").replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
-    # AttributeError: 'tuple' object has no attribute 'replace'
-
-if __name__ == '__main__':
-    # Import necessary libraries
-    # Your calling code (e.g., in a script or notebook)
-
-    from sequenzo import *  # Import the package, give it a short alias
-    import pandas as pd  # Data manipulation
-    import numpy as np
-
-    # List all the available datasets in Sequenzo
-    # Now access functions using the alias:
-    print('Available datasets in Sequenzo: ', list_datasets())
-
-    # Load the data that we would like to explore in this tutorial
-    # `df` is the short for `dataframe`, which is a common variable name for a dataset
-    # df = load_dataset('country_co2_emissions')
-    # df = load_dataset('mvad')
-    df = pd.read_csv("/Users/xinyi/Projects/sequenzo/sequenzo/data_and_output/orignal data/mvad.csv")
-
-    # 时间列表
-    time_list = ['Jul.93', 'Aug.93', 'Sep.93', 'Oct.93', 'Nov.93', 'Dec.93',
-                 'Jan.94', 'Feb.94', 'Mar.94', 'Apr.94', 'May.94', 'Jun.94', 'Jul.94',
-                 'Aug.94', 'Sep.94', 'Oct.94', 'Nov.94', 'Dec.94', 'Jan.95', 'Feb.95',
-                 'Mar.95', 'Apr.95', 'May.95', 'Jun.95', 'Jul.95', 'Aug.95', 'Sep.95',
-                 'Oct.95', 'Nov.95', 'Dec.95', 'Jan.96', 'Feb.96', 'Mar.96', 'Apr.96',
-                 'May.96', 'Jun.96', 'Jul.96', 'Aug.96', 'Sep.96', 'Oct.96', 'Nov.96',
-                 'Dec.96', 'Jan.97', 'Feb.97', 'Mar.97', 'Apr.97', 'May.97', 'Jun.97',
-                 'Jul.97', 'Aug.97', 'Sep.97', 'Oct.97', 'Nov.97', 'Dec.97', 'Jan.98',
-                 'Feb.98', 'Mar.98', 'Apr.98', 'May.98', 'Jun.98', 'Jul.98', 'Aug.98',
-                 'Sep.98', 'Oct.98', 'Nov.98', 'Dec.98', 'Jan.99', 'Feb.99', 'Mar.99',
-                 'Apr.99', 'May.99', 'Jun.99']
-
-    # 方法1: 使用pandas获取所有唯一值
-    time_states_df = df[time_list]
-    all_unique_states = set()
-
-    for col in time_list:
-        unique_vals = df[col].dropna().unique()  # Remove NaN values
-        all_unique_states.update(unique_vals)
-
-    # 转换为排序的列表
-    states = sorted(list(all_unique_states))
-    print("All unique states:")
-    for i, state in enumerate(states, 1):
-        print(f"{i:2d}. {state}")
-
-    print(f"\nstates list:")
-    print(f"states = {states}")
-
-    # Create a SequenceData object
-
-    # Define the time-span variable
-    time_list = ['Jul.93', 'Aug.93', 'Sep.93', 'Oct.93', 'Nov.93', 'Dec.93',
-                 'Jan.94', 'Feb.94', 'Mar.94', 'Apr.94', 'May.94', 'Jun.94', 'Jul.94',
-                 'Aug.94', 'Sep.94', 'Oct.94', 'Nov.94', 'Dec.94', 'Jan.95', 'Feb.95',
-                 'Mar.95', 'Apr.95', 'May.95', 'Jun.95', 'Jul.95', 'Aug.95', 'Sep.95',
-                 'Oct.95', 'Nov.95', 'Dec.95', 'Jan.96', 'Feb.96', 'Mar.96', 'Apr.96',
-                 'May.96', 'Jun.96', 'Jul.96', 'Aug.96', 'Sep.96', 'Oct.96', 'Nov.96',
-                 'Dec.96', 'Jan.97', 'Feb.97', 'Mar.97', 'Apr.97', 'May.97', 'Jun.97',
-                 'Jul.97', 'Aug.97', 'Sep.97', 'Oct.97', 'Nov.97', 'Dec.97', 'Jan.98',
-                 'Feb.98', 'Mar.98', 'Apr.98', 'May.98', 'Jun.98', 'Jul.98', 'Aug.98',
-                 'Sep.98', 'Oct.98', 'Nov.98', 'Dec.98', 'Jan.99', 'Feb.99', 'Mar.99',
-                 'Apr.99', 'May.99', 'Jun.99']
-
-    states = ['FE', 'HE', 'employment', 'joblessness', 'school', 'training']
-    labels = ['further education', 'higher education', 'employment', 'joblessness', 'school', 'training']
-
-    # TODO: write a try and error: if no such a parameter, then ask to pass the right ones
-    # sequence_data = SequenceData(df, time=time, id_col="country", ids=df['country'].values, states=states)
-
-    sequence_data = SequenceData(df,
-                                 time=time_list,
-                                 id_col="id",
-                                 states=states,
-                                 labels=labels,
-                                 )
-
-    om = get_distance_matrix(sequence_data,
-                             method="OM",
-                             sm="CONSTANT",
-                             indel=1)
-
-    cluster = Cluster(om, sequence_data.ids, clustering_method='ward_d')
-    cluster.plot_dendrogram(xlabel="Individuals", ylabel="Distance")
-
-    # Create a ClusterQuality object to evaluate clustering quality
-    cluster_quality = ClusterQuality(cluster)
-    cluster_quality.compute_cluster_quality_scores()
-    cluster_quality.plot_cqi_scores(norm='zscore')
-    summary_table = cluster_quality.get_cqi_table()
-    print(summary_table)
-
-    table = cluster_quality.get_cluster_range_table()
-    # table.to_csv("cluster_quality_table.csv")
-
-    print(table)

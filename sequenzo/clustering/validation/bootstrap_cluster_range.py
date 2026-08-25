@@ -54,19 +54,25 @@ def _draw_bootstrap_sample(
     rng: np.random.Generator,
 ) -> np.ndarray:
     n_obs = clustering.shape[0]
-    while True:
-        if sampling == "strata" and strata is not None:
-            sample = _stratified_sample(strata, sample_size, rng)
-        elif sampling == "medoids" and medoids is not None:
-            medoid_idx = np.asarray(medoids, dtype=int)
-            remaining = sample_size - medoid_idx.size
-            extra = rng.choice(n_obs, size=max(remaining, 0), replace=False)
-            sample = np.unique(np.concatenate([medoid_idx, extra]))
-        else:
-            sample = rng.choice(n_obs, size=sample_size, replace=False)
-        clust_sample = clustering.iloc[sample, :]
-        if all(clust_sample[col].nunique() == clustering[col].nunique() for col in clustering.columns):
-            return sample
+    if sampling == "strata":
+        if strata is None:
+            raise ValueError("sampling='strata' requires strata.")
+        return _stratified_sample(strata, sample_size, rng)
+    if sampling == "medoids":
+        if medoids is None:
+            raise ValueError("sampling='medoids' requires medoids.")
+        medoid_idx = np.unique(np.asarray(medoids, dtype=int) - 1)
+        if np.any((medoid_idx < 0) | (medoid_idx >= n_obs)):
+            raise ValueError("medoids must contain 1-based row indices.")
+        remaining = sample_size - medoid_idx.size
+        if remaining < 0:
+            raise ValueError("sample_size cannot be smaller than the medoid count.")
+        pool = np.setdiff1d(np.arange(n_obs), medoid_idx, assume_unique=True)
+        extra = rng.choice(pool, size=remaining, replace=False)
+        return np.sort(np.concatenate([medoid_idx, extra]))
+    if sampling != "simple":
+        raise ValueError("sampling must be 'simple', 'strata', or 'medoids'.")
+    return rng.choice(n_obs, size=sample_size, replace=False)
 
 
 def boot_cluster_range(
@@ -88,6 +94,7 @@ def boot_cluster_range(
 
     Either ``seqdata`` + ``seqdist_kwargs`` or a ``distance_builder`` callback
     must be provided to rebuild distances on each bootstrap sample.
+    ``medoids`` uses the 1-based row indices returned by ``KMedoids``.
     """
     if isinstance(clustering, pd.DataFrame):
         clustering_frame = clustering.copy()
@@ -99,13 +106,6 @@ def boot_cluster_range(
 
     if strata is None and sampling == "clustering":
         strata = clustering_frame.iloc[:, -1].to_numpy()
-        proportions = pd.Series(strata).value_counts(normalize=True)
-        if any(np.round(proportions * sample_size) < 2):
-            minimum = 2.0 / float(proportions.min())
-            raise ValueError(
-                "sample_size is too small for stratified sampling of clustering. "
-                f"Consider a minimum value of {minimum:.0f}."
-            )
         sampling = "strata"
 
     seqdist_kwargs = dict(seqdist_kwargs or {})
@@ -146,11 +146,19 @@ def boot_cluster_range(
     boot_arrays = [np.vstack(values) for values in boot_stats]
     meant = np.vstack([values.mean(axis=0) for values in boot_arrays])
     stderr = np.vstack([values.std(axis=0, ddof=1) for values in boot_arrays])
+    if distance_matrix is None:
+        stats = pd.DataFrame(meant, index=renamed, columns=METRIC_ORDER)
+    else:
+        stats = cluster_range_from_partitions(
+            distance_matrix,
+            clustering_frame,
+            weights=weights,
+        ).stats
 
     return BootClusterRangeResult(
         clustering=clustering_out,
         kvals=kvals,
-        stats=pd.DataFrame(meant, index=renamed, columns=METRIC_ORDER),
+        stats=stats,
         boot=boot_arrays,
         meant=pd.DataFrame(meant, index=renamed, columns=METRIC_ORDER),
         stderr=pd.DataFrame(stderr, index=renamed, columns=METRIC_ORDER),

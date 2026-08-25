@@ -34,6 +34,10 @@ _LAZY: dict[str, tuple[str, str]] = {
         "hierarchical_cluster_range",
     ),
     "KMedoids": ("sequenzo.clustering.k_medoids", "KMedoids"),
+    "cluster_sequences_pamonce": (
+        "sequenzo.clustering.sequence_pamonce",
+        "cluster_sequences_pamonce",
+    ),
     "k_medoids_range": ("sequenzo.clustering.k_medoids_range", "k_medoids_range"),
     "AggregateCasesResult": (
         "sequenzo.clustering.utils.aggregate_cases",
@@ -280,6 +284,7 @@ __all__ = [
     "compare_cluster_methods",
     "hierarchical_cluster_range",
     "KMedoids",
+    "cluster_sequences_pamonce",
     "k_medoids_range",
     "AggregateCasesResult",
     "aggregate_cases",
