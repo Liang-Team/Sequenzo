@@ -3,10 +3,12 @@
 @File    : plot_single_medoid.py
 @Time    : 26/08/2026 20:10
 @Desc    :
-    Cluster-medoid plots in the same visual language as ``plot_sequence_index``.
+    Group / cluster medoid plots in the same visual language as ``plot_sequence_index``.
 
-    * ``plot_medoids`` — one panel per cluster (column / grid) or all medoids
-      stacked as rows; optional subset via ``clusters=``.
+    * ``plot_medoids`` — one panel per group or cluster (column / grid), or all
+      medoids stacked as rows. Grouping uses the same two APIs as the index plot:
+      ``group_by_column`` (e.g. gender already in the data) or
+      ``group_dataframe`` + ``group_column_name`` (e.g. a cluster membership table).
     * ``plot_single_medoid`` — backward-compatible helper that finds one global
       medoid from a distance matrix.
 """
@@ -15,10 +17,12 @@ from __future__ import annotations
 from typing import List, Optional, Sequence, Union
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 from sequenzo.define_sequence_data import SequenceData
+from sequenzo.visualization.plot_sequence_index import smart_sort_groups
 from sequenzo.visualization.utils import (
     combine_plot_with_legend,
     create_standalone_legend,
@@ -69,12 +73,263 @@ def _validate_aligned_domains(domains: List[SequenceData]) -> SequenceData:
     return reference
 
 
-def _coerce_cluster_subset(clusters: Optional[Union[int, str, Sequence]]) -> Optional[list]:
-    if clusters is None:
+def _coerce_group_subset(groups: Optional[Union[int, str, Sequence]]) -> Optional[list]:
+    if groups is None:
         return None
-    if isinstance(clusters, (list, tuple, np.ndarray)):
-        return list(clusters)
-    return [clusters]
+    if isinstance(groups, (list, tuple, np.ndarray)):
+        return list(groups)
+    return [groups]
+
+
+def _match_group_subset(keys: list, wanted: list) -> list:
+    wanted_ints = []
+    for item in wanted:
+        try:
+            wanted_ints.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    keep = []
+    for key in keys:
+        if key in wanted:
+            keep.append(key)
+            continue
+        try:
+            if int(key) in wanted_ints:
+                keep.append(key)
+        except (TypeError, ValueError):
+            continue
+    if not keep:
+        raise ValueError(
+            f"No groups matched groups={wanted!r}. Available groups: {keys}."
+        )
+    return keep
+
+
+def _grouping_id_column(group_dataframe: pd.DataFrame, reference: SequenceData) -> str:
+    if reference.id_col and reference.id_col in group_dataframe.columns:
+        return reference.id_col
+    if "Entity ID" in group_dataframe.columns:
+        return "Entity ID"
+    return str(group_dataframe.columns[0])
+
+
+def _drop_missing_group_values(values) -> list:
+    unique = list(pd.unique(values))
+    return [g for g in unique if pd.notna(g)]
+
+
+def _ordered_groups(
+    values,
+    *,
+    group_order,
+    group_labels,
+    sort_groups: str,
+) -> list:
+    unique = _drop_missing_group_values(values)
+    if group_order:
+        groups = [g for g in group_order if g in unique]
+        missing = [g for g in unique if g not in group_order]
+        if missing:
+            print(f"[Warning] Groups not in group_order will be excluded: {missing}")
+        return groups
+    if group_labels is not None:
+        mapped = []
+        available = set(unique)
+        for _original_key, label_value in group_labels.items():
+            if label_value in available:
+                mapped.append(label_value)
+        leftover = available - set(mapped)
+        if leftover:
+            print(
+                f"[Warning] Some groups in data are not in group_labels "
+                f"and will be excluded: {leftover}"
+            )
+        return mapped
+    if sort_groups in {"numeric", "auto"}:
+        return smart_sort_groups(unique)
+    if sort_groups == "alpha":
+        return sorted(unique, key=lambda x: str(x))
+    if sort_groups == "none":
+        return unique
+    raise ValueError(
+        f"Invalid sort_groups value: {sort_groups}. "
+        "Use 'auto', 'numeric', 'alpha', or 'none'."
+    )
+
+
+def _build_group_table_from_column(
+    reference: SequenceData,
+    group_by_column: str,
+    group_labels: Optional[dict],
+) -> pd.DataFrame:
+    if group_by_column not in reference.data.columns:
+        available_cols = [
+            col
+            for col in reference.data.columns
+            if col not in reference.time and col != reference.id_col
+        ]
+        raise ValueError(
+            f"Column '{group_by_column}' not found in the data. "
+            f"Available columns for grouping: {available_cols}"
+        )
+    table = reference.data[[reference.id_col, group_by_column]].copy()
+    table.columns = ["Entity ID", "Category"]
+    unique_values = _drop_missing_group_values(reference.data[group_by_column])
+    if group_labels is not None:
+        missing_keys = set(unique_values) - set(group_labels.keys())
+        if missing_keys:
+            raise ValueError(
+                f"group_labels missing mappings for values: {missing_keys}. "
+                f"Please provide labels for all unique values in '{group_by_column}': "
+                f"{sorted(unique_values)}"
+            )
+        table["Category"] = table["Category"].map(group_labels)
+    n_categories = len(_drop_missing_group_values(table["Category"]))
+    print(
+        f"[>] Creating grouped medoid plots by '{group_by_column}' "
+        f"with {n_categories} categories"
+    )
+    return table
+
+
+def _apply_group_labels_to_table(
+    group_dataframe: pd.DataFrame,
+    group_column_name: str,
+    group_labels: Optional[dict],
+) -> pd.DataFrame:
+    if group_labels is None:
+        return group_dataframe
+    unique_values = _drop_missing_group_values(group_dataframe[group_column_name])
+    missing_keys = set(unique_values) - set(group_labels.keys())
+    if missing_keys:
+        raise ValueError(
+            f"group_labels missing mappings for values: {missing_keys}. "
+            f"Please provide labels for all unique values in '{group_column_name}': "
+            f"{sorted(unique_values)}"
+        )
+    out = group_dataframe.copy()
+    out[group_column_name] = out[group_column_name].map(group_labels)
+    return out
+
+
+def _member_positions(reference: SequenceData, group_ids) -> np.ndarray:
+    seq_ids = np.asarray(reference.ids)
+    mask = np.isin(seq_ids, np.asarray(group_ids))
+    if not np.any(mask):
+        mask = np.isin(seq_ids.astype(str), np.asarray(group_ids).astype(str))
+    return np.where(mask)[0]
+
+
+def _resolve_grouping(
+    reference: SequenceData,
+    *,
+    group_by_column,
+    group_dataframe,
+    group_column_name,
+    group_labels,
+    group_order,
+    sort_groups: str,
+    groups_subset,
+) -> Optional[tuple[list, list[np.ndarray], str]]:
+    """Return ``(group_keys, member_index_lists, grouping_name)`` or ``None``."""
+    grouping_name = group_by_column or group_column_name or ""
+    if group_by_column is not None:
+        group_dataframe = _build_group_table_from_column(
+            reference, group_by_column, group_labels
+        )
+        group_column_name = "Category"
+    elif group_column_name is not None and group_dataframe is None:
+        print(
+            "[>] Reminder: You passed `group_column_name` but not `group_dataframe`.\n"
+            "    • `group_column_name` is used together with `group_dataframe` "
+            "(e.g. a separate table with cluster membership).\n"
+            "    • To group by a column that is already in your sequence data, "
+            "use `group_by_column` instead (e.g. group_by_column='gender').\n"
+            "    Proceeding without grouping."
+        )
+        group_column_name = None
+    elif group_dataframe is not None and group_column_name is None:
+        print(
+            "[>] Reminder: You passed `group_dataframe` but not `group_column_name`.\n"
+            "    • When using `group_dataframe` you must also specify "
+            "`group_column_name` (the column that contains group IDs).\n"
+            "    • Alternatively, to group by a column already in your sequence data, "
+            "use `group_by_column`.\n"
+            "    Proceeding without grouping."
+        )
+        group_dataframe = None
+
+    if group_dataframe is None or group_column_name is None:
+        return None
+
+    if group_column_name not in group_dataframe.columns:
+        raise ValueError(
+            f"group_column_name {group_column_name!r} is not in group_dataframe "
+            f"columns: {list(group_dataframe.columns)}"
+        )
+
+    if group_by_column is None:
+        group_dataframe = _apply_group_labels_to_table(
+            group_dataframe, group_column_name, group_labels
+        )
+
+    id_col_name = _grouping_id_column(group_dataframe, reference)
+    group_keys = _ordered_groups(
+        group_dataframe[group_column_name],
+        group_order=group_order,
+        group_labels=group_labels,
+        sort_groups=sort_groups,
+    )
+    subset = _coerce_group_subset(groups_subset)
+    if subset is not None:
+        group_keys = _match_group_subset(group_keys, subset)
+
+    keys_out: list = []
+    members_out: list[np.ndarray] = []
+    for key in group_keys:
+        group_ids = group_dataframe.loc[
+            group_dataframe[group_column_name] == key, id_col_name
+        ].to_numpy()
+        positions = _member_positions(reference, group_ids)
+        if len(positions) == 0:
+            print(f"[>] Skipping group '{key}' (no matching sequences).")
+            continue
+        keys_out.append(key)
+        members_out.append(positions)
+    if not keys_out:
+        raise ValueError(
+            "No groups have matching sequences in the data. "
+            "Cannot create grouped medoid plot."
+        )
+    return keys_out, members_out, str(grouping_name)
+
+
+def _medoid_index_in_group(
+    distance_matrix: np.ndarray,
+    member_indices: np.ndarray,
+    weights: Optional[np.ndarray],
+) -> int:
+    if len(member_indices) == 0:
+        raise ValueError("Cannot compute a medoid for an empty group.")
+    if len(member_indices) == 1:
+        return int(member_indices[0])
+    sub = distance_matrix[np.ix_(member_indices, member_indices)]
+    if weights is None:
+        totals = sub.sum(axis=0)
+    else:
+        totals = sub.T @ np.asarray(weights)[member_indices]
+    return int(member_indices[int(np.argmin(totals))])
+
+
+def _panel_label(key, *, grouped: bool, grouping_name: str) -> str:
+    key_s = str(key)
+    if key_s.lower().startswith("cluster"):
+        return key_s
+    if grouped and "cluster" in grouping_name.lower():
+        return f"Cluster {key}"
+    if grouped:
+        return key_s
+    return f"Cluster {key}"
 
 
 def _filter_medoids(
@@ -106,8 +361,8 @@ def _filter_medoids(
             continue
     if not keep:
         raise ValueError(
-            f"No medoids matched clusters={wanted!r}. "
-            f"Available cluster keys: {cluster_keys}."
+            f"No medoids matched groups={wanted!r}. "
+            f"Available group keys: {cluster_keys}."
         )
     keep_arr = np.asarray(keep, dtype=int)
     return (
@@ -231,6 +486,13 @@ def plot_medoids(
     distance_matrix: Optional[np.ndarray] = None,
     cluster_labels: Optional[Sequence] = None,
     clusters: Optional[Union[int, str, Sequence]] = None,
+    groups: Optional[Union[int, str, Sequence]] = None,
+    group_by_column=None,
+    group_dataframe=None,
+    group_column_name=None,
+    group_labels=None,
+    group_order=None,
+    sort_groups: str = "auto",
     ids: Optional[Sequence] = None,
     domain_names: Optional[Sequence[str]] = None,
     layout: str = "column",
@@ -248,61 +510,117 @@ def plot_medoids(
     fontsize: int = 12,
     include_legend: bool = True,
     show_ids: bool = True,
-    show_cluster_titles: bool = True,
+    show_group_titles: bool = True,
+    show_cluster_titles: Optional[bool] = None,
     show_title: bool = True,
     show: bool = True,
     weights="auto",
 ):
     """
-    Plot cluster medoids with sequence-index styling and subplot layouts.
+    Plot group or cluster medoids with sequence-index styling and subplot layouts.
 
-    Parameters
-    ----------
-    seqdata
-        One ``SequenceData``, or a list of aligned domain objects (same IDs,
-        same states, same length). A list draws each cluster as a domain × time
-        panel, like a one-row index plot per cluster.
-    medoid_indices
-        0-based row indices of the medoids (one per cluster). If omitted,
-        ``distance_matrix`` is used to compute a single global medoid.
-    cluster_labels
-        Cluster ids aligned with ``medoid_indices``. Defaults to ``1..k``.
-    clusters
-        Subset of cluster ids to draw. Pass an int (``clusters=3``) to inspect
-        one cluster, or a list (``clusters=[1, 4]``) for a subset. ``None``
-        draws every medoid.
-    layout
-        ``'column'`` — one subplot per cluster, stacked (index-plot groups).
-        ``'grid'`` — wrapped subplot grid (same helper as ``plot_sequence_index``).
-        ``'stacked'`` — all medoids as rows of a single index-style image
-        (single-domain only).
-    idle_state, drop_idle_domains, sort_domains
-        Optional multi-domain cleanup: drop domains that are uniformly
-        ``idle_state`` on the medoids, and/or sort remaining domains by activity.
-    dpi
-        Saved-figure resolution (default 300).
+    Grouping matches ``plot_sequence_index``:
+
+    1. **Simplified API** — grouping column already in the sequence table::
+
+           plot_medoids(seqdata, distance_matrix=D, group_by_column="gender")
+
+    2. **Membership table** — clusters or any grouping in a separate dataframe::
+
+           plot_medoids(
+               seqdata,
+               distance_matrix=D,
+               group_dataframe=membership_df,
+               group_column_name="Cluster",
+           )
+
+    ``groups=`` (or the alias ``clusters=``) keeps a subset, e.g. ``groups="Female"``
+    or ``clusters=3``. If you already know the medoid row for each group, pass
+    ``medoid_indices`` instead of computing them from ``distance_matrix``.
     """
     domains = _as_domain_list(seqdata)
     reference = _validate_aligned_domains(domains)
 
-    if medoid_indices is None:
-        if distance_matrix is None:
-            raise ValueError("Provide medoid_indices or a distance_matrix.")
-        _, computed = compute_medoids_from_distance_matrix(
-            distance_matrix, reference, weights=weights, top_k=1
-        )
-        medoid_indices = computed
+    if show_cluster_titles is not None:
+        show_group_titles = show_cluster_titles
 
-    indices = np.asarray(medoid_indices, dtype=int).reshape(-1)
+    if groups is not None and clusters is not None and groups != clusters:
+        raise ValueError("Pass only one of groups= or clusters=; they are aliases.")
+    groups_subset = groups if groups is not None else clusters
+
+    if isinstance(weights, str) and weights == "auto":
+        weight_vec = getattr(reference, "weights", None)
+    elif weights is not None:
+        weight_vec = np.asarray(weights, dtype=float).reshape(-1)
+        if len(weight_vec) != len(reference.values):
+            raise ValueError("Length of weights must equal number of sequences.")
+    else:
+        weight_vec = None
+
+    grouping = _resolve_grouping(
+        reference,
+        group_by_column=group_by_column,
+        group_dataframe=group_dataframe,
+        group_column_name=group_column_name,
+        group_labels=group_labels,
+        group_order=group_order,
+        sort_groups=sort_groups,
+        groups_subset=groups_subset if (
+            group_by_column is not None or group_dataframe is not None
+        ) else None,
+    )
+
+    grouped = grouping is not None
+    grouping_name = ""
+    if grouping is not None:
+        group_keys, members_by_group, grouping_name = grouping
+        provided = (
+            None
+            if medoid_indices is None
+            else np.asarray(medoid_indices, dtype=int).reshape(-1)
+        )
+        if provided is not None and len(provided) == len(group_keys):
+            indices = provided
+        elif distance_matrix is not None:
+            distance_square = _to_square_matrix(distance_matrix)
+            indices = np.asarray(
+                [
+                    _medoid_index_in_group(distance_square, members, weight_vec)
+                    for members in members_by_group
+                ],
+                dtype=int,
+            )
+        elif provided is not None:
+            raise ValueError(
+                "medoid_indices length must match the number of groups "
+                f"({len(group_keys)}). Got {len(provided)}. "
+                "Pass one index per group, or a distance_matrix to compute them."
+            )
+        else:
+            raise ValueError(
+                "Grouped medoid plots need a distance_matrix (to find one medoid "
+                "per group) or medoid_indices aligned with the groups."
+            )
+        cluster_keys = list(group_keys)
+    else:
+        if medoid_indices is None:
+            if distance_matrix is None:
+                raise ValueError("Provide medoid_indices or a distance_matrix.")
+            _, computed = compute_medoids_from_distance_matrix(
+                distance_matrix, reference, weights=weight_vec, top_k=1
+            )
+            medoid_indices = computed
+
+        indices = np.asarray(medoid_indices, dtype=int).reshape(-1)
+        if cluster_labels is None:
+            cluster_keys = list(range(1, len(indices) + 1))
+        else:
+            cluster_keys = list(cluster_labels)
+            if len(cluster_keys) != len(indices):
+                raise ValueError("cluster_labels length must match medoid_indices.")
+
     if np.any((indices < 0) | (indices >= len(reference.values))):
         raise ValueError("medoid_indices must be 0-based row positions in seqdata.")
-
-    if cluster_labels is None:
-        cluster_keys = list(range(1, len(indices) + 1))
-    else:
-        cluster_keys = list(cluster_labels)
-        if len(cluster_keys) != len(indices):
-            raise ValueError("cluster_labels length must match medoid_indices.")
 
     if ids is None:
         entity_ids = [reference.ids[i] for i in indices]
@@ -313,16 +631,17 @@ def plot_medoids(
 
     titles = []
     for key, entity_id in zip(cluster_keys, entity_ids):
-        label = f"Cluster {key}" if not str(key).lower().startswith("cluster") else str(key)
+        label = _panel_label(key, grouped=grouped, grouping_name=grouping_name)
         titles.append(f"{label} · {entity_id}" if show_ids else label)
 
-    indices, cluster_keys, titles, entity_ids = _filter_medoids(
-        indices,
-        cluster_keys,
-        titles,
-        entity_ids,
-        _coerce_cluster_subset(clusters),
-    )
+    if grouping is None:
+        indices, cluster_keys, titles, entity_ids = _filter_medoids(
+            indices,
+            cluster_keys,
+            titles,
+            entity_ids,
+            _coerce_group_subset(groups_subset),
+        )
     n_medoids = len(indices)
 
     if domain_names is None:
@@ -365,7 +684,7 @@ def plot_medoids(
         fig_w, fig_h = figsize if figsize is not None else (10.0, max(2.2, 0.55 * n_medoids + 1.2))
         figsize = (fig_w, fig_h)
         fig, ax = plt.subplots(figsize=figsize)
-        y_labels = titles if show_cluster_titles else [str(x) for x in entity_ids]
+        y_labels = titles if show_group_titles else [str(x) for x in entity_ids]
         _draw_medoid_panel(
             ax,
             values=stacked,
@@ -438,7 +757,7 @@ def plot_medoids(
                 fontsize=fontsize,
                 xlabel=xlabel_i,
                 ylabel=ylabel_i,
-                show_cluster_titles=show_cluster_titles,
+                show_cluster_titles=show_group_titles,
             )
         for j in range(n_medoids, len(axes_flat)):
             axes_flat[j].set_visible(False)
