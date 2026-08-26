@@ -2120,12 +2120,12 @@ private:
 
         const double global_upper = *std::min_element(
             thread_upper_bounds.begin(), thread_upper_bounds.end());
-        std::size_t overlap_count = 0;
+        std::size_t total_overlap_count = 0;
         for (std::size_t count : thread_overlap_counts) {
-            overlap_count += count;
+            total_overlap_count += count;
         }
         screened_candidate_highwater = std::max(
-            screened_candidate_highwater, overlap_count);
+            screened_candidate_highwater, total_overlap_count);
 
         if (screened_buffer_overflow != 0) {
             return findBestVerifiedSecondPass<UnitWeights>(

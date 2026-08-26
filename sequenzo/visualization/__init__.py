@@ -11,7 +11,7 @@ from .plot_most_frequent_sequences import plot_most_frequent_sequences
 from .plot_relative_frequency import plot_relative_frequency
 from .plot_transition_matrix import compute_transition_matrix, print_transition_matrix, plot_transition_matrix
 from .plot_mean_time import plot_mean_time
-from .plot_single_medoid import plot_single_medoid, compute_medoids_from_distance_matrix
+from .plot_single_medoid import plot_single_medoid, plot_medoids, compute_medoids_from_distance_matrix
 from .plot_state_distribution import plot_state_distribution
 from .plot_modal_state import plot_modal_state
 from .plot_characteristics import (
@@ -26,6 +26,7 @@ __all__ = [
     "plot_relative_frequency",
     "plot_sequence_index",
     "plot_single_medoid",
+    "plot_medoids",
     "plot_state_distribution",
     "plot_transition_matrix",
     "plot_modal_state",
