@@ -48,3 +48,8 @@ ClusterCoreResult cluster_from_features(
     const double* X, int N, int D,
     const std::string& method
 );
+
+ClusterCoreResult cluster_from_features_inplace(
+    double* X, int N, int D,
+    const std::string& method
+);

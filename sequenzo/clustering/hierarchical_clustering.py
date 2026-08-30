@@ -236,8 +236,9 @@ class Cluster:
             feature-vector path.
         :param fast_path: If True, skips Ward compatibility checking and full_matrix retention.
         :param preserve_input: When False, a writable, C-contiguous float64 condensed
-            array is consumed in place to avoid the linkage working copy and is not
-            retained for later quality evaluation. The default keeps an internal copy.
+            array or Ward.D2 feature matrix is consumed in place to avoid the linkage
+            working copy and is not retained for later quality evaluation. The default
+            preserves the input.
         """
         cpp = _get_clustering_c_code()
 
@@ -248,7 +249,21 @@ class Cluster:
         use_condensed_path = False
 
         if use_vector_path:
-            X = np.asarray(X_features, dtype=np.float64, order="C")
+            if not preserve_input:
+                if (
+                    not isinstance(X_features, np.ndarray)
+                    or X_features.dtype != np.float64
+                    or X_features.ndim != 2
+                    or not X_features.flags.c_contiguous
+                    or not X_features.flags.writeable
+                ):
+                    raise ValueError(
+                        "preserve_input=False requires a writable, C-contiguous "
+                        "float64 feature matrix."
+                    )
+                X = X_features
+            else:
+                X = np.asarray(X_features, dtype=np.float64, order="C")
             if X.ndim != 2:
                 raise ValueError("X_features must be a 2D array (n x d).")
             n = X.shape[0]
@@ -314,8 +329,12 @@ class Cluster:
             self.weights = np.ones(n, dtype=np.float64)
 
         if use_vector_path:
-            result = cpp.cluster_from_features(X, method)
-            self._X_features = X
+            if preserve_input:
+                result = cpp.cluster_from_features(X, method)
+                self._X_features = X
+            else:
+                result = cpp.cluster_from_features_inplace(X, method)
+                self._X_features = None
         elif ward_d_feature_path:
             result = cpp.cluster_from_condensed_inplace(
                 matrix, int(n), method, bool(fast_path))

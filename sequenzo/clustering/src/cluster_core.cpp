@@ -293,11 +293,11 @@ ClusterCoreResult cluster_from_condensed_inplace(
 }
 
 // ============================================================================
-// cluster_from_features
+// Feature-matrix paths
 // ============================================================================
 
-ClusterCoreResult cluster_from_features(
-    const double* X, int N, int D,
+ClusterCoreResult cluster_from_features_inplace(
+    double* X, int N, int D,
     const std::string& raw_method)
 {
     if (N < 1) {
@@ -318,23 +318,44 @@ ClusterCoreResult cluster_from_features(
         return result;
     }
 
-    // compute_linkage_vector_euclidean modifies X in-place (merge_inplace),
-    // so we must work on a copy.
-    std::vector<double> X_work(static_cast<size_t>(N) * static_cast<size_t>(D));
-    std::memcpy(X_work.data(), X,
-                static_cast<size_t>(N) * static_cast<size_t>(D) * sizeof(double));
-
     result.linkage_matrix.resize(static_cast<size_t>(N - 1) * 4);
 
     compute_linkage_vector_euclidean(
-        X_work.data(), N, D, mcode,
+        X, N, D, mcode,
         result.linkage_matrix.data()
     );
 
-    // condensed_matrix and full_matrix are left empty for the vector path;
-    // Python can lazily compute them from the feature matrix if needed.
+    // Distance matrices are not retained for the vector path.
     result.euclidean_compatible = true;
     result.warning_flags = 0;
 
     return result;
+}
+
+ClusterCoreResult cluster_from_features(
+    const double* X, int N, int D,
+    const std::string& raw_method)
+{
+    if (N < 1) {
+        throw std::runtime_error("At least one element is needed for clustering.");
+    }
+    if (D < 1) {
+        throw std::runtime_error("Invalid dimension of the data set.");
+    }
+
+    const std::string method = normalise_method(raw_method);
+    vector_method_code(method);
+
+    if (N == 1) {
+        ClusterCoreResult result;
+        result.warning_flags = 0;
+        result.euclidean_compatible = true;
+        return result;
+    }
+
+    std::vector<double> X_work(static_cast<size_t>(N) * static_cast<size_t>(D));
+    std::memcpy(X_work.data(), X,
+                static_cast<size_t>(N) * static_cast<size_t>(D) * sizeof(double));
+    return cluster_from_features_inplace(
+        X_work.data(), N, D, method);
 }

@@ -815,6 +815,43 @@ PYBIND11_MODULE(clustering_c_code, m) {
     },
     py::arg("X"), py::arg("method"),
     "Ward.D2 feature matrix -> linkage matrix via linkage_vector (C++ core).");
+
+    m.def("cluster_from_features_inplace", [](py::array_t<double, py::array::c_style> X,
+                                                const std::string& method) -> py::dict {
+        if (!X.writeable()) {
+            throw std::runtime_error(
+                "preserve_input=False requires a writable feature matrix.");
+        }
+        auto buf = X.request();
+        if (buf.ndim != 2) {
+            throw std::runtime_error("Feature matrix must be a 2D array.");
+        }
+        const int N = static_cast<int>(buf.shape[0]);
+        const int D = static_cast<int>(buf.shape[1]);
+        auto* ptr = static_cast<double*>(buf.ptr);
+
+        ClusterCoreResult res;
+        {
+            py::gil_scoped_release release;
+            res = cluster_from_features_inplace(ptr, N, D, method);
+        }
+
+        py::dict out;
+        if (!res.linkage_matrix.empty()) {
+            const py::ssize_t rows = static_cast<py::ssize_t>(N - 1);
+            out["linkage_matrix"] = vector_to_pyarray_2d(
+                std::move(res.linkage_matrix), rows, 4);
+        } else {
+            out["linkage_matrix"] = py::none();
+        }
+        out["condensed_matrix"] = py::none();
+        out["full_matrix"] = py::none();
+        out["warning_flags"] = res.warning_flags;
+        out["euclidean_compatible"] = res.euclidean_compatible;
+        return out;
+    },
+    py::arg("X"), py::arg("method"),
+    "Cluster from a writable Ward.D2 feature matrix in place.");
     };
     register_cluster_core_apis();
 

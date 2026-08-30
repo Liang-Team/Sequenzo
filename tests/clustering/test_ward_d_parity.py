@@ -88,6 +88,7 @@ def test_ward_d_feature_input_matches_r_fastcluster_distance_semantics():
 
 
 def test_ward_d2_feature_and_distance_paths_match_scipy():
+    original = _FEATURES.copy()
     from_features = Cluster(
         X_features=_FEATURES,
         clustering_method="ward_d2",
@@ -106,6 +107,29 @@ def test_ward_d2_feature_and_distance_paths_match_scipy():
     np.testing.assert_allclose(
         from_distances.linkage_matrix, expected, rtol=1e-12, atol=1e-12
     )
+    np.testing.assert_array_equal(_FEATURES, original)
+
+
+def test_ward_d2_feature_input_can_be_used_in_place():
+    working = _FEATURES.copy()
+    expected = Cluster(
+        X_features=_FEATURES,
+        clustering_method="ward_d2",
+        fast_path=True,
+    )
+
+    result = Cluster(
+        X_features=working,
+        clustering_method="ward_d2",
+        fast_path=True,
+        preserve_input=False,
+    )
+
+    np.testing.assert_allclose(
+        result.linkage_matrix, expected.linkage_matrix, rtol=0.0, atol=0.0
+    )
+    assert not np.array_equal(working, _FEATURES)
+    assert result.condensed_matrix is None
 
 
 def test_default_condensed_input_is_owned_by_cluster():
