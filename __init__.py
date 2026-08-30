@@ -6,7 +6,7 @@
 """
 # sequenzo/__init__.py (Top-level)
 
-__version__ = "0.1.41"
+__version__ = "0.1.42"
 
 import importlib
 
