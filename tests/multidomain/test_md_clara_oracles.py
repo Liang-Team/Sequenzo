@@ -9,8 +9,8 @@ oracle is built from a different code path:
 * CAT: the traditional ``compute_cat_distance_matrix`` cost/diss path,
   not ``CATDistanceProvider``.
 
-A data-dependent fixture (INDELSLOG / weighted TRATE) checks that costs are
-frozen once on the original weighted cases.
+Data-dependent fixtures (INDELSLOG / weighted TRATE) check that costs are
+frozen once on the original weighted cases for IDCD, CAT, and DAT.
 """
 
 from __future__ import annotations
@@ -181,3 +181,67 @@ def test_idcd_data_dependent_costs_use_original_case_weights(sm):
     got = provider.sample_distances(np.arange(provider.n_sequences()), condensed=False)
     np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
     assert np.allclose(np.asarray(md_weighted.weights, dtype=float), weights)
+
+
+@pytest.mark.parametrize("sm", ["TRATE", "INDELSLOG"])
+def test_cat_data_dependent_costs_use_original_case_weights(sm):
+    """Weighted CAT TRATE/INDELSLOG must match traditional CAT on original cases."""
+    domains, _weights, rows1, rows2 = _weighted_duplicate_domains()
+    ac, agg_idx = _agg_view(domains)
+    params = {
+        "method": "OM",
+        "sm": [sm, sm],
+        "indel": "auto",
+        "norm": "none",
+    }
+    traditional = _as_square(
+        compute_cat_distance_matrix(domains, what="diss", **params)
+    )
+    expected = traditional[np.ix_(agg_idx, agg_idx)]
+    unweighted = [_make_domain(rows1), _make_domain(rows2)]
+    traditional_unit = _as_square(
+        compute_cat_distance_matrix(unweighted, what="diss", **params)
+    )
+    if sm == "INDELSLOG":
+        assert not np.allclose(traditional, traditional_unit)
+
+    provider = make_aggregated_distance_provider(domains, "cat", params, ac)
+    got = provider.sample_distances(
+        np.arange(provider.n_sequences()),
+        condensed=False,
+    )
+    np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
+
+
+@pytest.mark.parametrize("sm", ["TRATE", "INDELSLOG"])
+def test_dat_data_dependent_costs_use_original_case_weights(sm):
+    """Weighted DAT TRATE/INDELSLOG must match traditional DAT on original cases."""
+    domains, _weights, rows1, rows2 = _weighted_duplicate_domains()
+    ac, agg_idx = _agg_view(domains)
+    method_params = [
+        {
+            "method": "OM",
+            "sm": sm,
+            "indel": "auto",
+            "norm": "none",
+        }
+        for _ in domains
+    ]
+    traditional = _as_square(
+        compute_dat_distance_matrix(domains, method_params=method_params)
+    )
+    expected = traditional[np.ix_(agg_idx, agg_idx)]
+    unweighted = [_make_domain(rows1), _make_domain(rows2)]
+    traditional_unit = _as_square(
+        compute_dat_distance_matrix(unweighted, method_params=method_params)
+    )
+    if sm == "INDELSLOG":
+        assert not np.allclose(traditional, traditional_unit)
+
+    params = {"method_params": method_params, "link": "sum"}
+    provider = make_aggregated_distance_provider(domains, "dat", params, ac)
+    got = provider.sample_distances(
+        np.arange(provider.n_sequences()),
+        condensed=False,
+    )
+    np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
