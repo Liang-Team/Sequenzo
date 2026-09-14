@@ -16,12 +16,13 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import adjusted_rand_score
 
-from sequenzo.big_data.clara.clara import adjustedRandIndex, jaccardCoef
+from sequenzo.big_data.clara.clara import adjustedRandIndex
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.multidomain.idcd import create_idcd_sequence_from_domains, validate_multidomain_domains
 
 from .distance_providers import DATDistanceProvider, SequenceDistanceProvider
 from .results import MDClaraResult
+from ._utils import weightedcluster_partition_jaccard
 
 
 def _labels_contingency(
@@ -67,11 +68,11 @@ def _pairwise_partition_metrics(
     if weights is None:
         ari = float(adjusted_rand_score(left, right))
         tab = pd.crosstab(left, right)
-        jaccard = float(jaccardCoef(tab))
+        jaccard = float(weightedcluster_partition_jaccard(tab))
     else:
         tab = _labels_contingency(left, right, weights=weights)
         ari = float(adjustedRandIndex(tab))
-        jaccard = float(jaccardCoef(tab))
+        jaccard = float(weightedcluster_partition_jaccard(tab))
 
     return {"ari": ari, "jaccard": jaccard}
 
@@ -84,6 +85,10 @@ def compare_md_clara_strategies(
 ) -> pd.DataFrame:
     """
     Compare cluster partitions across IDCD, CAT, and DAT MD-CLARA runs.
+
+    Returns pairwise ARI and the WeightedCluster partition-level Jaccard
+    coefficient (``weightedcluster_partition_jaccard``). The Jaccard column is a
+    package diagnostic; papers that compare strategies typically report ARI.
 
     Parameters
     ----------

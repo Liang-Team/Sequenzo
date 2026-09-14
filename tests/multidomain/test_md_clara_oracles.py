@@ -1,4 +1,17 @@
-"""Independent-oracle checks: traditional IDCD/CAT/DAT vs MD-CLARA providers."""
+"""Independent-oracle checks: traditional IDCD/CAT/DAT vs MD-CLARA providers.
+
+These tests do **not** compare one DistanceProvider against another. Each
+oracle is built from a different code path:
+
+* IDCD: combine states into a ``SequenceData``, then call the ordinary
+  single-domain ``compute_distance_matrix`` (seqdist).
+* DAT: ordinary domain-level distance matrices, added by hand.
+* CAT: the traditional ``compute_cat_distance_matrix`` cost/diss path,
+  not ``CATDistanceProvider``.
+
+A data-dependent fixture (INDELSLOG / weighted TRATE) checks that costs are
+frozen once on the original weighted cases.
+"""
 
 from __future__ import annotations
 
@@ -127,3 +140,44 @@ def test_dat_unweighted_sum_matches_legacy_full_dat():
     )
     got = provider.sample_distances(np.arange(provider.n_sequences()), condensed=False)
     np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
+
+
+def _weighted_duplicate_domains():
+    """Non-uniform case weights; first profile dominates the weighted sample."""
+    rows1 = [[0, 0, 0, 0], [0, 1, 2, 1], [1, 2, 0, 2], [2, 1, 1, 0]]
+    rows2 = [[1, 1, 1, 1], [0, 2, 1, 0], [2, 0, 2, 1], [1, 0, 0, 2]]
+    weights = np.array([50.0, 1.0, 1.0, 1.0])
+    domains = [_make_domain(rows1, weights=weights), _make_domain(rows2, weights=weights)]
+    return domains, weights, rows1, rows2
+
+
+def test_idcd_combined_sequence_keeps_case_weights():
+    domains, weights, _rows1, _rows2 = _weighted_duplicate_domains()
+    md = create_idcd_sequence_from_domains(domains, quiet=True)
+    np.testing.assert_allclose(np.asarray(md.weights, dtype=float), weights)
+
+
+@pytest.mark.parametrize("sm", ["TRATE", "INDELSLOG"])
+def test_idcd_data_dependent_costs_use_original_case_weights(sm):
+    """Weighted IDCD TRATE/INDELSLOG must freeze on original case weights, not ones."""
+    from sequenzo.multidomain.clara._utils import freeze_seqdist_costs
+
+    domains, weights, rows1, rows2 = _weighted_duplicate_domains()
+    params = {"method": "OM", "sm": sm, "indel": "auto", "norm": "none"}
+    md_weighted = create_idcd_sequence_from_domains(domains, quiet=True)
+    frozen_weighted = freeze_seqdist_costs(md_weighted, dict(params))
+
+    unweighted = [_make_domain(rows1), _make_domain(rows2)]
+    md_unit = create_idcd_sequence_from_domains(unweighted, quiet=True)
+    frozen_unit = freeze_seqdist_costs(md_unit, dict(params))
+    if sm == "INDELSLOG":
+        # Frequency-based indel/substitution costs must move with case weights.
+        assert not np.allclose(frozen_weighted["sm"], frozen_unit["sm"])
+
+    ac, agg_idx = _agg_view(domains)
+    traditional = compute_distance_matrix(md_weighted, frozen_weighted, full_matrix=True)
+    expected = traditional[np.ix_(agg_idx, agg_idx)]
+    provider = make_aggregated_distance_provider(domains, "idcd", params, ac)
+    got = provider.sample_distances(np.arange(provider.n_sequences()), condensed=False)
+    np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
+    assert np.allclose(np.asarray(md_weighted.weights, dtype=float), weights)

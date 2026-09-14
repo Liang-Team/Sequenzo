@@ -535,14 +535,18 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                             label_parts.append(str(val))
                     md_labels.append(" + ".join(label_parts))
 
+            md_kwargs = dict(
+                data=newseqdata_df,
+                time=md_cnames,
+                states=states_space,
+                labels=md_labels,
+                id_col=channels[0].id_col,
+            )
+            case_weights = getattr(channels[0], "weights", None)
+            if case_weights is not None:
+                md_kwargs["weights"] = np.asarray(case_weights, dtype=float)
             with contextlib.redirect_stdout(io.StringIO()):
-                md_seqdata = SequenceData(
-                    newseqdata_df,
-                    time=md_cnames,
-                    states=states_space,
-                    labels=md_labels,
-                    id_col=channels[0].id_col,
-                )
+                md_seqdata = SequenceData(**md_kwargs)
 
             return {
                 "seqdata": md_seqdata,
@@ -578,12 +582,18 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                             label_parts.append(str(val))  # fallback if unexpected value
                     md_labels.append(" + ".join(label_parts))
 
+            seq_kwargs = dict(
+                data=newseqdata_df,
+                time=md_cnames,
+                states=states_space,
+                labels=md_labels,
+                id_col=channels[0].id_col,
+            )
+            case_weights = getattr(channels[0], "weights", None)
+            if case_weights is not None:
+                seq_kwargs["weights"] = np.asarray(case_weights, dtype=float)
             with contextlib.redirect_stdout(io.StringIO()):
-                newseqdata_seq = SequenceData(newseqdata_df,
-                                              time=md_cnames,
-                                              states=states_space,
-                                              labels=md_labels,
-                                              id_col=channels[0].id_col)
+                newseqdata_seq = SequenceData(**seq_kwargs)
 
             # Pass newindel as-is (can be scalar or vector depending on state-dependency)
             # TraMineR passes the full newindel vector/scalar to seqdist

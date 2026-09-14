@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import squareform
 from joblib import Parallel, delayed
-from sequenzo.big_data.clara.clara import adjustedRandIndex, jaccardCoef
+from sequenzo.big_data.clara.clara import adjustedRandIndex
 from sequenzo.big_data.clara.utils.davies_bouldin import (
     davies_bouldin_internal,
     fuzzy_davies_bouldin_internal,
@@ -37,6 +37,7 @@ from ._utils import (
     one_based_to_zero_based,
     validate_kvals,
     validate_profile_weights,
+    weightedcluster_partition_jaccard,
 )
 
 
@@ -230,7 +231,7 @@ def _stability_pair_labels(
     right_labels: np.ndarray,
     weights: np.ndarray,
 ) -> Tuple[float, float]:
-    """Weighted ARI and Jaccard between two profile-level partitions."""
+    """Weighted ARI and WeightedCluster partition JC between two profile-level partitions."""
     df = pd.DataFrame(
         {
             "left": left_labels,
@@ -239,7 +240,7 @@ def _stability_pair_labels(
         }
     )
     tab = df.groupby(["left", "right"])["w"].sum().unstack(fill_value=0)
-    return adjustedRandIndex(tab), jaccardCoef(tab)
+    return adjustedRandIndex(tab), weightedcluster_partition_jaccard(tab)
 
 
 def _unique_with_counts_first_occurrence(draws: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -823,17 +824,11 @@ def clara_from_distance_provider(
             comparison_indices = [j for j in range(R) if j != best]
 
             def _stability_pair(j: int) -> Tuple[float, float]:
-                left_labels = clustering_all[j]
-                right_labels = clustering_all[best]
-                df = pd.DataFrame(
-                    {
-                        "left": left_labels,
-                        "right": right_labels,
-                        "w": ac["aggWeights"],
-                    }
+                return _stability_pair_labels(
+                    clustering_all[j],
+                    clustering_all[best],
+                    ac["aggWeights"],
                 )
-                tab = df.groupby(["left", "right"])["w"].sum().unstack(fill_value=0)
-                return adjustedRandIndex(tab), jaccardCoef(tab)
 
             if n_jobs == 1:
                 arilist = [_stability_pair(j) for j in comparison_indices]

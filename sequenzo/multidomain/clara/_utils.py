@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
+from scipy.special import comb
 
 from sequenzo.define_sequence_data import SequenceData
 from sequenzo.dissimilarity_measures.get_distance_matrix import (
@@ -21,6 +22,99 @@ from sequenzo.dissimilarity_measures.get_distance_matrix import (
     warm_unique_sequence_cache,
 )
 from sequenzo.multidomain.idcd import validate_multidomain_domains
+from sequenzo.big_data.clara.clara import jaccardCoef
+
+
+def weightedcluster_partition_jaccard(tab) -> float:
+    """
+    Partition-level Jaccard coefficient matching WeightedCluster ``seqclararange``.
+
+    With contingency counts \(n_{rs}\),
+
+    \[
+    JC
+    =
+    \frac{\sum_{rs} n_{rs}^{2}}
+         {\sum_r n_{r\cdot}^{2} + \sum_s n_{\cdot s}^{2} - \sum_{rs} n_{rs}^{2}}.
+    \]
+
+    MD-CLARA uses this coefficient for CLARA-repetition stability (selected
+    partition versus the other \(R-1\) repetitions). It is the same formula as
+    ``jaccardCoef`` in ``sequenzo.big_data.clara.clara``. Cluster-specific
+    stability uses :func:`clusterwise_set_jaccard` instead.
+    """
+    if not isinstance(tab, pd.DataFrame):
+        tab = pd.DataFrame(np.asarray(tab))
+    return float(jaccardCoef(tab))
+
+
+def pairwise_jaccard_from_contingency(tab) -> float:
+    """
+    Pairwise co-membership Jaccard using unordered pair counts \(\\binom{n}{2}\).
+
+    For cell counts \(n_{ij}\),
+
+    \[
+    J = \frac{\sum_{ij}\binom{n_{ij}}{2}}
+             {\sum_i\binom{n_{i\cdot}}{2}
+              + \sum_j\binom{n_{\cdot j}}{2}
+              - \sum_{ij}\binom{n_{ij}}{2}}.
+    \]
+
+    This is a standard pair-counting Jaccard. MD-CLARA repetition stability
+    uses :func:`weightedcluster_partition_jaccard`, which matches WeightedCluster
+    ``seqclararange`` (squared contingency counts). Weighted tables use
+    ``scipy.special.comb``.
+    """
+    arr = np.asarray(tab, dtype=float)
+    if arr.size == 0:
+        return 1.0
+    if arr.shape == (1, 1):
+        return 1.0
+    n11 = float(np.sum(comb(arr, 2)))
+    n01 = float(np.sum(comb(arr.sum(axis=0), 2)))
+    n10 = float(np.sum(comb(arr.sum(axis=1), 2)))
+    denom = n01 + n10 - n11
+    if denom == 0:
+        return 1.0
+    return n11 / denom
+
+
+def clusterwise_set_jaccard(
+    left: np.ndarray,
+    right: np.ndarray,
+    cluster: int,
+) -> float:
+    """
+    Cluster-specific set Jaccard for one selected cluster.
+
+    Let \(C=\{i:\\,\\mathrm{left}_i=\\mathrm{cluster}\}\). Among clusters \(D\)
+    in ``right``, return
+
+    \[
+    \\max_D \\frac{|C\\cap D|}{|C\\cup D|}.
+    \]
+
+    This is the Hennig-style clusterwise overlap used for cluster-specific
+    stability. It is distinct from :func:`weightedcluster_partition_jaccard`.
+    """
+    left = np.asarray(left)
+    right = np.asarray(right)
+    if left.shape != right.shape:
+        raise ValueError("Label vectors must have the same length.")
+    a = left == cluster
+    best = 0.0
+    for other in np.unique(right):
+        if int(other) < 0:
+            continue
+        b = right == other
+        inter = float(np.sum(a & b))
+        union = float(np.sum(a | b))
+        if union <= 0:
+            continue
+        best = max(best, inter / union)
+    return best
+
 
 def validate_domain_weights(domains: List[SequenceData]) -> Optional[np.ndarray]:
     """
@@ -750,6 +844,9 @@ __all__ = [
     "validate_profile_weights",
     "validate_kvals",
     "distance_params_are_data_dependent",
+    "weightedcluster_partition_jaccard",
+    "pairwise_jaccard_from_contingency",
+    "clusterwise_set_jaccard",
     "assert_sample_distance_shape",
     "assert_condensed_distance_shape",
     "assert_distance_to_medoids_shape",

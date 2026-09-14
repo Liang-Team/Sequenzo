@@ -48,35 +48,42 @@ def _chi_cramers_v(xtab, chi2, df):
     return V, p_val
 
 
-def _log_likelihood_ratio_test(xtab, struct_zero=True):
+def _log_likelihood_ratio_test(xtab, struct_zero=False, structural_zero_mask=None):
     """
-    Computes the likelihood ratio test statistic for independence.
+    Likelihood-ratio statistic for independence in a contingency table.
 
-    Parameters:
-        xtab (np.ndarray): Contingency table.
-        struct_zero (bool): Adjust degrees of freedom for structural zeros.
-
-    Returns:
-        tuple: (LRT statistic, degrees of freedom, p-value)
+    Sampling zeros (cells with observed count 0) are not treated as structural
+    zeros. Pass ``structural_zero_mask`` only for cells that are impossible by
+    design; ``struct_zero=True`` without a mask is ignored.
     """
-    observed = xtab.copy()
+    observed = np.asarray(xtab, dtype=float).copy()
     row_totals = observed.sum(axis=1, keepdims=True)
     col_totals = observed.sum(axis=0, keepdims=True)
     total = observed.sum()
     expected = row_totals @ col_totals / total
 
-    if struct_zero:
-        zero_mask = (observed == 0)
-        expected[zero_mask] = 1
-        observed[zero_mask] = 1
-
     with np.errstate(divide='ignore', invalid='ignore'):
-        lrt_terms = np.where(observed > 0, observed * np.log(observed / expected), 0)
+        lrt_terms = np.where(
+            (observed > 0) & (expected > 0),
+            observed * np.log(observed / expected),
+            0,
+        )
     lrt_stat = 2 * np.sum(lrt_terms)
     df = (observed.shape[0] - 1) * (observed.shape[1] - 1)
-    if struct_zero:
-        df -= np.sum(observed == 0)
+    if structural_zero_mask is not None:
+        mask = np.asarray(structural_zero_mask, dtype=bool)
+        if mask.shape != observed.shape:
+            raise ValueError("structural_zero_mask must match the contingency table.")
+        df -= int(np.sum(mask))
         df = max(df, 1)
+    elif struct_zero:
+        import warnings
+        warnings.warn(
+            "struct_zero=True without structural_zero_mask is ignored: "
+            "observed zeros are sampling zeros, not structural zeros.",
+            UserWarning,
+            stacklevel=3,
+        )
     p_val = 1 - stats.chi2.cdf(lrt_stat, df)
     return lrt_stat, df, p_val
 
@@ -187,9 +194,9 @@ def _show_full_dataframe(df):
 
 
 def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method="overall",
-                                    wrange=None, p_value=True, struct_zero=True, cross_table=False,
+                                    wrange=None, p_value=True, struct_zero=False, cross_table=False,
                                     with_missing=False, weighted=True, dnames=None,
-                                    explain=True):
+                                    explain=True, structural_zero_mask=None):
     """
     Computes pairwise associations between multiple sequence domains using statistical tests.
 
@@ -199,7 +206,10 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
         rep_method (str): Method to determine which sequences to compare (currently only "overall").
         wrange (tuple or None): Not implemented yet (for time window comparison).
         p_value (bool): Whether to compute p-values.
-        struct_zero (bool): Whether to treat structural zeros as affecting degrees of freedom.
+        struct_zero (bool): Deprecated. Observed zeros are not treated as structural
+            zeros. Supply ``structural_zero_mask`` for impossible cells.
+        structural_zero_mask: Unused here; pairwise tables use ordinary LRT unless
+            a mask is passed through ``_log_likelihood_ratio_test``.
         cross_table (bool): If True, attach cross-tabulations to result attributes.
         with_missing (bool): Whether to include rows/cols that only contain missing or void.
         weighted (bool): Whether to apply sequence weights from the first domain.
@@ -245,7 +255,9 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
         res = {"df": None, "LRT": None, "p(LRT)": None, "v": None, "p(v)": None}
 
         if "LRT" in assoc:
-            lrt, df, plrt = _log_likelihood_ratio_test(xtab, struct_zero)
+            lrt, df, plrt = _log_likelihood_ratio_test(
+                xtab, struct_zero=struct_zero, structural_zero_mask=structural_zero_mask
+            )
             res["LRT"] = lrt
             res["df"] = df
             if p_value:
@@ -253,7 +265,9 @@ def get_association_between_domains(seqdata_dom, assoc=("LRT", "V"), rep_method=
 
         if "V" in assoc:
             if res["df"] is None:
-                _, df, _ = _log_likelihood_ratio_test(xtab, struct_zero)
+                _, df, _ = _log_likelihood_ratio_test(
+                    xtab, struct_zero=struct_zero, structural_zero_mask=structural_zero_mask
+                )
                 res["df"] = df
             chi2 = stats.chi2_contingency(xtab, correction=False)[0]
             v, pv = _chi_cramers_v(xtab, chi2, res["df"])

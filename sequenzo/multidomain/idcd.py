@@ -145,6 +145,25 @@ def validate_multidomain_domains(
             )
 
 
+def _aligned_case_weights(domains: List[SequenceData]) -> Optional[np.ndarray]:
+    """Copy domain-0 case weights onto the combined IDCD SequenceData."""
+    reference = getattr(domains[0], "weights", None)
+    if reference is None:
+        return None
+    weights = np.asarray(reference, dtype=float)
+    for idx, domain in enumerate(domains[1:], start=1):
+        other = getattr(domain, "weights", None)
+        if other is None:
+            raise ValueError(
+                "Either provide case weights for every domain or for none of them."
+            )
+        if not np.allclose(weights, np.asarray(other, dtype=float)):
+            raise ValueError(
+                f"Case weights in domain {idx} do not match domain 0."
+            )
+    return weights
+
+
 def create_idcd_sequence_from_domains(
     domains: List[SequenceData],
     ch_sep: str = "+",
@@ -155,6 +174,9 @@ def create_idcd_sequence_from_domains(
     Build an IDCD multidomain SequenceData object from aligned domain objects.
 
     Only observed combined states are retained (no full Cartesian product).
+    Case weights from domain 0 are copied onto the combined object so that
+    data-dependent costs (TRATE, INDELS, INDELSLOG) are estimated on the
+    original weighted cases.
     """
     validate_multidomain_domains(domains)
     time_cols = list(domains[0].time)
@@ -190,6 +212,7 @@ def create_idcd_sequence_from_domains(
         domain_state_labels,
         quiet=quiet,
         ch_sep=ch_sep,
+        weights=_aligned_case_weights(domains),
     )
 
 
@@ -198,7 +221,8 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
                               id_col: str,
                               domain_state_labels: List[Dict] = None,
                               quiet: bool = False,
-                              ch_sep: str = "+") -> SequenceData:
+                              ch_sep: str = "+",
+                              weights: Optional[np.ndarray] = None) -> SequenceData:
     """Build SequenceData from a combined multidomain DataFrame (used by both CSV and DFS entry points)."""
     flat_vals = combined_df[time_cols].values.ravel()
     observed_states = pd.Series(flat_vals).value_counts()
@@ -227,13 +251,16 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
     if not quiet:
         print("\n[IDCD] Observed Combined States Frequency Table:")
         print(freq_table.to_string(index=False))
-    return SequenceData(
+    kwargs = dict(
         data=combined_df,
         time=time_cols,
         states=observed_states.index.tolist(),
         labels=pretty_labels,
-        id_col=id_col
+        id_col=id_col,
     )
+    if weights is not None:
+        kwargs["weights"] = np.asarray(weights, dtype=float)
+    return SequenceData(**kwargs)
 
 
 def create_idcd_sequence_from_csvs(
