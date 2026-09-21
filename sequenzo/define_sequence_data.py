@@ -6,18 +6,12 @@
 
     Optimized SequenceData class with integrated color scheme & legend handling.
 
-    Note on `states` and `alphabet`:
+    Note on `states` (the state space):
 
-    In traditional sequence analysis tools (e.g., TraMineR), the `alphabet` refers to the full set of distinct states
-    found in the data and is often inferred automatically from the observed sequences.
-
-    However, in this implementation, we require the user to explicitly provide the set of `states`. This explicit control
-    is essential for ensuring consistent ordering of states, reproducibility of visualizations, and compatibility across
-    sequence datasets - especially when certain states may not appear in a given subset of the data.
-
-    As a result, `alphabet` is automatically set to `states` upon initialization, and kept as a semantic alias for clarity
-    and potential compatibility. Users should treat `states` as the definitive state space and are not required to provide
-    `alphabet` separately.
+    You must pass an explicit, ordered ``states`` list. That list is the state space:
+    it fixes encoding order, colors, and legends, including states that happen not to
+    appear in a given subset of the data. Do not rely on Sequenzo to infer it from the
+    table.
 
     # ----------------------------------------------------------------------
     # [Hint] Handling the ID column for sequence analysis
@@ -63,28 +57,50 @@ from typing import Union
 
 class SequenceData:
     """
-    A class for defining and processing a sequence dataset for social sequence analysis.
+    Define a sequence dataset for social sequence analysis.
 
     This class provides:
-    - Sequence extraction & missing value handling.
-    - Automatic alphabet (state space) management.
-    - Efficient sequence-to-numeric conversion.
-    - Color mapping & legend storage for visualization.
-    - TraMineR-compatible **void** metadata (``void``, ``void_code``) for event-history workflows.
+    - Sequence extraction and missing-value handling.
+    - An explicit, ordered **state space** (``states``) for encoding and colors.
+    - Numeric conversion of sequences.
+    - Color mapping and legends for visualization.
+    - **Void** padding for unequal-length sequences (``void``, ``void_code``).
 
-    Void vs missing (TraMineR ``seqdef``)
-    ------------------------------------
-    **Void** (default symbol ``"%"``, stored as ``self.void``) marks time positions that lie
-    **outside the observation window**—for example before labour-market entry or after exit when
-    sequences are left-aligned on a common calendar. These cells are not real states.
+    Unequal-length sequences
+    ------------------------
+    The input table must still be rectangular. Pad every cell **outside** that
+    person's observation window with the void symbol (default ``"%"``) and list
+    that symbol in ``states``. Then construct ``SequenceData`` as usual.
 
-    **Missing** (handled via ``missing_values`` / auto-detected NaN) marks positions **inside**
-    the window where the state is unknown. Void and missing are different concepts; only void
-    is used by TraMineRextras ``seqsamm()`` to drop invalid subsequence windows.
+    Career histories aligned at the start of the spell (person 1 observed for
+    two months, person 2 for four)::
 
-    If your data contain the void symbol, include it in ``states`` and keep the default
-    ``void="%"`` (or pass another symbol, as in ``seqdef(void=".")``). Pass ``void=None`` only
-    when you deliberately do not use void padding (typical for complete rectangular state tables).
+        df = pd.DataFrame({
+            "id": [1, 2],
+            "1": ["Education", "Education"],
+            "2": ["Education", "Work"],
+            "3": ["%", "Work"],
+            "4": ["%", "Work"],
+        })
+        seq = SequenceData(
+            df,
+            time=["1", "2", "3", "4"],
+            states=["Education", "Work", "%"],
+            id_col="id",
+        )
+        plot_sequence_index(seq)
+
+    A shared calendar window uses the same padding: ``"%"`` before labour-market
+    entry and after exit. Plots treat void as blank (not a colored state) and
+    omit it from the legend. Distances and SAMM still see the padded codes.
+
+    Void vs missing
+    ---------------
+    **Void** (default ``"%"``) is out-of-window padding — the person is not
+    supposed to have a state there. **Missing** (NaN / ``missing_values``) is an
+    unknown state *inside* the window. Include ``"%"`` in ``states`` whenever it
+    appears in the data. Pass ``void=None`` only for complete tables with no
+    padding.
     """
 
     def __init__(
@@ -107,15 +123,15 @@ class SequenceData:
 
         :param data: DataFrame containing sequence data.
         :param time: List of columns containing time labels.
-        :param states: List of unique states (categories).
-        :param alphabet: Optional predefined state space.
+        :param states: Ordered state space. Include the void symbol (default ``"%"``)
+            when the table is padded for unequal lengths.
         :param labels: Labels for states (optional, for visualization).
         :param id_col: Column name for row identifiers, which is very important for hierarchical clustering.
         :param weights: Sequence weights (optional).
         :param start: Starting time index (default: 1).
-        :param void: Symbol for **void** (out-of-window padding), TraMineR ``attr(seqdata, "void")``.
-            Default ``"%"`` matches ``seqdef()``. The symbol must appear in ``states`` if it occurs
-            in the data. Pass ``void=None`` to disable void metadata (no SAMM void filtering).
+        :param void: Symbol for **void** (out-of-window padding). Default ``"%"``.
+            Must appear in ``states`` if it occurs in the data. Plots hide these
+            cells; they are not a state. Pass ``void=None`` to disable padding.
             **Not** the same as missing values inside the observation window.
         :param custom_colors: Custom color palette for visualization. 
             If provided, should be a list of colors matching the number of states.
@@ -228,6 +244,15 @@ class SequenceData:
             )
             return
         self.void_code = int(self.state_mapping[self.void])
+
+    def _void_index(self):
+        """Index of the void symbol in ``states``, or ``None`` if void is inactive."""
+        if self.void is None:
+            return None
+        try:
+            return self.states.index(self.void)
+        except ValueError:
+            return None
 
     def has_void_in_data(self) -> bool:
         """True if the void symbol appears at least once in the sequence columns."""
@@ -346,7 +371,7 @@ class SequenceData:
             if void_norm in data_values_no_nan and void_norm not in states_clean_normalized:
                 raise ValueError(
                     f"[!] Data contain void symbol {self.void!r} but it is not listed in 'states'.\n"
-                    f"    Add {self.void!r} to states (TraMineR-style alphabet) or pass void=None if you "
+                    f"    Add {self.void!r} to states, or pass void=None if you "
                     f"do not use void padding."
                 )
 
@@ -850,6 +875,28 @@ class SequenceData:
                 return (float(color[0]), float(color[1]), float(color[2]), self.alpha)
         return color
 
+    def _core_color_palette(self, n, reverse_colors=True):
+        """Default palette for visible (non-void) states."""
+        if n <= 0:
+            return []
+        if n <= 20:
+            pal = list(sns.color_palette("Spectral", n))
+        elif n <= 40:
+            pal = list(sns.color_palette("viridis", n))
+        else:
+            viridis_colors = sns.color_palette("viridis", min(n // 2, 20))
+            pastel_colors = sns.color_palette("Set3", min(n // 2, 12))
+            tab20_colors = sns.color_palette("tab20", min(n // 3, 20))
+            combined_colors = list(viridis_colors) + list(pastel_colors) + list(tab20_colors)
+            while len(combined_colors) < n:
+                combined_colors.extend(
+                    combined_colors[: min(len(combined_colors), n - len(combined_colors))]
+                )
+            pal = combined_colors[:n]
+        if reverse_colors:
+            pal = list(reversed(pal))
+        return pal
+
     def _assign_colors(self, reverse_colors=True):
         """Assigns a color palette using user-defined or default Spectral palette.
         
@@ -929,10 +976,15 @@ class SequenceData:
                 color_list = list(non_missing_color_list) + [missing_gray_color]
         else:
             # No missing values - use original logic
+            void_idx = self._void_index()
             if self.custom_colors:
-                if len(self.custom_colors) != num_states:
+                if len(self.custom_colors) == num_states:
+                    color_list = list(self.custom_colors)
+                elif void_idx is not None and len(self.custom_colors) == num_states - 1:
+                    color_list = list(self.custom_colors)
+                    color_list.insert(void_idx, (1.0, 1.0, 1.0, 1.0))
+                else:
                     raise ValueError("Length of custom_colors must match number of states.")
-                color_list = self.custom_colors
             else:
                 if num_states <= 20:
                     color_list = sns.color_palette("Spectral", num_states)
@@ -958,6 +1010,26 @@ class SequenceData:
                 if reverse_colors:
                     color_list = list(reversed(color_list))
 
+        # Void is padding, not a state: give it no Spectral slot so visible states
+        # keep the same default palette as a complete rectangular table.
+        void_idx = self._void_index()
+        if void_idx is not None and not self.custom_colors:
+            n = num_states
+            missing_idx = (n - 1) if has_missing else None
+            n_core = n - 1 - (1 if missing_idx is not None and missing_idx != void_idx else 0)
+            core = self._core_color_palette(n_core, reverse_colors)
+            rebuilt = []
+            core_i = 0
+            for i in range(n):
+                if i == void_idx:
+                    rebuilt.append((1.0, 1.0, 1.0, 1.0))
+                elif missing_idx is not None and i == missing_idx:
+                    rebuilt.append(missing_gray_color)
+                else:
+                    rebuilt.append(core[core_i])
+                    core_i += 1
+            color_list = rebuilt
+
         # Apply additional_colors if specified (assign custom colors to specific states while keeping default colors)
         if self.additional_colors:
             color_list = list(color_list)  # Make a copy to avoid modifying original
@@ -982,6 +1054,14 @@ class SequenceData:
 
         # Apply alpha (transparency): convert each color to RGBA so visualizations use it
         color_list = [self._to_rgba(c) for c in color_list]
+        void_idx = self._void_index()
+        void_overridden = bool(
+            self.additional_colors is not None
+            and self.void is not None
+            and self.void in self.additional_colors
+        )
+        if void_idx is not None and not void_overridden:
+            color_list[void_idx] = (1.0, 1.0, 1.0, 0.0)
 
         # self.color_map = {state: color_list[i] for i, state in enumerate(self.states)}
         # This way all color map keys are 1, 2, 3..., which aligns with imshow(vmin=1, vmax=N)
@@ -1055,21 +1135,58 @@ class SequenceData:
         else:
             print(f"[>] Weights: Not provided")
 
-    def get_legend(self):
-        """Returns the legend handles and labels for visualization."""
-        # self.legend_handles = [plt.Rectangle((0, 0), 1, 1,
-        #                                      color=self.color_map[state],
-        #                                      label=label)
-        #                        for state, label in zip(self.states, self.labels)]
-        # return [handle for handle in self.legend_handles], self.labels
+    def get_legend(self, include_void: bool = False):
+        """Return legend handles and labels for visualization.
 
+        Void padding is omitted unless ``include_void=True``.
+        Index plots and other Sequenzo visualizations already use this.
+        """
+        indices = list(range(len(self.states)))
+        if not include_void:
+            void_idx = self._void_index()
+            if void_idx is not None:
+                indices = [i for i in indices if i != void_idx]
         self.legend_handles = [
             plt.Rectangle((0, 0), 1, 1,
                           color=self.color_map[i + 1],
                           label=self.labels[i])
-            for i in range(len(self.states))
+            for i in indices
         ]
-        return self.legend_handles, self.labels
+        return self.legend_handles, [self.labels[i] for i in indices]
+
+    @property
+    def legend_states(self):
+        """States shown in plots and legends (void padding excluded)."""
+        void_idx = self._void_index()
+        if void_idx is None:
+            return list(self.states)
+        return [state for i, state in enumerate(self.states) if i != void_idx]
+
+    @property
+    def legend_labels(self):
+        """Labels aligned with ``legend_states``."""
+        void_idx = self._void_index()
+        if void_idx is None:
+            return list(self.labels)
+        return [lab for i, lab in enumerate(self.labels) if i != void_idx]
+
+    @property
+    def legend_color_map(self):
+        """``color_map_by_label`` without the void entry."""
+        labels = set(self.legend_labels)
+        return {key: value for key, value in self.color_map_by_label.items() if key in labels}
+
+    def values_for_plot(self, values=None) -> np.ndarray:
+        """Numeric sequences with void cells masked as NaN so plots show a blank, not a state."""
+        data = np.asarray(self.values if values is None else values, dtype=float)
+        if data.ndim == 1:
+            data = data.reshape(1, -1)
+        else:
+            data = np.array(data, dtype=float, copy=True)
+        data[data < 1] = np.nan
+        if self.void_code is not None:
+            data[data == float(self.void_code)] = np.nan
+        return data
 
     def to_dataframe(self) -> pd.DataFrame:
         """Returns the processed sequence dataset as a DataFrame."""
@@ -1144,12 +1261,10 @@ class SequenceData:
         show_border: bool = True,
     ):
         """Vertical legend with title (original ``plot_legend`` style)."""
-        legend_handles = getattr(self, "legend_handles", None)
-        if not legend_handles:
-            legend_handles, _ = self.get_legend()
+        legend_handles, legend_labels = self.get_legend()
 
-        n_labels = len(self.labels)
-        max_label_len = max((len(label) for label in self.labels), default=10)
+        n_labels = len(legend_labels)
+        max_label_len = max((len(label) for label in legend_labels), default=10)
         fig_w = max(3.0, min(14.0, max_label_len * 0.11 + 1.5))
         fig_h = max(2.0, 0.34 * n_labels + 0.9)
 
@@ -1184,7 +1299,8 @@ class SequenceData:
         """Horizontal legend matching grouped sequence index plots."""
         from sequenzo.visualization.utils.utils import legend_ncol
 
-        n_labels = len(self.labels)
+        labels = self.legend_labels
+        n_labels = len(labels)
         ncol = legend_ncol(n_labels, max_ncol=5, ncol=ncol)
         nrows = max(1, (n_labels + ncol - 1) // ncol)
         figsize = (max(4.0, ncol * 1.5), max(0.6, 0.5 * nrows))
@@ -1193,12 +1309,12 @@ class SequenceData:
         ax.axis("off")
 
         handles = [
-            plt.Rectangle((0, 0), 1, 1, color=self.color_map_by_label.get(label, "gray"))
-            for label in self.labels
+            plt.Rectangle((0, 0), 1, 1, color=self.legend_color_map.get(label, "gray"))
+            for label in labels
         ]
         ax.legend(
             handles,
-            self.labels,
+            labels,
             loc="center",
             ncol=min(ncol, n_labels),
             frameon=show_border,
@@ -1229,7 +1345,7 @@ class SequenceData:
 
     @property
     def alphabet(self):
-        """Returns state alphabet."""
+        """Same as ``states`` (the state space)."""
         return self._alphabet
 
     @alphabet.setter

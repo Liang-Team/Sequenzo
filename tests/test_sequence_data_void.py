@@ -86,3 +86,27 @@ def test_seqsamm_no_void_filter_when_void_none():
     )
     samm = sequence_analysis_multi_state_model(seq, sublength=2)
     assert (samm.data["s.1"] == seq.state_mapping["%"]).any()
+
+
+def test_legend_and_plot_values_omit_void():
+    df = _df_with_void()
+    seq = SequenceData(
+        df,
+        time=["t1", "t2", "t3", "t4"],
+        id_col="id",
+        states=["%", "A", "B"],
+        labels=["Void", "A", "B"],
+    )
+    assert seq.legend_states == ["A", "B"]
+    assert seq.legend_labels == ["A", "B"]
+    assert "Void" not in seq.legend_color_map
+    _, labels = seq.get_legend()
+    assert labels == ["A", "B"]
+    _, labels_with_void = seq.get_legend(include_void=True)
+    assert labels_with_void == ["Void", "A", "B"]
+
+    plotted = seq.values_for_plot()
+    assert np.isnan(plotted[0, 0])
+    assert np.isnan(plotted[0, 1])
+    assert plotted[0, 2] == seq.state_mapping["A"]
+    assert seq.values[0, 0] == seq.void_code

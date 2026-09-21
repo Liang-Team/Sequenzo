@@ -136,22 +136,16 @@ def plot_mean_time(seqdata: SequenceData,
     # Use default style as base
     plt.style.use('default')
 
-    # Compute all required data at once
     mean_time_df = _compute_mean_time(seqdata, weights)
+    if seqdata.void is not None:
+        mean_time_df = mean_time_df[mean_time_df["State"] != seqdata.void].copy()
 
-    # Create figure and preallocate memory
     fig = plt.figure(figsize=(12, 7))
-
-    # Create main plot
     ax = plt.subplot(111)
 
-    # Get color mapping - use original colors without enhancement
-    cmap = seqdata.get_colormap()
-    colors = [cmap.colors[i] for i in range(len(seqdata.states))]
-
-    # Assign colors to states (without enhancing saturation)
-    mean_time_df['Color'] = pd.Categorical(mean_time_df['State']).codes
-    mean_time_df['Color'] = mean_time_df['Color'].map(lambda x: colors[x])
+    mean_time_df["Color"] = mean_time_df["State"].map(
+        lambda name: seqdata.color_map[seqdata.state_mapping[name]]
+    )
 
     # Create custom barplot
     for i, (_, row) in enumerate(mean_time_df.iterrows()):

@@ -74,6 +74,9 @@ def plot_most_frequent_sequences(seqdata: SequenceData, top_n: int = 10, weights
         for t, state_idx in enumerate(seq):
             # Use numeric-coded color map; if unknown, fall back to gray
             color = seqdata.color_map.get(int(state_idx), "gray")
+            if seqdata.void_code is not None and int(state_idx) == int(seqdata.void_code):
+                left += 1
+                continue
 
             width = 1  # Width of each time slice
             ax.barh(y=y_positions[i], width=width * 1.01, left=left - 0.005,

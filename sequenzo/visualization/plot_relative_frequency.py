@@ -91,7 +91,9 @@ def plot_relative_frequency(seqdata: SequenceData,
     ax = axes[0]
     for i, seq in enumerate(rep_sequences):
         for t, state_idx in enumerate(seq):
-            color = state_palette.get(state_idx, "gray")  # 直接用整数查颜色
+            color = state_palette.get(state_idx, "gray")
+            if seqdata.void_code is not None and int(state_idx) == int(seqdata.void_code):
+                continue
             ax.add_patch(Rectangle((t, i + 0.5), 1, 1, color=color))
 
     ax.set_xlim(0, seqdata.values.shape[1])
@@ -192,8 +194,8 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # **LEGEND BELOW PLOTS**
     legend_patches = [
-        Rectangle((0, 0), 1, 1, color=seqdata.color_map_by_label[label], label=label)
-        for label in seqdata.labels
+        Rectangle((0, 0), 1, 1, color=seqdata.legend_color_map[label], label=label)
+        for label in seqdata.legend_labels
     ]
 
     # Automatically adjust legend layout (maximum of 7 items per row)
@@ -209,7 +211,7 @@ def plot_relative_frequency(seqdata: SequenceData,
 
     # Estimate how many rows are needed for the legend
     max_items_per_row = 5
-    n_states = len(seqdata.states)
+    n_states = len(seqdata.legend_labels)
     ncol = min(max_items_per_row, n_states)
     nrow = (n_states + max_items_per_row - 1) // max_items_per_row  # 向上取整
 

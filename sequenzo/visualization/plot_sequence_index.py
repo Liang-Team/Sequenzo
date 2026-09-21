@@ -356,6 +356,10 @@ def plot_sequence_index(seqdata: SequenceData,
     This function creates index plots that visualize sequences as horizontal lines,
     with different sorting options matching R's TraMineR functionality.
 
+    Void padding (``"%"`` by default on ``SequenceData``) is drawn blank and omitted
+    from the legend. Pad unequal-length sequences in ``SequenceData``; you do not
+    need a separate plot call.
+
     **Two API modes for grouping:**
     
     1. **Simplified API** (when grouping info is already in the data):
@@ -732,11 +736,7 @@ def plot_sequence_index(seqdata: SequenceData,
         else:
             group_weights = None
 
-        # Handle NaN values for better visualization
-        if np.isnan(group_sequences).any():
-            # Map NaN to a dedicated state code with proper masking
-            group_sequences = group_sequences.astype(float)
-            group_sequences[np.isnan(group_sequences)] = np.nan
+        group_sequences = seqdata.values_for_plot(group_sequences)
 
         # Get the IDs for this group (after selection)
         group_ids_after_selection = seqdata.ids[mask]
@@ -801,9 +801,7 @@ def plot_sequence_index(seqdata: SequenceData,
 
         # Plot on the corresponding axis
         ax = axes[i]
-        # Use masked array for better NaN handling
-        data = sorted_data.astype(float)
-        data[data < 1] = np.nan
+        data = seqdata.values_for_plot(sorted_data)
         if sequence_gap > 0 or sequence_rows > 1:
             data = _insert_sequence_gaps(data, sequence_gap, sequence_rows)
         
@@ -938,11 +936,11 @@ def plot_sequence_index(seqdata: SequenceData,
 
     if include_legend:
         # Create standalone legend
-        colors = seqdata.color_map_by_label
+        colors = seqdata.legend_color_map
         legend_buffer = create_standalone_legend(
             colors=colors,
-            labels=seqdata.labels,
-            ncol=legend_ncol(len(seqdata.states)),
+            labels=seqdata.legend_labels,
+            ncol=legend_ncol(len(seqdata.legend_labels)),
             figsize=(actual_figsize[0] * ncols, 1),
             fontsize=fontsize-2,
             dpi=dpi
@@ -1090,10 +1088,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
         if hasattr(seqdata, 'ids') and seqdata.ids is not None:
             selected_ids = seqdata.ids
 
-    # Handle NaN values for better visualization
-    if np.isnan(sequence_values).any():
-        # Keep NaN as float for proper masking
-        sequence_values = sequence_values.astype(float)
+    sequence_values = seqdata.values_for_plot(sequence_values)
 
     # Sort sequences based on specified method
     # sort_by_ids takes priority if provided
@@ -1149,9 +1144,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     # Create the plot using imshow with proper NaN handling
     fig, ax = plt.subplots(figsize=actual_figsize)
-    # Use masked array for better NaN handling
-    data = sorted_data.astype(float)
-    data[data < 1] = np.nan
+    data = seqdata.values_for_plot(sorted_data)
     sequence_rows = max(1, int(sequence_rows))
     if sequence_gap > 0 or sequence_rows > 1:
         data = _insert_sequence_gaps(data, sequence_gap, sequence_rows)

@@ -131,7 +131,7 @@ def plot_modal_state(seqdata: SequenceData,
     # - use integer-coded color map for plotting (keys 1..N)
     # - keep label-based color map for the legend
     bar_colors = seqdata.color_map
-    legend_colors = seqdata.color_map_by_label
+    legend_colors = seqdata.legend_color_map
 
     # Process each group
     for i, group in enumerate(group_labels):
@@ -159,9 +159,11 @@ def plot_modal_state(seqdata: SequenceData,
             # Calculate weighted counts for each state (numeric encodings 1..N)
             weighted_sum = {}
             for s_num in range(1, len(seqdata.states) + 1):
+                if seqdata.void_code is not None and s_num == seqdata.void_code:
+                    continue
                 weighted_sum[s_num] = float(w[states_idx == s_num].sum())
 
-            totw = float(w.sum())
+            totw = float(sum(weighted_sum.values()))
 
             if totw > 0:
                 # Find the state (numeric code) with maximum weighted count
@@ -224,8 +226,8 @@ def plot_modal_state(seqdata: SequenceData,
     # Create a legend (label-based colors)
     legend_buffer = create_standalone_legend(
         colors=legend_colors,
-        labels=seqdata.labels,
-        ncol=min(5, len(seqdata.states)),
+        labels=seqdata.legend_labels,
+        ncol=min(5, len(seqdata.legend_labels)),
         figsize=(fig_width, 1),
         fontsize=fontsize-2,
         dpi=dpi

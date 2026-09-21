@@ -425,12 +425,8 @@ def _style_index_axes(ax, *, hide_y: bool) -> None:
     ax.tick_params(axis="both", which="major", direction="out")
 
 
-def _prepare_imshow_values(values: np.ndarray) -> np.ndarray:
-    data = np.asarray(values, dtype=float)
-    if data.ndim == 1:
-        data = data.reshape(1, -1)
-    data[data < 1] = np.nan
-    return data
+def _prepare_imshow_values(values: np.ndarray, seqdata: SequenceData) -> np.ndarray:
+    return seqdata.values_for_plot(values)
 
 
 def _draw_medoid_panel(
@@ -445,7 +441,7 @@ def _draw_medoid_panel(
     ylabel: Optional[str],
     show_cluster_titles: bool,
 ) -> None:
-    data = _prepare_imshow_values(values)
+    data = _prepare_imshow_values(values, seqdata)
     ax.imshow(
         np.ma.masked_invalid(data),
         aspect="auto",
@@ -518,6 +514,9 @@ def plot_medoids(
 ):
     """
     Plot group or cluster medoids with sequence-index styling and subplot layouts.
+
+    Void padding is drawn blank and omitted from the legend, same as
+    ``plot_sequence_index``.
 
     Grouping matches ``plot_sequence_index``:
 
@@ -771,9 +770,9 @@ def plot_medoids(
     if include_legend:
         main_buffer = save_figure_to_buffer(fig, dpi=dpi)
         legend_buffer = create_standalone_legend(
-            colors=reference.color_map_by_label,
-            labels=reference.labels,
-            ncol=legend_ncol(len(reference.states)),
+            colors=reference.legend_color_map,
+            labels=reference.legend_labels,
+            ncol=legend_ncol(len(reference.legend_labels)),
             figsize=(figsize[0] if figsize is not None else 10.0, 1.0),
             fontsize=fontsize - 2,
             dpi=dpi,

@@ -21,6 +21,25 @@ from sequenzo.visualization.utils import (
 )
 
 
+def _visible_plot_states(seqdata):
+    return list(getattr(seqdata, "legend_states", seqdata.states))
+
+
+def _visible_plot_labels(seqdata):
+    return list(getattr(seqdata, "legend_labels", seqdata.labels))
+
+
+def _apply_visible_rounding(distributions, plot_states):
+    """Fix float rounding among plotted states without absorbing void mass."""
+    if not plot_states:
+        return
+    last = str(plot_states[-1])
+    for row in distributions:
+        vis_sum = sum(row[str(state)] for state in plot_states)
+        if 99.5 <= vis_sum < 100:
+            row[last] += 100.0 - vis_sum
+
+
 def smart_sort_groups(groups):
     """
     Smart sorting: prioritize numeric prefix, fallback to string sorting
@@ -69,6 +88,9 @@ def plot_state_distribution(seqdata: SequenceData,
     """
     Creates state distribution plots for different groups, showing how state
     prevalence changes over time within each group.
+
+    Void padding is not drawn as a state (the stack is only real states).
+    Pad unequal-length sequences in ``SequenceData``.
 
     **Two API modes for grouping:**
     
@@ -328,31 +350,19 @@ def plot_state_distribution(seqdata: SequenceData,
             # Add time point and distribution to the list
             distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
-        # Ensure percentages sum to exactly 100% to avoid gaps
-        for j in range(len(distributions)):
-            total_percentage = sum(distributions[j][str(state)] for state in seqdata.states)
-            if total_percentage < 100:
-                top_state = str(seqdata.states[-1])
-                distributions[j][str(top_state)] += (100 - total_percentage)
-
-        # Convert to DataFrame for plotting
+        plot_states = _visible_plot_states(seqdata)
+        plot_labels = _visible_plot_labels(seqdata)
+        _apply_visible_rounding(distributions, plot_states)
         dist_df = pd.DataFrame(distributions)
-
-        # Plot on the corresponding axis
         ax = axes[i]
-
-        # Get colors for each state
-        # seqdata.states are integer encodings (e.g., 1, 2, ...)
-        # seqdata.state_mapping[state] maps integers to labels (e.g., 'Married', 'Single')
-        # seqdata.color_map[...] gets color by label
-        base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
+        base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in plot_states]
 
         # Plot the data
         if stacked:
             # Create a stacked area plot
             ax.stackplot(range(len(dist_df)),
-                         [dist_df[str(state)] for state in seqdata.states],
-                         labels=seqdata.labels,
+                         [dist_df[str(state)] for state in plot_states],
+                         labels=plot_labels,
                          colors=base_colors,
                          alpha=1.0)
 
@@ -361,7 +371,7 @@ def plot_state_distribution(seqdata: SequenceData,
             ax.set_axisbelow(True)
         else:
             # Create a line plot
-            for state, label, color in zip(seqdata.states, seqdata.labels, base_colors):
+            for state, label, color in zip(plot_states, plot_labels, base_colors):
                 ax.plot(range(len(dist_df)), dist_df[str(state)],
                         label=label, color=color,
                         linewidth=2.5, marker='o', markersize=5)
@@ -427,11 +437,11 @@ def plot_state_distribution(seqdata: SequenceData,
 
     if include_legend:
         # Create standalone legend
-        colors = seqdata.color_map_by_label
+        colors = seqdata.legend_color_map
         legend_buffer = create_standalone_legend(
             colors=colors,
-            labels=seqdata.labels,
-            ncol=min(5, len(seqdata.states)),
+            labels=seqdata.legend_labels,
+            ncol=min(5, len(seqdata.legend_labels)),
             figsize=(actual_figsize[0] * ncols, 1),
             fontsize=fontsize-2,
             dpi=dpi
@@ -576,17 +586,9 @@ def _plot_state_distribution_single(seqdata: SequenceData,
         # Add time point and distribution to the list
         distributions.append(dict({"time": col, **{str(k): v for k, v in dist.items()}}))
 
-    # Ensure percentages sum to exactly 100% to avoid gaps
-    for i in range(len(distributions)):
-        # Get sum of all state percentages for this time point
-        total_percentage = sum(distributions[i][str(state)] for state in seqdata.states)
-
-        # If there's a gap, add the difference to the top-most state
-        if total_percentage < 100:
-            # Get the last (top-most) state in your stack
-            top_state = str(seqdata.states[-1])
-            # Add the difference to make total exactly 100%
-            distributions[i][top_state] += (100 - total_percentage)
+    plot_states = _visible_plot_states(seqdata)
+    plot_labels = _visible_plot_labels(seqdata)
+    _apply_visible_rounding(distributions, plot_states)
 
     # Convert to DataFrame for plotting
     dist_df = pd.DataFrame(distributions)
@@ -596,14 +598,14 @@ def _plot_state_distribution_single(seqdata: SequenceData,
     fig, ax = plt.subplots(figsize=actual_figsize)
 
     # Get colors for each state and enhance vibrancy
-    base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in seqdata.states]
+    base_colors = [seqdata.color_map[seqdata.state_mapping[state]] for state in plot_states]
 
     # Plot the data
     if stacked:
         # Create a stacked area plot with enhanced colors
         ax.stackplot(range(len(dist_df)),
-                     [dist_df[str(state)] for state in seqdata.states],
-                     labels=seqdata.labels,
+                     [dist_df[str(state)] for state in plot_states],
+                     labels=plot_labels,
                      colors=base_colors,
                      alpha=1.0)  # Full opacity for maximum vibrancy
 
@@ -612,9 +614,9 @@ def _plot_state_distribution_single(seqdata: SequenceData,
         ax.set_axisbelow(True)
     else:
         # Create a line plot with enhanced colors
-        for i, state in enumerate(seqdata.states):
+        for i, (state, label) in enumerate(zip(plot_states, plot_labels)):
             ax.plot(range(len(dist_df)), dist_df[str(state)],
-                    label=state, color=base_colors[i],
+                    label=label, color=base_colors[i],
                     linewidth=2.5, marker='o', markersize=5)
 
         # Add grid lines
