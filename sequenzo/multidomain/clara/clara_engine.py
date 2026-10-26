@@ -446,8 +446,22 @@ def _scheduled_sample(
             )
         if indices.shape != weights.shape:
             raise ValueError("scheduled indices and PAM weights must have the same shape.")
+        if indices.size == 0:
+            raise ValueError("scheduled subsample indices must be non-empty.")
+        if indices.size != np.unique(indices).size:
+            raise ValueError("scheduled subsample indices must be unique profiles.")
+        if not np.all(np.isfinite(weights)) or np.any(weights <= 0):
+            raise ValueError("scheduled PAM weights must be finite and positive.")
         if np.any(indices < 0) or np.any(indices >= n_agg):
             raise IndexError("scheduled subsample indices are out of range for N*.")
+        if policy in STUDER_BOOTSTRAP_POLICIES:
+            if not np.all(np.equal(np.asarray(weights), np.floor(weights))):
+                raise ValueError("studer_bootstrap scheduled counts must be positive integers.")
+            if int(np.sum(weights)) != int(sample_size):
+                raise ValueError(
+                    "studer_bootstrap scheduled counts must sum to "
+                    f"sample_size={int(sample_size)} (got {int(np.sum(weights))})."
+                )
         return indices, weights
 
     arr = np.asarray(entry, dtype=int)

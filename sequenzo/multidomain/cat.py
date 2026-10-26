@@ -6,6 +6,7 @@
            derive multidomain indel and substitution costs from domain costs by means of an additive trick (CAT),
            and compute OM pairwise distances using CAT costs.
 """
+import time
 import numpy as np
 import pandas as pd
 from typing import List, Union, Optional
@@ -49,7 +50,8 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                                 miss_cost: float = 2,
                                 cweight: Optional[List[float]] = None,
                                 what: str = "MDseq",
-                                ch_sep: str = "+"):
+                                ch_sep: str = "+",
+                                stage_hook=None):
     """
             mulitdomain sequences analysis, you can get:
             - multi-domain sequences ('MDseq')
@@ -70,7 +72,17 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             :param cweight: A vector of domain weights.
             :param what: What output should be returned?
             :param ch_sep: Separator used for building state names of the expanded alphabet.
+            :param stage_hook: Optional ``callable(name, seconds)`` used by profiling.
+                The distance values do not depend on it.
     """
+
+    def _stage_start():
+        return time.perf_counter_ns()
+
+    def _stage_end(name, started):
+        if stage_hook is None:
+            return
+        stage_hook(name, (time.perf_counter_ns() - started) / 1e9)
 
     # ==================
     # Checking Arguments
@@ -218,6 +230,7 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
     md_cnames = channels[max_index].seqdata.columns
 
     print("[>] Building MD sequences of combined states.")
+    _combined_started = _stage_start()
 
     # ================================
     # Building the New Sequence Object
@@ -304,6 +317,7 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
                 states_space.append(val)
 
     print("  - OK.")
+    _stage_end("combined_sequence_construction", _combined_started)
 
     if what == "MDseq":
         return newseqdata
@@ -311,6 +325,7 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
         # ==================================================
         # Building Substitution Matrix and Indel Per Channel
         # ==================================================
+        _domain_cost_started = _stage_start()
         for i in range(nchannels):
             channel = channels[i]
 
@@ -381,11 +396,13 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
 
         if "auto" == indel:
             indel = indel_list
+        _stage_end("domain_cost_construction", _domain_cost_started)
 
         # =============================================
         # Building the New CAT Substitution Cost Matrix
         # =============================================
         print("[>] Computing MD substitution and indel costs with additive trick.")
+        _combined_cost_started = _stage_start()
 
         # Build new subsitution matrix and new alphabet
         alphabet = states_space
@@ -515,6 +532,7 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
         if link == "mean":
             newindel = newindel / np.sum(cweight)
             newsm = newsm / np.sum(cweight)
+        _stage_end("combined_cost_construction", _combined_cost_started)
 
         if what == "cost":
             newseqdata_df = pd.DataFrame(newseqdata, columns=md_cnames)
@@ -545,8 +563,10 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             case_weights = getattr(channels[0], "weights", None)
             if case_weights is not None:
                 md_kwargs["weights"] = np.asarray(case_weights, dtype=float)
+            _sequence_started = _stage_start()
             with contextlib.redirect_stdout(io.StringIO()):
                 md_seqdata = SequenceData(**md_kwargs)
+            _stage_end("sequence_data_initialization", _sequence_started)
 
             return {
                 "seqdata": md_seqdata,
@@ -592,8 +612,10 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
             case_weights = getattr(channels[0], "weights", None)
             if case_weights is not None:
                 seq_kwargs["weights"] = np.asarray(case_weights, dtype=float)
+            _sequence_started = _stage_start()
             with contextlib.redirect_stdout(io.StringIO()):
                 newseqdata_seq = SequenceData(**seq_kwargs)
+            _stage_end("sequence_data_initialization", _sequence_started)
 
             # Pass newindel as-is (can be scalar or vector depending on state-dependency)
             # TraMineR passes the full newindel vector/scalar to seqdist

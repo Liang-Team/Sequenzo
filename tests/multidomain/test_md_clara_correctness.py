@@ -383,6 +383,32 @@ def test_studer_schedule_requires_multiplicities():
         )
 
 
+def test_studer_schedule_rejects_illegal_counts():
+    domains = _duplicate_heavy_domains()
+    params = {"method": "OM", "sm": "CONSTANT", "indel": 1, "norm": "none"}
+    common = dict(
+        domains=domains,
+        strategy="idcd",
+        distance_params=params,
+        R=1,
+        sample_size=4,
+        kvals=[2],
+        n_jobs=1,
+        verbose=False,
+        sampling_policy="studer_bootstrap",
+    )
+    with pytest.raises(ValueError, match="unique"):
+        md_clara(
+            **common,
+            subsample_schedule=[{"indices": np.array([0, 0]), "counts": np.array([2, 2])}],
+        )
+    with pytest.raises(ValueError, match="sum to"):
+        md_clara(
+            **common,
+            subsample_schedule=[{"indices": np.array([0, 1]), "counts": np.array([3, 2])}],
+        )
+
+
 def test_studer_schedule_dict_preserves_counts():
     domains = _duplicate_heavy_domains()
     params = {"method": "OM", "sm": "CONSTANT", "indel": 1, "norm": "none"}

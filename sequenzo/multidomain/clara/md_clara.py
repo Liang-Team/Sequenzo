@@ -123,12 +123,17 @@ def _count_mixed_latent_profiles(
     n_profiles: int,
 ) -> int:
     """How many unique profiles mix more than one case-level latent label."""
-    mixed = 0
-    for u in range(int(n_profiles)):
-        labs = case_labels[disagg == u]
-        if labs.size and np.unique(labs).size > 1:
-            mixed += 1
-    return mixed
+    pairs = np.column_stack(
+        (
+            np.asarray(disagg).reshape(-1),
+            np.asarray(case_labels).reshape(-1),
+        )
+    )
+    if pairs.size == 0:
+        return 0
+    unique_pairs = np.unique(pairs, axis=0)
+    _profiles, counts = np.unique(unique_pairs[:, 0], return_counts=True)
+    return int(np.sum(counts > 1))
 
 
 def md_clara(
