@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+import time
 
 import numpy as np
 import pandas as pd
@@ -122,6 +123,7 @@ class IDCDDistanceProvider(DistanceProvider):
         ch_sep: str = "+",
         quiet: bool = True,
         seqdata: Optional[SequenceData] = None,
+        stage_hook=None,
         **seqdist_args: Any,
     ) -> None:
         if seqdata is None:
@@ -131,6 +133,7 @@ class IDCDDistanceProvider(DistanceProvider):
                 domains,
                 ch_sep=ch_sep,
                 quiet=quiet,
+                stage_hook=stage_hook,
             )
         else:
             self._domains = domains
@@ -141,10 +144,16 @@ class IDCDDistanceProvider(DistanceProvider):
                 "distance_params must include seqdist settings, e.g. "
                 "{'method': 'OM', 'sm': 'CONSTANT', 'indel': 1, 'norm': 'none'}."
             )
+        cost_started = time.perf_counter_ns() if stage_hook is not None else None
         self._dist_args = freeze_seqdist_costs(
             self._md_seqdata,
             dict(seqdist_args),
         )
+        if stage_hook is not None and cost_started is not None:
+            stage_hook(
+                "idcd_cost_construction",
+                (time.perf_counter_ns() - cost_started) / 1e9,
+            )
         warm_distance_query_caches(self._md_seqdata)
 
     def n_sequences(self) -> int:
@@ -350,6 +359,7 @@ class DATDistanceProvider(DistanceProvider):
         domain_weights: Optional[List[float]] = None,
         link: str = "sum",
         n_jobs_domains: int = 1,
+        stage_hook=None,
     ) -> None:
         validate_multidomain_domains(domains)
         if len(method_params) != len(domains):
@@ -363,10 +373,19 @@ class DATDistanceProvider(DistanceProvider):
             raise ValueError("link must be 'sum' or 'mean'.")
 
         self._domains = domains
+        # Factory may already have timed dat_domain_subsetting / a first freeze.
+        # Re-freeze here matches production (factory + __init__); accumulate cost.
+        cost_started = time.perf_counter_ns() if stage_hook is not None else None
         self._method_params = [
             freeze_seqdist_costs(domain, dict(params))
             for domain, params in zip(domains, method_params)
         ]
+        if stage_hook is not None and cost_started is not None:
+            stage_hook(
+                "dat_domain_cost_construction",
+                (time.perf_counter_ns() - cost_started) / 1e9,
+            )
+        init_started = time.perf_counter_ns() if stage_hook is not None else None
         weights_arr = _validate_nonnegative_weights(
             domain_weights if domain_weights is not None else [1.0] * len(domains),
             label="domain_weights",
@@ -382,6 +401,11 @@ class DATDistanceProvider(DistanceProvider):
             raise ValueError("n_jobs_domains must not be 0.")
         for domain in self._domains:
             warm_distance_query_caches(domain)
+        if stage_hook is not None and init_started is not None:
+            stage_hook(
+                "dat_provider_initialization",
+                (time.perf_counter_ns() - init_started) / 1e9,
+            )
 
     def n_sequences(self) -> int:
         return int(self._domains[0].seqdata.shape[0])
@@ -596,6 +620,7 @@ def make_aggregated_distance_provider(
     strategy: str,
     distance_params: Optional[Dict[str, Any]],
     aggregation: Dict[str, Any],
+    stage_hook=None,
 ) -> DistanceProvider:
     """
     Build an MD-CLARA provider on unique profiles with costs frozen correctly.
@@ -613,10 +638,16 @@ def make_aggregated_distance_provider(
     params = dict(distance_params or {})
     agg_idx = one_based_to_zero_based(aggregation["aggIndex"], name="aggIndex")
     agg_weights = np.asarray(aggregation["aggWeights"], dtype=float)
+    subset_started = time.perf_counter_ns() if stage_hook is not None else None
     agg_domains = [
         subset_sequence_data(domain, agg_idx, weights=agg_weights)
         for domain in domains
     ]
+    if stage_hook is not None and subset_started is not None and strategy == "dat":
+        stage_hook(
+            "dat_domain_subsetting",
+            (time.perf_counter_ns() - subset_started) / 1e9,
+        )
     freeze_on_original = distance_params_are_data_dependent(strategy, params)
 
     if strategy == "dat":
@@ -625,51 +656,75 @@ def make_aggregated_distance_provider(
             raise ValueError("DAT strategy requires distance_params['method_params'].")
         source_domains = domains if freeze_on_original else agg_domains
         frozen = dict(params)
+        cost_started = time.perf_counter_ns() if stage_hook is not None else None
         frozen["method_params"] = [
             freeze_seqdist_costs(domain, dict(block))
             for domain, block in zip(source_domains, method_params)
         ]
-        return DATDistanceProvider(agg_domains, **frozen)
+        if stage_hook is not None and cost_started is not None:
+            stage_hook(
+                "dat_domain_cost_construction",
+                (time.perf_counter_ns() - cost_started) / 1e9,
+            )
+        return DATDistanceProvider(agg_domains, stage_hook=stage_hook, **frozen)
 
     if strategy == "idcd":
         ch_sep = params.get("ch_sep", "+")
-        seqdist = {key: value for key, value in params.items() if key != "ch_sep"}
+        seqdist = {
+            key: value
+            for key, value in params.items()
+            if key not in {"ch_sep", "stage_hook"}
+        }
         if freeze_on_original:
             original_md = create_idcd_sequence_from_domains(
-                domains, ch_sep=ch_sep, quiet=True
+                domains, ch_sep=ch_sep, quiet=True, stage_hook=stage_hook
             )
+            cost_started = time.perf_counter_ns()
             frozen = freeze_seqdist_costs(original_md, seqdist)
+            if stage_hook is not None:
+                stage_hook(
+                    "idcd_cost_construction",
+                    (time.perf_counter_ns() - cost_started) / 1e9,
+                )
             subset = subset_sequence_data(
                 original_md, agg_idx, weights=agg_weights
             )
+            # Costs already frozen above; do not re-emit idcd_cost_construction.
             return IDCDDistanceProvider(
                 agg_domains,
                 seqdata=subset,
                 ch_sep=ch_sep,
                 quiet=True,
+                stage_hook=None,
                 **frozen,
             )
-        return IDCDDistanceProvider(agg_domains, ch_sep=ch_sep, quiet=True, **seqdist)
+        return IDCDDistanceProvider(
+            agg_domains, ch_sep=ch_sep, quiet=True, stage_hook=stage_hook, **seqdist
+        )
 
     if strategy == "cat":
         cat_kwargs = _cat_init_kwargs(params, n_domains=len(domains))
         if freeze_on_original:
-            bundle = build_cat_sequence_and_costs(channels=domains, **{
-                key: cat_kwargs[key]
-                for key in (
-                    "method",
-                    "norm",
-                    "indel",
-                    "sm",
-                    "with_missing",
-                    "link",
-                    "cval",
-                    "miss_cost",
-                    "cweight",
-                    "ch_sep",
-                )
-                if key in cat_kwargs
-            })
+            bundle = build_cat_sequence_and_costs(
+                channels=domains,
+                stage_hook=stage_hook,
+                **{
+                    key: cat_kwargs[key]
+                    for key in (
+                        "method",
+                        "norm",
+                        "indel",
+                        "sm",
+                        "with_missing",
+                        "link",
+                        "cval",
+                        "miss_cost",
+                        "cweight",
+                        "ch_sep",
+                    )
+                    if key in cat_kwargs
+                },
+            )
             subset = subset_sequence_data(
                 bundle["seqdata"], agg_idx, weights=agg_weights
             )

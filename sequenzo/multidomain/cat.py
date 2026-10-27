@@ -645,6 +645,7 @@ def build_cat_sequence_and_costs(
     miss_cost: float = 2,
     cweight: Optional[List[float]] = None,
     ch_sep: str = "+",
+    stage_hook=None,
 ) -> dict:
     """
     Build multidomain SequenceData and CAT substitution/indel costs without
@@ -663,6 +664,7 @@ def build_cat_sequence_and_costs(
         cweight=cweight,
         what="cost",
         ch_sep=ch_sep,
+        stage_hook=stage_hook,
     )
 
 

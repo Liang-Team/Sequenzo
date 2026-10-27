@@ -23,12 +23,27 @@ def KMedoids(
     threads=None,
     memory_budget_mb=None,
     return_diagnostics=False,
+    stage_hook=None,
 ):
     """Run weighted K-medoids on full or condensed distances.
 
     The result contains 1-based medoid row indices. Set
     ``return_diagnostics=True`` to also return execution diagnostics.
+
+    ``stage_hook`` is an optional ``callable(name, seconds)`` used only for
+    profiling (``ward_to_initial_medoids``, ``pamonce_optimization``). Cluster
+    assignments do not depend on it.
     """
+    import time as _time
+
+    def _stage_start():
+        return _time.perf_counter_ns()
+
+    def _stage_end(name, started):
+        if stage_hook is None or started is None:
+            return
+        stage_hook(name, (_time.perf_counter_ns() - started) / 1e9)
+
     method_original = method
     if isinstance(method, str):
         method = method.lower()
@@ -87,6 +102,7 @@ def KMedoids(
     needs_full_matrix = False
     medoids_are_internal = initialclust is None
     explicit_initial = initialclust is not None
+    init_started = _stage_start() if stage_hook is not None else None
     if explicit_initial:
         if _validate_linkage_matrix(initialclust):
             from scipy.cluster.hierarchy import cut_tree
@@ -127,6 +143,7 @@ def KMedoids(
                 f"[!] Starting medoids should be 0-based indices in 0:{nelements - 1} "
                 f"(R-style 1:{nelements} is also accepted)."
             )
+    _stage_end("ward_to_initial_medoids", init_started)
 
     if diss_condensed is not None and not needs_full_matrix:
         diss_cpp = np.ascontiguousarray(diss_condensed, dtype=np.float64)
@@ -164,6 +181,7 @@ def KMedoids(
     best_result = None
     best_objective = np.inf
     best_signature = None
+    pam_started = _stage_start() if stage_hook is not None else None
     for pass_index, (start, core_npass) in enumerate(starts):
         init_cpp = np.array(start, dtype=np.int32, order="C", copy=True)
         if method == 1:
@@ -229,6 +247,7 @@ def KMedoids(
             best_objective = objective
             best_signature = signature
             best_pass = pass_index
+    _stage_end("pamonce_optimization", pam_started)
 
     memb_matrix = best_result
     if verbose:

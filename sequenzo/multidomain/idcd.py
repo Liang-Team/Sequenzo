@@ -9,10 +9,21 @@
     multidomain level rather than deriving them additively from domain costs
     or domain distances.
 """
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
+import time
 import numpy as np
 import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
+
+
+def _stage_start():
+    return time.perf_counter_ns()
+
+
+def _stage_end(stage_hook, name, started):
+    if stage_hook is None:
+        return
+    stage_hook(name, (time.perf_counter_ns() - started) / 1e9)
 
 
 def _generate_combined_sequence_from_csv(csv_paths: List[str],
@@ -169,6 +180,7 @@ def create_idcd_sequence_from_domains(
     ch_sep: str = "+",
     domain_state_labels: Optional[List[Dict]] = None,
     quiet: bool = False,
+    stage_hook: Optional[Callable] = None,
 ) -> SequenceData:
     """
     Build an IDCD multidomain SequenceData object from aligned domain objects.
@@ -177,11 +189,15 @@ def create_idcd_sequence_from_domains(
     Case weights from domain 0 are copied onto the combined object so that
     data-dependent costs (TRATE, INDELS, INDELSLOG) are estimated on the
     original weighted cases.
+
+    ``stage_hook`` is an optional ``callable(name, seconds)`` used only for
+    profiling. Distance values do not depend on it.
     """
     validate_multidomain_domains(domains)
     time_cols = list(domains[0].time)
     n_seq = domains[0].seqdata.shape[0]
 
+    frame_started = _stage_start()
     reference = domains[0]
     if reference.id_col and reference.id_col in reference.data.columns:
         id_col = reference.id_col
@@ -199,12 +215,16 @@ def create_idcd_sequence_from_domains(
             frame[id_col] = ids
         cols = [id_col] + list(time_cols)
         domain_dfs.append(frame[cols].copy())
+    _stage_end(stage_hook, "idcd_input_frame_preparation", frame_started)
+
+    combined_started = _stage_start()
     combined_df = _generate_combined_sequence_from_dfs(
         domain_dfs,
         time_cols,
         id_col=id_col,
         ch_sep=ch_sep,
     )
+    _stage_end(stage_hook, "idcd_combined_sequence_construction", combined_started)
     return _build_idcd_sequence_data(
         combined_df,
         time_cols,
@@ -213,6 +233,7 @@ def create_idcd_sequence_from_domains(
         quiet=quiet,
         ch_sep=ch_sep,
         weights=_aligned_case_weights(domains),
+        stage_hook=stage_hook,
     )
 
 
@@ -222,8 +243,10 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
                               domain_state_labels: List[Dict] = None,
                               quiet: bool = False,
                               ch_sep: str = "+",
-                              weights: Optional[np.ndarray] = None) -> SequenceData:
+                              weights: Optional[np.ndarray] = None,
+                              stage_hook: Optional[Callable] = None) -> SequenceData:
     """Build SequenceData from a combined multidomain DataFrame (used by both CSV and DFS entry points)."""
+    alphabet_started = _stage_start()
     flat_vals = combined_df[time_cols].values.ravel()
     observed_states = pd.Series(flat_vals).value_counts()
     proportions = observed_states / len(flat_vals) * 100
@@ -251,6 +274,7 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
     if not quiet:
         print("\n[IDCD] Observed Combined States Frequency Table:")
         print(freq_table.to_string(index=False))
+    _stage_end(stage_hook, "idcd_alphabet_construction", alphabet_started)
     kwargs = dict(
         data=combined_df,
         time=time_cols,
@@ -260,7 +284,10 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
     )
     if weights is not None:
         kwargs["weights"] = np.asarray(weights, dtype=float)
-    return SequenceData(**kwargs)
+    seq_started = _stage_start()
+    built = SequenceData(**kwargs)
+    _stage_end(stage_hook, "idcd_sequence_data_initialization", seq_started)
+    return built
 
 
 def create_idcd_sequence_from_csvs(
