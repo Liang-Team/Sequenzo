@@ -536,6 +536,12 @@ def plot_medoids(
     ``groups=`` (or the alias ``clusters=``) keeps a subset, e.g. ``groups="Female"``
     or ``clusters=3``. If you already know the medoid row for each group, pass
     ``medoid_indices`` instead of computing them from ``distance_matrix``.
+
+    For multi-method comparison figures, reorder medoids so similar pathways share
+    a column with :func:`sequenzo.visualization.align_cluster_orders` (and
+    optionally :func:`apply_cluster_order` on summary tables) before plotting.
+    Prefer a substantive ``xlabel`` (e.g. ``"Month"``, ``"Age"``) over the
+    generic default ``"Time"``. Set ``show_ids=False`` to hide entity labels.
     """
     domains = _as_domain_list(seqdata)
     reference = _validate_aligned_domains(domains)

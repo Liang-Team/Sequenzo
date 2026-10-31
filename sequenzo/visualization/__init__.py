@@ -18,9 +18,19 @@ from .plot_characteristics import (
     plot_longitudinal_characteristics,
     plot_cross_sectional_characteristics,
 )
+from .align_cluster_orders import (
+    align_cluster_orders,
+    apply_cluster_order,
+    hamming_distance_matrix,
+    match_clusters_to_reference,
+)
 
 
 __all__ = [
+    "align_cluster_orders",
+    "apply_cluster_order",
+    "hamming_distance_matrix",
+    "match_clusters_to_reference",
     "plot_mean_time",
     "plot_most_frequent_sequences",
     "plot_relative_frequency",

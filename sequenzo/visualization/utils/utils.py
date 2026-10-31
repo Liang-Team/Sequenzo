@@ -65,35 +65,78 @@ def _to_square_matrix(distance_matrix) -> np.ndarray:
     )
 
 
-def set_up_time_labels_for_x_axis(seqdata: SequenceData,
-                                  ax: Axes,
-                                  color: str = "gray") -> None:
+def set_up_time_labels_for_x_axis(
+    seqdata: SequenceData,
+    ax: Axes,
+    color: str = "gray",
+    *,
+    max_ticks: Optional[int] = None,
+    rotation: Optional[float] = None,
+    fontsize: Optional[float] = None,
+    ha: Optional[str] = None,
+) -> None:
     """
     Helper function to set up time labels for the x-axis.
 
-    :param seqdata: (SequenceData) A SequenceData object containing time information
-    :param ax: (matplotlib.axes.Axes) The axes to set labels on
+    Parameters
+    ----------
+    seqdata :
+        SequenceData with ``cleaned_time`` labels (months, ages, calendar stamps, …).
+    ax :
+        Matplotlib axes to annotate.
+    color :
+        Tick label colour.
+    max_ticks :
+        Cap on the number of tick labels. Defaults to 10 for long series; use a
+        smaller value (e.g. 6–8) when labels are long calendar strings.
+    rotation :
+        Tick label rotation in degrees. If omitted, long string labels (mean
+        length ≥ 5) on crowded axes rotate to 35° to avoid overlap.
+    fontsize :
+        Tick label size (default 10).
+    ha :
+        Horizontal alignment. Defaults to ``"center"``, or ``"right"`` when
+        labels are rotated.
     """
-    # Extract time labels (year or age)
     time_labels = np.array(seqdata.cleaned_time)
-
-    # Determine the number of time steps
     num_time_steps = len(time_labels)
+    if num_time_steps == 0:
+        return
 
     # Dynamic X-Tick Adjustment
+    if max_ticks is None:
+        max_ticks = 10
+    max_ticks = max(2, int(max_ticks))
+
     if num_time_steps <= 10:
-        # If 10 or fewer time points, show all labels
         xtick_positions = np.arange(num_time_steps)
     elif num_time_steps <= 20:
-        # If 10-20 time points, show every 2nd label
         xtick_positions = np.arange(0, num_time_steps, step=2)
     else:
-        # More than 20 time points -> Pick 10 evenly spaced tick positions
-        xtick_positions = np.linspace(0, num_time_steps - 1, num=10, dtype=int)
+        n_show = min(max_ticks, num_time_steps)
+        xtick_positions = np.linspace(0, num_time_steps - 1, num=n_show, dtype=int)
 
-    # Set x-ticks and labels dynamically
+    # Drop duplicates that linspace can create on short ranges
+    xtick_positions = np.unique(xtick_positions)
+
+    labels = [str(x) for x in time_labels[xtick_positions]]
+    mean_len = float(np.mean([len(s) for s in labels])) if labels else 0.0
+    if rotation is None:
+        # Calendar-style stamps (e.g. "Sep.93") overlap when drawn flat
+        rotation = 35.0 if (mean_len >= 5 and len(labels) >= 6) else 0.0
+    if ha is None:
+        ha = "right" if float(rotation) else "center"
+    if fontsize is None:
+        fontsize = 10
+
     ax.set_xticks(xtick_positions)
-    ax.set_xticklabels(time_labels[xtick_positions], fontsize=10, rotation=0, ha="center", color=color)
+    ax.set_xticklabels(
+        labels,
+        fontsize=fontsize,
+        rotation=rotation,
+        ha=ha,
+        color=color,
+    )
 
 
 def legend_ncol(n_labels: int, max_ncol: int = 5, ncol: int | None = None) -> int:
