@@ -77,10 +77,12 @@ def compute_cat_distance_matrix(channels: List[SequenceData],
     """
 
     def _stage_start():
+        if stage_hook is None:
+            return None
         return time.perf_counter_ns()
 
     def _stage_end(name, started):
-        if stage_hook is None:
+        if stage_hook is None or started is None:
             return
         stage_hook(name, (time.perf_counter_ns() - started) / 1e9)
 

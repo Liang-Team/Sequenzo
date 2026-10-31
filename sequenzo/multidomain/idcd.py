@@ -16,12 +16,15 @@ import pandas as pd
 from sequenzo.define_sequence_data import SequenceData
 
 
-def _stage_start():
+def _stage_start(stage_hook):
+    # Skip the clock when no hook is attached so hooks-off runs avoid timer calls.
+    if stage_hook is None:
+        return None
     return time.perf_counter_ns()
 
 
 def _stage_end(stage_hook, name, started):
-    if stage_hook is None:
+    if stage_hook is None or started is None:
         return
     stage_hook(name, (time.perf_counter_ns() - started) / 1e9)
 
@@ -197,7 +200,7 @@ def create_idcd_sequence_from_domains(
     time_cols = list(domains[0].time)
     n_seq = domains[0].seqdata.shape[0]
 
-    frame_started = _stage_start()
+    frame_started = _stage_start(stage_hook)
     reference = domains[0]
     if reference.id_col and reference.id_col in reference.data.columns:
         id_col = reference.id_col
@@ -217,7 +220,7 @@ def create_idcd_sequence_from_domains(
         domain_dfs.append(frame[cols].copy())
     _stage_end(stage_hook, "idcd_input_frame_preparation", frame_started)
 
-    combined_started = _stage_start()
+    combined_started = _stage_start(stage_hook)
     combined_df = _generate_combined_sequence_from_dfs(
         domain_dfs,
         time_cols,
@@ -246,7 +249,7 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
                               weights: Optional[np.ndarray] = None,
                               stage_hook: Optional[Callable] = None) -> SequenceData:
     """Build SequenceData from a combined multidomain DataFrame (used by both CSV and DFS entry points)."""
-    alphabet_started = _stage_start()
+    alphabet_started = _stage_start(stage_hook)
     flat_vals = combined_df[time_cols].values.ravel()
     observed_states = pd.Series(flat_vals).value_counts()
     proportions = observed_states / len(flat_vals) * 100
@@ -284,7 +287,7 @@ def _build_idcd_sequence_data(combined_df: pd.DataFrame,
     )
     if weights is not None:
         kwargs["weights"] = np.asarray(weights, dtype=float)
-    seq_started = _stage_start()
+    seq_started = _stage_start(stage_hook)
     built = SequenceData(**kwargs)
     _stage_end(stage_hook, "idcd_sequence_data_initialization", seq_started)
     return built
