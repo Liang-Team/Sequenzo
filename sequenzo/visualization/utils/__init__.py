@@ -5,6 +5,7 @@
 @Desc    : 
 """
 from .utils import (set_up_time_labels_for_x_axis,
+                    xtick_bottom_margin,
                     legend_ncol,
                     create_standalone_legend,
                     save_figure_to_buffer,
@@ -16,6 +17,7 @@ from .utils import (set_up_time_labels_for_x_axis,
                     _to_square_matrix)
 
 __all__ = ['set_up_time_labels_for_x_axis',
+           'xtick_bottom_margin',
            'legend_ncol',
            'create_standalone_legend',
            'save_figure_to_buffer',

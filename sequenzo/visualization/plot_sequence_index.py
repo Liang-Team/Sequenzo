@@ -14,6 +14,7 @@ import matplotlib.gridspec as gridspec
 from ..define_sequence_data import SequenceData
 from sequenzo.visualization.utils import (
     set_up_time_labels_for_x_axis,
+    xtick_bottom_margin,
     save_figure_to_buffer,
     create_standalone_legend,
     combine_plot_with_legend,
@@ -938,9 +939,9 @@ def plot_sequence_index(seqdata: SequenceData,
         if i % ncols == 0 and not hide_y_axis:
             ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
-        ax.tick_params(axis='x', pad=6)
+        ax.tick_params(axis='x', pad=4)
         if show_ticks_i and xlabel:
-            ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color='gray')
+            ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='gray')
         else:
             ax.set_xlabel('')
 
@@ -954,13 +955,27 @@ def plot_sequence_index(seqdata: SequenceData,
     if title and show_title:
         fig.suptitle(title, fontsize=fontsize+2, y=1.02)
 
-    # Adjust layout to remove tight_layout warning and eliminate extra right space
-    # Increase hspace for column layout to prevent x-axis labels from overlapping with subplot above
+    # Bottom margin must fit tick *text* (and slant); xlabel sits under that.
+    show_any_tick_text = x_tick_labels != "none"
+    bottom = xtick_bottom_margin(
+        show_labels=show_any_tick_text,
+        rotation=x_tick_rotation,
+    )
+    if show_any_tick_text and xlabel:
+        bottom = min(0.42, bottom + 0.04)
+    # Extra row gap when every panel carries slanted stamps.
+    rot_abs = 35.0 if x_tick_rotation is None else abs(float(x_tick_rotation))
+    base_hspace = 0.4 if layout == 'column' else 0.25
+    if x_tick_labels == "all" and rot_abs >= 25.0:
+        base_hspace = max(base_hspace, 0.55)
     if proportional_scaling and layout == 'column':
-        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.9, wspace=0.15, hspace=0.4)
+        fig.subplots_adjust(
+            left=0.08, right=0.98, bottom=bottom, top=0.9, wspace=0.15, hspace=base_hspace
+        )
     else:
-        hspace_value = 0.4 if layout == 'column' else 0.25
-        fig.subplots_adjust(wspace=0.15, hspace=hspace_value, bottom=0.1, top=0.9, right=0.98, left=0.08)
+        fig.subplots_adjust(
+            wspace=0.15, hspace=base_hspace, bottom=bottom, top=0.9, right=0.98, left=0.08
+        )
 
     # Save main figure to memory
     main_buffer = save_figure_to_buffer(fig, dpi=dpi)
@@ -1260,7 +1275,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.spines['bottom'].set_position(('outward', 5))
     
     # Ensure ticks are always visible regardless of plot style
-    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major', pad=6)
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major', pad=4)
     ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
     
     # Force tick visibility for narrow plot styles
@@ -1270,7 +1285,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
 
     # Add labels and title
     if x_tick_labels != "none" and xlabel:
-        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color='gray')
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='gray')
     else:
         ax.set_xlabel('')
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')

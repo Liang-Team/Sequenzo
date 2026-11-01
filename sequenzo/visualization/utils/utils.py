@@ -65,6 +65,27 @@ def _to_square_matrix(distance_matrix) -> np.ndarray:
     )
 
 
+def xtick_bottom_margin(
+    *,
+    show_labels: bool = True,
+    rotation: Optional[float] = None,
+) -> float:
+    """
+    Recommended ``subplots_adjust(bottom=...)`` so x tick *text* is not clipped.
+
+    Flat month numbers need modest room; slanted calendar stamps (or ``rotation=None``
+    which may auto-slant) need more. Callers that also draw a shared xlabel under the
+    ticks should add a little extra on top of this value.
+    """
+    if not show_labels:
+        return 0.10
+    # None → library may auto-rotate long stamps; reserve slant room.
+    rot = 35.0 if rotation is None else abs(float(rotation))
+    if rot >= 25.0:
+        return 0.30
+    return 0.18
+
+
 def set_up_time_labels_for_x_axis(
     seqdata: SequenceData,
     ax: Axes,
@@ -74,6 +95,7 @@ def set_up_time_labels_for_x_axis(
     rotation: Optional[float] = None,
     fontsize: Optional[float] = None,
     ha: Optional[str] = None,
+    va: Optional[str] = None,
     show_labels: bool = True,
     pad: Optional[float] = None,
 ) -> None:
@@ -100,14 +122,17 @@ def set_up_time_labels_for_x_axis(
     ha :
         Horizontal alignment. Defaults to ``"center"``, or ``"right"`` when
         labels are rotated.
+    va :
+        Vertical alignment. Defaults to ``"top"`` so labels hang below the tick
+        marks (works for both flat and slanted text).
     show_labels :
         If True (default), draw time-point text under the ticks. If False, keep
         the tick marks / spine but hide the text (useful for upper rows in a
         multi-row figure when only the bottom row should show ``Sep.93`` etc.).
     pad :
         Distance in points between the tick mark and the tick label. Defaults
-        to 6 when labels are shown (enough clearance that text is not glued to
-        the spine); ignored when ``show_labels`` is False.
+        to 4 when labels are shown (clear of the spine without a large gap);
+        ignored when ``show_labels`` is False.
     """
     time_labels = np.array(seqdata.cleaned_time)
     num_time_steps = len(time_labels)
@@ -138,10 +163,12 @@ def set_up_time_labels_for_x_axis(
         rotation = 35.0 if (mean_len >= 4 and len(labels) >= 4) else 0.0
     if ha is None:
         ha = "right" if float(rotation) else "center"
+    if va is None:
+        va = "top"
     if fontsize is None:
         fontsize = 10
     if pad is None:
-        pad = 6.0
+        pad = 4.0
 
     ax.set_xticks(xtick_positions)
     if show_labels:
@@ -150,9 +177,13 @@ def set_up_time_labels_for_x_axis(
             fontsize=fontsize,
             rotation=rotation,
             ha=ha,
+            va=va,
             color=color,
         )
         ax.tick_params(axis="x", labelbottom=True, pad=pad)
+        # Tick text lives in the figure margin; never clip it to the axes box.
+        for lab in ax.get_xticklabels():
+            lab.set_clip_on(False)
     else:
         ax.set_xticklabels([])
         ax.tick_params(axis="x", labelbottom=False)
@@ -303,7 +334,15 @@ def save_figure_to_buffer(fig, dpi: int = 200) -> BytesIO:
         BytesIO: Buffer containing the figure image
     """
     buffer = BytesIO()
-    fig.savefig(buffer, format='png', dpi=dpi, bbox_inches='tight')
+    # pad_inches keeps slanted tick texts from being shaved by the tight crop.
+    fig.savefig(
+        buffer,
+        format="png",
+        dpi=dpi,
+        bbox_inches="tight",
+        pad_inches=0.08,
+        facecolor="white",
+    )
     plt.close(fig)
     buffer.seek(0)
     return buffer
@@ -324,7 +363,13 @@ def save_and_show_results(save_as=None, dpi=200, show=True):
     if save_as:
         if not any(save_as.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.pdf', '.svg']):
             save_as += '.png'
-        plt.savefig(save_as, dpi=dpi, bbox_inches='tight')
+        plt.savefig(
+            save_as,
+            dpi=dpi,
+            bbox_inches="tight",
+            pad_inches=0.08,
+            facecolor="white",
+        )
 
     # Get the current figure before closing it
     current_fig = plt.gcf()

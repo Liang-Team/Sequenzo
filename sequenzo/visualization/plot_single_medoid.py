@@ -32,6 +32,7 @@ from sequenzo.visualization.utils import (
     save_figure_to_buffer,
     set_up_time_labels_for_x_axis,
     show_plot_title,
+    xtick_bottom_margin,
     _to_square_matrix,
 )
 
@@ -420,7 +421,7 @@ def _style_index_axes(ax, *, hide_y: bool) -> None:
     ax.spines["bottom"].set_color("gray")
     ax.spines["bottom"].set_linewidth(0.7)
     ax.spines["bottom"].set_position(("outward", 5))
-    ax.tick_params(axis="x", colors="gray", length=4, width=0.7, which="major", pad=6)
+    ax.tick_params(axis="x", colors="gray", length=4, width=0.7, which="major", pad=4)
     ax.xaxis.set_ticks_position("bottom")
     ax.tick_params(axis="both", which="major", direction="out")
 
@@ -479,7 +480,7 @@ def _draw_medoid_panel(
         _style_index_axes(ax, hide_y=False)
     if xlabel:
         # Match tick colour: axis label is part of the panel unit with the sequence.
-        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color="gray")
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color="gray")
     if ylabel:
         ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color="black")
     if show_cluster_titles and title:
@@ -811,7 +812,18 @@ def plot_medoids(
 
     if title and show_title:
         fig.suptitle(title, fontsize=fontsize + 2, y=1.02)
-    fig.subplots_adjust(left=0.10, right=0.98, bottom=0.10, top=0.90, wspace=0.18, hspace=0.42)
+    show_any_tick_text = x_tick_labels != "none"
+    bottom = xtick_bottom_margin(
+        show_labels=show_any_tick_text,
+        rotation=x_tick_rotation,
+    )
+    if show_any_tick_text and xlabel:
+        bottom = min(0.42, bottom + 0.04)
+    rot_abs = 35.0 if x_tick_rotation is None else abs(float(x_tick_rotation))
+    hspace = 0.55 if (x_tick_labels == "all" and rot_abs >= 25.0) else 0.42
+    fig.subplots_adjust(
+        left=0.10, right=0.98, bottom=bottom, top=0.90, wspace=0.18, hspace=hspace
+    )
 
     if include_legend:
         main_buffer = save_figure_to_buffer(fig, dpi=dpi)
