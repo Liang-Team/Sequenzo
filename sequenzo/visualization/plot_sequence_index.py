@@ -350,6 +350,9 @@ def plot_sequence_index(seqdata: SequenceData,
                         sequence_gap=0,
                         sequence_rows=1,
                         show=True,
+                        x_tick_labels: str = "bottom",
+                        x_tick_rotation=None,
+                        max_ticks=None,
                         ):
     """Creates sequence index plots, optionally grouped by categories.
     
@@ -442,6 +445,15 @@ def plot_sequence_index(seqdata: SequenceData,
                          Keeps plots readable without excessive spacing.
     :param sequence_rows: (int, default: 1) Number of rows each sequence occupies. Use >1 for thicker bars (e.g. 3 = 3x thicker).
                          With sequence_gap=1, each gap will be 1/sequence_rows the height of each bar.
+    :param x_tick_labels: Where to draw time-point text (``"Sep.93"``, month numbers, …):
+        - ``"bottom"`` (default): tick *marks* on every panel; text labels + ``xlabel``
+          only on the bottom row / bottom subplot (clearest for multi-panel grids).
+        - ``"all"``: text labels on every panel.
+        - ``"none"``: tick marks only, no time-point text and no ``xlabel``.
+    :param x_tick_rotation: Degrees to slant tick labels. ``None`` auto-rotates long
+        calendar stamps (~35°) so neighbouring panels do not collide. Pass ``0`` for horizontal.
+    :param max_ticks: Cap on the number of x tick positions (passed through to the
+        time-axis helper).
     
     Note: For 'mds' and 'distance_to_most_frequent' sorting, distance matrices are computed
     automatically using Optimal Matching (OM) with constant substitution costs.
@@ -536,7 +548,14 @@ def plot_sequence_index(seqdata: SequenceData,
 
     # If no grouping information, create a single plot
     if group_dataframe is None or group_column_name is None:
-        return _sequence_index_plot_single(seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style, title, xlabel, ylabel, save_as, dpi, fontsize, include_legend, sequence_selection, n_sequences, show_sequence_ids, sort_by_ids, return_sorted_ids, show_title, sequence_gap, sequence_rows)
+        return _sequence_index_plot_single(
+            seqdata, sort_by, sort_by_weight, weights, actual_figsize, plot_style,
+            title, xlabel, ylabel, save_as, dpi, fontsize, include_legend,
+            sequence_selection, n_sequences, show_sequence_ids, sort_by_ids,
+            return_sorted_ids, show_title, sequence_gap, sequence_rows,
+            x_tick_labels=x_tick_labels, x_tick_rotation=x_tick_rotation,
+            max_ticks=max_ticks,
+        )
 
     # Process weights
     if isinstance(weights, str) and weights == "auto":
@@ -817,8 +836,25 @@ def plot_sequence_index(seqdata: SequenceData,
         # Remove grid lines
         ax.grid(False)
 
-        # Set up time labels
-        set_up_time_labels_for_x_axis(seqdata, ax)
+        # Time ticks: marks on every panel; text only where x_tick_labels allows.
+        if layout == 'column':
+            on_bottom = (i == num_groups - 1)
+        else:
+            on_bottom = (i >= num_groups - ncols)
+        if x_tick_labels == "all":
+            show_ticks_i = True
+        elif x_tick_labels == "none":
+            show_ticks_i = False
+        else:
+            show_ticks_i = on_bottom
+        set_up_time_labels_for_x_axis(
+            seqdata,
+            ax,
+            max_ticks=max_ticks,
+            rotation=x_tick_rotation,
+            fontsize=fontsize - 2,
+            show_labels=show_ticks_i,
+        )
 
         # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
         num_sequences = sorted_data.shape[0]
@@ -896,22 +932,17 @@ def plot_sequence_index(seqdata: SequenceData,
         else:
             group_title = f"{group} (n = {num_sequences})"
         if show_group_titles:
-            show_plot_title(ax, group_title, show=True, fontsize=fontsize, loc='right')
+            show_plot_title(ax, group_title, show=True, fontsize=fontsize, loc='right', pad=5)
 
         # Add axis labels
         if i % ncols == 0 and not hide_y_axis:
             ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
 
-        # For column layout, only show x-axis label on the bottom subplot
-        # For grid layout, show x-axis label on bottom row subplots
-        if layout == 'column':
-            # Only show xlabel on the last (bottom) subplot
-            if i == num_groups - 1:
-                ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
+        ax.tick_params(axis='x', pad=6)
+        if show_ticks_i and xlabel:
+            ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color='gray')
         else:
-            # For grid layout, show xlabel on bottom row
-            if i >= num_groups - ncols:
-                ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
+            ax.set_xlabel('')
 
     # Hide unused subplots (not needed for proportional scaling with column layout)
     if not (proportional_scaling and layout == 'column'):
@@ -955,7 +986,7 @@ def plot_sequence_index(seqdata: SequenceData,
             legend_buffer,
             output_path=save_as,
             dpi=dpi,
-            padding=20
+            padding=36,
         )
 
         # Display combined image
@@ -1011,7 +1042,10 @@ def _sequence_index_plot_single(seqdata: SequenceData,
                                 return_sorted_ids=False,
                                 show_title=True,
                                 sequence_gap=0,
-                                sequence_rows=1):
+                                sequence_rows=1,
+                                x_tick_labels: str = "bottom",
+                                x_tick_rotation=None,
+                                max_ticks=None):
     """Efficiently creates a sequence index plot using `imshow` for faster rendering.
 
     :param seqdata: SequenceData object containing sequence information
@@ -1166,7 +1200,14 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     # ax.set_yticks([])
 
     # x label
-    set_up_time_labels_for_x_axis(seqdata, ax)
+    set_up_time_labels_for_x_axis(
+        seqdata,
+        ax,
+        max_ticks=max_ticks,
+        rotation=x_tick_rotation,
+        fontsize=fontsize - 2,
+        show_labels=(x_tick_labels != "none"),
+    )
 
     # Enhance y-axis aesthetics - evenly spaced ticks including the last sequence
     num_sequences = sorted_data.shape[0]
@@ -1219,7 +1260,7 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.spines['bottom'].set_position(('outward', 5))
     
     # Ensure ticks are always visible regardless of plot style
-    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major')
+    ax.tick_params(axis='x', colors='gray', length=4, width=0.7, which='major', pad=6)
     ax.tick_params(axis='y', colors='gray', length=4, width=0.7, which='major')
     
     # Force tick visibility for narrow plot styles
@@ -1228,7 +1269,10 @@ def _sequence_index_plot_single(seqdata: SequenceData,
     ax.tick_params(axis='both', which='major', direction='out')
 
     # Add labels and title
-    ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color='black')
+    if x_tick_labels != "none" and xlabel:
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color='gray')
+    else:
+        ax.set_xlabel('')
     ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color='black')
     
     # Set title with weight information if available and show_title is True

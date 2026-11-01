@@ -74,6 +74,8 @@ def set_up_time_labels_for_x_axis(
     rotation: Optional[float] = None,
     fontsize: Optional[float] = None,
     ha: Optional[str] = None,
+    show_labels: bool = True,
+    pad: Optional[float] = None,
 ) -> None:
     """
     Helper function to set up time labels for the x-axis.
@@ -91,12 +93,21 @@ def set_up_time_labels_for_x_axis(
         smaller value (e.g. 6–8) when labels are long calendar strings.
     rotation :
         Tick label rotation in degrees. If omitted, long string labels (mean
-        length ≥ 5) on crowded axes rotate to 35° to avoid overlap.
+        length ≥ 5) on crowded axes rotate to 35° to avoid overlap between
+        neighbouring panels. Pass ``0`` to force horizontal labels.
     fontsize :
         Tick label size (default 10).
     ha :
         Horizontal alignment. Defaults to ``"center"``, or ``"right"`` when
         labels are rotated.
+    show_labels :
+        If True (default), draw time-point text under the ticks. If False, keep
+        the tick marks / spine but hide the text (useful for upper rows in a
+        multi-row figure when only the bottom row should show ``Sep.93`` etc.).
+    pad :
+        Distance in points between the tick mark and the tick label. Defaults
+        to 6 when labels are shown (enough clearance that text is not glued to
+        the spine); ignored when ``show_labels`` is False.
     """
     time_labels = np.array(seqdata.cleaned_time)
     num_time_steps = len(time_labels)
@@ -122,21 +133,29 @@ def set_up_time_labels_for_x_axis(
     labels = [str(x) for x in time_labels[xtick_positions]]
     mean_len = float(np.mean([len(s) for s in labels])) if labels else 0.0
     if rotation is None:
-        # Calendar-style stamps (e.g. "Sep.93") overlap when drawn flat
-        rotation = 35.0 if (mean_len >= 5 and len(labels) >= 6) else 0.0
+        # Calendar-style stamps (e.g. "Sep.93") overlap when drawn flat,
+        # especially in side-by-side cluster panels.
+        rotation = 35.0 if (mean_len >= 4 and len(labels) >= 4) else 0.0
     if ha is None:
         ha = "right" if float(rotation) else "center"
     if fontsize is None:
         fontsize = 10
+    if pad is None:
+        pad = 6.0
 
     ax.set_xticks(xtick_positions)
-    ax.set_xticklabels(
-        labels,
-        fontsize=fontsize,
-        rotation=rotation,
-        ha=ha,
-        color=color,
-    )
+    if show_labels:
+        ax.set_xticklabels(
+            labels,
+            fontsize=fontsize,
+            rotation=rotation,
+            ha=ha,
+            color=color,
+        )
+        ax.tick_params(axis="x", labelbottom=True, pad=pad)
+    else:
+        ax.set_xticklabels([])
+        ax.tick_params(axis="x", labelbottom=False)
 
 
 def legend_ncol(n_labels: int, max_ncol: int = 5, ncol: int | None = None) -> int:

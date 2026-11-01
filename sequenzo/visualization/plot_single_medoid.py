@@ -420,7 +420,7 @@ def _style_index_axes(ax, *, hide_y: bool) -> None:
     ax.spines["bottom"].set_color("gray")
     ax.spines["bottom"].set_linewidth(0.7)
     ax.spines["bottom"].set_position(("outward", 5))
-    ax.tick_params(axis="x", colors="gray", length=4, width=0.7, which="major")
+    ax.tick_params(axis="x", colors="gray", length=4, width=0.7, which="major", pad=6)
     ax.xaxis.set_ticks_position("bottom")
     ax.tick_params(axis="both", which="major", direction="out")
 
@@ -440,6 +440,9 @@ def _draw_medoid_panel(
     xlabel: Optional[str],
     ylabel: Optional[str],
     show_cluster_titles: bool,
+    show_tick_labels: bool = True,
+    xtick_rotation: Optional[float] = None,
+    max_ticks: Optional[int] = None,
 ) -> None:
     data = _prepare_imshow_values(values, seqdata)
     ax.imshow(
@@ -450,7 +453,14 @@ def _draw_medoid_panel(
         vmin=1,
         vmax=len(seqdata.states),
     )
-    set_up_time_labels_for_x_axis(seqdata, ax)
+    set_up_time_labels_for_x_axis(
+        seqdata,
+        ax,
+        max_ticks=max_ticks,
+        rotation=xtick_rotation,
+        fontsize=max(6, fontsize - 2),
+        show_labels=show_tick_labels,
+    )
     n_rows = data.shape[0]
     if ytick_labels is None or len(ytick_labels) == 0:
         _style_index_axes(ax, hide_y=True)
@@ -468,11 +478,14 @@ def _draw_medoid_panel(
         )
         _style_index_axes(ax, hide_y=False)
     if xlabel:
-        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=10, color="black")
+        # Match tick colour: axis label is part of the panel unit with the sequence.
+        ax.set_xlabel(xlabel, fontsize=fontsize, labelpad=8, color="gray")
     if ylabel:
         ax.set_ylabel(ylabel, fontsize=fontsize, labelpad=10, color="black")
     if show_cluster_titles and title:
-        show_plot_title(ax, title, show=True, fontsize=fontsize, loc="right")
+        # Title sits above the band with modest pad (larger than tick pad, smaller
+        # than a full subplot gap).
+        show_plot_title(ax, title, show=True, fontsize=fontsize, loc="right", pad=4)
 
 
 def plot_medoids(
@@ -511,6 +524,9 @@ def plot_medoids(
     show_title: bool = True,
     show: bool = True,
     weights="auto",
+    x_tick_labels: str = "bottom",
+    x_tick_rotation: Optional[float] = None,
+    max_ticks: Optional[int] = None,
 ):
     """
     Plot group or cluster medoids with sequence-index styling and subplot layouts.
@@ -542,6 +558,16 @@ def plot_medoids(
     optionally :func:`apply_cluster_order` on summary tables) before plotting.
     Prefer a substantive ``xlabel`` (e.g. ``"Month"``, ``"Age"``) over the
     generic default ``"Time"``. Set ``show_ids=False`` to hide entity labels.
+
+    ``x_tick_labels`` controls time-point text under each panel:
+
+    - ``"bottom"`` (default): tick *marks* on every panel; ``Sep.93``-style text
+      and the axis name only on the bottom row (clearest for multi-row grids).
+    - ``"all"``: text labels on every panel.
+    - ``"none"``: tick marks only, no time-point text.
+
+    ``x_tick_rotation`` slants those labels (degrees). ``None`` auto-rotates
+    long calendar stamps (~35°) so neighbouring panels do not collide.
     """
     domains = _as_domain_list(seqdata)
     reference = _validate_aligned_domains(domains)
@@ -697,9 +723,12 @@ def plot_medoids(
             title=None,
             ytick_labels=y_labels,
             fontsize=fontsize,
-            xlabel=xlabel,
+            xlabel=xlabel if x_tick_labels != "none" else None,
             ylabel=ylabel or "Medoid",
             show_cluster_titles=False,
+            show_tick_labels=x_tick_labels != "none",
+            xtick_rotation=x_tick_rotation,
+            max_ticks=max_ticks,
         )
         axes_for_layout = [ax]
         nrows_out, ncols_out = 1, 1
@@ -751,7 +780,15 @@ def plot_medoids(
                 y_labels = names if n_domains <= 60 else None
             elif show_ids:
                 y_labels = [str(entity_ids[i])]
-            xlabel_i = xlabel if (row_i == nrows_out - 1 or i >= n_medoids - ncols_out) else None
+            on_bottom = row_i == nrows_out - 1 or i >= n_medoids - ncols_out
+            if x_tick_labels == "all":
+                show_ticks_i = True
+            elif x_tick_labels == "none":
+                show_ticks_i = False
+            else:
+                # default / "bottom"
+                show_ticks_i = on_bottom
+            xlabel_i = xlabel if (on_bottom and x_tick_labels != "none") else None
             ylabel_i = ylabel if col_i == 0 else None
             _draw_medoid_panel(
                 ax,
@@ -763,6 +800,9 @@ def plot_medoids(
                 xlabel=xlabel_i,
                 ylabel=ylabel_i,
                 show_cluster_titles=show_group_titles,
+                show_tick_labels=show_ticks_i,
+                xtick_rotation=x_tick_rotation,
+                max_ticks=max_ticks,
             )
         for j in range(n_medoids, len(axes_flat)):
             axes_flat[j].set_visible(False)
@@ -790,7 +830,7 @@ def plot_medoids(
             legend_buffer,
             output_path=save_as,
             dpi=dpi,
-            padding=20,
+            padding=36,
         )
         display_h = max(4.0, (figsize[1] if figsize is not None else 6.0) + 1.0)
         plt.figure(figsize=(figsize[0] if figsize is not None else 10.0, display_h))

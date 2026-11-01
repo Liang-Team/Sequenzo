@@ -179,12 +179,12 @@ Each month is coded as one of nine family states combining partnership status an
 | \#  | State                           | Short Label |
 |-----|---------------------------------|-------------|
 | 1   | Single, no child                | S           |
-| 2   | Living apart together, no child | LAT         |
-| 3   | Cohabiting, no child            | COH         |
-| 4   | Married, no child               | MAR         |
-| 5   | Single, with child(ren)         | Sc          |
-| 6   | LAT, with child(ren)            | LATc        |
-| 7   | Cohabiting, with child(ren)     | COHc        |
+| 2   | Single, with child(ren)         | Sc          |
+| 3   | Living apart together, no child | LAT         |
+| 4   | LAT, with child(ren)            | LATc        |
+| 5   | Cohabiting, no child            | COH         |
+| 6   | Cohabiting, with child(ren)     | COHc        |
+| 7   | Married, no child               | MAR         |
 | 8   | Married, 1 child                | MARc1       |
 | 9   | Married, 2+ children            | MARc2+      |
 
@@ -223,12 +223,12 @@ time_list <- as.list(as.character(1:264))      # months 1–264
 states    <- as.list(as.character(1:9))         # 9 family states
 labels    <- as.list(c(
   "Single, no child",
-  "Living apart together, no child",
-  "Cohabiting, no child",
-  "Married, no child",
   "Single, with child(ren)",
+  "Living apart together, no child",
   "LAT, with child(ren)",
+  "Cohabiting, no child",
   "Cohabiting, with child(ren)",
+  "Married, no child",
   "Married, 1 child",
   "Married, 2+ children"
 ))
